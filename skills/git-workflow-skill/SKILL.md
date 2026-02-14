@@ -1,45 +1,41 @@
 ---
-name: git-workflow
-description: Mandatory feature branch workflow for Git operations. Use this skill BEFORE making ANY change to files in a Git repository that are not ignored by .gitignore. This includes creating, editing, or deleting any tracked files. Enforces branch creation from dev, conventional commits, and PR-based merging. Must be followed before writing code, modifying configs, updating documentation, or any other repository change.
+name: git-workflow-skill
+description: Mandatory feature branch workflow using git worktrees for parallel multi-agent development. Use this skill BEFORE making ANY change to files in a Git repository that are not ignored by .gitignore. Enforces isolated worktrees per feature, conventional commits, and PR-based merging. Supports multiple AI agents working simultaneously on different features without conflicts.
 ---
 
-# Git Workflow
+# Git Workflow (Worktree-Based)
+
+Multi-agent parallel development using git worktrees. Each agent gets an isolated working directory — no branch switching, no conflicts between agents.
 
 ## Bundled Tools
 
 ### Scripts (scripts/)
 | Script | Purpose |
 |--------|---------|
-| `start-feature.sh <type> <desc>` | Create feature branch from dev |
-| `finish-feature.sh` | Rebase, validate, push branch |
-| `validate-workflow.sh` | Check workflow compliance |
+| `start-feature.sh <type> <desc>` | Create worktree + feature branch from dev |
+| `finish-feature.sh [path]` | Rebase, push, create PR, remove worktree |
+| `validate-workflow.sh [--list]` | Check workflow compliance / list worktrees |
 | `install-hooks.sh` | Install git hooks to repo |
 
 ### Git Hooks (hooks/)
 | Hook | Purpose |
 |------|---------|
-| `pre-commit` | Blocks commits on dev/main |
+| `pre-commit` | Blocks commits on dev/main (shared across worktrees) |
 | `commit-msg` | Validates conventional commit format |
 | `prepare-commit-msg` | Adds commit message template |
 
 **Install hooks:** Run `scripts/install-hooks.sh` in target repository.
 
 ### Requirements
-- Git
+- Git (2.15+ for worktree support)
 - GitHub CLI (`gh`) - Required for automatic PR creation
   ```bash
-  # Install gh
   # macOS
   brew install gh
-
-  # Linux
-  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-  sudo apt update
-  sudo apt install gh
-
   # Windows
   winget install --id GitHub.cli
+  # Linux
+  apt install gh
 
   # Authenticate
   gh auth login
@@ -65,22 +61,25 @@ Before making ANY change to repository files (that are not in .gitignore):
    ```
 3. If `dev` does not exist → **STOP and ask user** to create it or specify base branch
 
-## Development Flow
+## Multi-Agent Development Flow
 
 ```
-Remote: dev ──────────────────────────────────────────────────► dev (updated)
-              │                                                   ▲
-              │ 1. create feature branch                          │ 5. PR merge
-              ▼                                                   │
-Remote: feature/xyz ◄───────────────────────────────────────────┤
-              │                                                   │
-              │ 2. clone/pull                    3. push + PR    │
-              ▼                                                   │
-Local:  feature/xyz ──► develop ──► commit ──► finish-feature ──┘
-              │                                        │
-              │ ◄──────────────────────────────────────┘
-              ▼                                 4. auto-switch to dev
-        dev (local)
+Main repo (stays on dev) ─── always clean, never modified directly
+  │
+  ├── .worktrees/auth-system/     ← Agent 1: feature/auth-system
+  │     └── (isolated copy of repo, own branch, own changes)
+  │
+  ├── .worktrees/api-refactor/    ← Agent 2: bugfix/api-refactor
+  │     └── (isolated copy of repo, own branch, own changes)
+  │
+  └── .worktrees/update-docs/     ← Agent 3: chore/update-docs
+        └── (isolated copy of repo, own branch, own changes)
+
+Each worktree:
+  1. Has its own directory and branch
+  2. Shares git history with the main repo
+  3. Can commit, push, and create PRs independently
+  4. Gets cleaned up automatically after finish-feature.sh
 ```
 
 ### Starting Work
@@ -88,13 +87,14 @@ Local:  feature/xyz ──► develop ──► commit ──► finish-feature 
 **Using script (recommended):**
 ```bash
 ./scripts/start-feature.sh feature my-feature-name
+# Output: .worktrees/my-feature-name/ created
+cd .worktrees/my-feature-name/
 ```
 
 **Manual:**
 ```bash
-git checkout dev
-git pull origin dev
-git checkout -b <branch-type>/<short-description>
+git worktree add .worktrees/<desc> -b feature/<desc> origin/dev
+cd .worktrees/<desc>
 ```
 
 ### Branch Naming
@@ -110,6 +110,7 @@ git checkout -b <branch-type>/<short-description>
 
 **Using script (recommended):**
 ```bash
+# Run from inside the worktree
 ./scripts/finish-feature.sh
 ```
 
@@ -119,35 +120,38 @@ This script will:
 3. Rebase on latest `dev` branch
 4. Push the feature branch
 5. **Automatically create a PR to `dev`** (requires `gh` CLI)
-6. **Switch back to `dev` branch**
+6. **Remove the worktree** (auto-cleanup)
 
-**Note:** If `gh` CLI is not installed or not authenticated, the script will skip PR creation and you'll need to create it manually. The branch will still be pushed successfully.
+**Note:** If `gh` CLI is not installed, the script will skip PR creation. The branch will still be pushed.
 
 **Manual:**
-1. Pull and rebase on `dev`:
-   ```bash
-   git fetch origin dev
-   git rebase origin/dev
-   ```
-2. Commit using conventional format (see below)
-3. Push feature branch:
-   ```bash
-   git push -u origin <branch-name>
-   ```
-4. Create Pull Request:
-   ```bash
-   gh pr create --base dev --head <branch-name>
-   ```
-5. Switch back to dev:
-   ```bash
-   git checkout dev
-   git pull origin dev
-   ```
-
-### Validation
-
-Run anytime to check workflow compliance:
 ```bash
+# From inside the worktree
+git fetch origin dev
+git rebase origin/dev
+git push -u origin <branch-name>
+gh pr create --base dev --head <branch-name>
+
+# Clean up from main repo
+cd /path/to/main/repo
+git worktree remove .worktrees/<desc>
+```
+
+### Managing Worktrees
+
+```bash
+# List all active worktrees
+git worktree list
+# or
+./scripts/validate-workflow.sh --list
+
+# Remove a specific worktree
+git worktree remove .worktrees/<desc>
+
+# Clean up stale references
+git worktree prune
+
+# Validate workflow compliance
 ./scripts/validate-workflow.sh
 ```
 
@@ -169,9 +173,10 @@ Run anytime to check workflow compliance:
 
 ## Critical Rules
 
-- **NEVER** modify tracked files without being on a feature branch
+- **NEVER** modify tracked files without being in a worktree on a feature branch
 - **NEVER** commit directly to `dev` or `main`
 - **ALWAYS** check if file is gitignored before applying this workflow
-- **ALWAYS** create feature branch before any tracked file changes
+- **ALWAYS** create a worktree before any tracked file changes
 - **ALWAYS** rebase on `dev` before pushing
 - **ALWAYS** use conventional commit format
+- **ALWAYS** add `.worktrees/` to your `.gitignore`

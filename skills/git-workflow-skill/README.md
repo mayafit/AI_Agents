@@ -1,34 +1,38 @@
-# Git Workflow Skill
+# Git Workflow Skill (Worktree-Based)
 
-Mandatory feature branch workflow for Git operations with automatic PR creation.
+Multi-agent parallel development using git worktrees. Each agent gets an isolated working directory — no branch switching, no conflicts.
 
 ## Quick Start
 
 ```bash
-# Start a new feature
+# Start a new feature (creates isolated worktree)
 ./scripts/start-feature.sh feature my-feature-name
+cd .worktrees/my-feature-name/
 
-# Make your changes...
+# Make your changes and commit...
+git add .
+git commit -m "feat(auth): add OAuth login flow"
 
-# Finish and create PR (auto-switches to dev)
+# Finish: rebase, push, create PR, clean up worktree
 ./scripts/finish-feature.sh
 ```
 
-## What It Does
+## Why Worktrees?
 
-✅ **Enforces feature branch workflow**
-- Creates branches from `dev`
-- Prevents commits to `dev`/`main`
-- Validates branch naming
+Traditional `git checkout` means only one branch at a time. With worktrees:
+- Multiple agents work on different features **simultaneously**
+- No branch switching — each agent has its own directory
+- Shared git history — no duplicated repos
+- Automatic cleanup after PR creation
 
-✅ **Validates commits**
-- Conventional commit format
-- Git hooks for automation
+## How It Works
 
-✅ **Automatic PR creation**
-- Uses GitHub CLI (`gh`)
-- Creates PR to `dev` branch
-- Switches back to `dev` after push
+```
+project/                              ← main repo (stays on dev)
+├── .worktrees/auth-system/           ← Agent 1 works here
+├── .worktrees/api-refactor/          ← Agent 2 works here
+└── .worktrees/update-docs/           ← Agent 3 works here
+```
 
 ## Branch Naming
 
@@ -44,13 +48,12 @@ Mandatory feature branch workflow for Git operations with automatic PR creation.
 ### 1. Start Feature
 ```bash
 ./scripts/start-feature.sh feature oauth-login
+cd .worktrees/oauth-login/
 ```
-
-Creates branch `feature/oauth-login` from latest `dev`.
+Creates branch `feature/oauth-login` in isolated worktree.
 
 ### 2. Make Changes
 ```bash
-# Edit files...
 git add .
 git commit -m "feat(auth): add OAuth login flow"
 ```
@@ -59,64 +62,50 @@ git commit -m "feat(auth): add OAuth login flow"
 ```bash
 ./scripts/finish-feature.sh
 ```
-
-This will:
-1. ✅ Validate you're on a feature branch
-2. ✅ Check for uncommitted changes
-3. ✅ Validate conventional commit messages
-4. ✅ Rebase on latest `dev`
-5. ✅ Push feature branch
-6. ✅ **Create PR to `dev`** (auto)
-7. ✅ **Switch back to `dev`** (auto)
+1. Validates feature branch and commit messages
+2. Rebases on latest `dev`
+3. Pushes branch
+4. Creates PR to `dev` (auto)
+5. Removes worktree (auto-cleanup)
 
 ### 4. Review & Merge
 - Request code review on the PR
 - Merge after approval
 
+## Manage Worktrees
+
+```bash
+# List active worktrees
+git worktree list
+
+# Validate workflow
+./scripts/validate-workflow.sh
+
+# Remove a worktree manually
+git worktree remove .worktrees/<desc>
+
+# Clean up stale references
+git worktree prune
+```
+
 ## Commit Format
 
 ```
 <type>(<scope>): <description>
-
-[optional body]
 ```
 
 **Types:** `feat`, `fix`, `chore`, `docs`, `refactor`, `test`
 
-**Examples:**
-- `feat(auth): add OAuth2 flow support`
-- `fix(api): handle null response from endpoint`
-- `chore(deps): update dependencies`
-
 ## Requirements
 
-- Git
+- Git 2.15+ (worktree support)
 - **GitHub CLI (`gh`)** - For automatic PR creation
   ```bash
-  # Install
   brew install gh          # macOS
   winget install GitHub.cli # Windows
   apt install gh           # Linux
-
-  # Authenticate
   gh auth login
   ```
-
-**Note:** If `gh` is not installed, the script will skip PR creation but still push the branch successfully. You can create the PR manually.
-
-## Validation
-
-Validate workflow compliance anytime:
-```bash
-./scripts/validate-workflow.sh
-```
-
-## Critical Rules
-
-- **NEVER** commit directly to `dev` or `main`
-- **ALWAYS** create feature branch before changes
-- **ALWAYS** use conventional commit format
-- **ALWAYS** rebase on `dev` before pushing
 
 ## Git Hooks
 
@@ -125,13 +114,22 @@ Install hooks to enforce workflow:
 ./scripts/install-hooks.sh
 ```
 
-Hooks:
 - `pre-commit` - Blocks commits on dev/main
 - `commit-msg` - Validates conventional commit format
 - `prepare-commit-msg` - Adds commit message template
+
+Hooks are shared across all worktrees automatically.
+
+## Critical Rules
+
+- **NEVER** commit directly to `dev` or `main`
+- **ALWAYS** create a worktree for changes
+- **ALWAYS** use conventional commit format
+- **ALWAYS** add `.worktrees/` to `.gitignore`
 
 ## See Also
 
 - [SKILL.md](SKILL.md) - Full documentation
 - [Conventional Commits](https://www.conventionalcommits.org/)
+- [Git Worktrees](https://git-scm.com/docs/git-worktree)
 - [GitHub CLI](https://cli.github.com/)
