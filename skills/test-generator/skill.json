@@ -1,0 +1,7 @@
+{
+  "name": "Test Generator",
+  "description": "Generates comprehensive unit and integration tests",
+  "version": "1.0.0",
+  "author": "AI Agent Skills",
+  "tags": ["testing", "unit-tests", "integration-tests", "quality"]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "ai-agent-skills",
+  "version": "1.0.0",
+  "description": "NPX tool to install skills for AI coding agents (Claude Code, Gemini, Copilot, Kilocode, Cline, Cursor)",
+  "main": "index.js",
+  "bin": {
+    "ai-agent-skills": "./bin/cli.js"
+  },
+  "scripts": {
+    "start": "node bin/cli.js",
+    "test": "node -e \"const {listSkills,listAgents}=require('./lib/installer'); console.log('Skills:',listSkills().length,'Agents:',listAgents().length)\""
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "skills",
+    "claude-code",
+    "gemini",
+    "copilot",
+    "kilocode",
+    "cline",
+    "cursor",
+    "npx"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "prompts": "^2.4.2",
+    "chalk": "^4.1.2",
+    "fs-extra": "^11.1.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

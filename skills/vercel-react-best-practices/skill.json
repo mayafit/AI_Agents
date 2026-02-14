@@ -1,0 +1,8 @@
+{
+  "name": "Vercel React Best Practices",
+  "description": "Performance optimization framework for React and Next.js projects with 57 actionable rules across 8 categories",
+  "version": "1.0.0",
+  "author": "vercel-labs",
+  "source": "https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices",
+  "tags": ["react", "nextjs", "performance", "optimization", "vercel", "best-practices"]
+}

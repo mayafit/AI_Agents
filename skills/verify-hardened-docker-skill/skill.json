@@ -1,0 +1,7 @@
+{
+  "name": "Verify Hardened Docker",
+  "description": "Comprehensive security verification for Docker configurations against CIS, OWASP, and NIST standards",
+  "version": "1.0.0",
+  "author": "AI Agent Skills",
+  "tags": ["docker", "security", "verification", "audit", "CIS", "OWASP"]
+}

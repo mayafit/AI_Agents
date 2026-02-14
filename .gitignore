@@ -1,0 +1,14 @@
+node_modules/
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.env
+.env.*
+dist/
+coverage/
+.vscode/
+.idea/
+*.skill
+.claude/
+test-security-project/

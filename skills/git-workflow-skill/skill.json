@@ -1,0 +1,7 @@
+{
+  "name": "Git Workflow",
+  "description": "Mandatory feature branch workflow for Git operations with conventional commits and PR-based merging",
+  "version": "1.0.0",
+  "author": "AI Agent Skills",
+  "tags": ["git", "workflow", "branching", "conventional-commits", "pull-requests"]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Commit Message Generator",
+  "description": "Generates conventional commit messages from code changes",
+  "version": "1.0.0",
+  "author": "AI Agent Skills",
+  "tags": ["git", "commit", "conventional-commits", "version-control"]
+}

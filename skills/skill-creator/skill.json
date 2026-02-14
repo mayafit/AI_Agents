@@ -1,0 +1,8 @@
+{
+  "name": "Skill Creator",
+  "description": "Guide for creating effective skills that extend Claude's capabilities with specialized knowledge, workflows, and tool integrations",
+  "version": "1.0.0",
+  "author": "anthropics",
+  "source": "https://github.com/anthropics/skills/blob/main/skills/skill-creator/SKILL.md",
+  "tags": ["skills", "creator", "meta", "workflows", "tool-integrations"]
+}

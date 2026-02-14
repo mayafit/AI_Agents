@@ -1,0 +1,7 @@
+{
+  "name": "Create Hardened Docker",
+  "description": "Creates production-ready hardened Docker configurations following CIS, OWASP, and NIST standards",
+  "version": "1.0.0",
+  "author": "AI Agent Skills",
+  "tags": ["docker", "security", "hardening", "CIS", "OWASP", "NIST"]
+}
