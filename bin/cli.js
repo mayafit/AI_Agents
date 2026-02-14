@@ -22,6 +22,7 @@ ${chalk.bold('Usage:')}
   ${chalk.cyan(`npx ${NAME} help`)}                         Show this help
 
 ${chalk.bold('Install options:')}
+  ${chalk.cyan('--global')}        Install to global/user-level paths (default: project-level)
   ${chalk.cyan('--path <dir>')}    Custom installation directory
 
 ${chalk.bold('Examples:')}
@@ -104,20 +105,24 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath) {
     selectedAgentIds = chosen;
   }
 
-  // Step 3: Custom path (optional)
+  // Step 3: Installation scope (project vs global)
   let installPath = customPath || '';
+  let installScope = 'project';
   if (!installPath) {
     const { pathChoice } = await prompts({
       type: 'select',
       name: 'pathChoice',
-      message: 'Installation path:',
+      message: 'Installation scope:',
       choices: [
-        { title: 'Default (agent-specific paths)', value: 'default' },
+        { title: 'Project level (current directory)', value: 'project' },
+        { title: 'Global (user-level settings)', value: 'global' },
         { title: 'Custom path...', value: 'custom' }
       ]
     });
 
-    if (pathChoice === 'custom') {
+    if (pathChoice === 'global') {
+      installScope = 'global';
+    } else if (pathChoice === 'custom') {
       const { customDir } = await prompts({
         type: 'text',
         name: 'customDir',
@@ -133,7 +138,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath) {
   console.log(chalk.bold('  Summary:'));
   console.log(chalk.cyan('  Skills:  ') + selectedSkillIds.join(', '));
   console.log(chalk.cyan('  Agents:  ') + selectedAgentIds.join(', '));
-  console.log(chalk.cyan('  Path:    ') + (installPath || 'default'));
+  console.log(chalk.cyan('  Path:    ') + (installPath || (installScope === 'global' ? 'global (user-level)' : 'project (current directory)')));
   console.log('');
 
   const { confirmed } = await prompts({
@@ -151,7 +156,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath) {
   // Step 5: Install each skill
   for (const skillId of selectedSkillIds) {
     try {
-      await installSkill(skillId, selectedAgentIds, installPath);
+      await installSkill(skillId, selectedAgentIds, installPath, installScope);
     } catch (error) {
       console.error(chalk.red(`\n Failed to install ${skillId}:`), error.message);
     }
@@ -162,14 +167,17 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath) {
 
 async function handleInstall(args) {
   const pathIdx = args.indexOf('--path');
+  const globalFlag = args.includes('--global');
   let customPath = '';
-  let positional = [...args];
+  let positional = [...args].filter(a => a !== '--global');
 
   if (pathIdx !== -1) {
-    customPath = args[pathIdx + 1] || '';
-    positional.splice(pathIdx, 2);
+    customPath = positional[positional.indexOf('--path') + 1] || '';
+    const pIdx = positional.indexOf('--path');
+    positional.splice(pIdx, 2);
   }
 
+  const scope = globalFlag ? 'global' : 'project';
   const skillId = positional[0];
   const agentIds = positional.slice(1);
 
@@ -185,9 +193,9 @@ async function handleInstall(args) {
     return;
   }
 
-  // Full args → direct install
+  // Full args → direct install (defaults to project-level)
   try {
-    await installSkill(skillId, agentIds, customPath);
+    await installSkill(skillId, agentIds, customPath, scope);
     console.log(chalk.bold.green('\n Installation complete!\n'));
   } catch (error) {
     console.error(chalk.red('\n Installation failed:'), error.message);
