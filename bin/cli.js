@@ -5,27 +5,30 @@ const chalk = require('chalk');
 const path = require('path');
 const { installSkill, listSkills, listAgents } = require('../lib/installer');
 
-const VERSION = require('../package.json').version;
+const PKG = require('../package.json');
+const NAME = PKG.name;
+const VERSION = PKG.version;
 
 function showHelp() {
   console.log(`
-${chalk.bold.cyan('AI Agent Skills')} ${chalk.gray(`v${VERSION}`)}
+${chalk.bold.cyan(NAME)} ${chalk.gray(`v${VERSION}`)}
 
 ${chalk.bold('Usage:')}
-  ${chalk.cyan('npx ai-agent-skills')}                              Interactive mode
-  ${chalk.cyan('npx ai-agent-skills install')} <skill> <agents...>  Install a skill
-  ${chalk.cyan('npx ai-agent-skills list')}                         List available skills
-  ${chalk.cyan('npx ai-agent-skills agents')}                       List supported agents
-  ${chalk.cyan('npx ai-agent-skills help')}                         Show this help
+  ${chalk.cyan(`npx ${NAME}`)}                              Interactive wizard
+  ${chalk.cyan(`npx ${NAME} install`)}                      Interactive install wizard
+  ${chalk.cyan(`npx ${NAME} install`)} <skill> <agents...>  Install directly
+  ${chalk.cyan(`npx ${NAME} list`)}                         List available skills
+  ${chalk.cyan(`npx ${NAME} agents`)}                       List supported agents
+  ${chalk.cyan(`npx ${NAME} help`)}                         Show this help
 
 ${chalk.bold('Install options:')}
   ${chalk.cyan('--path <dir>')}    Custom installation directory
 
 ${chalk.bold('Examples:')}
-  npx ai-agent-skills install code-review claude-code
-  npx ai-agent-skills install test-generator claude-code cline cursor
-  npx ai-agent-skills install skill-creator claude-code --path ./my-skills
-  npx ai-agent-skills list
+  npx ${NAME} install
+  npx ${NAME} install code-review claude-code
+  npx ${NAME} install test-generator claude-code cline cursor
+  npx ${NAME} install skill-creator claude-code --path ./my-skills
 `);
 }
 
@@ -47,6 +50,116 @@ function showAgents() {
   console.log('');
 }
 
+async function installWizard(preselectedSkill, preselectedAgents, customPath) {
+  const skills = listSkills();
+  const agents = listAgents();
+
+  // Step 1: Select skills (multi-select)
+  let selectedSkillIds;
+  if (preselectedSkill) {
+    selectedSkillIds = [preselectedSkill];
+  } else {
+    const { skills: chosen } = await prompts({
+      type: 'multiselect',
+      name: 'skills',
+      message: 'Which skills do you want to install?',
+      choices: skills.map(s => ({
+        title: chalk.white(s.name) + chalk.gray(` - ${s.description}`),
+        value: s.id,
+        selected: false
+      })),
+      instructions: chalk.gray('  Use space to select, enter to confirm'),
+      min: 1
+    });
+
+    if (!chosen || chosen.length === 0) {
+      console.log(chalk.yellow('No skills selected. Exiting.'));
+      process.exit(0);
+    }
+    selectedSkillIds = chosen;
+  }
+
+  // Step 2: Select agents (multi-select)
+  let selectedAgentIds;
+  if (preselectedAgents && preselectedAgents.length > 0) {
+    selectedAgentIds = preselectedAgents;
+  } else {
+    const { agents: chosen } = await prompts({
+      type: 'multiselect',
+      name: 'agents',
+      message: 'Which coding agents do you want to install to?',
+      choices: agents.map(a => ({
+        title: chalk.white(a.name) + chalk.gray(` - ${a.description}`),
+        value: a.id,
+        selected: false
+      })),
+      instructions: chalk.gray('  Use space to select, enter to confirm'),
+      min: 1
+    });
+
+    if (!chosen || chosen.length === 0) {
+      console.log(chalk.yellow('No agents selected. Exiting.'));
+      process.exit(0);
+    }
+    selectedAgentIds = chosen;
+  }
+
+  // Step 3: Custom path (optional)
+  let installPath = customPath || '';
+  if (!installPath) {
+    const { pathChoice } = await prompts({
+      type: 'select',
+      name: 'pathChoice',
+      message: 'Installation path:',
+      choices: [
+        { title: 'Default (agent-specific paths)', value: 'default' },
+        { title: 'Custom path...', value: 'custom' }
+      ]
+    });
+
+    if (pathChoice === 'custom') {
+      const { customDir } = await prompts({
+        type: 'text',
+        name: 'customDir',
+        message: 'Enter installation directory:',
+        initial: './skills'
+      });
+      installPath = customDir || '';
+    }
+  }
+
+  // Step 4: Confirm
+  console.log('');
+  console.log(chalk.bold('  Summary:'));
+  console.log(chalk.cyan('  Skills:  ') + selectedSkillIds.join(', '));
+  console.log(chalk.cyan('  Agents:  ') + selectedAgentIds.join(', '));
+  console.log(chalk.cyan('  Path:    ') + (installPath || 'default'));
+  console.log('');
+
+  const { confirmed } = await prompts({
+    type: 'confirm',
+    name: 'confirmed',
+    message: 'Proceed with installation?',
+    initial: true
+  });
+
+  if (!confirmed) {
+    console.log(chalk.yellow('Installation cancelled.'));
+    process.exit(0);
+  }
+
+  // Step 5: Install each skill
+  for (const skillId of selectedSkillIds) {
+    try {
+      await installSkill(skillId, selectedAgentIds, installPath);
+    } catch (error) {
+      console.error(chalk.red(`\n Failed to install ${skillId}:`), error.message);
+    }
+  }
+
+  console.log(chalk.bold.green('\n Installation complete!\n'));
+}
+
 async function handleInstall(args) {
   const pathIdx = args.indexOf('--path');
   let customPath = '';
@@ -60,20 +173,19 @@ async function handleInstall(args) {
   const skillId = positional[0];
   const agentIds = positional.slice(1);
 
+  // No args → launch wizard
   if (!skillId) {
-    console.error(chalk.red('\nError: No skill specified.'));
-    console.log(chalk.gray('Usage: npx ai-agent-skills install <skill> <agents...>'));
-    console.log(chalk.gray('Run "npx ai-agent-skills list" to see available skills.\n'));
-    process.exit(1);
+    await installWizard(null, null, customPath);
+    return;
   }
 
+  // Skill but no agents → wizard with skill preselected
   if (agentIds.length === 0) {
-    console.error(chalk.red('\nError: No agents specified.'));
-    console.log(chalk.gray('Usage: npx ai-agent-skills install <skill> <agents...>'));
-    console.log(chalk.gray('Run "npx ai-agent-skills agents" to see supported agents.\n'));
-    process.exit(1);
+    await installWizard(skillId, null, customPath);
+    return;
   }
 
+  // Full args → direct install
   try {
     await installSkill(skillId, agentIds, customPath);
     console.log(chalk.bold.green('\n Installation complete!\n'));
@@ -84,14 +196,14 @@ async function handleInstall(args) {
 }
 
 async function interactiveMode() {
-  console.log(chalk.bold.cyan('\n AI Agent Skills Installer\n'));
+  console.log(chalk.bold.cyan(`\n ${NAME} v${VERSION}\n`));
 
   const { action } = await prompts({
     type: 'select',
     name: 'action',
     message: 'What would you like to do?',
     choices: [
-      { title: 'Install a skill', value: 'install' },
+      { title: 'Install skills', value: 'install' },
       { title: 'List available skills', value: 'list-skills' },
       { title: 'List supported agents', value: 'list-agents' },
       { title: 'Exit', value: 'exit' }
@@ -114,49 +226,7 @@ async function interactiveMode() {
   }
 
   if (action === 'install') {
-    const skills = listSkills();
-
-    const { selectedSkill } = await prompts({
-      type: 'select',
-      name: 'selectedSkill',
-      message: 'Select a skill to install:',
-      choices: skills.map(s => ({ title: `${s.name} - ${s.description}`, value: s.id }))
-    });
-
-    if (!selectedSkill) {
-      console.log(chalk.yellow('No skill selected. Exiting.'));
-      process.exit(0);
-    }
-
-    const agents = listAgents();
-
-    const { selectedAgents } = await prompts({
-      type: 'multiselect',
-      name: 'selectedAgents',
-      message: 'Select agents to install this skill for:',
-      choices: agents.map(a => ({ title: a.name, value: a.id, selected: false })),
-      min: 1
-    });
-
-    if (!selectedAgents || selectedAgents.length === 0) {
-      console.log(chalk.yellow('No agents selected. Exiting.'));
-      process.exit(0);
-    }
-
-    const { installPath } = await prompts({
-      type: 'text',
-      name: 'installPath',
-      message: 'Installation path (leave empty for default):',
-      initial: ''
-    });
-
-    try {
-      await installSkill(selectedSkill, selectedAgents, installPath);
-      console.log(chalk.bold.green('\n Installation complete!\n'));
-    } catch (error) {
-      console.error(chalk.red('\n Installation failed:'), error.message);
-      process.exit(1);
-    }
+    await installWizard();
   }
 }
 
@@ -184,7 +254,7 @@ async function main() {
     case 'version':
     case '--version':
     case '-v':
-      console.log(`ai-agent-skills v${VERSION}`);
+      console.log(`${NAME} v${VERSION}`);
       break;
     default:
       await interactiveMode();
