@@ -1,8 +1,3 @@
----
-name: verify-hardened-docker
-description: Comprehensive security verification for Docker configurations. Checks Dockerfile, docker-compose.yml, and running containers against CIS Docker Benchmark, OWASP, and NIST SP 800-190 standards. Scans for vulnerabilities, leaked secrets, insecure configurations, and missing hardening controls.
----
-
 # Verify Hardened Docker
 
 ## Overview

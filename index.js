@@ -1,20 +1,22 @@
 /**
- * AI Agent Skills - Programmatic API
+ * ma-agents - Programmatic API
  *
  * This module exports the core functionality for use as a library.
- * For CLI usage, use: npx ai-agent-skills
+ * For CLI usage, use: npx ma-agents
  */
 
-const { installSkill, listSkills, listAgents } = require('./lib/installer');
+const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, readManifest, getInstalledSkillInfo, compareSemver } = require('./lib/installer');
 const { getAgent, getAllAgents } = require('./lib/agents');
 
 module.exports = {
-  // Installer functions
   installSkill,
+  uninstallSkill,
+  getStatus,
   listSkills,
   listAgents,
-
-  // Agent functions
+  readManifest,
+  getInstalledSkillInfo,
+  compareSemver,
   getAgent,
   getAllAgents
 };

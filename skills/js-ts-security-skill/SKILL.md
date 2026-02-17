@@ -1,7 +1,3 @@
----
-name: js-ts-security-skill
-description: Verify the security of JavaScript and TypeScript codebases against OWASP Top 10 2025 standards.
----
 
 # JS/TS Security Skill
 

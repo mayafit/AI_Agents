@@ -1,8 +1,3 @@
----
-name: create-hardened-docker
-description: Creates production-ready hardened Docker configurations (Dockerfile, docker-compose.yml, nginx.conf, .dockerignore) following CIS Docker Benchmark, OWASP, and NIST SP 800-190 standards. Includes multi-stage builds, non-root execution, read-only filesystems, capability dropping, and comprehensive security hardening.
----
-
 # Create Hardened Docker
 
 ## Overview

@@ -1,8 +1,3 @@
----
-name: skill-creator
-description: Guide for creating effective skills. This skill should be used when users want to create a new skill (or update an existing skill) that extends Claude's capabilities with specialized knowledge, workflows, or tool integrations.
----
-
 # Skill Creator
 
 ## Description
@@ -34,15 +29,18 @@ Follow these steps in order:
 
 ```
 skill-name/
-├── SKILL.md (required — YAML frontmatter + markdown body)
+├── skill.json (required — single source of truth for metadata)
+├── SKILL.md (required — pure Markdown, no frontmatter)
 ├── scripts/          (executable code, Python/Bash)
 ├── references/       (documentation loaded into context as needed)
+├── examples/         (sample outputs showing expected format)
+├── hooks/            (git hooks or other hook scripts)
 └── assets/           (files used in output: templates, images, fonts)
 ```
 
-### SKILL.md Frontmatter
+### skill.json (metadata)
 
-Only `name` and `description` are required. Description is the primary trigger mechanism — include both what the skill does AND when to use it.
+Contains `name`, `description`, `version`, `author`, `tags`. The `description` is the primary trigger mechanism — include both what the skill does AND when to use it. The installer automatically injects YAML frontmatter from skill.json into the installed SKILL.md.
 
 ### Bundled Resources
 

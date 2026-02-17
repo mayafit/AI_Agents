@@ -1,8 +1,3 @@
----
-name: git-workflow-skill
-description: Mandatory feature branch workflow using git worktrees for parallel multi-agent development. Use this skill BEFORE making ANY change to files in a Git repository that are not ignored by .gitignore. Enforces isolated worktrees per feature, conventional commits, and PR-based merging. Supports multiple AI agents working simultaneously on different features without conflicts.
----
-
 # Git Workflow (Worktree-Based)
 
 Multi-agent parallel development using git worktrees. Each agent gets an isolated working directory — no branch switching, no conflicts between agents.
