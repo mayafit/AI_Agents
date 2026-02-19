@@ -1,0 +1,13 @@
+{
+    "name": "Logging Best Practices",
+    "description": "Standardizes structured logging across Backend, Frontend, Realtime, and Algorithmic domains with mandatory exception handling.",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "logging",
+        "observability",
+        "json",
+        "opentelemetry",
+        "quality"
+    ]
+}

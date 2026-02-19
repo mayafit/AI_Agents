@@ -1,0 +1,12 @@
+{
+    "name": "Test-Accompanied Development",
+    "description": "Enforces writing unit tests for every new public method created by the agent.",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "testing",
+        "quality",
+        "policy",
+        "tdd"
+    ]
+}

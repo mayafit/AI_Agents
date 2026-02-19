@@ -191,6 +191,31 @@ Creates production-ready hardened Docker configurations following security best 
 
 ---
 
+### 5. Test-Accompanied Development (TAD)
+**Directory:** `test-accompanied-development/`
+
+Enforces a "Test-Alongside" policy where every public method is accompanied by a corresponding unit test. It ensures high code quality by mandating that all public interfaces are verified by automated tests at the moment of creation.
+
+**Key Features:**
+- ✅ **Automatic Enforcement**: Mandates tests for every new public method.
+- ✅ **Integration**: References `test-generator` for implementation standards.
+- ✅ **Workflow Guardrail**: Prevents "test debt" by requiring tests alongside code.
+
+---
+
+### 6. Logging Best Practices
+**Directory:** `logging-best-practices/`
+
+Standardizes structured logging (JSON) across Backend, Frontend, Realtime, and Algorithmic domains. Enforces mandatory exception logging and OpenTelemetry-aligned context fields.
+
+**Key Features:**
+- ✅ **Structured Logging**: Mandates JSON format for machine-readability.
+- ✅ **Domain-Specific**: Tailored guidance for Web, Server, and High-Performance Algorithm domains.
+- ✅ **Mandatory Exceptions**: Every catch block must log full stack traces.
+- ✅ **Context-Rich**: Standardizes fields like `trace_id`, `placement`, and `process_name`.
+
+---
+
 ## Requirements
 
 ### All Skills
