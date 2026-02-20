@@ -4,5 +4,17 @@
   "version": "1.0.0",
   "author": "vercel-labs",
   "source": "https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices",
-  "tags": ["react", "nextjs", "performance", "optimization", "vercel", "best-practices"]
+  "tags": [
+    "react",
+    "nextjs",
+    "performance",
+    "optimization",
+    "vercel",
+    "best-practices"
+  ],
+  "applies_when": [
+    "working on React or Next.js components",
+    "optimizing page performance",
+    "reviewing frontend code architecture"
+  ]
 }

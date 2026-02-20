@@ -7,7 +7,7 @@ This directory contains reusable skills for development workflows.
 ### 1. Git Workflow Skill
 **Directory:** `git-workflow-skill/`
 
-Mandatory feature branch workflow for Git operations. Enforces branch creation from dev, conventional commits, automatic PR creation, and returns to dev branch after push.
+**MANDATORY** feature branch workflow for ALL file-changing operations. Enforces branch creation via worktrees, conventional commits, automatic PR creation, and returns to dev branch after push. Agents MUST use this skill for every activity that modifies tracked repository files.
 
 **Usage:**
 ```bash

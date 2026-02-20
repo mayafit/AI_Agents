@@ -1,3 +1,15 @@
+# Mandatory Usage Policy (CRITICAL)
+
+**This skill is MANDATORY for all activities that modify tracked files in this repository.**
+
+1.  **Before starting ANY work** that changes source code, config files, or documentation: You MUST run `./scripts/start-feature.sh` (or the equivalent `git worktree add`) to create an isolated feature branch and worktree.
+2.  **During development**: You MUST perform all file-writing activities inside the newly created worktree directory.
+3.  **After completing work**: You MUST run `./scripts/finish-feature.sh` (or the equivalent rebase/push/PR/cleanup sequence) to integrate your changes and clean up the worktree.
+
+**Failure to follow this workflow is a violation of repository standards.**
+
+---
+
 # Git Workflow (Worktree-Based)
 
 Multi-agent parallel development using git worktrees. Each agent gets an isolated working directory — no branch switching, no conflicts between agents.
@@ -168,10 +180,11 @@ git worktree prune
 
 ## Critical Rules
 
-- **NEVER** modify tracked files without being in a worktree on a feature branch
-- **NEVER** commit directly to `dev` or `main`
-- **ALWAYS** check if file is gitignored before applying this workflow
-- **ALWAYS** create a worktree before any tracked file changes
-- **ALWAYS** rebase on `dev` before pushing
-- **ALWAYS** use conventional commit format
-- **ALWAYS** add `.worktrees/` to your `.gitignore`
+- **NEVER** modify tracked files without being in a worktree on a feature branch.
+- **NEVER** commit directly to `dev` or `main`.
+- **ALWAYS** check if a file is gitignored before applying this workflow.
+- **ALWAYS** create a worktree **BEFORE** calling any file-writing tools (write_to_file, replace_file_content, etc.).
+- **ALWAYS** rebase on `dev` before pushing.
+- **ALWAYS** use conventional commit format.
+- **ALWAYS** add `.worktrees/` to your `.gitignore`.
+- **ALWAYS** finish the workflow by creating a PR and removing the worktree once work is verified.

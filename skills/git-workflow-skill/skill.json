@@ -1,7 +1,21 @@
 {
   "name": "Git Workflow",
-  "description": "Worktree-based feature branch workflow for parallel multi-agent development with conventional commits and PR-based merging",
-  "version": "2.0.0",
+  "description": "MANDATORY worktree-based workflow for ALL file-changing activities. Enforces isolated feature branches, conventional commits, and PR-based merging.",
+  "version": "2.1.0",
   "author": "AI Agent Skills",
-  "tags": ["git", "worktrees", "workflow", "branching", "conventional-commits", "pull-requests", "multi-agent"]
+  "tags": [
+    "git",
+    "worktrees",
+    "workflow",
+    "branching",
+    "conventional-commits",
+    "pull-requests",
+    "multi-agent"
+  ],
+  "applies_when": [
+    "committing changes",
+    "creating branches or PRs",
+    "any code writing or modification task"
+  ],
+  "always_load": true
 }

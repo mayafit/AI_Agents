@@ -3,5 +3,16 @@
   "description": "Verify security of JavaScript and TypeScript codebases against OWASP Top 10 2025 standards",
   "version": "1.0.0",
   "author": "AI Agent Skills",
-  "tags": ["javascript", "typescript", "security", "OWASP", "vulnerability-scanning"]
+  "tags": [
+    "javascript",
+    "typescript",
+    "security",
+    "OWASP",
+    "vulnerability-scanning"
+  ],
+  "applies_when": [
+    "writing or reviewing security-critical code",
+    "analyzing third-party dependencies",
+    "performing security audits"
+  ]
 }

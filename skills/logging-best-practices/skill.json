@@ -9,5 +9,10 @@
         "json",
         "opentelemetry",
         "quality"
+    ],
+    "applies_when": [
+        "writing new service classes",
+        "reviewing or modifying existing log statements",
+        "adding error handling"
     ]
 }

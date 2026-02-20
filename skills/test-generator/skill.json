@@ -3,5 +3,15 @@
   "description": "Generates comprehensive unit and integration tests",
   "version": "1.0.0",
   "author": "AI Agent Skills",
-  "tags": ["testing", "unit-tests", "integration-tests", "quality"]
+  "tags": [
+    "testing",
+    "unit-tests",
+    "integration-tests",
+    "quality"
+  ],
+  "applies_when": [
+    "creating new code files",
+    "adding complex logic",
+    "refactoring existing code"
+  ]
 }
