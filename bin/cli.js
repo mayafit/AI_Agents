@@ -120,60 +120,113 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
   const skills = listSkills();
   const agents = listAgents();
 
+  let selectedSkillIds = preselectedSkill ? [preselectedSkill] : [];
+  let selectedAgentIds = preselectedAgents || [];
+  let installScope = 'project';
+  let installPath = customPath || '';
+
+  const existingStatus = getStatus([], '', 'project');
+  let isUpdate = false;
+
+  // Step 0: Check for existing installation ONLY in interactive mode (no preselected skill)
+  if (!preselectedSkill && !customPath && existingStatus.length > 0) {
+    console.log(chalk.cyan('\n Existing installation detected in project.'));
+
+    const { action } = await prompts({
+      type: 'select',
+      name: 'action',
+      message: 'What would you like to do?',
+      choices: [
+        { title: 'Update (add/remove skills)', value: 'update' },
+        { title: 'Clean reinstall (remove all first)', value: 'reinstall' },
+        { title: 'Uninstall all skills', value: 'uninstall' },
+        { title: 'Cancel', value: 'cancel' }
+      ]
+    });
+
+    if (!action || action === 'cancel') process.exit(0);
+
+    if (action === 'uninstall') {
+      const { confirmed } = await prompts({
+        type: 'confirm',
+        name: 'confirmed',
+        message: 'This will remove all ma-agents skills from this project. Are you sure?',
+        initial: false
+      });
+      if (!confirmed) process.exit(0);
+
+      for (const entry of existingStatus) {
+        for (const skillId of Object.keys(entry.skills)) {
+          await uninstallSkill(skillId, [entry.agent.id], '', 'project');
+        }
+      }
+      console.log(chalk.bold.green('\n All skills successfully removed!\n'));
+      return;
+    }
+
+    if (action === 'reinstall') {
+      for (const entry of existingStatus) {
+        for (const skillId of Object.keys(entry.skills)) {
+          await uninstallSkill(skillId, [entry.agent.id], '', 'project');
+        }
+      }
+      console.log(chalk.gray(' Clean slate prepared.'));
+    }
+
+    if (action === 'update') {
+      isUpdate = true;
+      // Pre-populate selections from existing status
+      const existingSkillIds = new Set();
+      const existingAgentIds = new Set();
+      existingStatus.forEach(entry => {
+        existingAgentIds.add(entry.agent.id);
+        Object.keys(entry.skills).forEach(id => existingSkillIds.add(id));
+      });
+      selectedSkillIds = Array.from(existingSkillIds);
+      selectedAgentIds = Array.from(existingAgentIds);
+    }
+  }
+
   // Step 1: Select skills
-  let selectedSkillIds;
-  if (preselectedSkill) {
-    selectedSkillIds = [preselectedSkill];
-  } else {
+  if (selectedSkillIds.length === 0 || isUpdate) {
     const { skills: chosen } = await prompts({
       type: 'multiselect',
       name: 'skills',
-      message: 'Which skills do you want to install?',
+      message: 'Select the skills you want to have installed:',
       choices: skills.map(s => ({
         title: chalk.white(s.name) + chalk.gray(` v${s.version} - ${s.description}`),
         value: s.id,
-        selected: false
+        selected: selectedSkillIds.includes(s.id)
       })),
       instructions: chalk.gray('  Use space to select, enter to confirm'),
       min: 1
     });
 
-    if (!chosen || chosen.length === 0) {
-      console.log(chalk.yellow('No skills selected. Exiting.'));
-      process.exit(0);
-    }
+    if (!chosen) process.exit(0);
     selectedSkillIds = chosen;
   }
 
   // Step 2: Select agents
-  let selectedAgentIds;
-  if (preselectedAgents && preselectedAgents.length > 0) {
-    selectedAgentIds = preselectedAgents;
-  } else {
+  if (selectedAgentIds.length === 0 || isUpdate) {
     const { agents: chosen } = await prompts({
       type: 'multiselect',
       name: 'agents',
-      message: 'Which coding agents do you want to install to?',
+      message: 'Select which coding agents to include:',
       choices: agents.map(a => ({
         title: chalk.white(a.name) + chalk.gray(` v${a.version} - ${a.description}`),
         value: a.id,
-        selected: false
+        selected: selectedAgentIds.includes(a.id)
       })),
       instructions: chalk.gray('  Use space to select, enter to confirm'),
       min: 1
     });
 
-    if (!chosen || chosen.length === 0) {
-      console.log(chalk.yellow('No agents selected. Exiting.'));
-      process.exit(0);
-    }
+    if (!chosen) process.exit(0);
     selectedAgentIds = chosen;
   }
 
-  // Step 3: Installation scope
-  let installPath = customPath || '';
-  let installScope = 'project';
-  if (!installPath) {
+  // Step 3: Scope (Skip if update, we already know it's project)
+  if (!isUpdate && !installPath) {
     const { pathChoice } = await prompts({
       type: 'select',
       name: 'pathChoice',
@@ -209,16 +262,33 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
   const { confirmed } = await prompts({
     type: 'confirm',
     name: 'confirmed',
-    message: 'Proceed with installation?',
+    message: isUpdate ? 'Apply changes?' : 'Proceed with installation?',
     initial: true
   });
 
   if (!confirmed) {
-    console.log(chalk.yellow('Installation cancelled.'));
+    console.log(chalk.yellow('Operation cancelled.'));
     process.exit(0);
   }
 
-  // Step 5: Install each skill (with upgrade detection)
+  // Step 5: Execution
+  if (isUpdate) {
+    // Identify removals
+    const currentlyInstalled = new Set();
+    existingStatus.forEach(entry => Object.keys(entry.skills).forEach(id => currentlyInstalled.add(id)));
+
+    const finalSkills = new Set(selectedSkillIds);
+    const toRemove = [...currentlyInstalled].filter(id => !finalSkills.has(id));
+
+    if (toRemove.length > 0) {
+      console.log(chalk.gray(`\n  Cleaning up ${toRemove.length} removed skills...`));
+      for (const skillId of toRemove) {
+        await uninstallSkill(skillId, selectedAgentIds, installPath, 'project');
+      }
+    }
+  }
+
+  // Install requested skills
   for (const skillId of selectedSkillIds) {
     try {
       await installSkill(skillId, selectedAgentIds, installPath, installScope, { force: !!forceFlag });
@@ -227,7 +297,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     }
   }
 
-  console.log(chalk.bold.green('\n Installation complete!\n'));
+  console.log(chalk.bold.green('\n Done!\n'));
 }
 
 // --- Command handlers ---
