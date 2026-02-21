@@ -289,6 +289,19 @@ Enforces safe multi-threading using RAII locking and task-based parallelism (C++
 
 ---
 
+### 13. Modern CMake Best Practices
+**Directory:** `cmake-best-practices/`
+
+Enforces target-based, property-oriented CMake patterns (CMake 3.0+ philosophy).
+
+**Key Features:**
+- ✅ **Target-Centric**: Bans global commands (e.g., `include_directories`) in favor of `target_*`.
+- ✅ **Visibility Hygiene**: Enforces `PUBLIC`, `PRIVATE`, and `INTERFACE` scopes.
+- ✅ **Feature-Based**: Uses `target_compile_features` for C++ standard management.
+- ✅ **Clean Flags**: Bans global `CMAKE_CXX_FLAGS` manipulation.
+
+---
+
 ## Requirements
 
 ### All Skills

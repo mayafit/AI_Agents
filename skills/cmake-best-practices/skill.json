@@ -1,0 +1,18 @@
+{
+    "name": "Modern CMake Best Practices",
+    "description": "Enforce target-based, property-oriented CMake patterns (CMake 3.0+).",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "cmake",
+        "cpp",
+        "build-system",
+        "devops"
+    ],
+    "applies_when": [
+        "creating or modifying CMakeLists.txt files",
+        "managing C++ project dependencies via CMake",
+        "defining C++ build configurations"
+    ],
+    "always_load": true
+}
