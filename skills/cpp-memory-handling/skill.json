@@ -1,0 +1,20 @@
+{
+    "name": "C++ Safe Memory Handling",
+    "description": "Enforces Modern C++ practices (RAII, Smart Pointers) to prevent memory leaks, dangling pointers, and buffer overflows.",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "cpp",
+        "memory-management",
+        "raii",
+        "smart-pointers",
+        "cplusplus",
+        "security"
+    ],
+    "applies_when": [
+        "writing c++ code",
+        "modifying memory-intensive C++ logic",
+        "debugging memory leaks in c++",
+        "implementing new c++ classes"
+    ]
+}

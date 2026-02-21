@@ -1,0 +1,18 @@
+{
+    "name": "C++ Robust Interfaces",
+    "description": "Enforce contract-based design and strong typing in C++ interfaces (C++14+).",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "cpp",
+        "interfaces",
+        "contracts",
+        "gsl",
+        "type-safety"
+    ],
+    "applies_when": [
+        "creating or modifying C++ header files",
+        "designing C++ function signatures",
+        "defining C++ APIs or public interfaces"
+    ]
+}

@@ -216,6 +216,79 @@ Standardizes structured logging (JSON) across Backend, Frontend, Realtime, and A
 
 ---
 
+### 7. OpenTelemetry Best Practices
+**Directory:** `opentelemetry-best-practices/`
+
+Standardizes distributed tracing, metrics, and semantic conventions for high-quality system observability. Enforces trace context propagation and OTel semantic naming.
+
+**Key Features:**
+- ✅ **Standardized Tracing**: Mandates spans for DB calls and external requests.
+- ✅ **Semantic Conventions**: Enforces OTel naming standards.
+- ✅ **Context Propagation**: Ensures trace IDs flow across async boundaries.
+
+---
+
+### 8. C++ Safe Memory Handling
+**Directory:** `cpp-memory-handling/`
+
+Enforces Modern C++ practices (RAII, Smart Pointers) to prevent memory leaks and dangling pointers.
+
+**Key Features:**
+- ✅ **Smart Pointers**: Mandates `std::unique_ptr` and `std::shared_ptr`.
+- ✅ **RAII**: Ensures every resource is bound to object lifetimes.
+- ✅ **Safe Containers**: Forbids raw buffers in favor of `std::vector` and `std::string`.
+
+---
+
+### 9. C++ Robust Interfaces
+**Directory:** `cpp-robust-interfaces/`
+
+Enforces contract-based design and strong typing in C++ signatures (C++14+).
+
+**Key Features:**
+- ✅ **Contracts**: Enforces `Expects()` and `Ensures()` validation.
+- ✅ **Strong Typing**: Discourages boolean blindness in favor of enums.
+- ✅ **Ownership Clarity**: Forbids owning raw pointers in interfaces.
+- ✅ **Span Support**: Uses `gsl::span` for safe sequence passing.
+
+---
+
+### 10. C++ Modern Composition
+**Directory:** `cpp-modern-composition/`
+
+Replaces legacy C-style patterns with modern STL and Ranges-based composition (C++14+).
+
+**Key Features:**
+- ✅ **STL Algorithms**: Mandates `<algorithm>` over manual loops.
+- ✅ **Zero Macros/C-Casts**: Enforces `constexpr` and `static_cast`.
+- ✅ **Universal Init**: Uses `{}` to prevent narrowing and parsing errors.
+
+---
+
+### 11. C++ Const-Correctness & Logic
+**Directory:** `cpp-const-correctness/`
+
+Enforces immutability-by-default and pushes logic to compile-time (C++14+).
+
+**Key Features:**
+- ✅ **Immutable Default**: Mandates `const` for all local variables.
+- ✅ **Const Members**: Ensures inspectors are correctly marked `const`.
+- ✅ **constexpr Logic**: Pushes mathematical and config logic to compile-time.
+
+---
+
+### 12. C++ Safety-First Concurrency
+**Directory:** `cpp-concurrency-safety/`
+
+Enforces safe multi-threading using RAII locking and task-based parallelism (C++14+).
+
+**Key Features:**
+- ✅ **RAII Locking**: Mandates `std::lock_guard` and `std::scoped_lock`.
+- ✅ **Task-Based**: Prefers `std::async` over raw `std::thread`.
+- ✅ **Race Prevention**: Enforces "No shared mutable state" policies.
+
+---
+
 ## Requirements
 
 ### All Skills

@@ -1,0 +1,19 @@
+{
+    "name": "C++ Safety-First Concurrency",
+    "description": "Enforce safe multi-threading patterns using RAII locking and task-based parallelism (C++14+).",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "cpp",
+        "concurrency",
+        "threads",
+        "mutex",
+        "raii"
+    ],
+    "applies_when": [
+        "working with C++ threads",
+        "using C++ mutexes or locking primitives",
+        "performing C++ asynchronous operations",
+        "designing multi-threaded C++ systems"
+    ]
+}

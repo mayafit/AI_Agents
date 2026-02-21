@@ -1,0 +1,19 @@
+{
+    "name": "C++ Const-Correctness & Logic",
+    "description": "Enforce immutability-by-default and push logic to compile-time using constexpr (C++14+).",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "cpp",
+        "const",
+        "constexpr",
+        "immutability",
+        "optimization"
+    ],
+    "applies_when": [
+        "declaring C++ variables",
+        "defining C++ member functions",
+        "performing C++ compile-time calculations",
+        "optimizing C++ logic"
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "name": "OpenTelemetry Best Practices",
+    "description": "Standardizes distributed tracing, metrics, and semantic conventions for high-quality system observability.",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "opentelemetry",
+        "observability",
+        "tracing",
+        "metrics",
+        "distributed-systems"
+    ],
+    "applies_when": [
+        "implementing api endpoints",
+        "handling distributed requests",
+        "optimizing performance",
+        "adding monitoring"
+    ]
+}
