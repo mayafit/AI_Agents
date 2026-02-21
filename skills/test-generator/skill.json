@@ -7,6 +7,8 @@
     "testing",
     "unit-tests",
     "integration-tests",
+    "python",
+    "pytest",
     "quality"
   ],
   "applies_when": [

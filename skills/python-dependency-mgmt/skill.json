@@ -1,0 +1,21 @@
+{
+    "name": "Python Dependency Management",
+    "description": "Standardize Python dependency handling using uv and pip (requirements.txt).",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "python",
+        "uv",
+        "pip",
+        "dependencies",
+        "packaging",
+        "best-practices"
+    ],
+    "applies_when": [
+        "managing Python project dependencies",
+        "configuring Python build systems",
+        "updating requirements.txt or uv.lock",
+        "setting up Python development environments"
+    ],
+    "always_load": true
+}

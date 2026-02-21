@@ -35,8 +35,9 @@ Generate comprehensive unit and integration tests for code.
 - Mock external dependencies
 - Clear assertion messages
 
-## Example Output
+## Example Outputs
 
+### JavaScript (Jest)
 ```javascript
 describe('ComponentName', () => {
   test('should [behavior] when [condition]', () => {
@@ -49,13 +50,25 @@ describe('ComponentName', () => {
     // Assert
     expect(result).toEqual(expectedOutput);
   });
-
-  test('should handle edge case', () => {
-    // ...
-  });
-
-  test('should throw on invalid input', () => {
-    expect(() => fn(invalid)).toThrow();
-  });
 });
+```
+
+### Python (Pytest)
+```python
+import pytest
+from app.module import function_under_test
+
+def test_should_behavior_when_condition():
+    # Arrange
+    input_data = setup_test_data()
+    
+    # Act
+    result = function_under_test(input_data)
+    
+    # Assert
+    assert result == expected_output
+
+def test_should_raise_on_invalid_input():
+    with pytest.raises(ValueError):
+        function_under_test(None)
 ```

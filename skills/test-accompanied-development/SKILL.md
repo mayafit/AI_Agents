@@ -33,7 +33,14 @@ To ensure high code quality and maintainability by mandating that all public int
 
 ## Example Workflow
 
+### TypeScript (Jest)
 1.  **Agent**: "I am adding a `calculateTotal` method to the `InvoiceService`. I will also create `InvoiceService.test.ts` to verify it."
 2.  **Agent**: [Writes `calculateTotal` in `InvoiceService.ts`]
 3.  **Agent**: [Writes tests in `InvoiceService.test.ts` using `test-generator` patterns]
 4.  **Agent**: "Method and tests are complete. Running tests now..."
+
+### Python (Pytest)
+1.  **Agent**: "I am adding a `validate_user` function to `auth.py`. I will also create `tests/test_auth.py` to verify it."
+2.  **Agent**: [Writes `validate_user` in `auth.py`]
+3.  **Agent**: [Writes tests in `tests/test_auth.py` using `test-generator` patterns]
+4.  **Agent**: "Implementation and tests are ready. Running `pytest`."

@@ -7,7 +7,9 @@
         "testing",
         "quality",
         "policy",
-        "tdd"
+        "tdd",
+        "python",
+        "pytest"
     ],
     "applies_when": [
         "writing or reviewing public APIs",

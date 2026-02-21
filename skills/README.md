@@ -302,6 +302,56 @@ Enforces target-based, property-oriented CMake patterns (CMake 3.0+ philosophy).
 
 ---
 
+### 14. Code Documentation Best Practices
+**Directory:** `code-documentation/`
+
+Enforces standardized file headers and method documentation across C++, C#, JS, and TS.
+
+**Key Features:**
+- ✅ **Standardized Headers**: Mandatory purpose, author, and version metadata.
+- ✅ **Language Standards**: Supporting Doxygen (C++), XML (C#), and JSDoc (JS/TS).
+- ✅ **Semantic Richness**: Mandates documenting `@param`, `@returns`, and `@throws`.
+
+---
+
+### 15. Python Security Best Practices
+**Directory:** `python-security-skill/`
+
+Enforces secure Python coding standards aligned with OWASP Top 10 2025.
+
+**Key Features:**
+- ✅ **Injection Prevention**: Bans `eval()`, `exec()`, and insecure shell commands.
+- ✅ **Secure Serialization**: Mandates `json` over `pickle` for untrusted data.
+- ✅ **Crypto Standards**: Enforces `secrets` module and modern hashing (SHA256+).
+- ✅ **Supply Chain**: Integrated with `pip-audit` and version pinning logic.
+
+---
+
+### 16. Python Dependency Management
+**Directory:** `python-dependency-mgmt/`
+
+Standardizes Python dependency handling using `uv` and `pip` (requirements.txt).
+
+**Key Features:**
+- ✅ **uv Mastery**: Full support for `uv lock`, `uv sync`, and `pyproject.toml`.
+- ✅ **Legacy Support**: Layered `requirements.txt` (pinned + hashes).
+- ✅ **Isolation**: Enforces virtual environment discipline and `.venv` usage.
+
+---
+
+### 17. JS/TS Dependency Management
+**Directory:** `js-ts-dependency-mgmt/`
+
+Standardizes package management and security across NPM, Yarn, and PNPM.
+
+**Key Features:**
+- ✅ **Build Stability**: Protocols for version pinning and lockfile discipline.
+- ✅ **Security Audit**: Mandatory `npm audit` / `yarn audit` integration.
+- ✅ **Categorization**: Correct usage of `dependencies` vs `devDependencies`.
+- ✅ **Hygiene**: Standardized `.npmrc` and registry security settings.
+
+---
+
 ## Requirements
 
 ### All Skills

@@ -1,0 +1,23 @@
+{
+    "name": "JS/TS Dependency Management",
+    "description": "Standardize package management and security across NPM, Yarn, and PNPM.",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "javascript",
+        "typescript",
+        "npm",
+        "yarn",
+        "pnpm",
+        "dependencies",
+        "security",
+        "best-practices"
+    ],
+    "applies_when": [
+        "managing JavaScript or TypeScript project dependencies",
+        "configuring package.json, npmrc, or lockfiles",
+        "updating NPM/Yarn/PNPM packages",
+        "auditing JS/TS supply chain security"
+    ],
+    "always_load": true
+}

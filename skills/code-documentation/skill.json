@@ -1,0 +1,23 @@
+{
+    "name": "Code Documentation Best Practices",
+    "description": "Standardize file headers and method documentation across C++, C#, JS, TS, and Python.",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "documentation",
+        "best-practices",
+        "cpp",
+        "csharp",
+        "javascript",
+        "typescript",
+        "doxygen",
+        "jsdoc"
+    ],
+    "applies_when": [
+        "creating or modifying source code files",
+        "defining new functions, methods, or classes",
+        "refactoring code logic",
+        "documenting APIs"
+    ],
+    "always_load": true
+}
