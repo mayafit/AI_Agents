@@ -189,21 +189,37 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
   // Step 1: Select skills
   if (selectedSkillIds.length === 0 || isUpdate) {
-    const { skills: chosen } = await prompts({
-      type: 'multiselect',
-      name: 'skills',
-      message: 'Select the skills you want to have installed:',
-      choices: skills.map(s => ({
-        title: chalk.white(s.name) + chalk.gray(` v${s.version} - ${s.description}`),
-        value: s.id,
-        selected: selectedSkillIds.includes(s.id)
-      })),
-      instructions: chalk.gray('  Use space to select, enter to confirm'),
-      min: 1
+    const { selectionType } = await prompts({
+      type: 'select',
+      name: 'selectionType',
+      message: 'Would you like to install all available skills or choose specific ones?',
+      choices: [
+        { title: 'Install all available skills', value: 'all' },
+        { title: 'Choose which skills to install', value: 'custom' }
+      ]
     });
 
-    if (!chosen) process.exit(0);
-    selectedSkillIds = chosen;
+    if (!selectionType) process.exit(0);
+
+    if (selectionType === 'all') {
+      selectedSkillIds = skills.map(s => s.id);
+    } else {
+      const { skills: chosen } = await prompts({
+        type: 'multiselect',
+        name: 'skills',
+        message: 'Select the skills you want to have installed:',
+        choices: skills.map(s => ({
+          title: chalk.white(s.name) + chalk.gray(` v${s.version} - ${s.description}`),
+          value: s.id,
+          selected: selectedSkillIds.includes(s.id)
+        })),
+        instructions: chalk.gray('  Use space to select, enter to confirm'),
+        min: 1
+      });
+
+      if (!chosen) process.exit(0);
+      selectedSkillIds = chosen;
+    }
   }
 
   // Step 2: Select agents
