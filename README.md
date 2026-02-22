@@ -5,7 +5,7 @@ A universal NPX tool to install AI coding agent skills. Write skills once, insta
 ## Quick Start
 
 ```bash
-# Interactive wizard
+# Interactive wizard (Install All / Custom Select / Update / Uninstall)
 npx ma-agents
 
 # Direct install
@@ -23,6 +23,8 @@ Skills are written in a **unified generic format** and stored in this package. W
 2. Injects YAML frontmatter from `skill.json` (the single source of metadata)
 3. Copies the skill and its resources into the target agent's directory
 4. Renames resource directories to match the agent's native structure (e.g., `references/` becomes `docs/` for Cline)
+5. **Generates `MANIFEST.yaml`**: A central discovery file for the agent to find all installed skills.
+6. **Updates Instructions**: Injects planning hints into agent files (e.g., `CLAUDE.md`, `.clinerules`) to ensure the agent uses the skills.
 
 ```
 Generic (this repo)                    Installed Output
@@ -32,51 +34,90 @@ skills/code-review/
 ├── SKILL.md          ──────────►     .claude/skills/code-review/SKILL.md
 ├── scripts/          ──────────►     .claude/skills/code-review/scripts/
 └── references/       ──────────►     .claude/skills/code-review/references/
+                                       + Generated MANIFEST.yaml
+                                       + Updated Agent Instructions (CLAUDE.md, etc.)
 ```
 
 ## Supported Agents
 
-| Agent | Project Path | Template |
-|-------|-------------|----------|
-| Claude Code | `.claude/skills/` | `claude-code` |
-| Google Gemini | `.gemini/skills/` | `generic` |
-| GitHub Copilot | `.github/copilot/skills/` | `generic` |
-| Cursor | `.cursor/skills/` | `generic` |
-| Cline | `.cline/skills/` | `cline` |
-| Kilocode | `.kilocode/skills/` | `generic` |
+| Agent | Project Path | Template | Instruction File |
+|-------|-------------|----------|------------------|
+| Claude Code | `.claude/skills/` | `claude-code` | `CLAUDE.md` |
+| Google Gemini | `.gemini/skills/` | `generic` | - |
+| GitHub Copilot | `.github/copilot/skills/` | `generic` | - |
+| Cursor | `.cursor/skills/` | `generic` | - |
+| Cline | `.cline/skills/` | `cline` | `.clinerules` |
+| Kilocode | `.kilocode/skills/` | `generic` | - |
 
-## Available Skills
+## Available Skills (22)
 
-| Skill | Description |
-|-------|-------------|
-| `code-review` | Comprehensive code reviews following industry best practices and security guidelines |
-| `commit-message` | Generates conventional commit messages from code changes |
-| `test-generator` | Generates comprehensive unit and integration tests |
-| `git-workflow-skill` | Worktree-based feature branch workflow for parallel multi-agent development |
-| `skill-creator` | Guide for creating skills that extend AI agent capabilities |
-| `vercel-react-best-practices` | 57 actionable performance rules for React and Next.js projects |
-| `create-hardened-docker-skill` | Creates production-ready hardened Docker configurations (CIS, OWASP, NIST) |
-| `verify-hardened-docker-skill` | Security verification for Docker configurations against CIS/OWASP/NIST |
-| `js-ts-security-skill` | Security verification for JS/TS codebases against OWASP Top 10 2025 |
+| Skill ID | Domain | Description |
+| :--- | :--- | :--- |
+| **General** | | |
+| `code-review` | Quality | Comprehensive reviews following best practices and security guidelines |
+| `commit-message` | Git | Generates conventional commit messages from code changes |
+| `test-generator` | Testing | Generates comprehensive unit and integration tests |
+| `test-accompanied-development` | Quality | Enforces "test-alongside" policy for every public method |
+| `code-documentation` | Quality | Enforces PEP 257, Doxygen, JSDoc, and XML standards |
+| `skill-creator` | Meta | Guide for creating new skills to extend agent capabilities |
+| **Security** | | |
+| `python-security-skill` | Python | OWASP Top 10 2025 aligned guardrails for Python |
+| `js-ts-security-skill` | JS/TS | Security verification for JS/TS codebases (OWASP aligned) |
+| `create-hardened-docker-skill` | Docker | Creates production-ready hardened Docker (CIS/NIST) |
+| `verify-hardened-docker-skill` | Docker | Security verification for Docker configurations |
+| **Dependencies** | | |
+| `python-dependency-mgmt` | Python | Best practices for `uv` (lockfiles/sync) and `pip` |
+| `js-ts-dependency-mgmt` | JS/TS | Stability and security for NPM, Yarn, and PNPM |
+| **Modern C++** | | |
+| `cpp-memory-handling` | C++ | RAII, smart pointers, and safe buffer management |
+| `cpp-robust-interfaces` | C++ | Contract-based design and strong typing (C++14+) |
+| `cpp-modern-composition` | C++ | Replaces C-style patterns with STL and Ranges |
+| `cpp-const-correctness` | C++ | Immutability-by-default and `constexpr` logic |
+| `cpp-concurrency-safety` | C++ | RAII locking and task-based parallelism |
+| `cmake-best-practices` | Build | Target-based, property-oriented CMake patterns |
+| **Architecture** | | |
+| `logging-best-practices` | Logic | Standardized structured logging (JSON) across domains |
+| `opentelemetry-best-practices` | Logic | Distributed tracing and semantic conventions |
+| `vercel-react-best-practices` | Web | 57 Performance rules for React and Next.js |
+| `git-workflow-skill` | Git | Worktree-based feature branch workflow |
 
-List all skills:
-```bash
-npx ma-agents list
-```
+## Automated Skill Discovery
+
+`ma-agents` features an automated discovery system that ensures installed skills are actually used by the agent without manual configuration.
+
+### 1. The Manifest (`MANIFEST.yaml`)
+Every installation automatically generates a `MANIFEST.yaml` in the skills directory. It contains:
+- **Skill IDs and Paths**: Where to find the instructions.
+- **`applies_when` Conditions**: Hints about when a skill should be loaded (e.g., "when writing public APIs").
+- **`always_load` Flags**: Mandatory skills that should always be in context.
+
+### 2. Instruction Injection
+The installer automatically updates agent-specific instruction files (like `CLAUDE.md` or `.clinerules`) with a "Planning Instruction" block. This block tells the agent to:
+1. Consult the `MANIFEST.yaml` before starting a task.
+2. Select and read only the relevant skills for the current context.
+
+---
 
 ## CLI Usage
 
-```
-npx ma-agents                              Interactive wizard
-npx ma-agents install                      Interactive install wizard
-npx ma-agents install <skill> <agents...>  Install directly
-npx ma-agents list                         List available skills
-npx ma-agents agents                       List supported agents
-npx ma-agents help                         Show help
+```bash
+npx ma-agents                              # Launch interactive wizard
+npx ma-agents install                      # Interactive install wizard
+npx ma-agents status                       # Show installed skills and paths
+npx ma-agents list                         # List all available skills
+npx ma-agents agents                       # List supported agents
+npx ma-agents uninstall <skill> <agents>   # Direct uninstall
 ```
 
-### Install Options
+### The Interactive Wizard
+The easiest way to manage your skills is to simply run `npx ma-agents`. The wizard will guide you through:
+- **Install All**: One-click setup for the entire 22-skill suite.
+- **Custom Select**: Granularly choose specific skills and agents.
+- **Update**: Add or remove skills from an existing installation.
+- **Clean Reinstall**: Wipe the slate and start fresh.
+- **Uninstall All**: Remove all ma-agents artifacts from the project.
 
+### Install Options (Direct)
 ```bash
 # Default: installs to project-level paths (current directory)
 npx ma-agents install code-review claude-code
@@ -88,20 +129,19 @@ npx ma-agents install code-review claude-code --global
 npx ma-agents install code-review claude-code --path ./my-skills
 ```
 
-### Installation Scope
+## Requirements
 
-By default, skills install at **project level** (relative to where the command is run):
+### Global Requirements
+- **Node.js**: v16+ (npx support)
+- **Git**: Required for git-related skills and version detection.
+- **Bash**: Most skill scripts require a bash-compliant shell.
 
-| Agent | Project Path |
-|-------|-------------|
-| Claude Code | `.claude/skills/<skill-name>/SKILL.md` |
-| Gemini | `.gemini/skills/<skill-name>/SKILL.md` |
-| Copilot | `.github/copilot/skills/<skill-name>/SKILL.md` |
-| Cursor | `.cursor/skills/<skill-name>/SKILL.md` |
-| Cline | `.cline/skills/<skill-name>/SKILL.md` |
-| Kilocode | `.kilocode/skills/<skill-name>/SKILL.md` |
-
-Use `--global` to install to user-level directories instead.
+### Skill-Specific Requirements
+- **Python Security/Deps**: `pip`, `uv` (recommended), `pip-audit`.
+- **JS/TS Security/Deps**: `npm`, `yarn`, or `pnpm`.
+- **C++ Skills**: C++14+ compiler recommended.
+- **Docker Skills**: `docker`, `docker-compose`, `trivy` (for scanning).
+- **Git Workflow**: `gh` (GitHub CLI) for PR automation.
 
 ## Skill Structure
 
@@ -250,7 +290,7 @@ ma-agents/
 │   ├── agents.js               # Agent configurations and paths
 │   └── installer.js            # Skill discovery, frontmatter injection, installation
 ├── skills/
-│   ├── code-review/            # 9 bundled skills
+│   ├── code-review/            # 22 bundled skills across 5 domains
 │   ├── commit-message/
 │   ├── create-hardened-docker-skill/
 │   ├── git-workflow-skill/
