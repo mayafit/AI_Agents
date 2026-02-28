@@ -4,6 +4,7 @@ const prompts = require('prompts');
 const chalk = require('chalk');
 const path = require('path');
 const { installSkill, uninstallSkill, getStatus, listSkills, listAgents } = require('../lib/installer');
+const bmad = require('../lib/bmad');
 
 const PKG = require('../package.json');
 const NAME = PKG.name;
@@ -264,6 +265,46 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
         initial: './skills'
       });
       installPath = customDir || '';
+    }
+  }
+
+  // Step 3.5: BMAD-METHOD Integration
+  if (installScope === 'project') {
+    const bmadInstalled = bmad.isBmadInstalled();
+    if (!bmadInstalled) {
+      const { installBmad } = await prompts({
+        type: 'confirm',
+        name: 'installBmad',
+        message: 'BMAD-METHOD not detected. Would you like to install it?',
+        initial: true
+      });
+
+      if (installBmad) {
+        console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
+        const success = await bmad.installBmad(selectedAgentIds);
+        if (success) {
+          console.log(chalk.green(' BMAD-METHOD installed successfully!'));
+          console.log(chalk.cyan(' Applying ma-agents customizations...'));
+          await bmad.applyCustomizations();
+        }
+      }
+    } else {
+      const { updateBmad } = await prompts({
+        type: 'confirm',
+        name: 'updateBmad',
+        message: 'BMAD-METHOD installation detected. Would you like to update it?',
+        initial: true
+      });
+
+      if (updateBmad) {
+        console.log(chalk.cyan('\n Updating BMAD-METHOD...'));
+        const success = await bmad.updateBmad(selectedAgentIds);
+        if (success) {
+          console.log(chalk.green(' BMAD-METHOD updated successfully!'));
+          console.log(chalk.cyan(' Re-applying ma-agents customizations...'));
+          await bmad.applyCustomizations();
+        }
+      }
     }
   }
 

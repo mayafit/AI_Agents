@@ -1,0 +1,13 @@
+{
+    "name": "Docker Image Signing",
+    "description": "Automates the signing of Docker images using certificates and Cosign/Notary.",
+    "version": "1.0.0",
+    "author": "ma-agents",
+    "tags": [
+        "docker",
+        "security",
+        "signing",
+        "cosign",
+        "notary"
+    ]
+}

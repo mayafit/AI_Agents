@@ -1,0 +1,13 @@
+{
+    "name": "Docker Hardening Verification",
+    "description": "Audits Docker images for security best practices, least privilege, and OpenShift compliance.",
+    "version": "1.0.0",
+    "author": "ma-agents",
+    "tags": [
+        "docker",
+        "security",
+        "hardening",
+        "openshift",
+        "least-privilege"
+    ]
+}

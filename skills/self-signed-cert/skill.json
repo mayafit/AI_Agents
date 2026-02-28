@@ -1,0 +1,12 @@
+{
+    "name": "Self-Signed Certificate Generator",
+    "description": "Generates secure self-signed certificates and Root CAs using OpenSSL.",
+    "version": "1.0.0",
+    "author": "Yael (Cyber Analyst)",
+    "tags": [
+        "security",
+        "pki",
+        "certificates",
+        "openssl"
+    ]
+}

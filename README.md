@@ -25,6 +25,7 @@ Skills are written in a **unified generic format** and stored in this package. W
 4. Renames resource directories to match the agent's native structure (e.g., `references/` becomes `docs/` for Cline)
 5. **Generates `MANIFEST.yaml`**: A central discovery file for the agent to find all installed skills.
 6. **Updates Instructions**: Injects planning hints into agent files (e.g., `CLAUDE.md`, `.clinerules`) to ensure the agent uses the skills.
+7. **BMAD-METHOD Integration**: Automatically detects and integrates with [BMAD-METHOD](https://docs.bmad-method.org/), applying project-specific customizations and orchestration.
 
 ```
 Generic (this repo)                    Installed Output
@@ -47,6 +48,10 @@ skills/code-review/
 | GitHub Copilot | `.github/copilot/skills/` | `generic` | - |
 | Cursor | `.cursor/skills/` | `generic` | - |
 | Cline | `.cline/skills/` | `cline` | `.clinerules` |
+| SRE Agent (Alex) | `.sre/skills/` | `generic` | - |
+| DevOps Agent (Amit) | `.devops/skills/` | `generic` | - |
+| Cyber Analyst (Yael) | `.cyber/skills/` | `generic` | - |
+| Antigravity | `.antigravity/skills/` | `generic` | - |
 | Kilocode | `.kilocode/skills/` | `generic` | - |
 
 ## Available Skills (22)
@@ -80,6 +85,9 @@ skills/code-review/
 | `opentelemetry-best-practices` | Logic | Distributed tracing and semantic conventions |
 | `vercel-react-best-practices` | Web | 57 Performance rules for React and Next.js |
 | `git-workflow-skill` | Git | Worktree-based feature branch workflow |
+| `self-signed-cert` | Security | Automated Root CA and self-signed certificate generation |
+| `docker-image-signing` | Security | Automated cryptographic signing for Docker images |
+| `docker-hardening-verification` | Security | Audits images for least-privilege and OpenShift compatibility |
 
 ## Automated Skill Discovery
 
@@ -116,6 +124,36 @@ The easiest way to manage your skills is to simply run `npx ma-agents`. The wiza
 - **Update**: Add or remove skills from an existing installation.
 - **Clean Reinstall**: Wipe the slate and start fresh.
 - **Uninstall All**: Remove all ma-agents artifacts from the project.
+
+### BMAD-METHOD Integration
+`ma-agents` features first-class integration with [BMAD-METHOD](https://docs.bmad-method.org/) to provide advanced orchestration and specialized personas.
+
+#### Core Features
+- **Auto-Detection**: Recognizes existing BMAD installations and prompts for silent updates.
+- **Silent Setup**: Non-interactive installation/update of BMAD tailored to your project's agents.
+- **Customization Engine**: Injects project-specific `.customize.yaml` templates to align agents with your workflow.
+- **Advanced Agent Templates**: Deploys full XML-structured agent definitions directly into the BMAD system.
+
+#### Specialized BMAD Agents
+1. **SRE Agent (Alex)**:
+   - **Focus**: High availability, Kubernetes, Docker, and Podman.
+   - **Capabilities**: Day 1/2 operations, GitOps (ArgoCD/Flux), and advanced deployment strategies (Canary, Blue-Green).
+   - **Workflows**: System status, drift detection, and automated troubleshooting.
+2. **DevOps Agent (Amit)**:
+   - **Focus**: Build automation and multi-environment deployment.
+   - **Capabilities**: Helm charts/umbrellas, Docker Compose, and infrastructure provisioning (PV/PVC/LB).
+   - **On-Prem Support**: Specialized strategies for disconnected (air-gapped) environments.
+3. **Cyber Analyst (Yael)**:
+   - **Focus**: Cyber immunity, security auditing, and vulnerability management.
+   - **Capabilities**: Immunity estimation (scoring), Vault secret management, and PKI automation.
+   - **Integration**: Orchestrates ma-agents security skills for deep scans.
+
+#### Operational Workflows
+The integration includes a suite of specialized playbooks:
+- **GitOps & Deployment**: Canary releases, rolling updates, and sync monitoring.
+- **Infrastructure**: PV/PVC management, Load Balancer configuration, and storage setup.
+- **Security & Trust**: Vault secrets, certificate generation, and vulnerability scanning.
+- **Diagnostics**: Advanced health checks across K8s, Docker, and Podman.
 
 ### Install Options (Direct)
 ```bash
