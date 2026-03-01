@@ -51,8 +51,18 @@ function showSkills() {
 function showAgents() {
   const agents = listAgents();
   console.log(chalk.bold('\n Supported Agents:\n'));
-  agents.forEach(agent => {
-    console.log(chalk.cyan(`  ${agent.id.padEnd(20)}`) + chalk.white(agent.name) + chalk.gray(` v${agent.version} - ${agent.description}`));
+
+  const ideAgents = agents.filter(a => !['bmm-sre', 'bmm-devops', 'bmm-cyber', 'antigravity'].includes(a.id));
+  const bmadAgents = agents.filter(a => ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'antigravity'].includes(a.id));
+
+  console.log(chalk.bold.yellow('  AI Coding Assistants:'));
+  ideAgents.forEach(agent => {
+    console.log(chalk.cyan(`    ${agent.id.padEnd(20)}`) + chalk.white(agent.name) + chalk.gray(` v${agent.version} - ${agent.description}`));
+  });
+
+  console.log(chalk.bold.yellow('\n  BMAD Method Agents:'));
+  bmadAgents.forEach(agent => {
+    console.log(chalk.cyan(`    ${agent.id.padEnd(20)}`) + chalk.white(agent.name) + chalk.gray(` v${agent.version} - ${agent.description}`));
   });
   console.log('');
 }
@@ -225,21 +235,45 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
   // Step 2: Select agents
   if (selectedAgentIds.length === 0 || isUpdate) {
-    const { agents: chosen } = await prompts({
+    const ideAgents = agents.filter(a => !['bmm-sre', 'bmm-devops', 'bmm-cyber', 'antigravity'].includes(a.id));
+    const bmadAgents = agents.filter(a => ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'antigravity'].includes(a.id));
+
+    // 2.1 Coding Assistants
+    const { ideChosen } = await prompts({
       type: 'multiselect',
-      name: 'agents',
-      message: 'Select which coding agents to include:',
-      choices: agents.map(a => ({
+      name: 'ideChosen',
+      message: 'Select AI Coding Assistants:',
+      choices: ideAgents.map(a => ({
         title: chalk.white(a.name) + chalk.gray(` v${a.version} - ${a.description}`),
         value: a.id,
         selected: selectedAgentIds.includes(a.id)
       })),
       instructions: chalk.gray('  Use space to select, enter to confirm'),
-      min: 1
     });
 
-    if (!chosen) process.exit(0);
-    selectedAgentIds = chosen;
+    if (ideChosen === undefined) process.exit(0);
+
+    // 2.2 BMAD Method Agents
+    const { bmadChosen } = await prompts({
+      type: 'multiselect',
+      name: 'bmadChosen',
+      message: 'Select BMAD Method Agents:',
+      choices: bmadAgents.map(a => ({
+        title: chalk.white(a.name) + chalk.gray(` v${a.version} - ${a.description}`),
+        value: a.id,
+        selected: selectedAgentIds.includes(a.id)
+      })),
+      instructions: chalk.gray('  Use space to select, enter to confirm'),
+    });
+
+    if (bmadChosen === undefined) process.exit(0);
+
+    selectedAgentIds = [...ideChosen, ...bmadChosen];
+
+    if (selectedAgentIds.length === 0) {
+      console.log(chalk.yellow('No agents selected. Please select at least one agent to install skills.'));
+      process.exit(1);
+    }
   }
 
   // Step 3: Scope (Skip if update, we already know it's project)
@@ -281,7 +315,8 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
       if (installBmad) {
         console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
-        const success = await bmad.installBmad(selectedAgentIds);
+        const bmadTools = selectedAgentIds.filter(id => ['claude-code', 'cursor', 'cline', 'gemini', 'antigravity'].includes(id));
+        const success = await bmad.installBmad(['bmm', 'bmb'], bmadTools);
         if (success) {
           console.log(chalk.green(' BMAD-METHOD installed successfully!'));
           console.log(chalk.cyan(' Applying ma-agents customizations...'));
@@ -298,7 +333,8 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
       if (updateBmad) {
         console.log(chalk.cyan('\n Updating BMAD-METHOD...'));
-        const success = await bmad.updateBmad(selectedAgentIds);
+        const bmadTools = selectedAgentIds.filter(id => ['claude-code', 'cursor', 'cline', 'gemini', 'antigravity'].includes(id));
+        const success = await bmad.updateBmad(['bmm', 'bmb'], bmadTools);
         if (success) {
           console.log(chalk.green(' BMAD-METHOD updated successfully!'));
           console.log(chalk.cyan(' Re-applying ma-agents customizations...'));
