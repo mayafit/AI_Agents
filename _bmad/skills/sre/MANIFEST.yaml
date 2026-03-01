@@ -1,7 +1,0 @@
-# skills/MANIFEST.yaml
-
-skills:
-  - id: docker-image-signing
-    file: skills/docker-image-signing/SKILL.md
-    description: Automates the signing of Docker images using certificates and Cosign/Notary.
-

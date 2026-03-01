@@ -12,3 +12,6 @@ coverage/
 *.skill
 .claude/
 test-security-project/
+_bmad/
+_bmad-output/
+_bmad-custom-backup-temp/

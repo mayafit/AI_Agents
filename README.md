@@ -2,17 +2,23 @@
 
 A universal NPX tool to install AI coding agent skills. Write skills once, install them across Claude Code, Gemini, Copilot, Cline, Cursor, and Kilocode.
 
-## Quick Start
+## Installation & Usage
 
+`ma-agents` is designed to be run via `npx` in the root of your project.
+
+### 1. Interactive Wizard (Recommended)
+The wizard is the easiest way to set up or update your environment.
 ```bash
-# Interactive wizard (Install All / Custom Select / Update / Uninstall)
 npx ma-agents
+```
 
-# Direct install
-npx ma-agents install code-review claude-code
+### 2. Direct Command Line
+```bash
+# Install specific skills to specific agents
+npx ma-agents install code-review claude-code copilot
 
-# Install a skill to multiple agents at once
-npx ma-agents install code-review claude-code copilot cline
+# Global installation (user-level)
+npx ma-agents install code-review claude-code --global
 ```
 
 ## How It Works
@@ -48,13 +54,14 @@ skills/code-review/
 | GitHub Copilot | `.github/copilot/skills/` | `generic` | - |
 | Cursor | `.cursor/skills/` | `generic` | - |
 | Cline | `.cline/skills/` | `cline` | `.clinerules` |
-| SRE Agent (Alex) | `.sre/skills/` | `generic` | - |
-| DevOps Agent (Amit) | `.devops/skills/` | `generic` | - |
-| Cyber Analyst (Yael) | `.cyber/skills/` | `generic` | - |
-| Antigravity | `.antigravity/skills/` | `generic` | - |
+| SRE Agent (Alex) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/sre.md` |
+| DevOps Agent (Amit) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/devops.md` |
+| Cyber Analyst (Yael) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/cyber.md` |
+| Joseph (MIL-STD-498) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/mil498.md` |
+| Antigravity | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/antigravity.md` |
 | Kilocode | `.kilocode/skills/` | `generic` | - |
 
-## Available Skills (22)
+## Available Skills (25)
 
 | Skill ID | Domain | Description |
 | :--- | :--- | :--- |
@@ -117,13 +124,14 @@ npx ma-agents agents                       # List supported agents
 npx ma-agents uninstall <skill> <agents>   # Direct uninstall
 ```
 
-### The Interactive Wizard
-The easiest way to manage your skills is to simply run `npx ma-agents`. The wizard will guide you through:
-- **Install All**: One-click setup for the entire 22-skill suite.
-- **Custom Select**: Granularly choose specific skills and agents.
-- **Update**: Add or remove skills from an existing installation.
-- **Clean Reinstall**: Wipe the slate and start fresh.
-- **Uninstall All**: Remove all ma-agents artifacts from the project.
+### The Update Process
+Running `ma-agents` on a project where skills are already installed triggers the **Update Flow**:
+1. **Detection**: Recognizes existing `.ma-agents.json` manifest.
+2. **Selection**: Allows you to add new skills or remove existing ones.
+3. **Synchronization**: 
+   - Re-injects the latest instructions into `CLAUDE.md`, `.clinerules`, etc.
+   - Regenerates the `MANIFEST.yaml` to reflect the current skill set.
+   - Updates BMAD-METHOD personas and workflows to the latest versions if detected.
 
 ### BMAD-METHOD Integration
 `ma-agents` features first-class integration with [BMAD-METHOD](https://docs.bmad-method.org/) to provide advanced orchestration and specialized personas.
@@ -147,6 +155,10 @@ The easiest way to manage your skills is to simply run `npx ma-agents`. The wiza
    - **Focus**: Cyber immunity, security auditing, and vulnerability management.
    - **Capabilities**: Immunity estimation (scoring), Vault secret management, and PKI automation.
    - **Integration**: Orchestrates ma-agents security skills for deep scans.
+4. **Joseph (MIL-STD-498)**:
+   - **Focus**: Technical standards compliance and military document generation.
+   - **Capabilities**: Document Data Descriptions (DIDs), requirements traceability, and complex specification writing.
+   - **Workflows**: SRS, SSS, and SSDD generation with strict structural validation.
 
 #### Operational Workflows
 The integration includes a suite of specialized playbooks:
@@ -326,9 +338,13 @@ ma-agents/
 │   └── cli.js                  # CLI entry point (wizard + commands)
 ├── lib/
 │   ├── agents.js               # Agent configurations and paths
-│   └── installer.js            # Skill discovery, frontmatter injection, installation
+│   ├── installer.js            # Skill discovery and installation logic
+│   ├── bmad.js                 # BMAD-METHOD integration and injection logic
+│   ├── bmad-customizations/    # BMAD persona templates (.md) and YAML configs
+│   ├── bmad-workflows/         # Specialized BMAD playbooks (SRE, Cyber, etc.)
+│   └── mil498-templates/       # MIL-STD-498 DID library (SRS, SSS, SSDD, etc.)
 ├── skills/
-│   ├── code-review/            # 22 bundled skills across 5 domains
+│   ├── code-review/            # 25 bundled skills across 5 domains
 │   ├── commit-message/
 │   ├── create-hardened-docker-skill/
 │   ├── git-workflow-skill/

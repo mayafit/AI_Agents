@@ -52,8 +52,8 @@ function showAgents() {
   const agents = listAgents();
   console.log(chalk.bold('\n Supported Agents:\n'));
 
-  const ideAgents = agents.filter(a => !['bmm-sre', 'bmm-devops', 'bmm-cyber', 'antigravity'].includes(a.id));
-  const bmadAgents = agents.filter(a => ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'antigravity'].includes(a.id));
+  const ideAgents = agents.filter(a => !['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-mil498'].includes(a.id));
+  const bmadAgents = agents.filter(a => ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-mil498'].includes(a.id));
 
   console.log(chalk.bold.yellow('  AI Coding Assistants:'));
   ideAgents.forEach(agent => {
@@ -235,8 +235,8 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
   // Step 2: Select agents
   if (selectedAgentIds.length === 0 || isUpdate) {
-    const ideAgents = agents.filter(a => !['bmm-sre', 'bmm-devops', 'bmm-cyber', 'antigravity'].includes(a.id));
-    const bmadAgents = agents.filter(a => ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'antigravity'].includes(a.id));
+    const ideAgents = agents.filter(a => !['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-mil498'].includes(a.id));
+    const bmadAgents = agents.filter(a => ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-mil498'].includes(a.id));
 
     // 2.1 Coding Assistants
     const { ideChosen } = await prompts({
@@ -382,9 +382,10 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
   }
 
   // Install requested skills
+  const batchState = {};
   for (const skillId of selectedSkillIds) {
     try {
-      await installSkill(skillId, selectedAgentIds, installPath, installScope, { force: !!forceFlag });
+      await installSkill(skillId, selectedAgentIds, installPath, installScope, { force: !!forceFlag, batchState });
     } catch (error) {
       console.error(chalk.red(`\n Failed to install ${skillId}:`), error.message);
     }
