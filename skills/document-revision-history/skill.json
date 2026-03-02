@@ -1,0 +1,18 @@
+{
+    "name": "Document Revision History",
+    "description": "Manages a revision history table at the beginning of generated documents, tracking changes per version.",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "documentation",
+        "revision-history",
+        "version-tracking",
+        "mil-std-498",
+        "change-management"
+    ],
+    "applies_when": [
+        "generating or updating planning documents",
+        "creating specification or design documents",
+        "modifying existing markdown documents that have a revision history table"
+    ]
+}

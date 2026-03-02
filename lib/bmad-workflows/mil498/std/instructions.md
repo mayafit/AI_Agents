@@ -56,6 +56,16 @@ This defines the required DID sections and content expectations for each paragra
 
 Write the document in {document_output_language}, populating each template section. **Important**: Safety precautions (marked by WARNING or CAUTION) and security/privacy considerations shall be included as applicable throughout Sections 3 and 4.
 
+### Revision History
+
+Before writing any content, add a **Revision History table** immediately after the document title. If this is a new document, create the table with version `1.0`. If updating an existing document, read the existing revision history and add a new row with an incremented version number and a summary of all changes made in this session. See the `document-revision-history` skill for full formatting rules.
+
+```markdown
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.0 | {date} | Agent ({model}) | Initial document generation |
+```
+
 ### Section 1: Scope
 - **1.1 Identification**: Extract system and software identifiers from PRD/Architecture
 - **1.2 System overview**: Summarize the system and the CSCI(s) being tested

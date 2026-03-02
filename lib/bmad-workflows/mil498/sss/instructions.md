@@ -45,6 +45,16 @@ This defines the required DID sections and content expectations for each paragra
 
 Write the document in {document_output_language}, populating each template section. Keep requirements at the **system/subsystem level** — avoid low-level software implementation details. Each requirement shall be assigned a project-unique identifier, be stated so that an objective test can be defined for it, and be annotated with qualification method(s).
 
+### Revision History
+
+Before writing any content, add a **Revision History table** immediately after the document title. If this is a new document, create the table with version `1.0`. If updating an existing document, read the existing revision history and add a new row with an incremented version number and a summary of all changes made in this session. See the `document-revision-history` skill for full formatting rules.
+
+```markdown
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.0 | {date} | Agent ({model}) | Initial document generation |
+```
+
 ### Section 1: Scope
 - **1.1 Identification**: Extract system name, version, identifiers from PRD/Product Brief
 - **1.2 System overview**: Summarize system purpose, nature, and stakeholders

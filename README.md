@@ -61,7 +61,7 @@ skills/code-review/
 | Joseph (MIL-STD-498) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/mil498.md` |
 | Antigravity | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/antigravity.md` |
 
-## Available Skills (25)
+## Available Skills (27)
 
 | Skill ID | Domain | Description |
 | :--- | :--- | :--- |
@@ -72,6 +72,8 @@ skills/code-review/
 | `test-accompanied-development` | Quality | Enforces "test-alongside" policy for every public method |
 | `code-documentation` | Quality | Enforces PEP 257, Doxygen, JSDoc, and XML standards |
 | `skill-creator` | Meta | Guide for creating new skills to extend agent capabilities |
+| `document-revision-history` | Documentation | Manages revision history tables at the beginning of generated documents |
+| `ai-audit-trail` | Audit | Tracks AI agent session activity, time spent, and token usage |
 | **Security** | | |
 | `python-security-skill` | Python | OWASP Top 10 2025 aligned guardrails for Python |
 | `js-ts-security-skill` | JS/TS | Security verification for JS/TS codebases (OWASP aligned) |

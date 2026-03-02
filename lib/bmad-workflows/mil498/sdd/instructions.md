@@ -66,6 +66,16 @@ This defines the required DID sections and content expectations for each paragra
 
 Write the document in {document_output_language}, populating each template section.
 
+### Revision History
+
+Before writing any content, add a **Revision History table** immediately after the document title. If this is a new document, create the table with version `1.0`. If updating an existing document, read the existing revision history and add a new row with an incremented version number and a summary of all changes made in this session. See the `document-revision-history` skill for full formatting rules.
+
+```markdown
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.0 | {date} | Agent ({model}) | Initial document generation |
+```
+
 ### Section 1: Scope
 - **1.1 Identification**: Identify the CSCI by name, version, and project-unique identifier (as assigned in the SSDD)
 - **1.2 System overview**: Summarize the system and this CSCI's role within it, referencing the SSDD

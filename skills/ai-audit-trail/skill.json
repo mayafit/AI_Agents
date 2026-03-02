@@ -1,0 +1,20 @@
+{
+    "name": "AI Audit Trail",
+    "description": "Tracks AI agent session activity, time spent, and token usage in a project-level AiAudit.md log file.",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "audit",
+        "logging",
+        "time-tracking",
+        "tokens",
+        "accountability",
+        "project-management"
+    ],
+    "applies_when": [
+        "starting a new agent task or workflow",
+        "completing a document generation session",
+        "finishing any multi-step agent workflow"
+    ],
+    "always_load": true
+}
