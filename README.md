@@ -49,17 +49,17 @@ skills/code-review/
 
 | Agent | Project Path | Template | Instruction File |
 |-------|-------------|----------|------------------|
-| Claude Code | `.claude/skills/` | `claude-code` | `CLAUDE.md` |
-| Google Gemini | `.gemini/skills/` | `generic` | - |
-| GitHub Copilot | `.github/copilot/skills/` | `generic` | - |
-| Cursor | `.cursor/skills/` | `generic` | - |
-| Cline | `.cline/skills/` | `cline` | `.clinerules` |
+| Claude Code | `.claude/skills/` | `claude-code` | `.claude/CLAUDE.md` |
+| Google Gemini | `.gemini/skills/` | `generic` | `.gemini/gemini.md` |
+| GitHub Copilot | `.github/copilot/skills/` | `generic` | `.github/copilot/copilot.md` |
+| Cursor | `.cursor/skills/` | `generic` | `.cursor/cursor.md` |
+| Kilocode | `.kilocode/skills/` | `generic` | `.kilocode/kilocode.md` |
+| Cline | `.cline/skills/` | `cline` | `.cline/clinerules.md` |
 | SRE Agent (Alex) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/sre.md` |
 | DevOps Agent (Amit) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/devops.md` |
 | Cyber Analyst (Yael) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/cyber.md` |
 | Joseph (MIL-STD-498) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/mil498.md` |
 | Antigravity | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/antigravity.md` |
-| Kilocode | `.kilocode/skills/` | `generic` | - |
 
 ## Available Skills (25)
 

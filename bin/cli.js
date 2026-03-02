@@ -52,8 +52,8 @@ function showAgents() {
   const agents = listAgents();
   console.log(chalk.bold('\n Supported Agents:\n'));
 
-  const ideAgents = agents.filter(a => !['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-mil498'].includes(a.id));
-  const bmadAgents = agents.filter(a => ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-mil498'].includes(a.id));
+  const ideAgents = agents.filter(a => a.category !== 'bmad');
+  const bmadAgents = agents.filter(a => a.category === 'bmad');
 
   console.log(chalk.bold.yellow('  AI Coding Assistants:'));
   ideAgents.forEach(agent => {
@@ -235,8 +235,8 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
   // Step 2: Select agents
   if (selectedAgentIds.length === 0 || isUpdate) {
-    const ideAgents = agents.filter(a => !['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-mil498'].includes(a.id));
-    const bmadAgents = agents.filter(a => ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-mil498'].includes(a.id));
+    const ideAgents = agents.filter(a => a.category !== 'bmad');
+    const bmadAgents = agents.filter(a => a.category === 'bmad');
 
     // 2.1 Coding Assistants
     const { ideChosen } = await prompts({
@@ -320,7 +320,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
         if (success) {
           console.log(chalk.green(' BMAD-METHOD installed successfully!'));
           console.log(chalk.cyan(' Applying ma-agents customizations...'));
-          await bmad.applyCustomizations();
+          await bmad.applyCustomizations(process.cwd(), ['bmm', 'bmb'], bmadTools, selectedAgentIds);
         }
       }
     } else {
@@ -338,7 +338,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
         if (success) {
           console.log(chalk.green(' BMAD-METHOD updated successfully!'));
           console.log(chalk.cyan(' Re-applying ma-agents customizations...'));
-          await bmad.applyCustomizations();
+          await bmad.applyCustomizations(process.cwd(), ['bmm', 'bmb'], bmadTools, selectedAgentIds);
         }
       }
     }
@@ -366,17 +366,43 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
   // Step 5: Execution
   if (isUpdate) {
-    // Identify removals
-    const currentlyInstalled = new Set();
-    existingStatus.forEach(entry => Object.keys(entry.skills).forEach(id => currentlyInstalled.add(id)));
+    // Build a map: skillId -> set of agent IDs that originally had it installed
+    const originalAgentsBySkill = new Map();
+    const originalAllAgentIds = new Set();
+    existingStatus.forEach(entry => {
+      originalAllAgentIds.add(entry.agent.id);
+      Object.keys(entry.skills).forEach(skillId => {
+        if (!originalAgentsBySkill.has(skillId)) {
+          originalAgentsBySkill.set(skillId, new Set());
+        }
+        originalAgentsBySkill.get(skillId).add(entry.agent.id);
+      });
+    });
 
     const finalSkills = new Set(selectedSkillIds);
-    const toRemove = [...currentlyInstalled].filter(id => !finalSkills.has(id));
+
+    // Skills to fully remove (deselected from skill list)
+    const toRemove = [...originalAgentsBySkill.keys()].filter(id => !finalSkills.has(id));
 
     if (toRemove.length > 0) {
       console.log(chalk.gray(`\n  Cleaning up ${toRemove.length} removed skills...`));
       for (const skillId of toRemove) {
-        await uninstallSkill(skillId, selectedAgentIds, installPath, 'project');
+        // Use the ORIGINAL agent IDs, not the new selection
+        const originalAgents = [...originalAgentsBySkill.get(skillId)];
+        await uninstallSkill(skillId, originalAgents, installPath, 'project');
+      }
+    }
+
+    // Also handle agents that were deselected: uninstall their skills
+    const deselectedAgents = [...originalAllAgentIds].filter(id => !selectedAgentIds.includes(id));
+
+    if (deselectedAgents.length > 0) {
+      console.log(chalk.gray(`\n  Removing skills from ${deselectedAgents.length} deselected agents...`));
+      for (const [skillId, agentSet] of originalAgentsBySkill) {
+        const agentsToRemoveFrom = deselectedAgents.filter(id => agentSet.has(id));
+        if (agentsToRemoveFrom.length > 0) {
+          await uninstallSkill(skillId, agentsToRemoveFrom, installPath, 'project');
+        }
       }
     }
   }
