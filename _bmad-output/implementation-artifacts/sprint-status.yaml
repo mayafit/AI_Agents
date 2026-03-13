@@ -1,0 +1,124 @@
+# generated: 2026-03-12
+# project: agents
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-03-12
+project: agents
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: CI/CD Non-Interactive Mode
+  epic-1: in-progress
+  1-1-ci-cd-yes-flag: ready-for-dev
+  epic-1-retrospective: optional
+
+  # Epic 2: Language-Specific Skill Expansion
+  epic-2: in-progress
+  2-1-cpp-coding-standards-skill: ready-for-dev
+  2-2-csharp-coding-standards-skill: ready-for-dev
+  2-3-python-coding-standards-skill: ready-for-dev
+  epic-2-retrospective: optional
+
+  # Epic 3: Skill Authoring Tooling
+  epic-3: in-progress
+  3-1-skill-scaffolding-tool: ready-for-dev
+  3-2-skill-validation-tool: ready-for-dev
+  3-3-mandatory-skill-designation: ready-for-dev
+  3-4-bmad-persona-customization-tooling: ready-for-dev
+  3-5-specialized-agent-development-tooling: ready-for-dev
+  epic-3-retrospective: optional
+
+  # Epic 4: Visual Studio Agent Integration
+  epic-4: in-progress
+  4-1-vs-agent-registry-entry: ready-for-dev
+  4-2-vs-skill-template-format: ready-for-dev
+  epic-4-retrospective: optional
+
+  # Epic 5: Self-Contained Installer
+  epic-5: in-progress
+  5-1-standalone-binary-packaging: ready-for-dev
+  5-2-cross-platform-binary-testing: ready-for-dev
+  epic-5-retrospective: optional
+
+  # Epic 6: Methodology Onboarding Package
+  epic-6: in-progress
+  6-1-methodology-presentation-bundle: ready-for-dev
+  epic-6-retrospective: optional
+
+  # Epic 7: Test Suite Foundation
+  epic-7: in-progress
+  7-1-test-infrastructure-setup: ready-for-dev
+  7-2-installer-pipeline-tests: ready-for-dev
+  7-3-bmad-pipeline-tests: ready-for-dev
+  7-4-cli-command-routing-tests: ready-for-dev
+  epic-7-retrospective: optional
+
+  # Epic 8: Skill Enforcement Architecture (Phase 2)
+  # Execution order: 8.1 → 8.2 → 8.3 → 8.4 → 8.5 → 8.6
+  epic-8: in-progress
+  8-1-move-instruction-injection-to-top: ready-for-dev
+  8-2-agent-aware-injection-strategy: ready-for-dev
+  8-3-create-bmad-extension-module: ready-for-dev
+  8-4-integration-verification: backlog
+  8-5-per-agent-enforcement-hooks-research: ready-for-dev
+  8-6-context-persistence-research: ready-for-dev
+  epic-8-retrospective: optional
+
+  # Epic 9: OpenCode Agent Support (Phase 2)
+  epic-9: in-progress
+  9-1-register-opencode-agent: ready-for-dev
+  9-2-json-merge-injection: ready-for-dev
+  epic-9-retrospective: optional
+
+  # Epic 10: Project Knowledge Preservation (Phase 2)
+  epic-10: in-progress
+  10-1-ensure-bmad-output-not-gitignored: ready-for-dev
+  epic-10-retrospective: optional
+
+  # Epic 11: Bug Management System (Phase 2)
+  epic-11: in-progress
+  11-1-auto-bug-detection-skill: ready-for-dev
+  11-2-bug-story-extension-workflow: ready-for-dev
+  11-3-integrate-bug-detection-code-review: ready-for-dev
+  epic-11-retrospective: optional
+
+  # Epic 12: Realistic Sprint Management (Phase 2)
+  epic-12: in-progress
+  12-1-add-sprint-workflow: ready-for-dev
+  12-2-add-to-sprint-workflow: ready-for-dev
+  12-3-modify-sprint-workflow: ready-for-dev
+  12-4-sprint-status-assigned-items: ready-for-dev
+  epic-12-retrospective: optional
