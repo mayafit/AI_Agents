@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node bin/cli.js",
-    "test": "node -e \"const {listSkills,listAgents}=require('./lib/installer'); console.log('Skills:',listSkills().length,'Agents:',listAgents().length)\""
+    "test": "node -e \"const {listSkills,listAgents}=require('./lib/installer'); console.log('Skills:',listSkills().length,'Agents:',listAgents().length)\"",
+    "build:bmad-cache": "node scripts/build-bmad-cache.js"
   },
   "keywords": [
     "ai",
@@ -25,6 +26,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "bmad-method": "6.0.4",
     "prompts": "^2.4.2",
     "chalk": "^4.1.2",
     "fs-extra": "^11.1.1"
