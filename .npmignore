@@ -7,12 +7,19 @@ _bmad-custom-backup-temp/
 
 # Dev/test files
 .claude/
+.cline/
+.clinerules
+.cursor/
+.gemini/
+.github/
+.kilocode/
 .vscode/
 .idea/
 test-security-project/
 coverage/
 out.txt
 /mil498/
+*.tgz
 
 # Git
 .git/
