@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node bin/cli.js",
-    "test": "node -e \"const {listSkills,listAgents}=require('./lib/installer'); console.log('Skills:',listSkills().length,'Agents:',listAgents().length)\"",
+    "test": "node test/yes-flag.test.js",
     "build:bmad-cache": "node scripts/build-bmad-cache.js"
   },
   "keywords": [

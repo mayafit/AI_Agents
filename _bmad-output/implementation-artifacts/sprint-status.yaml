@@ -42,7 +42,7 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   # Epic 1: CI/CD Non-Interactive Mode
   epic-1: in-progress
-  1-1-ci-cd-yes-flag: ready-for-dev
+  1-1-ci-cd-yes-flag: review
   epic-1-retrospective: optional
 
   # Epic 2: Language-Specific Skill Expansion
@@ -73,7 +73,7 @@ development_status:
   5-1-bmad-method-direct-dependency: done
   5-2-bmad-cache-build-script: done
   5-3-pre-populate-bmad-cache: done
-  5-4-validate-bundled-installation: backlog
+  5-4-validate-bundled-installation: ready-for-dev
   epic-5-retrospective: optional
 
   # Epic 6: Methodology Onboarding Package

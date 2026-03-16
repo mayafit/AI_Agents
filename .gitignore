@@ -17,3 +17,10 @@ _bmad/
 _bmad-custom-backup-temp/
 .agent/
 .antigravity/
+.worktrees/
+.cline/
+.clinerules
+.cursor/
+.gemini/
+.github/
+.kilocode/

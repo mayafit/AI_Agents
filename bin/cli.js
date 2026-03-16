@@ -25,14 +25,19 @@ ${chalk.bold('Usage:')}
   ${chalk.cyan(`npx ${NAME} help`)}                         Show this help
 
 ${chalk.bold('Install options:')}
-  ${chalk.cyan('--global')}        Install to global/user-level paths (default: project-level)
-  ${chalk.cyan('--path <dir>')}    Custom installation directory
-  ${chalk.cyan('--force')}         Skip upgrade prompts, always overwrite
+  ${chalk.cyan('--global')}          Install to global/user-level paths (default: project-level)
+  ${chalk.cyan('--path <dir>')}      Custom installation directory
+  ${chalk.cyan('--force')}           Skip upgrade prompts, always overwrite
+  ${chalk.cyan('--yes')}             Skip all prompts, use defaults (for CI/CD)
+  ${chalk.cyan('--agent <name>')}    Target a specific agent (skip agent selection)
 
 ${chalk.bold('Examples:')}
   npx ${NAME} install
   npx ${NAME} install code-review claude-code
   npx ${NAME} install code-review claude-code --force
+  npx ${NAME} install --yes
+  npx ${NAME} install --yes --agent claude-code
+  npx ${NAME} install --yes --global
   npx ${NAME} uninstall code-review claude-code
   npx ${NAME} status
   npx ${NAME} status --global
@@ -107,8 +112,10 @@ function showStatus(args) {
 function parseFlags(args) {
   const globalFlag = args.includes('--global');
   const forceFlag = args.includes('--force');
+  const yesFlag = args.includes('--yes');
   let customPath = '';
-  let positional = [...args].filter(a => a !== '--global' && a !== '--force');
+  let agentFlag = '';
+  let positional = [...args].filter(a => a !== '--global' && a !== '--force' && a !== '--yes');
 
   const pathIdx = positional.indexOf('--path');
   if (pathIdx !== -1) {
@@ -116,9 +123,23 @@ function parseFlags(args) {
     positional.splice(pathIdx, 2);
   }
 
+  const agentIdx = positional.indexOf('--agent');
+  if (agentIdx !== -1) {
+    const agentName = positional[agentIdx + 1];
+    if (!agentName || agentName.startsWith('--')) {
+      console.error(chalk.red('Error: --agent requires an agent name'));
+      console.error(chalk.gray('  Hint: Run "list" to see available agents'));
+      process.exit(1);
+    }
+    agentFlag = agentName;
+    positional.splice(agentIdx, 2);
+  }
+
   return {
     globalFlag,
     forceFlag,
+    yesFlag,
+    agentFlag,
     customPath,
     scope: globalFlag ? 'global' : 'project',
     positional
@@ -127,7 +148,7 @@ function parseFlags(args) {
 
 // --- Install wizard ---
 
-async function installWizard(preselectedSkill, preselectedAgents, customPath, forceFlag) {
+async function installWizard(preselectedSkill, preselectedAgents, customPath, forceFlag, yesFlag = false) {
   const skills = listSkills();
   const agents = listAgents();
 
@@ -141,143 +162,166 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
   // Step 0: Check for existing installation ONLY in interactive mode (no preselected skill)
   if (!preselectedSkill && !customPath && existingStatus.length > 0) {
-    console.log(chalk.cyan('\n Existing installation detected in project.'));
-
-    const { action } = await prompts({
-      type: 'select',
-      name: 'action',
-      message: 'What would you like to do?',
-      choices: [
-        { title: 'Update (add/remove skills)', value: 'update' },
-        { title: 'Clean reinstall (remove all first)', value: 'reinstall' },
-        { title: 'Uninstall all skills', value: 'uninstall' },
-        { title: 'Cancel', value: 'cancel' }
-      ]
-    });
-
-    if (!action || action === 'cancel') process.exit(0);
-
-    if (action === 'uninstall') {
-      const { confirmed } = await prompts({
-        type: 'confirm',
-        name: 'confirmed',
-        message: 'This will remove all ma-agents skills from this project. Are you sure?',
-        initial: false
-      });
-      if (!confirmed) process.exit(0);
-
-      for (const entry of existingStatus) {
-        for (const skillId of Object.keys(entry.skills)) {
-          await uninstallSkill(skillId, [entry.agent.id], '', 'project');
-        }
-      }
-      console.log(chalk.bold.green('\n All skills successfully removed!\n'));
-      return;
-    }
-
-    if (action === 'reinstall') {
+    if (yesFlag) {
+      // Default: clean reinstall (avoids isUpdate path which re-triggers skill selection prompts)
       for (const entry of existingStatus) {
         for (const skillId of Object.keys(entry.skills)) {
           await uninstallSkill(skillId, [entry.agent.id], '', 'project');
         }
       }
       console.log(chalk.gray(' Clean slate prepared.'));
-    }
+    } else {
+      console.log(chalk.cyan('\n Existing installation detected in project.'));
 
-    if (action === 'update') {
-      isUpdate = true;
-      // Pre-populate selections from existing status
-      const existingSkillIds = new Set();
-      const existingAgentIds = new Set();
-      existingStatus.forEach(entry => {
-        existingAgentIds.add(entry.agent.id);
-        Object.keys(entry.skills).forEach(id => existingSkillIds.add(id));
+      const { action } = await prompts({
+        type: 'select',
+        name: 'action',
+        message: 'What would you like to do?',
+        choices: [
+          { title: 'Update (add/remove skills)', value: 'update' },
+          { title: 'Clean reinstall (remove all first)', value: 'reinstall' },
+          { title: 'Uninstall all skills', value: 'uninstall' },
+          { title: 'Cancel', value: 'cancel' }
+        ]
       });
-      selectedSkillIds = Array.from(existingSkillIds);
-      selectedAgentIds = Array.from(existingAgentIds);
+
+      if (!action || action === 'cancel') process.exit(0);
+
+      if (action === 'uninstall') {
+        const { confirmed } = await prompts({
+          type: 'confirm',
+          name: 'confirmed',
+          message: 'This will remove all ma-agents skills from this project. Are you sure?',
+          initial: false
+        });
+        if (!confirmed) process.exit(0);
+
+        for (const entry of existingStatus) {
+          for (const skillId of Object.keys(entry.skills)) {
+            await uninstallSkill(skillId, [entry.agent.id], '', 'project');
+          }
+        }
+        console.log(chalk.bold.green('\n All skills successfully removed!\n'));
+        return;
+      }
+
+      if (action === 'reinstall') {
+        for (const entry of existingStatus) {
+          for (const skillId of Object.keys(entry.skills)) {
+            await uninstallSkill(skillId, [entry.agent.id], '', 'project');
+          }
+        }
+        console.log(chalk.gray(' Clean slate prepared.'));
+      }
+
+      if (action === 'update') {
+        isUpdate = true;
+        // Pre-populate selections from existing status
+        const existingSkillIds = new Set();
+        const existingAgentIds = new Set();
+        existingStatus.forEach(entry => {
+          existingAgentIds.add(entry.agent.id);
+          Object.keys(entry.skills).forEach(id => existingSkillIds.add(id));
+        });
+        selectedSkillIds = Array.from(existingSkillIds);
+        selectedAgentIds = Array.from(existingAgentIds);
+      }
     }
   }
 
   // Step 1: Select skills
-  if (selectedSkillIds.length === 0 || isUpdate) {
-    const { selectionType } = await prompts({
-      type: 'select',
-      name: 'selectionType',
-      message: 'Would you like to install all available skills or choose specific ones?',
-      choices: [
-        { title: 'Install all available skills', value: 'all' },
-        { title: 'Choose which skills to install', value: 'custom' }
-      ]
-    });
-
-    if (!selectionType) process.exit(0);
-
-    if (selectionType === 'all') {
+  if (yesFlag || selectedSkillIds.length === 0 || isUpdate) {
+    if (yesFlag) {
       selectedSkillIds = skills.map(s => s.id);
     } else {
-      const { skills: chosen } = await prompts({
-        type: 'multiselect',
-        name: 'skills',
-        message: 'Select the skills you want to have installed:',
-        choices: skills.map(s => ({
-          title: chalk.white(s.name) + chalk.gray(` v${s.version} - ${s.description}`),
-          value: s.id,
-          selected: selectedSkillIds.includes(s.id)
-        })),
-        instructions: chalk.gray('  Use space to select, enter to confirm'),
-        min: 1
+      const { selectionType } = await prompts({
+        type: 'select',
+        name: 'selectionType',
+        message: 'Would you like to install all available skills or choose specific ones?',
+        choices: [
+          { title: 'Install all available skills', value: 'all' },
+          { title: 'Choose which skills to install', value: 'custom' }
+        ]
       });
 
-      if (!chosen) process.exit(0);
-      selectedSkillIds = chosen;
+      if (!selectionType) process.exit(0);
+
+      if (selectionType === 'all') {
+        selectedSkillIds = skills.map(s => s.id);
+      } else {
+        const { skills: chosen } = await prompts({
+          type: 'multiselect',
+          name: 'skills',
+          message: 'Select the skills you want to have installed:',
+          choices: skills.map(s => ({
+            title: chalk.white(s.name) + chalk.gray(` v${s.version} - ${s.description}`),
+            value: s.id,
+            selected: selectedSkillIds.includes(s.id)
+          })),
+          instructions: chalk.gray('  Use space to select, enter to confirm'),
+          min: 1
+        });
+
+        if (!chosen) process.exit(0);
+        selectedSkillIds = chosen;
+      }
     }
   }
 
   // Step 2: Select agents
-  if (selectedAgentIds.length === 0 || isUpdate) {
+  if (yesFlag || selectedAgentIds.length === 0 || isUpdate) {
     const ideAgents = agents.filter(a => a.category !== 'bmad');
     const bmadAgents = agents.filter(a => a.category === 'bmad');
 
-    // 2.1 Coding Assistants
-    const { ideChosen } = await prompts({
-      type: 'multiselect',
-      name: 'ideChosen',
-      message: 'Select AI Coding Assistants:',
-      choices: ideAgents.map(a => ({
-        title: chalk.white(a.name) + chalk.gray(` v${a.version} - ${a.description}`),
-        value: a.id,
-        selected: selectedAgentIds.includes(a.id)
-      })),
-      instructions: chalk.gray('  Use space to select, enter to confirm'),
-    });
+    if (yesFlag) {
+      selectedAgentIds = [...ideAgents.map(a => a.id), ...bmadAgents.map(a => a.id)];
+      if (selectedAgentIds.length === 0) {
+        console.error(chalk.red('Error: No agents detected'));
+        console.error(chalk.gray('  Hint: Ensure at least one supported IDE is present'));
+        process.exit(1);
+      }
+    } else {
+      // 2.1 Coding Assistants
+      const { ideChosen } = await prompts({
+        type: 'multiselect',
+        name: 'ideChosen',
+        message: 'Select AI Coding Assistants:',
+        choices: ideAgents.map(a => ({
+          title: chalk.white(a.name) + chalk.gray(` v${a.version} - ${a.description}`),
+          value: a.id,
+          selected: selectedAgentIds.includes(a.id)
+        })),
+        instructions: chalk.gray('  Use space to select, enter to confirm'),
+      });
 
-    if (ideChosen === undefined) process.exit(0);
+      if (ideChosen === undefined) process.exit(0);
 
-    // 2.2 BMAD Method Agents
-    const { bmadChosen } = await prompts({
-      type: 'multiselect',
-      name: 'bmadChosen',
-      message: 'Select BMAD Method Agents:',
-      choices: bmadAgents.map(a => ({
-        title: chalk.white(a.name) + chalk.gray(` v${a.version} - ${a.description}`),
-        value: a.id,
-        selected: selectedAgentIds.includes(a.id)
-      })),
-      instructions: chalk.gray('  Use space to select, enter to confirm'),
-    });
+      // 2.2 BMAD Method Agents
+      const { bmadChosen } = await prompts({
+        type: 'multiselect',
+        name: 'bmadChosen',
+        message: 'Select BMAD Method Agents:',
+        choices: bmadAgents.map(a => ({
+          title: chalk.white(a.name) + chalk.gray(` v${a.version} - ${a.description}`),
+          value: a.id,
+          selected: selectedAgentIds.includes(a.id)
+        })),
+        instructions: chalk.gray('  Use space to select, enter to confirm'),
+      });
 
-    if (bmadChosen === undefined) process.exit(0);
+      if (bmadChosen === undefined) process.exit(0);
 
-    selectedAgentIds = [...ideChosen, ...bmadChosen];
+      selectedAgentIds = [...ideChosen, ...bmadChosen];
 
-    if (selectedAgentIds.length === 0) {
-      console.log(chalk.yellow('No agents selected. Please select at least one agent to install skills.'));
-      process.exit(1);
+      if (selectedAgentIds.length === 0) {
+        console.log(chalk.yellow('No agents selected. Please select at least one agent to install skills.'));
+        process.exit(1);
+      }
     }
   }
 
-  // Step 3: Scope (Skip if update, we already know it's project)
-  if (!isUpdate && !installPath) {
+  // Step 3: Scope (Skip if update, yesFlag, or path already set)
+  if (!isUpdate && !installPath && !yesFlag) {
     const { pathChoice } = await prompts({
       type: 'select',
       name: 'pathChoice',
@@ -304,41 +348,74 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
   // Step 3.5: BMAD-METHOD Integration
   if (installScope === 'project') {
+    const bmadToolsFilter = ['claude-code', 'cursor', 'cline', 'gemini', 'antigravity'];
+
+    if (yesFlag) {
+      // Warn about IDE agents not supported for BMAD customizations
+      const ideAgentIds = agents.filter(a => a.category !== 'bmad').map(a => a.id);
+      const unsupported = selectedAgentIds.filter(id => ideAgentIds.includes(id) && !bmadToolsFilter.includes(id));
+      unsupported.forEach(id => {
+        console.log(chalk.yellow(`  Warning: Agent '${id}' is not supported for BMAD customizations`));
+      });
+    }
+
     const bmadInstalled = bmad.isBmadInstalled();
     if (!bmadInstalled) {
-      const { installBmad } = await prompts({
-        type: 'confirm',
-        name: 'installBmad',
-        message: 'BMAD-METHOD not detected. Would you like to install it?',
-        initial: true
-      });
-
-      if (installBmad) {
+      if (yesFlag) {
         console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
-        const bmadTools = selectedAgentIds.filter(id => ['claude-code', 'cursor', 'cline', 'gemini', 'antigravity'].includes(id));
+        const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id));
         const success = await bmad.installBmad(['bmm', 'bmb'], bmadTools);
         if (success) {
           console.log(chalk.green(' BMAD-METHOD installed successfully!'));
           console.log(chalk.cyan(' Applying ma-agents customizations...'));
           await bmad.applyCustomizations(process.cwd(), ['bmm', 'bmb'], bmadTools, selectedAgentIds);
         }
+      } else {
+        const { installBmad } = await prompts({
+          type: 'confirm',
+          name: 'installBmad',
+          message: 'BMAD-METHOD not detected. Would you like to install it?',
+          initial: true
+        });
+
+        if (installBmad) {
+          console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
+          const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id));
+          const success = await bmad.installBmad(['bmm', 'bmb'], bmadTools);
+          if (success) {
+            console.log(chalk.green(' BMAD-METHOD installed successfully!'));
+            console.log(chalk.cyan(' Applying ma-agents customizations...'));
+            await bmad.applyCustomizations(process.cwd(), ['bmm', 'bmb'], bmadTools, selectedAgentIds);
+          }
+        }
       }
     } else {
-      const { updateBmad } = await prompts({
-        type: 'confirm',
-        name: 'updateBmad',
-        message: 'BMAD-METHOD installation detected. Would you like to update it?',
-        initial: true
-      });
-
-      if (updateBmad) {
+      if (yesFlag) {
         console.log(chalk.cyan('\n Updating BMAD-METHOD...'));
-        const bmadTools = selectedAgentIds.filter(id => ['claude-code', 'cursor', 'cline', 'gemini', 'antigravity'].includes(id));
+        const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id));
         const success = await bmad.updateBmad(['bmm', 'bmb'], bmadTools);
         if (success) {
           console.log(chalk.green(' BMAD-METHOD updated successfully!'));
           console.log(chalk.cyan(' Re-applying ma-agents customizations...'));
           await bmad.applyCustomizations(process.cwd(), ['bmm', 'bmb'], bmadTools, selectedAgentIds);
+        }
+      } else {
+        const { updateBmad } = await prompts({
+          type: 'confirm',
+          name: 'updateBmad',
+          message: 'BMAD-METHOD installation detected. Would you like to update it?',
+          initial: true
+        });
+
+        if (updateBmad) {
+          console.log(chalk.cyan('\n Updating BMAD-METHOD...'));
+          const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id));
+          const success = await bmad.updateBmad(['bmm', 'bmb'], bmadTools);
+          if (success) {
+            console.log(chalk.green(' BMAD-METHOD updated successfully!'));
+            console.log(chalk.cyan(' Re-applying ma-agents customizations...'));
+            await bmad.applyCustomizations(process.cwd(), ['bmm', 'bmb'], bmadTools, selectedAgentIds);
+          }
         }
       }
     }
@@ -352,16 +429,18 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
   console.log(chalk.cyan('  Path:    ') + (installPath || (installScope === 'global' ? 'global (user-level)' : 'project (current directory)')));
   console.log('');
 
-  const { confirmed } = await prompts({
-    type: 'confirm',
-    name: 'confirmed',
-    message: isUpdate ? 'Apply changes?' : 'Proceed with installation?',
-    initial: true
-  });
+  if (!yesFlag) {
+    const { confirmed } = await prompts({
+      type: 'confirm',
+      name: 'confirmed',
+      message: isUpdate ? 'Apply changes?' : 'Proceed with installation?',
+      initial: true
+    });
 
-  if (!confirmed) {
-    console.log(chalk.yellow('Operation cancelled.'));
-    process.exit(0);
+    if (!confirmed) {
+      console.log(chalk.yellow('Operation cancelled.'));
+      process.exit(0);
+    }
   }
 
   // Step 5: Execution
@@ -409,9 +488,12 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
   // Install requested skills
   const batchState = {};
+  if (yesFlag) {
+    batchState.globalAction = 'update';
+  }
   for (const skillId of selectedSkillIds) {
     try {
-      await installSkill(skillId, selectedAgentIds, installPath, installScope, { force: !!forceFlag, batchState });
+      await installSkill(skillId, selectedAgentIds, installPath, installScope, { force: !!forceFlag, yes: yesFlag, batchState });
     } catch (error) {
       console.error(chalk.red(`\n Failed to install ${skillId}:`), error.message);
     }
@@ -423,26 +505,39 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 // --- Command handlers ---
 
 async function handleInstall(args) {
-  const { globalFlag, forceFlag, customPath, scope, positional } = parseFlags(args);
+  const { globalFlag, forceFlag, yesFlag, agentFlag, customPath, scope, positional } = parseFlags(args);
+
+  // Task 3.2: Validate agentFlag against known agents
+  if (agentFlag) {
+    const knownAgents = listAgents();
+    const isKnown = knownAgents.some(a => a.id === agentFlag);
+    if (!isKnown) {
+      console.error(chalk.red(`Error: Unknown agent '${agentFlag}'`));
+      console.error(chalk.gray('  Hint: Run "list" to see available agents'));
+      process.exit(1);
+    }
+  }
 
   const skillId = positional[0];
   const agentIds = positional.slice(1);
+  const preselectedAgents = agentFlag ? [agentFlag] : null;
 
-  // No args → launch wizard
+  // No skill → launch wizard (Task 3.3, 3.4)
   if (!skillId) {
-    await installWizard(null, null, customPath, forceFlag);
+    await installWizard(null, preselectedAgents, customPath, forceFlag, yesFlag);
     return;
   }
 
-  // Skill but no agents → wizard with skill preselected
-  if (agentIds.length === 0) {
-    await installWizard(skillId, null, customPath, forceFlag);
+  // Skill but no agents (and no agentFlag) → wizard with skill preselected
+  if (!agentFlag && agentIds.length === 0) {
+    await installWizard(skillId, null, customPath, forceFlag, yesFlag);
     return;
   }
 
-  // Full args → direct install
+  // Full args → direct install (Task 3.5)
+  const targetAgents = agentFlag ? [agentFlag] : agentIds;
   try {
-    await installSkill(skillId, agentIds, customPath, scope, { force: forceFlag });
+    await installSkill(skillId, targetAgents, customPath, scope, { force: forceFlag, yes: yesFlag });
     console.log(chalk.bold.green('\n Installation complete!\n'));
   } catch (error) {
     console.error(chalk.red('\n Installation failed:'), error.message);
@@ -559,7 +654,11 @@ async function main() {
   }
 }
 
-main().catch(error => {
-  console.error(chalk.red('Error:'), error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch(error => {
+    console.error(chalk.red('Error:'), error);
+    process.exit(1);
+  });
+}
+
+module.exports = { parseFlags };
