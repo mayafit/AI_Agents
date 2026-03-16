@@ -2,8 +2,14 @@
 stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit']
 workflowStatus: 'complete'
 completedDate: '2026-03-05'
-lastEdited: '2026-03-11'
+lastEdited: '2026-03-15'
 editHistory:
+  - date: '2026-03-15'
+    changes: 'Adversarial review fixes: FR53 updated from 4 to 11 BMAD agents (added 7 built-in). FR72 moved from Phase 3 to Phase 2 (Epic 6 in-progress). Removed "Methodology presentation bundled with installation" from Phase 3 list. F6 description corrected from require() to execSync+require.resolve invocation pattern. Updated Technical Success to reflect 11 agents.'
+  - date: '2026-03-15'
+    changes: 'Reorganized F6 as Bundled BMAD Installation (merged Epic 13 into Epic 5). Removed standalone binary concept (Node.js+npm always available). Removed --offline flag (bundled is the only mode). Deleted FR77, FR78. Rewrote NFR21 for deterministic bundled output. Reorganized FRs by concern, removing date-based section headers. Swept stale references to standalone binary, --offline, Epic 13.'
+  - date: '2026-03-15'
+    changes: 'Added F6: Self-Contained BMAD Installation. Moved from Phase 3 to Phase 2 (urgent). Added FR74-FR78, NFR20-NFR21. Pins bmad-method v6.0.4 for bundling. Bundles external modules (bmb, cis, tea) as pre-cloned cache inside ma-agents npm package.'
   - date: '2026-03-11'
     changes: 'Added 5 features: Skill Enforcement Architecture, OpenCode Agent Support, _bmad-output policy, Bug Management System, Realistic Sprint Management. Added FR51-FR71 and NFR16-NFR19.'
 inputDocuments: ['docs/index.md', 'docs/project-overview.md', 'docs/architecture.md', 'docs/source-tree-analysis.md', 'docs/development-guide.md', 'README.md', 'CONTRIBUTING.md', 'DEVELOPMENT.md', 'QUICK_START.md', 'SKILLS_STRUCTURE.md', '_bmad-output/planning-artifacts/product-brief-agents-2026-03-08.md']
@@ -23,7 +29,7 @@ classification:
 # Product Requirements Document - agents
 
 **Author:** Alon
-**Date:** 2026-03-05 | **Last Edited:** 2026-03-11
+**Date:** 2026-03-05 | **Last Edited:** 2026-03-15
 
 ## Executive Summary
 
@@ -68,7 +74,7 @@ The core insight is convergence: AI agents need governance, and engineering meth
 - BMAD-METHOD integration works end-to-end: install, update, customize, recompile
 - BMAD extension module (`extends-module: bmm`) survives `npx bmad-method install --action update` without losing functionality
 - Manifest system tracks versions reliably for upgrade/downgrade detection across multi-agent installs
-- All 4 BMAD agents (SRE, DevOps, Cyber, MIL-498) have `critical_actions` for skill loading on activation
+- All 11 BMAD agents (4 custom + 7 built-in) have `critical_actions` for skill loading on activation
 
 ### Measurable Outcomes
 
@@ -218,9 +224,8 @@ ma-agents is a Node.js CLI tool that distributes language-aware engineering meth
 
 | Method | Status | Notes |
 |--------|--------|-------|
-| `npx ma-agents` | Current — primary | Zero-install via npm registry, interactive wizard + direct CLI modes |
+| `npx ma-agents` | Current — primary | Zero-install via npm registry, interactive wizard + direct CLI modes. Bundles all BMAD components (Phase 2 F6) |
 | `npx ma-agents install --yes --force` | Current — CI/CD | Non-interactive scriptable mode for pipeline automation |
-| Self-contained installer | Planned | Standalone package without npm dependency — required for fully air-gapped environments without npm access |
 
 ### IDE / Agent Integration Model
 
@@ -251,7 +256,7 @@ ma-agents does not integrate as an IDE extension. Instead, it injects skill cont
 
 - **OpenCode integration** uses JSON-based instruction injection (`opencode.json` instructions array) rather than markdown comment blocks. The installer must handle JSON config merging (OpenCode configs merge, not replace) and skill path resolution for `.opencode/skills/`
 - **Visual Studio integration** is an identified gap. The team needs to investigate how Visual Studio exposes AI agent configuration (Copilot Chat extensions, `.editorconfig`-adjacent patterns, or VS-specific instruction files) and determine the appropriate injection mechanism
-- **Self-contained installer** must bundle Node.js runtime or compile to a standalone binary (pkg, nexe, or similar) for environments without npm access
+- **Bundled BMAD installation** (Phase 2 F6) bundles bmad-method and external modules inside the npm package, pre-populating bmad-method's cache. Node.js and npm are always available in target environments
 - **Language-specific skill growth** — the skill format must accommodate language-specific content (coding standards, patterns, linting rules) without requiring changes to the core installer when new languages are added
 
 ## Project Scoping & Phased Development
@@ -315,11 +320,16 @@ ma-agents does not integrate as an IDE extension. Instead, it injects skill cont
 - New BMAD extension workflows: add a sprint, add stories/bugs to a sprint from backlog, change/modify a sprint
 - Updated sprint status: shows real sprint definitions with assigned items, not just epic lists
 
+**F6: Bundled BMAD Installation**
+- Bundle `bmad-method` v6.0.4 as a direct npm dependency inside ma-agents (not fetched via `npx` at install time)
+- Bundle pre-cloned external BMAD modules (bmb, cis, tea, gds) inside ma-agents npm package under `lib/bmad-cache/`
+- Before calling bmad-method install, pre-populate `~/.bmad/cache/external-modules/` from bundled cache — bmad-method's `cloneExternalModule()` skips git clone when cache directory exists
+- Pin to bmad-method v6.0.4 for initial release; version upgrade is a deliberate, tested operation
+- Replace `npx bmad-method install` calls in `bmad.js` with direct invocation of the vendored dependency via `execSync('node <resolved-path> install ...')` where the path is resolved using `require.resolve('bmad-method/tools/bmad-npx-wrapper.js')`
+
 ### Phase 3 — Growth (Next)
 
 - Visual Studio agent integration (identified gap)
-- Self-contained installer for fully air-gapped environments (no npm dependency)
-- Methodology presentation bundled with installation
 - Additional language-specific skills (C++, C#, Python standards)
 - Skill authoring tooling for organizational skill creators
 - Expanded BMAD agent personas for additional enterprise roles
@@ -334,7 +344,7 @@ ma-agents does not integrate as an IDE extension. Instead, it injects skill cont
 
 ### Risk Mitigation Strategy
 
-**Technical Risks:** BMAD extension compatibility and OpenCode JSON injection are the primary unknowns for Phase 2. Both can be prototyped early. Visual Studio integration and self-contained installer remain unknowns for Phase 3.
+**Technical Risks:** BMAD extension compatibility and OpenCode JSON injection are the primary unknowns for Phase 2. Both can be prototyped early. Bundled BMAD installation (F6) is well-understood — bmad-method's cache mechanism (`~/.bmad/cache/external-modules/`) has been confirmed to support pre-populated caches. Visual Studio integration remains an unknown for Phase 3.
 
 **Adoption Risks:** Methodology drift across teams. Mitigated by skill enforcement architecture (Phase 2 F1) — moving from advisory to enforced compliance.
 
@@ -420,7 +430,7 @@ ma-agents does not integrate as an IDE extension. Instead, it injects skill cont
 
 - FR51: The installer injects the planning instruction at the TOP of agent instruction files, not the bottom — ensuring highest priority during LLM context processing
 - FR52: The installer deploys a BMAD extension module (`extends-module: bmm`) that injects skill-loading `critical_actions` into BMAD agents — skills are loaded before any menu or workflow executes
-- FR53: All 4 BMAD agent customizations (SRE, DevOps, Cyber, MIL-498) include skill-loading `critical_actions` in their `.customize.yaml` files
+- FR53: All 11 BMAD agents (4 custom: SRE, DevOps, Cyber, MIL-498 + 7 built-in: bmad-master, analyst, architect, dev, pm, qa, sm) include skill-loading `critical_actions` — custom agents via `.customize.yaml` files, built-in agents via the BMAD extension module
 - FR54: Per-agent enforcement mechanisms are implemented where the agent supports them (e.g., Claude Code hooks that verify manifest was read)
 - FR55: Context persistence strategies ensure skills survive LLM context compression and session restoration (via BMAD sidecar memory or equivalent)
 
@@ -452,11 +462,17 @@ ma-agents does not integrate as an IDE extension. Instead, it injects skill cont
 - FR70: A BMAD extension workflow enables changing/modifying a sprint (reorder items, swap items, adjust capacity)
 - FR71: Sprint status displays real sprint definitions with assigned items, not just a list of epics
 
+### Bundled BMAD Installation (Phase 2)
+
+- FR74: The ma-agents npm package bundles bmad-method v6.0.4 as a direct dependency — no `npx` download at install time
+- FR75: The ma-agents npm package bundles pre-cloned BMAD external modules (bmb, cis, tea, gds) under `lib/bmad-cache/` — no git clone at install time
+- FR76: Before invoking bmad-method install, the installer pre-populates `~/.bmad/cache/external-modules/` from the bundled cache so bmad-method finds modules locally
+
 ### Developer Infrastructure (Phase 2)
 
 - FR73: The 4 core modules (cli.js, installer.js, agents.js, bmad.js) have automated regression tests that verify architectural contracts (pipeline ordering, additive-only operations, template resolution, command routing)
 
-### Methodology Onboarding (Phase 3)
+### Methodology Onboarding (Phase 2)
 
 - FR72: A methodology presentation is bundled with BMAD installation and deployed to `_bmad-output/methodology/`, providing team onboarding content for BMAD-METHOD without separate training materials
 
@@ -495,3 +511,8 @@ ma-agents does not integrate as an IDE extension. Instead, it injects skill cont
 - NFR17: All BMAD-facing changes must use official BMAD Builder extension APIs only (`extends-module`, `critical_actions`, `module-help.csv`, `bmad-bmb-create-agent`, `bmad-bmb-create-workflow`) — zero bmad-method core modifications
 - NFR18: OpenCode JSON instruction injection must not corrupt existing `opencode.json` configuration — JSON config merging must be additive-only
 - NFR19: Bug and sprint extension workflows must function identically whether invoked via BMAD agent menu or direct slash command
+
+### Bundled Installation (Phase 2)
+
+- NFR20: The bundled BMAD cache must be version-pinned (v6.0.4 initial) — upgrading the bundled version is a deliberate, tested release operation, not an automatic fetch
+- NFR21: The bundled installation produces deterministic `_bmad/` output from the included cache. The resulting directory structure is reproducible given the same ma-agents package version.

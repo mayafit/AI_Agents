@@ -1,4 +1,4 @@
-# generated: 2026-03-12
+# generated: 2026-03-15
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system
@@ -33,7 +33,7 @@
 # - SM typically creates next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
-generated: 2026-03-12
+generated: 2026-03-15
 project: agents
 project_key: NOKEY
 tracking_system: file-system
@@ -67,10 +67,13 @@ development_status:
   4-2-vs-skill-template-format: ready-for-dev
   epic-4-retrospective: optional
 
-  # Epic 5: Self-Contained Installer
+  # Epic 5: Bundled BMAD Installation (Phase 2) — FIRST PRIORITY
+  # Execution order: 5.1 → 5.2 → 5.3 → 5.4
   epic-5: in-progress
-  5-1-standalone-binary-packaging: ready-for-dev
-  5-2-cross-platform-binary-testing: ready-for-dev
+  5-1-bmad-method-direct-dependency: review
+  5-2-bmad-cache-build-script: review
+  5-3-pre-populate-bmad-cache: ready-for-dev
+  5-4-validate-bundled-installation: backlog
   epic-5-retrospective: optional
 
   # Epic 6: Methodology Onboarding Package
@@ -98,14 +101,18 @@ development_status:
   epic-8-retrospective: optional
 
   # Epic 9: OpenCode Agent Support (Phase 2)
+  # Execution order: 9.1 → 9.2 → 9.3 → 9.4
   epic-9: in-progress
   9-1-register-opencode-agent: ready-for-dev
   9-2-json-merge-injection: ready-for-dev
+  9-3-json-merge-existing: ready-for-dev
+  9-4-json-error-handling: ready-for-dev
   epic-9-retrospective: optional
 
   # Epic 10: Project Knowledge Preservation (Phase 2)
   epic-10: in-progress
   10-1-ensure-bmad-output-not-gitignored: ready-for-dev
+  10-2-document-bmad-output-policy: ready-for-dev
   epic-10-retrospective: optional
 
   # Epic 11: Bug Management System (Phase 2)

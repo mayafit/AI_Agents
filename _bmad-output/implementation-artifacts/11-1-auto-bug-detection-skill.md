@@ -26,6 +26,12 @@ So that bugs are caught proactively during all agent sessions.
    **When** validated,
    **Then** it passes all existing skill validation rules
 
+4. **Given** SKILL.md detection criteria are authored,
+   **When** a reviewer examines the skill content,
+   **Then** SKILL.md includes at least 6 distinct defect categories (logic errors, unhandled edge cases, missing error handling, broken contracts, regressions, security vulnerabilities),
+   **And** each category includes at least one concrete example of what qualifies as that defect type,
+   **And** "What NOT to Flag" section explicitly covers committed feature-branch code tied to in-progress stories
+
 ## Tasks / Subtasks
 
 - [ ] Task 1: Create skill directory and skill.json (AC: #1, #3)
@@ -35,7 +41,10 @@ So that bugs are caught proactively during all agent sessions.
 
 - [ ] Task 2: Author SKILL.md with detection criteria (AC: #1, #2)
   - [ ] 2.1: Create `skills/auto-bug-detection/SKILL.md` with a clear title and purpose section
-  - [ ] 2.2: Add "Detection Scope" section defining what qualifies as delivered code (merged/committed code, completed stories) vs work-in-progress (current branch changes, uncommitted work)
+  - [ ] 2.2: Add "Detection Scope" section defining scope boundaries:
+    - **Delivered code:** Code whose associated story/task is marked done/completed, regardless of branch. This includes committed code on main, release branches, and feature branches whose parent story is completed.
+    - **Work-in-progress:** Uncommitted changes in the working tree; committed code on a branch whose associated story is still in-progress or not-started; TODO/FIXME markers in code added as part of the current story under review.
+    - **Ambiguous boundary — feature branches:** Committed code on a feature branch where the story status is unknown must be treated as WIP. Agents must check story status before classifying. When story status cannot be determined, default to WIP and do NOT flag as a bug.
   - [ ] 2.3: Add "Detection Criteria" section listing categories of defects to detect: logic errors, unhandled edge cases, missing error handling, broken contracts, regressions, security vulnerabilities in existing code
   - [ ] 2.4: Add "Reporting Format" section with structured template: title, severity (critical/high/medium/low), affected component, reproduction steps, expected behavior, actual behavior, affected files
   - [ ] 2.5: Add "What NOT to Flag" section: work-in-progress code, TODO/FIXME comments in current work, incomplete implementations in active stories, style preferences
@@ -54,7 +63,11 @@ So that bugs are caught proactively during all agent sessions.
 - **No new dependencies:** Pure content — skill.json metadata and SKILL.md directives only
 - **Schema compliance:** skill.json uses all required fields (name, version, description, category, tags, always_load)
 
-### Critical Guardrails
+### Shared Guardrails
+
+See `_bmad-output/implementation-artifacts/epic-11-12-shared-guardrails.md` for universal constraints shared across all Epic 11 & 12 stories.
+
+### Critical Guardrails (story-specific)
 
 - Do NOT add any new npm dependencies
 - Do NOT modify lib/installer.js, lib/agents.js, or lib/bmad.js

@@ -2,6 +2,13 @@
 stepsCompleted: ['step-01-init', 'step-02-context', 'step-03-starter', 'step-04-decisions', 'step-05-patterns', 'step-06-structure', 'step-07-validation', 'step-08-complete']
 phase2StepsCompleted: ['step-02-context', 'step-04-decisions', 'step-05-patterns', 'step-06-structure', 'step-07-validation', 'step-08-complete']
 phase2CompletedAt: '2026-03-11'
+phase2bEditHistory:
+  - date: '2026-03-15'
+    changes: 'Added Decision P2-6: Bundled BMAD Installation. Added bmad-cache bundling architecture, bmad-method as npm dependency. Updated project structure, patterns, and validation.'
+  - date: '2026-03-15'
+    changes: 'Simplified P2-6: Removed --offline flag (bundled is the only mode), removed standalone binary option, removed Option B (vendored copy), renumbered Epic 13 to Epic 5. Swept all stale references.'
+  - date: '2026-03-15'
+    changes: 'Fixed stale counts in Project Context Analysis: FR count 50→76 (Phase 1+2 minus deleted FR77-FR78), NFR count 15→21 (original 15 + Phase 2 NFR16-NFR21).'
 inputDocuments: ['_bmad-output/planning-artifacts/prd.md', 'docs/index.md', 'docs/project-overview.md', 'docs/architecture.md', 'docs/source-tree-analysis.md', 'docs/development-guide.md', 'README.md']
 workflowType: 'architecture'
 status: 'complete'
@@ -20,10 +27,10 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 ### Requirements Overview
 
 **Functional Requirements:**
-50 FRs across 8 capability areas. The architecture must support: (1) a content transformation pipeline that translates skills into agent-native formats, (2) a BMAD lifecycle management subsystem, (3) MIL-STD-498 document generation workflows delivered via BMAD, (4) manifest-based version tracking across multi-agent installs, and (5) skill authoring and governance capabilities.
+76 FRs across 14 capability areas (Phase 1: 50 FRs across 8 areas + Phase 2: 26 FRs across 6 areas, minus FR77-FR78 deleted). The architecture must support: (1) a content transformation pipeline that translates skills into agent-native formats, (2) a BMAD lifecycle management subsystem, (3) MIL-STD-498 document generation workflows delivered via BMAD, (4) manifest-based version tracking across multi-agent installs, and (5) skill authoring and governance capabilities.
 
 **Non-Functional Requirements:**
-15 NFRs across 4 categories driving architectural decisions:
+21 NFRs across 6 categories driving architectural decisions (original 15 + Phase 2 NFR16-NFR21):
 - **Security** — no data exfiltration, inspectable content, offline operation (NFR1-4)
 - **Integration reliability** — additive-only installs, atomic manifest operations, strict pipeline ordering (NFR5-8)
 - **Portability** — cross-platform identical results, write-once skills, extensible agent targets (NFR9-12)
@@ -40,7 +47,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 - Zero runtime component — install-time only execution
 - Cross-platform file system operations (Windows, macOS, Linux)
 - Air-gapped operation — no network calls during skill installation
-- npm as primary distribution channel (self-contained installer planned for Phase 2)
+- npm as primary distribution channel (bundled BMAD installation planned for Phase 2)
 
 ### Cross-Cutting Concerns Identified
 
@@ -52,11 +59,11 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 ### Phase 2 Requirements Analysis (2026-03-11)
 
-**New Functional Requirements (FR51-FR71):**
-21 FRs across 5 capability areas. The architecture must additionally support: (6) instruction injection priority management (TOP placement, JSON injection for OpenCode), (7) a BMAD extension module that injects skill-loading `critical_actions` into BMAD agents, (8) bug entity management and auto-detection skills, (9) sprint management workflows as BMAD extensions.
+**New Functional Requirements (FR51-FR76):**
+26 FRs across 6 capability areas. The architecture must additionally support: (6) instruction injection priority management (TOP placement, JSON injection for OpenCode), (7) a BMAD extension module that injects skill-loading `critical_actions` into BMAD agents, (8) bug entity management and auto-detection skills, (9) sprint management workflows as BMAD extensions, (10) bundled BMAD installation with bundled external modules.
 
-**New Non-Functional Requirements (NFR16-NFR19):**
-4 NFRs adding BMAD extension compatibility requirements:
+**New Non-Functional Requirements (NFR16-NFR21):**
+6 NFRs adding BMAD extension compatibility and bundled installation requirements:
 - Extension module must survive BMAD updates (`extends-module` identity persistence) (NFR16)
 - Zero bmad-method core modifications — extension APIs only (NFR17)
 - OpenCode JSON injection must be additive-only — merge, not replace (NFR18)
@@ -76,6 +83,9 @@ Skill enforcement touches multiple architectural boundaries:
 - 4 new BMAD extension workflows (bug story, add sprint, modify sprint, add items to sprint)
 - 1 new skill (`auto-bug-detection`)
 - 4 updated `.customize.yaml` files (SRE, DevOps, Cyber, MIL-498) with skill-loading `critical_actions`
+- 1 new bundled dependency (bmad-method v6.0.4)
+- 1 new build artifact directory (`lib/bmad-cache/` with 4 pre-cloned external modules)
+- 0 new CLI flags (bundled installation is the default and only mode)
 
 ## Technology Foundation (Established)
 
@@ -114,7 +124,7 @@ CLI tool / build-time packaging pipeline — established brownfield project (v2.
 - Manifest versioning contract
 
 **Important Decisions (Shape Phase 2):**
-- Self-contained installer packaging approach
+- Bundled BMAD installer packaging approach
 - Visual Studio agent integration mechanism
 - Testing strategy formalization
 
@@ -185,11 +195,11 @@ This chain satisfies NFR10 (write-once skills) and NFR11 (new agents need only a
 - CI/CD: `npx ma-agents install --yes --force` for non-interactive pipeline use
 - Cross-platform: Node.js path.join/path.resolve for all file operations (NFR9)
 
-**Phase 2 Decisions (Flagged — Not Yet Decided):**
+**Phase 2 Decisions:**
 
 | Decision | Options | Status |
 |----------|---------|--------|
-| Self-contained installer | pkg, nexe, Node SEA (Single Executable Application) | Needs investigation — Node SEA is native since Node 20, may be simplest |
+| Bundled BMAD installation | Bundle bmad-method as npm dependency + pre-clone external modules into `lib/bmad-cache/` | **DECIDED** (P2-6) — bmad-method v6.0.4 pinned, cache pre-population before install |
 | Visual Studio integration | VS Copilot Chat extensions, .vs/ directory, custom mechanism | Needs investigation — depends on VS AI agent config model |
 | Testing framework | Node.js built-in test runner, Jest, Vitest | Needs decision — recommend Node.js built-in (no dependencies, aligns with minimal approach) |
 
@@ -201,7 +211,7 @@ This chain satisfies NFR10 (write-once skills) and NFR11 (new agents need only a
 3. BMAD pipeline ordering → enterprise integration reliability
 4. Manifest contract → version tracking across all operations
 5. (Phase 2) Testing framework → enables regression protection
-6. (Phase 2) Self-contained installer → air-gapped deployment
+6. (Phase 2) Bundled BMAD installation → air-gapped deployment
 7. (Phase 2) Visual Studio integration → new agent target
 
 **Cross-Component Dependencies:**
@@ -341,6 +351,60 @@ Workflows are registered in `module-help.csv` for phase discovery. They function
 
 **Affects:** `lib/bmad-extension/workflows/` (4 workflow directories), `lib/bmad-extension/module-help.csv`
 
+#### Decision P2-6: Bundled BMAD Installation (FR74-FR76, NFR20-NFR21)
+
+**Decision:** Bundle bmad-method as npm dependency and pre-clone external modules inside the ma-agents npm package
+
+**Problem:** bmad-method's external module installation uses `git clone` to fetch modules (bmb, cis, tea, gds) from GitHub into `~/.bmad/cache/external-modules/`. This fails in air-gapped environments. Additionally, `npx bmad-method` itself requires npm registry access. Since Node.js+npm is always available, bundling via npm dependency is the natural approach.
+
+**Architecture:**
+
+```
+lib/
+├── bmad-cache/                     — pre-cloned external module repos
+│   ├── bmb/                        — bmad-builder module (full git repo snapshot)
+│   │   ├── src/
+│   │   ├── package.json
+│   │   └── node_modules/           — pre-installed production dependencies
+│   ├── cis/                        — bmad-creative-intelligence-suite
+│   │   ├── src/
+│   │   ├── package.json
+│   │   └── node_modules/
+│   ├── tea/                        — bmad-method-test-architecture-enterprise
+│   │   ├── src/
+│   │   ├── package.json
+│   │   └── node_modules/
+│   └── gds/                        — bmad-game-dev-studio
+│       ├── src/
+│       ├── package.json
+│       └── node_modules/
+```
+
+**Mechanism — 2 steps in `bmad.js`:**
+
+1. **Pre-populate cache:** Before calling bmad-method, copy `lib/bmad-cache/*` to `~/.bmad/cache/external-modules/` (only if target directory doesn't exist or `--force`). bmad-method's `cloneExternalModule()` checks `fs.pathExists(moduleCacheDir)` — if the cache directory exists, it skips git clone and uses the cached copy.
+
+2. **Invoke bmad-method from npm dependency:** Add `bmad-method` as a direct npm dependency in `package.json` with a pinned version (`"bmad-method": "6.0.4"`). When `npm install` or `npm pack` runs, bmad-method is included in `node_modules/`. Invoke via `require.resolve('bmad-method/tools/bmad-npx-wrapper.js')`. This eliminates the npm registry dependency at runtime.
+
+**Pre-cloned cache creation (build step):**
+A new `npm run build:bmad-cache` script:
+1. For each module in `external-official-modules.yaml`: `git clone --depth 1 <url> lib/bmad-cache/<code>/`
+2. Run `npm install --omit=dev` in each cloned directory
+3. Remove `.git/` directories to reduce package size
+4. This script runs on a connected machine; the output is committed to the repo
+
+**npm package size impact:**
+- bmad-method: ~555 KB (v6.1.0 optimized, v6.0.4 may be larger)
+- External modules: estimated 2-5 MB each with node_modules
+- Total package size increase: ~10-20 MB — acceptable for enterprise/air-gapped use case
+
+**Version pinning (NFR20):**
+- `package.json` pins `bmad-method` to exact version: `"6.0.4"`
+- `lib/bmad-cache/` modules are pinned at clone time
+- Upgrading is a deliberate operation: update version pin, re-run `npm run build:bmad-cache`, test, release
+
+**Affects:** `bmad.js` (cache pre-population + local invocation), `package.json` (new dependency), new `lib/bmad-cache/` directory, new build script
+
 #### Phase 2 Decision Impact Analysis
 
 **Implementation Sequence:**
@@ -350,6 +414,7 @@ Workflows are registered in `module-help.csv` for phase discovery. They function
 4. Extension deployment (`bmad.js`) — deploy extension module during BMAD install
 5. `auto-bug-detection` skill creation (`skills/auto-bug-detection/`)
 6. `.gitignore` update logic (`installer.js`) — don't add `_bmad-output`
+7. Bundled BMAD installation (`bmad.js`, `package.json`, `lib/bmad-cache/`) — bundle bmad-method as npm dependency + external modules, pre-populate cache
 
 **New Cross-Component Dependencies:**
 - `injectionStrategy` in `agents.js` drives `installer.js` injection behavior
@@ -564,6 +629,9 @@ critical_actions:
 - Creating per-agent injection logic in `installer.js` instead of driving behavior from `agents.js` registry
 - Modifying bmad-method core files instead of using extension module APIs (NFR17 violation)
 - Adding `_bmad-output` to `.gitignore` (reverses F3 intent)
+- Fetching bmad-method via `npx` instead of using the npm dependency copy (breaks air-gap, NFR20 violation)
+- Letting bmad-method auto-fetch external modules without pre-populating the cache first (breaks air-gap)
+- Including `.git/` directories in `lib/bmad-cache/` — wastes package size, not needed for installation
 
 ## Project Structure & Boundaries
 
@@ -587,7 +655,12 @@ ma-agents/
 ├── lib/
 │   ├── installer.js                — core install engine, manifest management, MANIFEST.yaml gen
 │   ├── agents.js                   — agent registry (12 agents incl. OpenCode), platform paths, resource maps
-│   ├── bmad.js                     — BMAD lifecycle: install, update, customize, recompile
+│   ├── bmad.js                     — BMAD lifecycle: install, update, customize, recompile, bundled cache pre-population
+│   ├── bmad-cache/                 — pre-cloned BMAD external modules (committed, built via build:bmad-cache)
+│   │   ├── bmb/                    — bmad-builder (with pre-installed node_modules, no .git/)
+│   │   ├── cis/                    — bmad-creative-intelligence-suite
+│   │   ├── tea/                    — bmad-method-test-architecture-enterprise
+│   │   └── gds/                    — bmad-game-dev-studio
 │   └── bmad-extension/             — BMAD extension module (deployed to _bmad/ at install)
 │       ├── module.yaml             — extends-module: bmm, module identity
 │       ├── module-help.csv         — phase registration for extension workflows
@@ -685,6 +758,7 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 | Project Knowledge (FR59-60) | `installer.js` | `.gitignore` modification |
 | Bug Management (FR61-65) | BMAD extension workflows + skill | `lib/bmad-extension/workflows/`, `skills/auto-bug-detection/` |
 | Sprint Management (FR66-71) | BMAD extension workflows | `lib/bmad-extension/workflows/` |
+| Bundled BMAD (FR74-FR76) | `bmad.js` + `lib/bmad-cache/` + `package.json` | `lib/bmad-cache/`, `bmad.js` |
 
 ### Integration Points
 
@@ -759,13 +833,15 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 | NFR17 (Zero Core Mods) | Extension module APIs only, no bmad-method core changes | COVERED |
 | NFR18 (Additive JSON) | OpenCode JSON merge pattern: append to instructions array, preserve all keys | COVERED |
 | NFR19 (Dual Invocation) | BMAD registration system supports both menu and slash command natively | COVERED |
+| NFR20 (Version Pinning) | `package.json` pins bmad-method exact version, `lib/bmad-cache/` pinned at clone time | COVERED |
+| NFR21 (Identical Output) | Same bmad-method version + same module cache = identical `_bmad/` output regardless of environment | COVERED |
 
 ### Implementation Readiness Validation
 
 **Decision Completeness:** HIGH
 - All Phase 1 decisions documented with rationale
 - Phase 2 decisions P2-1 through P2-5 now decided and documented (instruction injection, OpenCode, extension module, critical_actions, extension workflows)
-- Remaining Phase 2 items (self-contained installer, Visual Studio integration, testing framework) still flagged as needs investigation
+- Remaining Phase 2 items (Visual Studio integration, testing framework) still flagged as needs investigation
 - No ambiguous or conflicting decisions
 
 **Pattern Completeness:** HIGH
@@ -781,17 +857,16 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 
 ### Gap Analysis Results
 
-**No Critical Gaps.** All 71 FRs and 19 NFRs have architectural support.
+**No Critical Gaps.** All 76 FRs and 21 NFRs have architectural support.
 
 **Important Gaps (Phase 2 — Known and Flagged):**
 - Testing framework not yet decided — blocks regression testing
 - Visual Studio integration mechanism unknown — blocks new agent target
-- Self-contained installer approach not chosen — blocks full air-gap support
 
 **Minor Gaps:**
 - No formal error code catalog — errors are currently ad-hoc strings
 - No formal logging strategy — console output patterns defined but no structured logging for diagnostics
-- FR53 scope expansion (4 → 11 agents) documented in architecture but PRD still says "All 4 BMAD agents" — non-blocking, PRD can be amended for traceability
+- FR53 scope expansion (4 → 11 agents) — aligned across PRD, Architecture, and Epics (fixed 2026-03-15)
 
 ### Architecture Completeness Checklist
 
@@ -836,4 +911,4 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 - Testing framework decision and test suite creation (Phase 2)
 - Error code standardization
 - Structured logging for diagnostic purposes
-- Visual Studio and self-contained installer investigations
+- Visual Studio integration investigation

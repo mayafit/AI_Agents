@@ -1,6 +1,8 @@
 # Story 11.3: Integrate Bug Detection into Code Review
 
-Status: ready-for-dev
+Status: blocked
+
+<!-- BLOCKED: Depends on Story 11.1 (auto-bug-detection skill) and Story 11.2 (create-bug-story workflow). Both must be fully implemented before this story can be started. Do NOT begin implementation until 11.1 and 11.2 are complete. -->
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -11,6 +13,12 @@ I want code review to include explicit bug detection checks,
 So that defects in delivered code are caught during review.
 
 ## Acceptance Criteria
+
+0. **Precondition — Story 11.1 complete:**
+   `skills/auto-bug-detection/skill.json` and `skills/auto-bug-detection/SKILL.md` exist and pass skill validation before this story begins.
+
+0. **Precondition — Story 11.2 complete:**
+   `lib/bmad-extension/workflows/create-bug-story/workflow.md` exists and is invocable via `/create-bug-story` before this story begins.
 
 1. **Given** code review is in progress,
    **When** auto-bug-detection skill is loaded via critical_actions,
@@ -49,7 +57,11 @@ So that defects in delivered code are caught during review.
 - **Code-review skill update:** Adding a section to existing SKILL.md, not changing skill.json or creating new files
 - **No installer changes:** The existing installer already loads both skills — this story is about making their content work together
 
-### Critical Guardrails
+### Shared Guardrails
+
+See `_bmad-output/implementation-artifacts/epic-11-12-shared-guardrails.md` for universal constraints shared across all Epic 11 & 12 stories.
+
+### Critical Guardrails (story-specific)
 
 - Do NOT modify lib/installer.js, lib/agents.js, or bin/cli.js
 - Do NOT change the code-review skill.json — only update SKILL.md content

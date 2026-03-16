@@ -2,8 +2,14 @@
 stepsCompleted: [1, 2, 3, 4, 'phase2-step-01', 'phase2-step-02', 'phase2-step-03', 'phase2-step-04']
 workflowStatus: 'complete'
 completedDate: '2026-03-08'
-lastEdited: '2026-03-12'
+lastEdited: '2026-03-15'
 phase2EditHistory:
+  - date: '2026-03-15'
+    changes: 'Adversarial review fixes: Removed deleted FR77/FR78 strikethrough lines and standalone binary strikethrough. Added FR44/FR45 to FR Coverage Map. Updated Epic 6 dependency note to reference Epic 5. Added determinism/git-fetch acceptance criteria and technical note to Story 5.3.'
+  - date: '2026-03-15'
+    changes: 'Deleted old Epic 5 (Self-Contained Installer / standalone binary). Renumbered Epic 13 (Self-Contained BMAD Installation) to Epic 5, renamed to Bundled BMAD Installation. Removed --offline flag story (13.4). Reordered remaining stories to fix circular dependency. Added cross-epic bmad.js coordination and development execution order sections. Updated FR Coverage Map.'
+  - date: '2026-03-15'
+    changes: 'Adding Epic 13: Self-Contained BMAD Installation (FR74-FR78, NFR20-NFR21). Marked as highest priority — first epic to develop.'
   - date: '2026-03-12'
     changes: 'Adding Phase 2 epics for FR51-FR71 (Skill Enforcement, OpenCode, Project Knowledge, Bug Management, Sprint Management)'
 inputDocuments: ['_bmad-output/planning-artifacts/prd.md', '_bmad-output/planning-artifacts/architecture.md', '_bmad-output/planning-artifacts/implementation-readiness-report-2026-03-11.md']
@@ -94,6 +100,12 @@ This document provides the complete epic and story breakdown for agents, decompo
 - FR70: A BMAD extension workflow enables changing/modifying a sprint (reorder items, swap items, adjust capacity)
 - FR71: Sprint status displays real sprint definitions with assigned items, not just a list of epics
 
+### Functional Requirements (Phase 2 — added 2026-03-15)
+
+- FR74: The ma-agents npm package bundles bmad-method v6.0.4 as a direct dependency — no `npx` download at install time
+- FR75: The ma-agents npm package bundles pre-cloned BMAD external modules (bmb, cis, tea, gds) under `lib/bmad-cache/` — no git clone at install time
+- FR76: Before invoking bmad-method install, the installer pre-populates `~/.bmad/cache/external-modules/` from the bundled cache so bmad-method finds modules locally
+
 ### NonFunctional Requirements
 
 - NFR1: Skills must not transmit project data externally — all content is static instruction delivery, not data collection
@@ -118,12 +130,13 @@ This document provides the complete epic and story breakdown for agents, decompo
 - NFR17: All BMAD-facing changes must use official BMAD Builder extension APIs only — zero bmad-method core modifications
 - NFR18: OpenCode JSON instruction injection must not corrupt existing `opencode.json` configuration — additive-only
 - NFR19: Bug and sprint extension workflows must function identically whether invoked via BMAD agent menu or direct slash command
+- NFR20: The bundled BMAD cache must be version-pinned (v6.0.4 initial) — upgrading the bundled version is a deliberate, tested release operation
+- NFR21: The bundled installation must produce a complete, deterministic `_bmad/` output from the bundled npm package
 
 ### Additional Requirements
 
 - Testing framework needs formalization — Node.js built-in test runner recommended per architecture
 - Visual Studio agent integration mechanism needs investigation (VS Copilot Chat, .vs/ directory)
-- Self-contained installer packaging approach needed (pkg, nexe, or Node SEA)
 - Error code catalog — standardize currently ad-hoc error strings
 - Structured logging for diagnostic purposes beyond console output
 - Methodology presentation to be bundled with installation for team onboarding
@@ -143,8 +156,6 @@ This document provides the complete epic and story breakdown for agents, decompo
 | FR43 | Epic 3 | MANIFEST.yaml generation validation |
 | FR34 (VS gap) | Epic 4 | Visual Studio agent target |
 | FR38 (VS) | Epic 4 | VS format translation |
-| FR44 (enhanced) | Epic 5 | Self-contained installer for full air-gap |
-| FR45 (enhanced) | Epic 5 | Cross-platform standalone binary |
 | All other Phase 1 FRs | Implemented | v2.19.2 baseline — no epic needed |
 | FR51 | Epic 8 | TOP injection placement |
 | FR52 | Epic 8 | BMAD extension module with critical_actions |
@@ -169,6 +180,11 @@ This document provides the complete epic and story breakdown for agents, decompo
 | FR71 | Epic 12 | Sprint status with assigned items |
 | FR72 | Epic 6 | Methodology presentation bundled with BMAD install |
 | FR73 | Epic 7 | Automated regression tests for 4 core modules |
+| FR74 | Epic 5 | Bundle bmad-method as dependency |
+| FR75 | Epic 5 | Bundle pre-cloned external modules |
+| FR76 | Epic 5 | Pre-populate bmad cache before install |
+| FR44 | Epic 5 | Air-gapped environment support via bundled installation |
+| FR45 | Implemented | Cross-platform support (Windows, macOS, Linux) |
 
 ## Epic List
 
@@ -192,17 +208,18 @@ Engineers can target Visual Studio's AI assistant for skill installation, expand
 **FRs covered:** FR34 (VS gap), FR38 (VS format translation)
 **NFRs addressed:** NFR11 (new agent = template mapping only), NFR13 (config-driven registry)
 
-### Epic 5: Self-Contained Installer
-Engineers can install ma-agents in fully air-gapped environments without npm, Node.js, or internet access via a standalone binary distribution.
-**FRs covered:** FR44 (enhanced), FR45 (enhanced)
-**NFRs addressed:** NFR2 (offline operation), NFR9 (cross-platform)
-**Phase 2 dependencies:** If Epics 8-12 ship before Epic 5, the standalone binary must bundle `lib/bmad-extension/` (Epic 8), support 12 agents including OpenCode (Epic 9), and include bug/sprint extension workflows (Epics 11-12). Story 5.2 dev notes include a pre-implementation checklist for this.
+### Epic 5: Bundled BMAD Installation
+The ma-agents npm package bundles bmad-method and all external BMAD modules (bmb, cis, tea, gds) so that `npx ma-agents install` never performs runtime git clone or npm registry fetch for BMAD components. Installation is deterministic and works in air-gapped environments where the npm package is available.
+**FRs covered:** FR74, FR75, FR76
+**NFRs addressed:** NFR2 (offline operation), NFR20 (version pinning), NFR21 (deterministic output)
+**Dependencies:** Coordination with Epics 6, 8 (shared `bmad.js` modifications). Epic 8 creates extension module deployment in `bmad.js`. Epic 6 adds methodology deployment step. All three epics modify `bmad.js` — implementation must coordinate merge order.
+**Version pin:** bmad-method v6.0.4
 
 ### Epic 6: Methodology Onboarding Package
 Teams receive a methodology presentation bundled with installation, enabling organizational onboarding to BMAD-METHOD without separate training materials.
 **FRs covered:** FR72
 **Standalone:** Adds content to existing install pipeline
-**Phase 2 dependency:** Epic 8 modifies `bmad.js` — coordinate insertion point for methodology deployment step
+**Phase 2 dependencies:** Epic 5 modifies `bmad.js` invocation pattern (must ship first). Epic 8 modifies `bmad.js` for extension module deployment — coordinate insertion point for methodology deployment step.
 
 ### Epic 7: Test Suite Foundation
 Contributors have automated regression tests verifying architectural contracts across the 4 core modules (cli.js, installer.js, agents.js, bmad.js), catching pipeline ordering violations, registry inconsistencies, and template resolution bugs before release.
@@ -238,6 +255,161 @@ Project managers work with flat backlogs containing stories and bugs, capacity-b
 **FRs covered:** FR65, FR66, FR67, FR68, FR69, FR70, FR71
 **NFRs addressed:** NFR19 (menu + slash command invocation)
 **Dependency:** Uses extension module from Epic 8 for workflow deployment
+
+### Cross-Epic Coordination: `bmad.js`
+
+Three epics modify `bmad.js`. Implementation order matters:
+1. **Epic 5** (Bundled BMAD) — changes invocation from `npx bmad-method` to vendored `node <resolved-path>`, adds cache pre-population before install
+2. **Epic 6** (Methodology Onboarding) — adds methodology deployment step
+3. **Epic 8** (Skill Enforcement) — adds extension module deployment
+
+Stories in Epics 6 and 8 that touch `bmad.js` must build on Epic 5's vendored invocation pattern.
+
+### Development Execution Order
+
+1. **Epic 5** (Bundled BMAD Installation) — foundational, enables deterministic installation
+2. **Epic 9** (OpenCode Agent) — independent, can parallel with Epic 5
+3. **Epic 10** (Project Knowledge) — simple, no conflicts, can parallel
+4. **Epic 8** (Skill Enforcement) — touches `bmad.js`, must follow Epic 5
+5. **Epics 11, 12** (Bug/Sprint Management) — depend on Epic 8's extension module
+6. **Epics 1-4, 6-7** (Phase 1 remaining) — can run in parallel throughout, Epic 6 coordinates with Epic 5 on `bmad.js`
+
+---
+
+## Epic 5: Bundled BMAD Installation (Phase 2)
+
+The ma-agents npm package bundles bmad-method and all external BMAD modules (bmb, cis, tea, gds) so that `npx ma-agents install` never performs runtime git clone or npm registry fetch for BMAD components. Installation is deterministic and works in air-gapped environments where the npm package is available.
+
+### Story 5.1: Add bmad-method as Direct Dependency
+
+As a **DevOps engineer**,
+I want bmad-method included as a direct npm dependency in ma-agents,
+So that BMAD installation does not require fetching bmad-method from the npm registry at runtime.
+
+**Acceptance Criteria:**
+
+**Given** `package.json` includes `"bmad-method": "6.0.4"` as a dependency
+**When** `npm install` or `npm pack` is run
+**Then** bmad-method v6.0.4 is installed in `node_modules/bmad-method/`
+
+**Given** bmad-method is available in `node_modules/`
+**When** `bmad.js` needs to invoke bmad-method
+**Then** it uses `require.resolve('bmad-method/tools/bmad-npx-wrapper.js')` to find the local copy
+**And** invokes it via `execSync('node <resolved-path> install ...')` instead of `execSync('npx bmad-method install ...')`
+
+**Given** the vendored bmad-method is used
+**When** any install, update, or recompile operation runs
+**Then** the behavior is identical to the previous `npx bmad-method` invocation
+**And** no npm registry network call is made for bmad-method
+
+**Given** a project with an existing BMAD installation (installed via previous ma-agents version using `npx bmad-method`),
+**When** the project upgrades to this version and runs `npx ma-agents install` or update,
+**Then** existing `_bmad/` content is preserved, BMAD workflows continue to function, and no corruption occurs.
+
+**Technical notes:**
+- All 3 `execSync('npx bmad-method ...')` calls in `bmad.js` (lines 14, 37, 112) must be updated
+- The resolved path must work cross-platform (use `path.join()`)
+
+### Story 5.2: Create BMAD Cache Build Script
+
+As a **Chief Architect**,
+I want a build script that clones all BMAD external modules and their dependencies into `lib/bmad-cache/`,
+So that the external modules can be bundled inside the ma-agents npm package for deterministic installation.
+
+**Acceptance Criteria:**
+
+**Given** the developer runs `npm run build:bmad-cache` on a connected machine
+**When** the script executes
+**Then** it clones each module listed in bmad-method's `external-official-modules.yaml` (bmb, cis, tea, gds) into `lib/bmad-cache/<module-code>/` using `git clone --depth 1`
+**And** runs `npm install --omit=dev` inside each cloned module directory
+**And** removes `.git/` directories from each cloned module to reduce package size
+**And** creates a `lib/bmad-cache/cache-manifest.json` recording module versions, clone date, and source URLs
+
+**Given** the script has already been run and `lib/bmad-cache/` exists
+**When** the script is run again with `--force`
+**Then** it removes the existing cache and rebuilds from scratch
+
+**Given** the script is run without `--force` and `lib/bmad-cache/` exists
+**When** a module's cached version matches the upstream HEAD
+**Then** that module is skipped (incremental update)
+
+**Given** the npm package is built with `npm pack`,
+**When** the resulting tarball is inspected,
+**Then** `lib/bmad-cache/` and all module directories are included in the package.
+
+**Technical notes:**
+- The script reads module definitions from bmad-method's `external-official-modules.yaml` (from the bmad-method npm dependency at `node_modules/bmad-method/`)
+- The `.npmignore` or `package.json` `files` field must include `lib/bmad-cache/` to ensure it ships with the npm package
+- Target bmad-method version: v6.0.4
+
+### Story 5.3: Pre-populate BMAD External Module Cache
+
+As a **DevOps engineer**,
+I want the installer to pre-populate `~/.bmad/cache/external-modules/` from the bundled cache before invoking bmad-method,
+So that bmad-method finds the external modules locally and skips git clone.
+
+**Acceptance Criteria:**
+
+**Given** `lib/bmad-cache/` contains pre-cloned modules (bmb, cis, tea, gds)
+**When** the installer runs BMAD installation (install or update)
+**Then** before invoking bmad-method, it copies each module from `lib/bmad-cache/<code>/` to `~/.bmad/cache/external-modules/<code>/`
+**And** only copies if the target directory does not already exist (or `--force` is set)
+
+**Given** the target cache directory `~/.bmad/cache/external-modules/bmb/` already exists
+**When** the installer runs without `--force`
+**Then** the existing cache is preserved (no overwrite)
+**And** bmad-method uses the existing cached copy
+
+**Given** the target cache directory exists
+**When** the installer runs with `--force`
+**Then** the existing cache is replaced with the bundled version
+
+**Given** the cache is pre-populated from the bundled copy
+**When** bmad-method's `cloneExternalModule()` runs
+**Then** the installer sets `GIT_TERMINAL_PROMPT=0` in the child process environment to prevent interactive git prompts
+**And** even if `git fetch` succeeds on a connected machine, the installation result remains deterministic because bmad-method uses the existing cache directory without overwriting bundled content
+
+**Given** the cache is pre-populated
+**When** bmad-method's `cloneExternalModule()` runs
+**Then** it detects `fs.pathExists(moduleCacheDir)` is true
+**And** attempts `git fetch` internally (succeeds silently on connected machines, fails silently in air-gapped environments — either way, the pre-populated cache is used)
+**And** proceeds with the cached copy
+
+**Technical notes:**
+- Cache pre-population runs BEFORE any `bmad.installBmad()` or `bmad.updateBmad()` call
+- Use `fs.copy()` (from fs-extra) for directory copy
+- Create `~/.bmad/cache/external-modules/` directory structure if it doesn't exist
+- This is the critical step that makes air-gapped BMAD installation work
+- Note: bmad-method's internal git fetch on existing cache directories does a `git fetch` + `git reset --hard origin/main` only if fetch succeeds. To guarantee deterministic output per NFR20/NFR21, the pre-population step should set the cache directories as read-only or the installer should re-copy bundled cache after bmad-method completes. This is a design decision to resolve during implementation.
+
+### Story 5.4: Validate Bundled Installation Completeness
+
+As a **Chief Architect**,
+I want to verify that installation from the bundled npm package produces a complete, functional BMAD environment,
+So that deterministic installation is validated (NFR21).
+
+**Acceptance Criteria:**
+
+**Given** the ma-agents npm package is installed (via `npm install` or `npx`)
+**When** `npx ma-agents install` is run with BMAD installation
+**Then** the resulting `_bmad/` directory structure is complete
+**And** all BMAD modules are present: core, bmm, bmb, cis, tea, gds
+**And** all BMAD workflows, agents, and tasks function correctly
+**And** all ma-agents customizations are applied (agent personas, MIL-STD-498 workflows, extension module)
+
+**Given** the installation is complete
+**When** the user runs any BMAD workflow (e.g., `/bmad-bmm-create-prd`)
+**Then** the workflow executes correctly
+
+**Given** the installation is complete
+**When** the user runs `npx ma-agents status`
+**Then** the status shows all installed skills and BMAD modules correctly
+
+**Technical notes:**
+- This is a validation/testing story, not a code implementation story
+- Create a test procedure document verifying installation completeness
+- Verify that no git clone or npm registry fetch occurs during BMAD installation
+- Document any environment-specific considerations (e.g., cache-manifest.json dates)
 
 ---
 
@@ -470,57 +642,6 @@ So that I can install skills into Visual Studio's AI assistant.
 **When** the install completes
 **Then** skill content is placed in the correct VS configuration directory
 **And** the manifest tracks the VS agent installation
-
----
-
-## Epic 5: Self-Contained Installer
-
-Engineers can install ma-agents in fully air-gapped environments without npm, Node.js, or internet access via a standalone binary distribution.
-
-### Story 5.1: Evaluate and Select Packaging Approach
-
-As a **Chief Architect**,
-I want to evaluate Node SEA, pkg, and nexe for creating a standalone binary,
-So that we select the right packaging approach for air-gapped distribution.
-
-**Acceptance Criteria:**
-
-**Given** the three packaging options (Node SEA, pkg, nexe)
-**When** each is evaluated
-**Then** a comparison document is produced covering:
-  - Cross-platform support (Windows, macOS, Linux)
-  - Binary size
-  - Node.js version requirements
-  - Ability to bundle the entire `skills/` directory as embedded assets
-  - Ability to bundle `_bmad/` content
-  - Maintenance status and community support
-
-**Given** the evaluation is complete
-**When** a recommendation is made
-**Then** it includes a proof-of-concept build demonstrating the chosen approach works with ma-agents
-
-### Story 5.2: Build Self-Contained Binary Pipeline
-
-As a **DevOps engineer**,
-I want a build script that produces standalone binaries for Windows, macOS, and Linux,
-So that I can distribute ma-agents without npm dependency.
-
-**Acceptance Criteria:**
-
-**Given** the chosen packaging approach from Story 5.1
-**When** `npm run build:standalone` is executed
-**Then** standalone binaries are produced for Windows (.exe), macOS, and Linux
-**And** each binary includes the full skill library and BMAD content
-
-**Given** a standalone binary is executed on a machine without Node.js
-**When** the user runs `./ma-agents install`
-**Then** the installation works identically to `npx ma-agents install`
-**And** all skills, agents, and BMAD features function correctly
-
-**Given** the binary is transferred to an air-gapped machine
-**When** executed without internet access
-**Then** skill installation completes successfully
-**And** no network calls are attempted
 
 ---
 
@@ -954,6 +1075,26 @@ So that planning artifacts are tracked as version-controlled project knowledge.
 **Given** the installer creates or updates `.gitignore` for other entries (e.g., `node_modules`, `_bmad/`)
 **When** it writes the file
 **Then** `_bmad-output` is never included in any gitignore entries
+
+### Story 10.2: Document _bmad-output Policy in README and Installation Guidance
+
+As a **Chief Architect**,
+I want the `_bmad-output` folder policy documented in the README and installation guidance,
+So that developers understand why `_bmad-output` is version-controlled and do not add it back to `.gitignore`.
+
+**Acceptance Criteria:**
+
+**Given** the project README
+**When** a developer reads it
+**Then** it contains a section explaining that `_bmad-output/` is intentionally tracked in version control as project knowledge
+**And** the section explains what the folder contains (planning artifacts: PRDs, architecture, epics, stories, sprint plans)
+**And** the section explains why it is tracked (team alignment, AI context continuity, project history)
+
+**Given** the installation or getting-started documentation
+**When** a developer sets up the tool
+**Then** the guidance explicitly states that `_bmad-output/` must not be added to `.gitignore` and explains that the installer will remove it if found
+
+**Dependency:** Story 10.1 (documents the installer behavior introduced there)
 
 ---
 
