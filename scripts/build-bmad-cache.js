@@ -187,11 +187,14 @@ function processModule(mod, manifest) {
     console.log(`  📦 ${mod.code}: no package.json, skipping npm install`);
   }
 
-  // Remove .git directory (AC #3)
+  // Rename .git → _git_preserved so it survives npm pack (npm always strips .git/).
+  // prePopulateBmadCache() restores it and sets origin to a local file:// URL so that
+  // bmad-method's "git fetch origin" succeeds without network access.
   const gitDir = path.join(moduleDir, '.git');
+  const preservedDir = path.join(moduleDir, '_git_preserved');
   if (fs.existsSync(gitDir)) {
-    fs.removeSync(gitDir);
-    console.log(`  🗑  ${mod.code}: removed .git directory`);
+    fs.renameSync(gitDir, preservedDir);
+    console.log(`  📦 ${mod.code}: preserved .git as _git_preserved`);
   }
 
   return {
