@@ -1,4 +1,5 @@
 # generated: 2026-03-15
+# updated: 2026-03-17 — status audit against actual codebase
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system
@@ -32,6 +33,11 @@
 # - Stories can be worked in parallel if team capacity allows
 # - SM typically creates next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+#
+# AUDIT NOTE (2026-03-17):
+# Brownfield document generation created story files for all epics, which inflated
+# statuses to ready-for-dev. This audit corrected statuses based on actual codebase
+# evidence. Epic order adjusted: Epic 8 now follows Epic 5 per priority request.
 
 generated: 2026-03-15
 project: agents
@@ -40,34 +46,7 @@ tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 
 development_status:
-  # Epic 1: CI/CD Non-Interactive Mode
-  epic-1: in-progress
-  1-1-ci-cd-yes-flag: review
-  epic-1-retrospective: optional
-
-  # Epic 2: Language-Specific Skill Expansion
-  epic-2: in-progress
-  2-1-cpp-coding-standards-skill: ready-for-dev
-  2-2-csharp-coding-standards-skill: ready-for-dev
-  2-3-python-coding-standards-skill: ready-for-dev
-  epic-2-retrospective: optional
-
-  # Epic 3: Skill Authoring Tooling
-  epic-3: in-progress
-  3-1-skill-scaffolding-tool: ready-for-dev
-  3-2-skill-validation-tool: ready-for-dev
-  3-3-mandatory-skill-designation: ready-for-dev
-  3-4-bmad-persona-customization-tooling: ready-for-dev
-  3-5-specialized-agent-development-tooling: ready-for-dev
-  epic-3-retrospective: optional
-
-  # Epic 4: Visual Studio Agent Integration
-  epic-4: in-progress
-  4-1-vs-agent-registry-entry: ready-for-dev
-  4-2-vs-skill-template-format: ready-for-dev
-  epic-4-retrospective: optional
-
-  # Epic 5: Bundled BMAD Installation (Phase 2) — FIRST PRIORITY
+  # Epic 5: Bundled BMAD Installation (Phase 2) — COMPLETED
   # Execution order: 5.1 → 5.2 → 5.3 → 5.4
   epic-5: done
   5-1-bmad-method-direct-dependency: done
@@ -76,33 +55,26 @@ development_status:
   5-4-validate-bundled-installation: done
   epic-5-retrospective: optional
 
-  # Epic 6: Methodology Onboarding Package
-  epic-6: in-progress
-  6-1-methodology-presentation-bundle: ready-for-dev
-  epic-6-retrospective: optional
-
-  # Epic 7: Test Suite Foundation
-  epic-7: in-progress
-  7-1-test-infrastructure-setup: ready-for-dev
-  7-2-installer-pipeline-tests: ready-for-dev
-  7-3-bmad-pipeline-tests: ready-for-dev
-  7-4-cli-command-routing-tests: ready-for-dev
-  epic-7-retrospective: optional
-
-  # Epic 8: Skill Enforcement Architecture (Phase 2)
+  # Epic 8: Skill Enforcement Architecture (Phase 2) — NEXT PRIORITY (after Epic 5)
   # Execution order: 8.1 → 8.2 → 8.3 → 8.4 → 8.5 → 8.6
+  # Dependencies: Epics 11, 12 depend on Epic 8's extension module
   epic-8: in-progress
-  8-1-move-instruction-injection-to-top: ready-for-dev
-  8-2-agent-aware-injection-strategy: ready-for-dev
+  8-1-move-instruction-injection-to-top: review
+  8-2-agent-aware-injection-strategy: review
   8-3-create-bmad-extension-module: ready-for-dev
   8-4-integration-verification: backlog
   8-5-per-agent-enforcement-hooks-research: ready-for-dev
   8-6-context-persistence-research: ready-for-dev
   epic-8-retrospective: optional
 
+  # Epic 1: CI/CD Non-Interactive Mode — COMPLETED
+  epic-1: done
+  1-1-ci-cd-yes-flag: done
+  epic-1-retrospective: optional
+
   # Epic 9: OpenCode Agent Support (Phase 2)
   # Execution order: 9.1 → 9.2 → 9.3 → 9.4
-  epic-9: in-progress
+  epic-9: backlog
   9-1-register-opencode-agent: ready-for-dev
   9-2-json-merge-injection: ready-for-dev
   9-3-json-merge-existing: ready-for-dev
@@ -111,19 +83,57 @@ development_status:
 
   # Epic 10: Project Knowledge Preservation (Phase 2)
   epic-10: in-progress
-  10-1-ensure-bmad-output-not-gitignored: ready-for-dev
+  10-1-ensure-bmad-output-not-gitignored: done
   10-2-document-bmad-output-policy: ready-for-dev
   epic-10-retrospective: optional
 
+  # Epic 2: Language-Specific Skill Expansion
+  epic-2: backlog
+  2-1-cpp-coding-standards-skill: ready-for-dev
+  2-2-csharp-coding-standards-skill: ready-for-dev
+  2-3-python-coding-standards-skill: ready-for-dev
+  epic-2-retrospective: optional
+
+  # Epic 3: Skill Authoring Tooling
+  epic-3: backlog
+  3-1-skill-scaffolding-tool: ready-for-dev
+  3-2-skill-validation-tool: ready-for-dev
+  3-3-mandatory-skill-designation: ready-for-dev
+  3-4-bmad-persona-customization-tooling: ready-for-dev
+  3-5-specialized-agent-development-tooling: ready-for-dev
+  epic-3-retrospective: optional
+
+  # Epic 4: Visual Studio Agent Integration
+  epic-4: backlog
+  4-1-vs-agent-registry-entry: ready-for-dev
+  4-2-vs-skill-template-format: ready-for-dev
+  epic-4-retrospective: optional
+
+  # Epic 6: Methodology Onboarding Package
+  # Dependencies: Epic 5 must ship first (bmad.js coordination)
+  epic-6: backlog
+  6-1-methodology-presentation-bundle: ready-for-dev
+  epic-6-retrospective: optional
+
+  # Epic 7: Test Suite Foundation
+  epic-7: backlog
+  7-1-test-infrastructure-setup: ready-for-dev
+  7-2-installer-pipeline-tests: ready-for-dev
+  7-3-bmad-pipeline-tests: ready-for-dev
+  7-4-cli-command-routing-tests: ready-for-dev
+  epic-7-retrospective: optional
+
   # Epic 11: Bug Management System (Phase 2)
-  epic-11: in-progress
+  # Dependencies: Epic 8 extension module required
+  epic-11: backlog
   11-1-auto-bug-detection-skill: ready-for-dev
   11-2-bug-story-extension-workflow: ready-for-dev
   11-3-integrate-bug-detection-code-review: ready-for-dev
   epic-11-retrospective: optional
 
   # Epic 12: Realistic Sprint Management (Phase 2)
-  epic-12: in-progress
+  # Dependencies: Epic 8 extension module required
+  epic-12: backlog
   12-1-add-sprint-workflow: ready-for-dev
   12-2-add-to-sprint-workflow: ready-for-dev
   12-3-modify-sprint-workflow: ready-for-dev
