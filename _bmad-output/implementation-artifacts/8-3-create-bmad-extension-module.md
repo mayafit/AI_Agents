@@ -1,6 +1,6 @@
 # Story 8.3: Create BMAD Extension Module Structure
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

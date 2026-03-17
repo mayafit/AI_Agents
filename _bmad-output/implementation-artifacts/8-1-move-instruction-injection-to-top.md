@@ -1,6 +1,6 @@
 # Story 8.1: Move Instruction Injection to TOP Priority Position
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
