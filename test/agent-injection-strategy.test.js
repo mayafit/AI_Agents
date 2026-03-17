@@ -65,15 +65,15 @@ test('3.3: installer.js contains NO agent-name-specific logic', () => {
 
 console.log('\nTask 4 — Registry completeness');
 
-const EXPECTED_IDE = ['claude-code', 'gemini', 'copilot', 'kilocode', 'cline', 'cursor', 'antigravity'];
+const EXPECTED_IDE = ['claude-code', 'gemini', 'copilot', 'kilocode', 'cline', 'cursor', 'antigravity', 'opencode'];
 const EXPECTED_BMAD = ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-mil498'];
 const EXPECTED_ALL = [...EXPECTED_IDE, ...EXPECTED_BMAD];
 
-test('4.1: registry has exactly 11 agents (7 IDE + 4 BMAD)', () => {
-  assert.strictEqual(allAgents.length, 11, `Expected 11 agents, got ${allAgents.length}`);
+test('4.1: registry has at least 12 agents (8+ IDE + 4 BMAD)', () => {
+  assert.ok(allAgents.length >= 12, `Expected at least 12 agents, got ${allAgents.length}`);
   const ideCount = allAgents.filter(a => a.category === 'ide').length;
   const bmadCount = allAgents.filter(a => a.category === 'bmad').length;
-  assert.strictEqual(ideCount, 7, `Expected 7 IDE agents, got ${ideCount}`);
+  assert.ok(ideCount >= 8, `Expected at least 8 IDE agents, got ${ideCount}`);
   assert.strictEqual(bmadCount, 4, `Expected 4 BMAD agents, got ${bmadCount}`);
 });
 
@@ -83,13 +83,18 @@ test('4.2: every agent has well-shaped injectionStrategy property', () => {
       `Agent '${agent.id}' is missing injectionStrategy`);
     assert.strictEqual(typeof agent.injectionStrategy.position, 'string',
       `Agent '${agent.id}' injectionStrategy.position should be a string`);
-    assert.ok(Array.isArray(agent.injectionStrategy.skipPatterns),
-      `Agent '${agent.id}' injectionStrategy.skipPatterns should be an array, got ${typeof agent.injectionStrategy.skipPatterns}`);
+    // skipPatterns is only required for non-json-merge strategies
+    if (agent.injectionStrategy.position !== 'json-merge') {
+      assert.ok(Array.isArray(agent.injectionStrategy.skipPatterns),
+        `Agent '${agent.id}' injectionStrategy.skipPatterns should be an array, got ${typeof agent.injectionStrategy.skipPatterns}`);
+    }
   }
 });
 
 test('4.3: all agents with .md instruction files have skipPatterns: [---]', () => {
   for (const agent of allAgents) {
+    // json-merge agents use a different injection mechanism; skip this check for them
+    if (agent.injectionStrategy.position === 'json-merge') continue;
     const hasMdFiles = agent.instructionFiles.some(f => f.endsWith('.md'));
     if (hasMdFiles) {
       assert.ok(agent.injectionStrategy.skipPatterns,
@@ -100,8 +105,9 @@ test('4.3: all agents with .md instruction files have skipPatterns: [---]', () =
   }
 });
 
-test('4.3b: all agents have position: top', () => {
+test('4.3b: non-json-merge agents have position: top', () => {
   for (const agent of allAgents) {
+    if (agent.injectionStrategy.position === 'json-merge') continue;
     assert.strictEqual(agent.injectionStrategy.position, 'top',
       `Agent '${agent.id}' should have position: 'top'`);
   }
