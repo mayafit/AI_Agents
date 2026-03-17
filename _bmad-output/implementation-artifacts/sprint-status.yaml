@@ -69,11 +69,11 @@ development_status:
 
   # Epic 5: Bundled BMAD Installation (Phase 2) — FIRST PRIORITY
   # Execution order: 5.1 → 5.2 → 5.3 → 5.4
-  epic-5: in-progress
+  epic-5: done
   5-1-bmad-method-direct-dependency: done
   5-2-bmad-cache-build-script: done
   5-3-pre-populate-bmad-cache: done
-  5-4-validate-bundled-installation: ready-for-dev
+  5-4-validate-bundled-installation: done
   epic-5-retrospective: optional
 
   # Epic 6: Methodology Onboarding Package
