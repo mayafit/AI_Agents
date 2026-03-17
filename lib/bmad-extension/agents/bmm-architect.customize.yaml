@@ -1,0 +1,4 @@
+critical_actions:
+  1: "Read the skills MANIFEST at skills/MANIFEST.yaml (relative to project root)"
+  2: "For each skill marked always_load: true, read the skill file completely"
+  3: "Follow all skill directives during this session"

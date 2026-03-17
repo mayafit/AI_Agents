@@ -61,7 +61,7 @@ development_status:
   epic-8: in-progress
   8-1-move-instruction-injection-to-top: review
   8-2-agent-aware-injection-strategy: review
-  8-3-create-bmad-extension-module: ready-for-dev
+  8-3-create-bmad-extension-module: review
   8-4-integration-verification: backlog
   8-5-per-agent-enforcement-hooks-research: ready-for-dev
   8-6-context-persistence-research: ready-for-dev

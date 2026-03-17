@@ -1,0 +1,3 @@
+extends-module: bmm
+name: ma-agents-skills
+description: MA-Agents skill enforcement extension for BMM agents
