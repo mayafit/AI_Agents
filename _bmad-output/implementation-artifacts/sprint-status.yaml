@@ -78,7 +78,7 @@ development_status:
   9-1-register-opencode-agent: review
   9-2-json-merge-injection: review
   9-3-json-merge-existing: review
-  9-4-json-error-handling: ready-for-dev
+  9-4-json-error-handling: review
   epic-9-retrospective: optional
 
   # Epic 10: Project Knowledge Preservation (Phase 2)

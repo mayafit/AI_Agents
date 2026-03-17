@@ -1,6 +1,6 @@
 # Story 9.4: JSON Injection — Handle Invalid opencode.json Gracefully
 
-Status: ready-for-dev
+Status: review
 
 depends-on: 9-3-json-merge-existing
 
@@ -18,18 +18,18 @@ So that a corrupt or hand-edited config file does not abort the entire install r
 
 ## Tasks / Subtasks
 
-- [ ] Wrap the `JSON.parse()` call in the `json-merge` branch with a `try/catch` block (AC: #1)
-  - [ ] On `catch (err)`: log a clear error message including the file path and `err.message`, e.g.: `console.error(\`[ma-agents] ERROR: Could not parse ${filePath} — ${err.message}. File not modified.\`)`
-  - [ ] On catch: `return` from the current iteration without writing anything to disk
-  - [ ] Do NOT re-throw the error — the outer caller must continue processing subsequent agents
-- [ ] Verify that the `return` on error exits only the current agent's instruction update, not the entire install loop (AC: #1)
-  - [ ] Trace the call site of `updateAgentInstructions()` in installer.js to confirm the loop continues after a non-throwing return
-- [ ] Write fixture-based unit test for the error path (AC: #1)
-  - [ ] Fixture A: opencode.json containing `"not valid json {{{"` (corrupt file)
-  - [ ] Assert: file content is byte-identical after the installer run (file NOT modified)
-  - [ ] Assert: console.error was called with a message containing the file path and a description of the parse failure
-  - [ ] Assert: the installer processes at least one additional agent after the OpenCode error (continuation verified)
-  - [ ] Fixture B (continuation test): install list `[opencode, someOtherAgent]` where opencode.json is corrupt — assert `someOtherAgent`'s instruction file IS updated successfully
+- [x] Wrap the `JSON.parse()` call in the `json-merge` branch with a `try/catch` block (AC: #1)
+  - [x] On `catch (err)`: log a clear error message including the file path and `err.message`, e.g.: `console.error(\`[ma-agents] ERROR: Could not parse ${filePath} — ${err.message}. File not modified.\`)`
+  - [x] On catch: `return` from the current iteration without writing anything to disk
+  - [x] Do NOT re-throw the error — the outer caller must continue processing subsequent agents
+- [x] Verify that the `return` on error exits only the current agent's instruction update, not the entire install loop (AC: #1)
+  - [x] Trace the call site of `updateAgentInstructions()` in installer.js to confirm the loop continues after a non-throwing return
+- [x] Write fixture-based unit test for the error path (AC: #1)
+  - [x] Fixture A: opencode.json containing `"not valid json {{{"` (corrupt file)
+  - [x] Assert: file content is byte-identical after the installer run (file NOT modified)
+  - [x] Assert: console.error was called with a message containing the file path and a description of the parse failure
+  - [x] Assert: the installer processes at least one additional agent after the OpenCode error (continuation verified)
+  - [x] Fixture B (continuation test): install list `[opencode, someOtherAgent]` where opencode.json is corrupt — assert `someOtherAgent`'s instruction file IS updated successfully
 
 ## Dev Notes
 
@@ -74,6 +74,17 @@ AC #1 requires verifying that subsequent agents are processed. The test in Fixtu
 ## Dev Agent Record
 
 ### Agent Model Used
+claude-sonnet-4-6
+
 ### Debug Log References
+None — implementation was straightforward with no unexpected issues.
+
 ### Completion Notes List
+- Wrapped `JSON.parse(content)` and subsequent merge logic in a `try/catch` in the `json-merge` branch of `updateAgentInstructions()` in `lib/installer.js`
+- On `catch (err)`: logs `[ma-agents] ERROR: Could not parse ${filePath} — ${err.message}. File not modified.` and returns without any write
+- The catch block does NOT re-throw — the outer install loop continues processing remaining agents
+- All 6 new tests pass: 4 Fixture A tests (corrupt file unchanged, error logged with file path, error describes parse failure, no .tmp file left) and 2 Fixture B tests (continuation: subsequent markdown agent IS updated; non-fatal: no throw)
+
 ### File List
+- `lib/installer.js` — added try/catch around JSON.parse in the json-merge file-present branch (lines 185-203)
+- `test/opencode-json-error.test.js` — new test file with 6 tests covering Fixture A (corrupt file) and Fixture B (continuation)
