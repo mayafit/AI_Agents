@@ -222,23 +222,27 @@ console.log('\nStory 9.2 — JSON injection: file-absent creation path');
     });
   });
 
-  await asyncTest('9.2.12: file present — does not overwrite (Story 9.3 placeholder)', async () => {
+  await asyncTest('9.2.12: file present — user entries preserved, fresh ma-agents entries appended (Story 9.3)', async () => {
     await withTempDir(async (tmpDir) => {
       const agent = createOpenCodeAgent(tmpDir);
       const filePath = path.join(tmpDir, 'opencode.json');
 
-      // Pre-create a file with custom content
+      // Pre-create a file with a single user entry
       const existingContent = { instructions: [{ _source: 'user', text: 'user instruction' }] };
       await fs.writeFile(filePath, JSON.stringify(existingContent, null, 2), 'utf-8');
 
       await updateFn(agent, tmpDir);
 
-      // Story 9.3 will handle merge; for now, existing file should NOT be overwritten
+      // Story 9.3 merge: user entry preserved, fresh ma-agents entries appended
       const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      assert.strictEqual(parsed.instructions.length, 1,
-        'Existing file should not be modified by Story 9.2 code');
-      assert.strictEqual(parsed.instructions[0]._source, 'user',
-        'Existing user entry should be preserved untouched');
+      const userEntries = parsed.instructions.filter(e => e._source !== MA_AGENTS_SOURCE);
+      const maEntries = parsed.instructions.filter(e => e._source === MA_AGENTS_SOURCE);
+      assert.strictEqual(userEntries.length, 1,
+        'Existing user entry should be preserved');
+      assert.strictEqual(userEntries[0]._source, 'user',
+        'User entry _source should remain "user"');
+      assert.ok(maEntries.length > 0,
+        'Fresh ma-agents entries should be appended');
     });
   });
 
