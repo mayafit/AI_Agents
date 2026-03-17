@@ -76,7 +76,7 @@ development_status:
   # Execution order: 9.1 → 9.2 → 9.3 → 9.4
   epic-9: in-progress
   9-1-register-opencode-agent: review
-  9-2-json-merge-injection: ready-for-dev
+  9-2-json-merge-injection: review
   9-3-json-merge-existing: ready-for-dev
   9-4-json-error-handling: ready-for-dev
   epic-9-retrospective: optional

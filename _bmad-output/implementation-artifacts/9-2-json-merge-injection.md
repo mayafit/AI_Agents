@@ -1,6 +1,6 @@
 # Story 9.2: JSON Injection — Create opencode.json When Absent
 
-Status: ready-for-dev
+Status: review
 
 depends-on: 9-1-register-opencode-agent
 
@@ -18,19 +18,19 @@ So that OpenCode receives skill instructions on first install without requiring 
 
 ## Tasks / Subtasks
 
-- [ ] Define the named constant `MA_AGENTS_SOURCE = 'ma-agents'` at the top of lib/installer.js (AC: #1)
-  - [ ] Use this constant everywhere `'ma-agents'` appears — never use the bare string literal
-- [ ] In `updateAgentInstructions()` (installer.js line 110), add a conditional branch that routes to JSON merge logic when `agent.injectionStrategy?.position === 'json-merge'` (AC: #1)
-  - [ ] Guard: if `injectionStrategy.position` is not exactly `'json-merge'`, do not enter the JSON path — fall through to existing markdown logic unchanged
-- [ ] Implement the file-absent creation path (AC: #1)
-  - [ ] Check if the target file (resolved from `agent.instructionFiles[0]` relative to `projectRoot`) exists using `fs.existsSync()`
-  - [ ] If file does NOT exist: build a fresh JSON object `{ instructions: [] }`
-  - [ ] Append ma-agents instruction entries to `instructions` — each entry must be an object: `{ "_source": MA_AGENTS_SOURCE, "text": "<generated instruction text>" }`
-  - [ ] Write the resulting object to the target path using `JSON.stringify(data, null, 2)` via `fs.outputFile()`
-- [ ] Write fixture-based unit test for the creation path (AC: #1)
-  - [ ] Fixture: directory with no opencode.json present
-  - [ ] Assert: file created, is valid JSON, contains `instructions` array, every entry has `_source === 'ma-agents'` and a non-empty `text` string
-  - [ ] Assert: no extra top-level keys in the written JSON
+- [x] Define the named constant `MA_AGENTS_SOURCE = 'ma-agents'` at the top of lib/installer.js (AC: #1)
+  - [x] Use this constant everywhere `'ma-agents'` appears — never use the bare string literal
+- [x] In `updateAgentInstructions()` (installer.js line 110), add a conditional branch that routes to JSON merge logic when `agent.injectionStrategy?.position === 'json-merge'` (AC: #1)
+  - [x] Guard: if `injectionStrategy.position` is not exactly `'json-merge'`, do not enter the JSON path — fall through to existing markdown logic unchanged
+- [x] Implement the file-absent creation path (AC: #1)
+  - [x] Check if the target file (resolved from `agent.instructionFiles[0]` relative to `projectRoot`) exists using `fs.existsSync()`
+  - [x] If file does NOT exist: build a fresh JSON object `{ instructions: [] }`
+  - [x] Append ma-agents instruction entries to `instructions` — each entry must be an object: `{ "_source": MA_AGENTS_SOURCE, "text": "<generated instruction text>" }`
+  - [x] Write the resulting object to the target path using `JSON.stringify(data, null, 2)` via `fs.outputFile()`
+- [x] Write fixture-based unit test for the creation path (AC: #1)
+  - [x] Fixture: directory with no opencode.json present
+  - [x] Assert: file created, is valid JSON, contains `instructions` array, every entry has `_source === 'ma-agents'` and a non-empty `text` string
+  - [x] Assert: no extra top-level keys in the written JSON
 
 ## Dev Notes
 
@@ -73,6 +73,19 @@ Detection logic (used in Stories 9.3 and 9.4) checks `entry._source === MA_AGENT
 ## Dev Agent Record
 
 ### Agent Model Used
+claude-sonnet-4-6
+
 ### Debug Log References
+None — implementation was straightforward, all 12 new tests passed on first run alongside all 51 existing tests.
+
 ### Completion Notes List
+- Added `MA_AGENTS_SOURCE = 'ma-agents'` constant at top of `lib/installer.js` after `MANIFEST_VERSION`
+- Added `json-merge` branch at the top of `updateAgentInstructions()`, before the existing markdown injection code; the branch exits via `return` so markdown logic is completely untouched
+- File-absent path creates `{ instructions: [{ _source: MA_AGENTS_SOURCE, text: <planning instruction> }] }` using the same instruction text formula as the markdown path (relative MANIFEST.yaml path)
+- File-present path is a no-op `return` per Story 9.3 placeholder requirement
+- Exported `MA_AGENTS_SOURCE` as `_MA_AGENTS_SOURCE` for test consumption
+- 12 new tests in `test/opencode-json-injection.test.js` covering: file creation, valid JSON, instructions array, non-empty entries, `_source` equality, non-empty text, no extra top-level keys, 2-space indentation, MANIFEST.yaml reference, constant value, markdown fallthrough guard, and file-present no-op
+
 ### File List
+- `lib/installer.js` — added `MA_AGENTS_SOURCE` constant, `json-merge` branch in `updateAgentInstructions()`, exported `_MA_AGENTS_SOURCE`
+- `test/opencode-json-injection.test.js` — new test file with 12 fixture-based unit tests
