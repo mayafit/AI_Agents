@@ -19,6 +19,12 @@ npx ma-agents install code-review claude-code copilot
 
 # Global installation (user-level)
 npx ma-agents install code-review claude-code --global
+
+# CI/CD: skip all prompts, use defaults
+npx ma-agents install --yes
+
+# Target a specific agent only
+npx ma-agents install --yes --agent claude-code
 ```
 
 ## How It Works
@@ -120,6 +126,8 @@ The installer automatically updates agent-specific instruction files (like `CLAU
 ```bash
 npx ma-agents                              # Launch interactive wizard
 npx ma-agents install                      # Interactive install wizard
+npx ma-agents install --yes                # Non-interactive, use defaults (CI/CD)
+npx ma-agents install --yes --agent <id>   # Non-interactive, target one agent
 npx ma-agents status                       # Show installed skills and paths
 npx ma-agents list                         # List all available skills
 npx ma-agents agents                       # List supported agents
@@ -143,6 +151,20 @@ Running `ma-agents` on a project where skills are already installed triggers the
 - **Silent Setup**: Non-interactive installation/update of BMAD tailored to your project's agents.
 - **Customization Engine**: Injects project-specific `.customize.yaml` templates to align agents with your workflow.
 - **Advanced Agent Templates**: Deploys full XML-structured agent definitions directly into the BMAD system.
+
+#### Bundled & Offline Installation (v2.20+)
+
+`ma-agents` ships with everything needed to install BMAD without any network access at install time:
+
+- **`bmad-method` is a direct npm dependency** — no runtime `npx bmad-method` fetch required. The correct version is pinned and bundled inside `node_modules/` when you `npm install ma-agents`.
+- **External modules pre-bundled** — `lib/bmad-cache/` ships the 4 optional BMAD modules (`bmb`, `cis`, `gds`, `tea`) inside the package itself. They are pre-populated to `~/.bmad/cache/external-modules/` before any install runs, so BMAD never needs to clone them from GitHub.
+- **Deterministic installs** — same `ma-agents` version always produces the same `_bmad/` output, regardless of network conditions (NFR21).
+- **Air-gapped friendly** — install from a tarball (`npm install ./ma-agents-x.y.z.tgz`) and run `npx ma-agents install` completely offline.
+
+```
+npm install ma-agents          # bundles bmad-method + 4 external modules
+npx ma-agents install --yes    # fully offline BMAD install — no network needed
+```
 
 #### Specialized BMAD Agents
 1. **SRE Agent (Alex)**:
@@ -179,7 +201,26 @@ npx ma-agents install code-review claude-code --global
 
 # Install to a custom directory
 npx ma-agents install code-review claude-code --path ./my-skills
+
+# Skip all prompts, use defaults — ideal for CI/CD pipelines
+npx ma-agents install --yes
+npx ma-agents install --yes --global
+npx ma-agents install --yes --agent claude-code
+
+# Target a specific agent (skips agent selection prompt)
+npx ma-agents install code-review --agent cursor
+
+# Force overwrite without upgrade prompts
+npx ma-agents install code-review claude-code --force
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--yes` | Skip all prompts, use defaults. Selects all detected agents, installs/updates BMAD automatically. |
+| `--agent <name>` | Target a specific agent — skips agent selection. Run `npx ma-agents agents` for valid names. |
+| `--force` | Skip upgrade prompts, always overwrite existing installations. |
+| `--global` | Install to global/user-level paths instead of project-level. |
+| `--path <dir>` | Custom installation directory. |
 
 ## Requirements
 
@@ -342,11 +383,14 @@ ma-agents/
 │   ├── agents.js               # Agent configurations and paths
 │   ├── installer.js            # Skill discovery and installation logic
 │   ├── bmad.js                 # BMAD-METHOD integration and injection logic
+│   ├── bmad-cache/             # Pre-bundled BMAD external modules (bmb, cis, gds, tea)
 │   ├── bmad-customizations/    # BMAD persona templates (.md) and YAML configs
 │   ├── bmad-workflows/         # Specialized BMAD playbooks (SRE, Cyber, etc.)
 │   └── mil498-templates/       # MIL-STD-498 DID library (SRS, SSS, SSDD, etc.)
+├── scripts/
+│   └── build-bmad-cache.js     # Rebuilds lib/bmad-cache/ from upstream repos
 ├── skills/
-│   ├── code-review/            # 25 bundled skills across 5 domains
+│   ├── code-review/            # 27 bundled skills across 5 domains
 │   ├── commit-message/
 │   ├── create-hardened-docker-skill/
 │   ├── git-workflow-skill/
@@ -355,6 +399,10 @@ ma-agents/
 │   ├── test-generator/
 │   ├── vercel-react-best-practices/
 │   └── verify-hardened-docker-skill/
+├── test/
+│   └── yes-flag.test.js        # Tests for --yes / --agent flag behavior
+├── docs/
+│   └── validation/             # Manual validation reports (e.g., bundled install)
 ├── SKILLS_STRUCTURE.md         # Full skill authoring documentation
 ├── package.json
 └── README.md
@@ -378,6 +426,12 @@ node bin/cli.js list
 
 # Test agents listing
 node bin/cli.js agents
+
+# Run tests
+npm test
+
+# Rebuild the bundled BMAD module cache (lib/bmad-cache/)
+npm run build:bmad-cache
 ```
 
 ## Programmatic API
