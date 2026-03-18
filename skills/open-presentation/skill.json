@@ -1,0 +1,11 @@
+{
+  "name": "Open Presentation",
+  "description": "Opens the BMAD-METHOD AI Development Training presentation from _bmad-output/methodology/",
+  "version": "1.0.0",
+  "author": "AI Agent Skills",
+  "tags": ["methodology", "presentation", "bmad", "training"],
+  "applies_when": [
+    "user types /open-presentation",
+    "user asks to open the methodology presentation or training slides"
+  ]
+}

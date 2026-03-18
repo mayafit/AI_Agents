@@ -128,6 +128,57 @@ test('--yes --agent invalid-agent-name exits 1 with error', () => {
   );
 });
 
+// ─── Story 10.2 — README _bmad-output/ policy documentation tests ─────────────
+console.log('\nStory 10.2 — README _bmad-output/ policy documentation');
+
+const README_PATH = path.join(__dirname, '..', 'README.md');
+const readmeContent = require('fs').readFileSync(README_PATH, 'utf-8');
+
+test('README contains _bmad-output/ policy section heading', () => {
+  assert.ok(
+    readmeContent.includes('## Project Knowledge: _bmad-output/'),
+    'README must contain heading "## Project Knowledge: _bmad-output/"'
+  );
+});
+
+test('README contains explicit do-not-gitignore directive', () => {
+  assert.ok(
+    readmeContent.includes('Do not add `_bmad-output/` to your `.gitignore`'),
+    'README must contain the phrase "Do not add `_bmad-output/` to your `.gitignore`"'
+  );
+});
+
+test('README explains why _bmad-output/ is tracked (team alignment)', () => {
+  const mentionsReason =
+    readmeContent.includes('team alignment') ||
+    readmeContent.includes('AI context') ||
+    readmeContent.includes('planning artifacts');
+  assert.ok(
+    mentionsReason,
+    'README must mention at least one reason for tracking (team alignment, AI context, planning artifacts)'
+  );
+});
+
+test('README mentions installer removes _bmad-output/ from .gitignore', () => {
+  assert.ok(
+    readmeContent.includes('installer') && readmeContent.includes('.gitignore') && readmeContent.includes('_bmad-output'),
+    'README must mention installer behaviour around .gitignore and _bmad-output/'
+  );
+});
+
+test('_bmad-output/ policy section is discoverable within first two major sections', () => {
+  const sectionIndex = readmeContent.indexOf('## Project Knowledge: _bmad-output/');
+  const installIndex = readmeContent.indexOf('## Installation');
+  const howItWorksIndex = readmeContent.indexOf('## How It Works');
+  assert.ok(sectionIndex > -1, 'Section must exist');
+  // Section must appear before or shortly after the "Supported Agents" section
+  const supportedAgentsIndex = readmeContent.indexOf('## Supported Agents');
+  assert.ok(
+    sectionIndex < supportedAgentsIndex,
+    '_bmad-output/ policy section must appear before "## Supported Agents" (discoverable early)'
+  );
+});
+
 // ─── Task 6.3 — installSkill batchState pre-set with yes=true ─────────────────
 console.log('\nTask 6.3 — Unit test: installSkill batchState pre-set with yes=true');
 

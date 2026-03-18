@@ -51,6 +51,32 @@ skills/code-review/
                                        + Updated Agent Instructions (CLAUDE.md, etc.)
 ```
 
+## Project Knowledge: _bmad-output/
+
+The `_bmad-output/` folder is **intentionally tracked in version control** as project knowledge. Do not add `_bmad-output/` to your `.gitignore`.
+
+### What it contains
+
+`_bmad-output/` holds all AI-generated planning artifacts produced by BMAD agents:
+
+- **`planning-artifacts/`** — PRDs, architecture documents, UX designs
+- **`implementation-artifacts/`** — Epics, user stories, sprint status
+- **`methodology/`** — BMAD-METHOD training materials and onboarding presentation
+
+### Why it is version-controlled
+
+1. **Team alignment** — all team members see the same AI-generated plans and decisions
+2. **AI context continuity** — AI agents need prior context across sessions to maintain consistency
+3. **Decision history** — preserves the rationale and evolution of architectural and product decisions
+
+### Installer behaviour
+
+The `ma-agents` installer automatically removes `_bmad-output/` from `.gitignore` if it finds it there. This is intentional — if your IDE or tooling suggests adding `_bmad-output/` to `.gitignore`, you should decline. The folder is project knowledge, not build artefacts.
+
+> **Do not add `_bmad-output/` to your `.gitignore`** — the installer will remove it automatically if it appears there.
+
+---
+
 ## Supported Agents
 
 | Agent | Project Path | Template | Instruction File |
@@ -67,7 +93,7 @@ skills/code-review/
 | Joseph (MIL-STD-498) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/mil498.md` |
 | Antigravity | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/antigravity.md` |
 
-## Available Skills (27)
+## Available Skills (28)
 
 | Skill ID | Domain | Description |
 | :--- | :--- | :--- |
@@ -80,6 +106,7 @@ skills/code-review/
 | `skill-creator` | Meta | Guide for creating new skills to extend agent capabilities |
 | `document-revision-history` | Documentation | Manages revision history tables at the beginning of generated documents |
 | `ai-audit-trail` | Audit | Tracks AI agent session activity, time spent, and token usage |
+| `open-presentation` | Methodology | Opens the BMAD-METHOD AI Development Training presentation (`/open-presentation`) |
 | **Security** | | |
 | `python-security-skill` | Python | OWASP Top 10 2025 aligned guardrails for Python |
 | `js-ts-security-skill` | JS/TS | Security verification for JS/TS codebases (OWASP aligned) |
