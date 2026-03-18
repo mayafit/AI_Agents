@@ -133,9 +133,9 @@ development_status:
 
   # Epic 12: Realistic Sprint Management (Phase 2)
   # Dependencies: Epic 8 extension module required
-  epic-12: backlog
-  12-1-add-sprint-workflow: ready-for-dev
-  12-2-add-to-sprint-workflow: ready-for-dev
-  12-3-modify-sprint-workflow: ready-for-dev
-  12-4-sprint-status-assigned-items: ready-for-dev
+  epic-12: done
+  12-1-add-sprint-workflow: done
+  12-2-add-to-sprint-workflow: done
+  12-3-modify-sprint-workflow: done
+  12-4-sprint-status-assigned-items: done
   epic-12-retrospective: optional
