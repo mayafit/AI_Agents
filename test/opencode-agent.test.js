@@ -73,14 +73,22 @@ test('getGlobalPath returns a non-empty string', () => {
   assert.ok(globalPath.length > 0, 'getGlobalPath should return a non-empty string');
 });
 
-test('getGlobalPath contains .opencode', () => {
+test('getGlobalPath contains opencode (no leading dot — follows AppData/XDG convention)', () => {
   const globalPath = opencode.getGlobalPath();
-  assert.ok(globalPath.includes('.opencode'),
-    `Expected global path to contain '.opencode', got: ${globalPath}`);
+  assert.ok(
+    globalPath.includes('opencode'),
+    `Expected global path to contain 'opencode', got: ${globalPath}`
+  );
 });
 
 test('fileExtension is ".md"', () => {
   assert.strictEqual(opencode.fileExtension, '.md');
+});
+
+test('description is a non-empty string', () => {
+  assert.strictEqual(typeof opencode.description, 'string',
+    'description should be a string');
+  assert.ok(opencode.description.length > 0, 'description should not be empty');
 });
 
 test('template is "generic"', () => {

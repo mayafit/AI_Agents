@@ -34,9 +34,9 @@ So that the installer can target OpenCode using the same config-driven pattern.
 ### Architecture Compliance
 - NFR13: Config-driven registry pattern. Adding an agent must only require a new entry in agents.js; no installer.js changes for resolution.
 - Agent structure must follow the exact same shape as existing agents. Reference entries: `claude-code` (lines 18-38 of agents.js) and `antigravity` (lines 171-190 of agents.js).
-- `antigravity` is the Google Deepmind Antigravity Agent (`id: 'antigravity'`, `category: 'ide'`). It is already the 11th entry in the array. OpenCode becomes the 12th.
+- `antigravity` is the Google Deepmind Antigravity Agent (`id: 'antigravity'`, `category: 'ide'`). It appears before OpenCode in the array. Do not assert on absolute agent positions — the registry order may change as agents are added.
 - The `injectionStrategy` field is new — it is NOT present on any existing agent. It will be read by the JSON merge logic added in Stories 9.2, 9.3, and 9.4 in installer.js.
-- `version: '1.0.0'` follows the convention used by all 11 existing agents (except `bmm-mil498` which is `'2.0.0'`). This field is informational only — installer.js does not read or validate it. Use `'1.0.0'`.
+- `version: '1.0.0'` follows the convention used by existing agents (except `bmm-mil498` which is `'2.0.0'`). This field is informational only — installer.js does not read or validate it. Use `'1.0.0'`.
 
 ### Critical Guardrails
 - Do NOT modify installer.js for this story — agent resolution must work via existing config-driven patterns

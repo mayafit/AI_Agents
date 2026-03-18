@@ -24,3 +24,5 @@ _bmad-custom-backup-temp/
 .gemini/
 .github/
 .kilocode/
+.opencode/
+opencode.json

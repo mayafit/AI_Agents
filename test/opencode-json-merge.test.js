@@ -269,6 +269,26 @@ console.log('\nStory 9.3 — JSON injection: file-present merge path');
     });
   });
 
+  await asyncTest('9.3.11: null entries in instructions array are filtered out safely (null-guard)', async () => {
+    await withTempDir(async (tmpDir) => {
+      const agent = createOpenCodeAgent(tmpDir);
+      const filePath = path.join(tmpDir, 'opencode.json');
+      // Hand-edited file with null entry and a valid user entry
+      const fixture = { instructions: [null, { text: 'user entry' }, { _source: MA_AGENTS_SOURCE, text: 'old ma-entry' }] };
+      await fs.writeFile(filePath, JSON.stringify(fixture, null, 2), 'utf-8');
+
+      await updateFn(agent, tmpDir);
+
+      const result = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      // null should be filtered out — only user entry + fresh ma-agents entry remain
+      assert.ok(!result.instructions.includes(null), 'null entry should be removed from instructions array');
+      const userEntries = result.instructions.filter(e => e != null && e._source !== MA_AGENTS_SOURCE);
+      assert.strictEqual(userEntries.length, 1, 'valid user entry should be preserved');
+      const maEntries = result.instructions.filter(e => e != null && e._source === MA_AGENTS_SOURCE);
+      assert.ok(maEntries.length > 0, 'fresh ma-agents entry should be present');
+    });
+  });
+
   // Print summary
   console.log(`\n${passed} passed, ${failed} failed`);
   if (errors.length > 0) {
