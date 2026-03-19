@@ -1,6 +1,6 @@
 # Story 3.1: Skill Scaffolding Command
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -32,21 +32,21 @@ So that I can author new skills quickly without manually creating the directory 
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Add `create-skill` command to CLI router (AC: #1, #2, #3)
-  - [ ] 1.1: Add `create-skill` to the command routing in `bin/cli.js` (search: command routing logic, likely a switch/if-else block handling `install`, `list`, `status`, `uninstall`)
-  - [ ] 1.2: Create handler function `handleCreateSkill(args)` in `bin/cli.js` or a new `lib/skill-authoring.js` module (see Dev Notes on module placement)
-  - [ ] 1.3: Add `create-skill` to help text (search: `console.log.*Usage`)
-- [ ] Task 2: Implement name validation (AC: #3)
-  - [ ] 2.1: Validate skill name matches kebab-case pattern: `/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/`
-  - [ ] 2.2: On invalid name: print `Error: Skill name must be kebab-case (lowercase letters, numbers, hyphens)` / `Hint: Example: my-new-skill, python-linting, api-security`
-  - [ ] 2.3: Exit with code 1 on validation failure
-- [ ] Task 3: Implement duplicate detection (AC: #2)
-  - [ ] 3.1: Check if `skills/<skill-name>/` directory already exists
-  - [ ] 3.2: On duplicate: print `Error: Skill '<skill-name>' already exists at skills/<skill-name>/` / `Hint: Choose a different name or remove the existing skill first`
-  - [ ] 3.3: Exit with code 1 on duplicate
-- [ ] Task 4: Generate skill directory and files (AC: #1)
-  - [ ] 4.1: Create `skills/<skill-name>/` directory
-  - [ ] 4.2: Generate `skill.json` with template values:
+- [x] Task 1: Add `create-skill` command to CLI router (AC: #1, #2, #3)
+  - [x] 1.1: Add `create-skill` to the command routing in `bin/cli.js` (search: command routing logic, likely a switch/if-else block handling `install`, `list`, `status`, `uninstall`)
+  - [x] 1.2: Create handler function `handleCreateSkill(args)` in `bin/cli.js` or a new `lib/skill-authoring.js` module (see Dev Notes on module placement)
+  - [x] 1.3: Add `create-skill` to help text (search: `console.log.*Usage`)
+- [x] Task 2: Implement name validation (AC: #3)
+  - [x] 2.1: Validate skill name matches kebab-case pattern: `/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/`
+  - [x] 2.2: On invalid name: print `Error: Skill name must be kebab-case (lowercase letters, numbers, hyphens)` / `Hint: Example: my-new-skill, python-linting, api-security`
+  - [x] 2.3: Exit with code 1 on validation failure
+- [x] Task 3: Implement duplicate detection (AC: #2)
+  - [x] 3.1: Check if `skills/<skill-name>/` directory already exists
+  - [x] 3.2: On duplicate: print `Error: Skill '<skill-name>' already exists at skills/<skill-name>/` / `Hint: Choose a different name or remove the existing skill first`
+  - [x] 3.3: Exit with code 1 on duplicate
+- [x] Task 4: Generate skill directory and files (AC: #1)
+  - [x] 4.1: Create `skills/<skill-name>/` directory
+  - [x] 4.2: Generate `skill.json` with template values:
     ```json
     {
       "name": "<Skill Name from kebab>",
@@ -59,16 +59,16 @@ So that I can author new skills quickly without manually creating the directory 
     }
     ```
     Convert kebab-case to Title Case for the name field (e.g., `my-new-skill` -> `My New Skill`)
-  - [ ] 4.3: Generate `SKILL.md` with template structure (see Dev Notes for template content)
-  - [ ] 4.4: Create empty directories: `templates/`, `references/`, `assets/`
-  - [ ] 4.5: Print success message: `Skill '<skill-name>' created at skills/<skill-name>/`
-  - [ ] 4.6: Print next steps hint: `  Next: Edit skill.json and SKILL.md to add your skill content`
-- [ ] Task 5: Test the command
-  - [ ] 5.1: Run `npx ma-agents create-skill test-skill` and verify all files/dirs created
-  - [ ] 5.2: Run `npx ma-agents create-skill test-skill` again and verify duplicate error
-  - [ ] 5.3: Run `npx ma-agents create-skill InvalidName` and verify kebab-case error
-  - [ ] 5.4: Run `npx ma-agents list` and verify new skill appears
-  - [ ] 5.5: Clean up test skill directory after testing
+  - [x] 4.3: Generate `SKILL.md` with template structure (see Dev Notes for template content)
+  - [x] 4.4: Create empty directories: `templates/`, `references/`, `assets/`
+  - [x] 4.5: Print success message: `Skill '<skill-name>' created at skills/<skill-name>/`
+  - [x] 4.6: Print next steps hint: `  Next: Edit skill.json and SKILL.md to add your skill content`
+- [x] Task 5: Test the command
+  - [x] 5.1: Run `npx ma-agents create-skill test-skill` and verify all files/dirs created
+  - [x] 5.2: Run `npx ma-agents create-skill test-skill` again and verify duplicate error
+  - [x] 5.3: Run `npx ma-agents create-skill InvalidName` and verify kebab-case error
+  - [x] 5.4: Run `npx ma-agents list` and verify new skill appears
+  - [x] 5.5: Clean up test skill directory after testing
 
 ## Dev Notes
 
@@ -156,8 +156,29 @@ Simple implementation: `name.split('-').map(w => w[0].toUpperCase() + w.slice(1)
 
 ### Agent Model Used
 
+claude-sonnet-4-6
+
 ### Debug Log References
+
+None — implementation was straightforward.
 
 ### Completion Notes List
 
+- Created `lib/skill-authoring.js` with `validateSkillName`, `createSkill`, `handleCreateSkill`, `kebabToTitleCase` exports
+- Added `create-skill` command routing to `bin/cli.js` switch statement
+- Added `create-skill` to help text in `showHelp()`
+- Created `test/skill-authoring.test.js` with 14 tests: 6 unit tests for `validateSkillName`, 8 integration CLI tests covering all ACs
+- All 14 new tests pass; all 58 existing regression tests pass (no regressions)
+- Skill directory structure created: root dir, skill.json, SKILL.md, templates/, references/, assets/
+- kebab-to-title-case conversion: `my-new-skill` → `My New Skill`
+- Error format follows architecture: `Error: <what>` + `  Hint: <how to fix>`
+
 ### File List
+
+- `lib/skill-authoring.js` (new)
+- `bin/cli.js` (modified — added import, create-skill case, help text)
+- `test/skill-authoring.test.js` (new)
+
+### Change Log
+
+- 2026-03-19: Implemented Story 3.1 — create-skill scaffolding command with name validation, duplicate detection, file generation, and tests

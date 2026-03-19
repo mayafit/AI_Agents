@@ -5,6 +5,7 @@ const chalk = require('chalk');
 const path = require('path');
 const { installSkill, uninstallSkill, getStatus, listSkills, listAgents } = require('../lib/installer');
 const bmad = require('../lib/bmad');
+const { handleCreateSkill } = require('../lib/skill-authoring');
 
 const PKG = require('../package.json');
 const NAME = PKG.name;
@@ -22,6 +23,7 @@ ${chalk.bold('Usage:')}
   ${chalk.cyan(`npx ${NAME} status`)}                       Show installed skills
   ${chalk.cyan(`npx ${NAME} list`)}                         List available skills
   ${chalk.cyan(`npx ${NAME} agents`)}                       List supported agents
+  ${chalk.cyan(`npx ${NAME} create-skill`)} <name>           Scaffold a new skill directory
   ${chalk.cyan(`npx ${NAME} help`)}                         Show this help
 
 ${chalk.bold('Install options:')}
@@ -637,6 +639,9 @@ async function main() {
     case 'agents':
     case 'list-agents':
       showAgents();
+      break;
+    case 'create-skill':
+      handleCreateSkill(args.slice(1));
       break;
     case 'help':
     case '--help':
