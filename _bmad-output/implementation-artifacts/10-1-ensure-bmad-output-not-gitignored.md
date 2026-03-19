@@ -1,6 +1,6 @@
 # Story 10.1: Ensure _bmad-output Is Not Gitignored
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -143,6 +143,30 @@ Test assertions must verify this exact string, not just "something was logged."
 ## Dev Agent Record
 
 ### Agent Model Used
+claude-sonnet-4-6
+
 ### Debug Log References
+None — implementation was straightforward with no debugging required.
+
 ### Completion Notes List
+- ✅ Added `BMAD_OUTPUT_PATTERNS` constant and `ensureBmadOutputTracked(projectRoot)` function to `lib/installer.js` after `writeManifest()`
+- ✅ Uses try/catch with ENOENT check (no TOCTOU race), splits on `/\r?\n/`, trims lines before comparison, writes back only if lines removed
+- ✅ Called `ensureBmadOutputTracked(installPath)` immediately after `writeManifest(installPath, manifest)` in `installSkill()`
+- ✅ Exported `ensureBmadOutputTracked` in `module.exports`
+- ✅ Removed commented `_bmad-output/` line from project `.gitignore` (line 16)
+- ✅ Created `test/bmad-output-policy.test.js` with 6 Story 10-1 tests (AC1–AC3, CRLF, idempotency, own .gitignore) plus 5 relocated Story 10-2 README tests
+- ✅ Removed Story 10-2 test block from `test/yes-flag.test.js`
+- ✅ Strengthened discoverable assertion in relocated test (counts H2s before section, asserts ≤ 3)
+- ✅ All 11 tests in `test/bmad-output-policy.test.js` pass
+
 ### File List
+- `lib/installer.js` (modified — added `ensureBmadOutputTracked()`, call in `installSkill()`, exported)
+- `.gitignore` (modified — removed commented `_bmad-output/` line)
+- `test/bmad-output-policy.test.js` (created — 11 tests for Stories 10-1 and 10-2)
+- `test/yes-flag.test.js` (modified — removed Story 10-2 test block)
+- `_bmad-output/implementation-artifacts/10-1-ensure-bmad-output-not-gitignored.md` (modified — status → done)
+- `_bmad-output/implementation-artifacts/10-2-document-bmad-output-policy.md` (modified — status → done)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified — 10-2 → done)
+
+### Change Log
+- 2026-03-18: Implemented Story 10-1 — ensureBmadOutputTracked() in lib/installer.js; also completed Story 10-2 closure (test relocation, status updates)

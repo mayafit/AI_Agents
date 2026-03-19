@@ -1,6 +1,6 @@
 # Story 10.2: Document _bmad-output Policy in README and Installation Guidance
 
-Status: review
+Status: done
 
 depends-on: 10-1-ensure-bmad-output-not-gitignored
 
