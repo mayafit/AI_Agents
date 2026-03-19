@@ -110,7 +110,7 @@ development_status:
   # Epic 3: Skill Authoring Tooling
   epic-3: backlog
   3-1-skill-scaffolding-tool: review
-  3-2-skill-validation-tool: ready-for-dev
+  3-2-skill-validation-tool: review
   3-3-mandatory-skill-designation: ready-for-dev
   3-4-bmad-persona-customization-tooling: ready-for-dev
   3-5-specialized-agent-development-tooling: ready-for-dev
@@ -143,3 +143,14 @@ development_status:
   11-2-bug-story-extension-workflow: ready-for-dev
   11-3-integrate-bug-detection-code-review: ready-for-dev
   epic-11-retrospective: optional
+
+  # Epic 13: Project Context Auto-Generation (Phase 2)
+  # Dependencies: Epic 8 (critical_actions infrastructure), Epic 10 (_bmad-output policy)
+  # Execution order: 13.1 → 13.2 → 13.3 → 13.4 (blocked on investigation) → 13.5
+  epic-13: backlog
+  13-1-project-context-template-and-generator: ready-for-dev
+  13-2-install-pipeline-integration: ready-for-dev
+  13-3-bmad-critical-actions-update: ready-for-dev
+  13-4-retrospective-expansion-trigger: backlog    # blocked: retrospective workflow location must be confirmed first
+  13-5-document-project-context-generation: ready-for-dev
+  epic-13-retrospective: optional

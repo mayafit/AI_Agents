@@ -2,8 +2,10 @@
 stepsCompleted: [1, 2, 3, 4, 'phase2-step-01', 'phase2-step-02', 'phase2-step-03', 'phase2-step-04']
 workflowStatus: 'complete'
 completedDate: '2026-03-08'
-lastEdited: '2026-03-15'
+lastEdited: '2026-03-19'
 phase2EditHistory:
+  - date: '2026-03-19'
+    changes: 'Added Epic 13: Project Context Auto-Generation (FR77-FR84, NFR22-NFR24). 4 stories: template+generator, install pipeline integration, BMAD critical_actions update, retrospective expansion trigger. Added FR77-FR84 to FR Coverage Map.'
   - date: '2026-03-15'
     changes: 'Adversarial review fixes: Removed deleted FR77/FR78 strikethrough lines and standalone binary strikethrough. Added FR44/FR45 to FR Coverage Map. Updated Epic 6 dependency note to reference Epic 5. Added determinism/git-fetch acceptance criteria and technical note to Story 5.3.'
   - date: '2026-03-15'
@@ -185,6 +187,14 @@ This document provides the complete epic and story breakdown for agents, decompo
 | FR76 | Epic 5 | Pre-populate bmad cache before install |
 | FR44 | Epic 5 | Air-gapped environment support via bundled installation |
 | FR45 | Implemented | Cross-platform support (Windows, macOS, Linux) |
+| FR79 | Epic 13 | Generate project-context.md at project-level install |
+| FR80 | Epic 13 | Mandatory rules: MANIFEST, always_load skills, git worktrees |
+| FR81 | Epic 13 | Platform-aware manifest path resolution (from full manifest) |
+| FR82 | Epic 13 | Multi-platform manifest path listing |
+| FR83 | Epic 13 | Full 8-step agent mission lifecycle documented |
+| FR84 | Epic 13 | Idempotent generation — skip if exists |
+| FR85 | Epic 13 | Inline expansion comments + template version comment |
+| FR86 | Epic 13 | BMAD critical_actions updated for 12 BMM+master agents |
 
 ## Epic List
 
@@ -254,6 +264,12 @@ Agents detect defects in already-delivered code and generate structured bug repo
 Project managers work with flat backlogs containing stories and bugs, capacity-based sprints, and multi-criteria prioritization.
 **FRs covered:** FR65, FR66, FR67, FR68, FR69, FR70, FR71
 **NFRs addressed:** NFR19 (menu + slash command invocation)
+
+### Epic 13: Project Context Auto-Generation (Phase 2)
+At project-level installation, ma-agents generates `_bmad-output/project-context.md` — a platform-agnostic constitutional document that mandates skill loading, fresh-worktree git workflow, and the full agent mission lifecycle for all installed agents and BMAD workflows.
+**FRs covered:** FR79, FR80, FR81, FR82, FR83, FR84, FR85, FR86
+**NFRs addressed:** NFR22 (template has no hardcoded paths), NFR23 (additive-only), NFR24 (template as separate file), NFR25 (version comment for upgrade detection)
+**Dependency:** Uses extension module from Epic 8 for critical_actions update; `_bmad-output/` policy from Epic 10
 **Dependency:** Uses extension module from Epic 8 for workflow deployment
 
 ### Cross-Epic Coordination: `bmad.js`
@@ -1245,3 +1261,152 @@ So that sprint progress is visible with all stories and bugs listed.
 **Then** it shows all assigned items (stories + bugs) with their current status (FR71)
 **And** remaining capacity is visible
 **And** bugs and stories are distinguishable in the listing
+
+---
+
+## Epic 13: Project Context Auto-Generation (Phase 2)
+
+**Goal:** Every ma-agents project-level installation produces a platform-agnostic `_bmad-output/project-context.md` that acts as a constitutional document — mandating skill loading, fresh-worktree git workflow, and full mission lifecycle for all agents and BMAD workflows.
+**FRs covered:** FR79, FR80, FR81, FR82, FR83, FR84, FR85, FR86
+**NFRs addressed:** NFR22 (template has no hardcoded paths), NFR23 (additive-only), NFR24 (template as separate file), NFR25 (version comment for upgrade detection)
+**Dependency:** Epic 8 (BMAD extension module with critical_actions infrastructure), Epic 10 (`_bmad-output/` version-controlled policy)
+
+**Execution order:** 13.1 → 13.2 → 13.3 → 13.4 (prerequisite investigation required first) → 13.5
+
+### Story 13.1: Create Project-Context Template and Generator Function
+
+As a **Chief Architect**,
+I want a standalone project-context template and a `generateProjectContext()` function in the installer,
+So that a constitutional document can be generated with correct platform-specific content at install time.
+
+**Acceptance Criteria:**
+
+**Given** `lib/templates/project-context.template.md` is created (NFR24)
+**When** a developer reads it
+**Then** it contains all mandatory rule sections: pre-task MANIFEST loading, git worktree workflow, and full 8-step mission lifecycle (FR80, FR83)
+**And** it contains a `{{MANIFEST_PATHS_LIST}}` placeholder — no hardcoded platform paths in the template source (NFR22)
+**And** it contains a machine-readable template version comment `<!-- ma-agents-template-version: 1.0 -->` (NFR25)
+**And** it contains inline expansion comments for `bmad-generate-project-context`, `bmad-retrospective`, and manual updates (FR85)
+**And** it contains empty `## Technology Stack` and `## Project-Specific Rules` placeholder sections
+
+**Given** `generateProjectContext(projectRoot, installedAgents)` is implemented in `installer.js`
+**When** called with a project root and ALL agents from the project manifest (not just current-run agents)
+**Then** it reads the template from `lib/templates/project-context.template.md`
+**And** it resolves relative MANIFEST.yaml paths for each agent's `skillsDir` (relative to project root — no absolute paths)
+**And** it replaces `{{MANIFEST_PATHS_LIST}}` with a formatted markdown bullet list of all resolved paths (FR81, FR82)
+**And** it returns the stamped content string — it does NOT write any file (writing is Story 13.2's responsibility)
+**And** when the template file is missing or unreadable it throws a descriptive Error with the cause
+
+**Given** only one platform is installed
+**When** paths are stamped
+**Then** one MANIFEST path appears in the list (FR81)
+
+**Given** multiple platforms are installed
+**When** paths are stamped
+**Then** all platform MANIFEST paths from the manifest appear in the list (FR82)
+
+### Story 13.2: Integrate Generation into Install Pipeline
+
+As a **DevOps Engineer**,
+I want project-context.md generated automatically at the end of every project-level skill installation,
+So that every ma-agents project has the constitutional document without any manual step.
+
+**Acceptance Criteria:**
+
+**Given** `npx ma-agents install` completes a project-level installation
+**When** skills and/or BMAD have been installed
+**Then** `generateProjectContext()` is called at the end of the install pipeline
+**And** `_bmad-output/project-context.md` exists after installation
+
+**Given** `_bmad-output/project-context.md` does not exist before installation
+**When** the installer runs
+**Then** the file is created with correct platform-stamped content (FR77, FR79)
+**And** a success message is logged: `✓ project-context.md generated at _bmad-output/project-context.md`
+
+**Given** `_bmad-output/project-context.md` already exists before installation (FR82, NFR23)
+**When** the installer runs
+**Then** the existing file is NOT modified or overwritten
+**And** an info message is logged: `ℹ project-context.md already exists — skipping generation`
+
+**Given** the install is a global install (targeting `~/.config/<agent>/`)
+**When** the pipeline runs
+**Then** project-context generation is skipped — no file is created (generation is project-level only)
+
+**Given** the install is non-interactive CI/CD mode (`--yes` flag)
+**When** the pipeline runs
+**Then** project-context generation behaves identically to interactive mode — no interactive prompts required
+
+### Story 13.3: Update BMAD Extension Critical_Actions to Load Project-Context
+
+As a **Chief Architect**,
+I want all BMAD agent `critical_actions` to load `_bmad-output/project-context.md` at activation,
+So that BMAD workflow agents follow project-context rules in every session, not just IDE agents reading CLAUDE.md.
+
+**Acceptance Criteria:**
+
+**Given** all 11 agent `.customize.yaml` files in `lib/bmad-extension/agents/`
+**When** updated for this story
+**Then** each file's `critical_actions` includes a new step: `"If _bmad-output/project-context.md exists, read it completely"` — placed after the MANIFEST read step and before the skill-loading step (FR84)
+
+**Given** a BMAD agent activates with the updated `critical_actions`
+**When** `_bmad-output/project-context.md` exists in the project
+**Then** the agent reads it as part of initialization and follows all rules therein
+**And** the agent applies the git worktree mandate, mission lifecycle, and skill-loading rules from the file
+
+**Given** a BMAD agent activates with the updated `critical_actions`
+**When** `_bmad-output/project-context.md` does NOT exist (e.g., first install before generation, or global install)
+**Then** the agent skips that step gracefully — the `if exists` phrasing ensures no error
+
+**Given** `bmad.js` deploys the updated extension module
+**When** `npx bmad-method install --action update` is run after deployment
+**Then** the updated `critical_actions` survive the BMAD update (NFR16 — extension module independence)
+
+**Dev Note:** The 4 custom agent customize files (SRE, DevOps, Cyber, MIL-498) have full persona + menu + critical_actions. The 7 built-in agent files (PM, Architect, Dev, QA, SM, Tech Writer, UX Designer, BMad Master) have critical_actions only. All 11 must be updated.
+
+### Story 13.4: Add Project-Context Expansion Trigger to Retrospective Workflow
+
+As a **Scrum Master**,
+I want the BMAD retrospective workflow to include a project-context update step,
+So that conventions and patterns discovered during a sprint are captured in the living document automatically.
+
+**Acceptance Criteria:**
+
+**Given** the retrospective workflow at `_bmad/bmm/workflows/bmad-retrospective/` (or equivalent extension path)
+**When** a retrospective completes
+**Then** the workflow includes a final step: *"Review `_bmad-output/project-context.md` — identify any new conventions, patterns, or agent failures from this sprint that should be captured. Propose specific additions to the `## Project-Specific Rules` section."*
+
+**Given** the Scrum Master runs `/bmad-retrospective` after a sprint
+**When** the retrospective reaches the expansion step
+**Then** the agent presents the current `## Project-Specific Rules` section of project-context.md
+**And** proposes additions based on patterns observed during the sprint
+**And** waits for human confirmation before writing any changes to the file
+
+**Given** `_bmad-output/project-context.md` does not exist when retrospective runs
+**When** the expansion step executes
+**Then** the step is skipped gracefully with a note: *"No project-context.md found — consider running the install or bmad-generate-project-context first."*
+
+**Dev Note:** This story modifies a BMAD extension workflow. The retrospective workflow may live in `lib/bmad-extension/workflows/` (if it is a custom extension workflow) or in the installed `_bmad/bmm/workflows/` (if it is a built-in BMAD workflow). Investigate the actual location before implementation — if it is a built-in BMAD workflow, create an override or companion extension workflow rather than modifying the core. Never modify bmad-method core files (NFR17). **This story requires prerequisite investigation and should not be started until the workflow location is confirmed.**
+
+### Story 13.5: Document Project-Context Generation in README and Installation Guidance
+
+As a **DevOps Engineer**,
+I want project-context generation documented in the README and QUICK_START guide,
+So that users understand what the generated file is, why it appeared, and how to expand it over time.
+
+**Acceptance Criteria:**
+
+**Given** the README.md at project root
+**When** updated for this story
+**Then** it includes a "Project Context" section explaining: what `_bmad-output/project-context.md` is, when it is generated (project-level install only), that it is intentionally not overwritten on reinstall, and how to expand it (via `/bmad-generate-project-context` and retrospectives)
+
+**Given** a user runs `npx ma-agents install` and sees `_bmad-output/project-context.md` appear
+**When** they check the README
+**Then** they find an explanation of the file without needing to search elsewhere
+
+**Given** the QUICK_START.md guide
+**When** updated
+**Then** it mentions project-context.md as a post-install artifact with a pointer to the README for details
+
+**Given** the generated project-context.md template (Story 13.1)
+**When** reviewed alongside the README section
+**Then** the expansion instructions in the README match the inline comments in the file — no contradictions between the two
