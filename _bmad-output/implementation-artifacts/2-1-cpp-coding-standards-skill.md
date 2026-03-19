@@ -1,6 +1,6 @@
 # Story 2.1: Create C++ Best Practices Skill
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -30,22 +30,22 @@ So that my AI coding agent follows our organization's C++ methodology consistent
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create skill directory and metadata (AC: #1)
-  - [ ] 1.1: Create directory `skills/cpp-best-practices/`
-  - [ ] 1.2: Create `skill.json` with all required fields (see skill.json Schema section below). Must include `applies_when` array for skill discovery and `always_load: true` (this is the umbrella C++ skill).
-  - [ ] 1.3: Verify `npx ma-agents list` shows the new skill with correct metadata
-- [ ] Task 2: Author SKILL.md content (AC: #2)
-  - [ ] 2.1: Write C++ coding standards covering: naming conventions, code organization, modern C++ idioms. Target practical density — prioritize high-value rules over exhaustive coverage. If content naturally exceeds 500 lines, use `references/` directory for supplementary material.
-  - [ ] 2.2: Include memory management best practices — cross-reference existing `cpp-memory-handling` skill using informational language ("if the `cpp-memory-handling` skill is installed, it provides detailed RAII/smart pointer patterns"). Do NOT assume sibling skills are co-installed.
-  - [ ] 2.3: Include modern C++ patterns: structured bindings, std::optional, std::variant, constexpr, concepts (C++20), ranges (C++20), modules awareness (C++20/23)
-  - [ ] 2.4: Include error handling patterns: exceptions vs error codes, std::expected (C++23), noexcept guidelines
-  - [ ] 2.5: Include build and compilation guidelines: warning levels, sanitizers, compiler flags. Cross-reference `cmake-best-practices` skill for CMake-specific guidance.
-  - [ ] 2.6: Cross-reference all 6 existing C++ related skills using conditional language (see Dev Notes — Relationship to Existing C++ Skills)
-  - [ ] 2.7: Optionally create `examples/` directory with representative code samples, consistent with peer C++ skills which all include `examples/`
-- [ ] Task 3: Verify installation across agents (AC: #3)
-  - [ ] 3.1: Install to at least 2 different agents (e.g., claude-code and cursor)
-  - [ ] 3.2: Verify installed content is identical across agents (SKILL.md fallback is the only path)
-  - [ ] 3.3: Verify `generateSkillsManifest()` produces correct MANIFEST.yaml entries — check that `applies_when` conditions and `always_load` flag are present in the generated manifest
+- [x] Task 1: Create skill directory and metadata (AC: #1)
+  - [x] 1.1: Create directory `skills/cpp-best-practices/`
+  - [x] 1.2: Create `skill.json` with all required fields (see skill.json Schema section below). Must include `applies_when` array for skill discovery and `always_load: true` (this is the umbrella C++ skill).
+  - [x] 1.3: Verify `npx ma-agents list` shows the new skill with correct metadata
+- [x] Task 2: Author SKILL.md content (AC: #2)
+  - [x] 2.1: Write C++ coding standards covering: naming conventions, code organization, modern C++ idioms. Target practical density — prioritize high-value rules over exhaustive coverage. If content naturally exceeds 500 lines, use `references/` directory for supplementary material.
+  - [x] 2.2: Include memory management best practices — cross-reference existing `cpp-memory-handling` skill using informational language ("if the `cpp-memory-handling` skill is installed, it provides detailed RAII/smart pointer patterns"). Do NOT assume sibling skills are co-installed.
+  - [x] 2.3: Include modern C++ patterns: structured bindings, std::optional, std::variant, constexpr, concepts (C++20), ranges (C++20), modules awareness (C++20/23)
+  - [x] 2.4: Include error handling patterns: exceptions vs error codes, std::expected (C++23), noexcept guidelines
+  - [x] 2.5: Include build and compilation guidelines: warning levels, sanitizers, compiler flags. Cross-reference `cmake-best-practices` skill for CMake-specific guidance.
+  - [x] 2.6: Cross-reference all 6 existing C++ related skills using conditional language (see Dev Notes — Relationship to Existing C++ Skills)
+  - [x] 2.7: Optionally create `examples/` directory with representative code samples, consistent with peer C++ skills which all include `examples/`
+- [x] Task 3: Verify installation across agents (AC: #3)
+  - [x] 3.1: Install to at least 2 different agents (e.g., claude-code and cursor)
+  - [x] 3.2: Verify installed content is identical across agents (SKILL.md fallback is the only path)
+  - [x] 3.3: Verify `generateSkillsManifest()` produces correct MANIFEST.yaml entries — check that `applies_when` conditions and `always_load` flag are present in the generated manifest
 
 ## Dev Notes
 
@@ -156,8 +156,33 @@ The skill content must be applicable to **C++17/20/23** per AC #2. Key areas:
 
 ### Agent Model Used
 
+claude-sonnet-4-6
+
 ### Debug Log References
+
+None — implementation was straightforward. Skill package only (no installer code changes per guardrail NFR14).
 
 ### Completion Notes List
 
+- Created `skills/cpp-best-practices/` with `skill.json` and `SKILL.md`
+- `skill.json` includes `applies_when` array (4 conditions) and `always_load: true`
+- `SKILL.md` covers 10 sections: naming conventions, code organization, memory management (cross-ref cpp-memory-handling), modern C++ idioms (C++17/20/23), const-correctness (cross-ref cpp-const-correctness), error handling, class design (cross-ref cpp-modern-composition + cpp-robust-interfaces), concurrency (cross-ref cpp-concurrency-safety), build guidelines (cross-ref cmake-best-practices), general code quality
+- All 6 existing C++ sibling skills cross-referenced using conditional language
+- `examples/` directory created with `naming-and-organization.md` and `modern-idioms.md` (consistent with peer C++ skills)
+- Installed to claude-code and cursor; `diff` confirms identical SKILL.md content across both agents
+- `npx ma-agents list` shows skill with correct description and tags including "cpp"
+- MANIFEST.yaml verified: `applies_when` and `always_load: true` present
+- All 9 existing tests pass — no regressions
+
 ### File List
+
+- `skills/cpp-best-practices/skill.json` (new)
+- `skills/cpp-best-practices/SKILL.md` (new)
+- `skills/cpp-best-practices/examples/naming-and-organization.md` (new)
+- `skills/cpp-best-practices/examples/modern-idioms.md` (new)
+
+Note: `.claude/` and `.cursor/` installed copies are derived outputs generated by `npx ma-agents install` and are gitignored — not tracked here.
+
+### Change Log
+
+- 2026-03-19: Created C++ Best Practices umbrella skill (Story 2.1) — new skill package in `skills/cpp-best-practices/` with 10-section SKILL.md covering naming, modern C++17/20/23 idioms, error handling, and build guidelines; cross-references all 6 existing C++ domain skills using conditional language; installed to claude-code and cursor agents.

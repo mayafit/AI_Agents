@@ -1,0 +1,25 @@
+{
+    "name": "C++ Best Practices",
+    "description": "Comprehensive C++ coding standards covering naming conventions, modern C++ idioms (C++17/20/23), error handling, and build guidelines. Cross-references domain-specific C++ skills for deep-dives.",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "tags": [
+        "c++",
+        "cpp",
+        "coding-standards",
+        "best-practices",
+        "modern-cpp",
+        "c++17",
+        "c++20",
+        "c++23"
+    ],
+    "applies_when": [
+        "writing c++ code",
+        "modifying c++ code",
+        "creating new c++ files or classes",
+        "reviewing c++ code style or conventions",
+        "refactoring c++ code",
+        "setting up a c++ project"
+    ],
+    "always_load": true
+}
