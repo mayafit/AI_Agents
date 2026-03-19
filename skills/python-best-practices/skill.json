@@ -1,0 +1,26 @@
+{
+    "name": "Python Best Practices",
+    "description": "Comprehensive Python coding standards covering PEP 8 conventions, type hinting (3.10+), modern patterns (match/case, exception groups), async, and packaging best practices. Cross-references security-focused Python skills.",
+    "version": "1.0.0",
+    "category": "language",
+    "author": "ma-agents",
+    "tags": [
+        "python",
+        "coding-standards",
+        "best-practices",
+        "pep8",
+        "type-hints",
+        "python3.10",
+        "python3.11",
+        "python3.12"
+    ],
+    "applies_when": [
+        "writing python code",
+        "modifying python code",
+        "creating new python files or modules",
+        "reviewing python code style or conventions",
+        "refactoring python code",
+        "setting up a python project"
+    ],
+    "always_load": false
+}

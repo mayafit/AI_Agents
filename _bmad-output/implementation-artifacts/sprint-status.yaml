@@ -129,7 +129,7 @@ development_status:
   epic-2: in-progress
   2-1-cpp-coding-standards-skill: done
   2-2-csharp-coding-standards-skill: done
-  2-3-python-coding-standards-skill: ready-for-dev
+  2-3-python-coding-standards-skill: done
   epic-2-retrospective: optional
 
   # ─── BACKLOG (not yet started) ────────────────────────────────────────────────

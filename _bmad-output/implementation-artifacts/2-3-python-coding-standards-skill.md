@@ -1,6 +1,6 @@
 # Story 2.3: Create Python Best Practices Skill
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -27,21 +27,21 @@ So that my AI coding agent follows our organization's Python methodology consist
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create skill directory and metadata (AC: #1)
-  - [ ] 1.1: Create directory `skills/python-best-practices/`
-  - [ ] 1.2: Create `skill.json` with: name "Python Best Practices", version "1.0.0", category "language", description referencing Python coding standards for 3.10+, author "ma-agents", tags ["python", "coding-standards", "best-practices", "pep8", "type-hints"], always_load false
-  - [ ] 1.3: Verify `npx ma-agents list` shows the new skill with correct metadata
-- [ ] Task 2: Author SKILL.md content (AC: #2)
-  - [ ] 2.1: Write comprehensive Python coding standards covering: PEP 8 naming conventions (snake_case functions/variables, PascalCase classes, UPPER_SNAKE constants), code organization (module structure, `__init__.py` patterns, `__all__` exports)
-  - [ ] 2.2: Include type hinting patterns: function annotations, variable annotations, generics (`list[str]` not `List[str]` for 3.10+), `TypeAlias`, `TypeVar`, `Protocol`, `ParamSpec`, `TypeGuard`, `Self` (3.11), `type` statement (3.12)
-  - [ ] 2.3: Include modern Python patterns: structural pattern matching (`match/case` 3.10), exception groups and `except*` (3.11), f-string improvements (3.12), `__slots__` usage, dataclasses vs attrs vs Pydantic guidance, walrus operator (`:=`)
-  - [ ] 2.4: Include packaging best practices: `pyproject.toml` (not setup.py), dependency management (pip-tools, poetry, uv), virtual environments, `src/` layout convention
-  - [ ] 2.5: Include async patterns: `asyncio` conventions, `async for`/`async with`, `TaskGroup` (3.11), structured concurrency, avoid mixing sync and async
-  - [ ] 2.6: Cross-reference existing Python skills where they provide deeper coverage (see Dev Notes)
-- [ ] Task 3: Verify installation across agents and manifest status (AC: #2, #3)
-  - [ ] 3.1: Install to at least 2 different agents (e.g., claude-code and cursor)
-  - [ ] 3.2: Verify SKILL.md fallback works when no agent-specific template exists
-  - [ ] 3.3: Install all 3 language skills (cpp-best-practices, csharp-best-practices, python-best-practices) and verify `npx ma-agents status` shows all three with correct versions
+- [x] Task 1: Create skill directory and metadata (AC: #1)
+  - [x] 1.1: Create directory `skills/python-best-practices/`
+  - [x] 1.2: Create `skill.json` with: name "Python Best Practices", version "1.0.0", category "language", description referencing Python coding standards for 3.10+, author "ma-agents", tags ["python", "coding-standards", "best-practices", "pep8", "type-hints"], always_load false
+  - [x] 1.3: Verify `npx ma-agents list` shows the new skill with correct metadata
+- [x] Task 2: Author SKILL.md content (AC: #2)
+  - [x] 2.1: Write comprehensive Python coding standards covering: PEP 8 naming conventions (snake_case functions/variables, PascalCase classes, UPPER_SNAKE constants), code organization (module structure, `__init__.py` patterns, `__all__` exports)
+  - [x] 2.2: Include type hinting patterns: function annotations, variable annotations, generics (`list[str]` not `List[str]` for 3.10+), `TypeAlias`, `TypeVar`, `Protocol`, `ParamSpec`, `TypeGuard`, `Self` (3.11), `type` statement (3.12)
+  - [x] 2.3: Include modern Python patterns: structural pattern matching (`match/case` 3.10), exception groups and `except*` (3.11), f-string improvements (3.12), `__slots__` usage, dataclasses vs attrs vs Pydantic guidance, walrus operator (`:=`)
+  - [x] 2.4: Include packaging best practices: `pyproject.toml` (not setup.py), dependency management (pip-tools, poetry, uv), virtual environments, `src/` layout convention
+  - [x] 2.5: Include async patterns: `asyncio` conventions, `async for`/`async with`, `TaskGroup` (3.11), structured concurrency, avoid mixing sync and async
+  - [x] 2.6: Cross-reference existing Python skills where they provide deeper coverage (see Dev Notes)
+- [x] Task 3: Verify installation across agents and manifest status (AC: #2, #3)
+  - [x] 3.1: Install to at least 2 different agents (e.g., claude-code and cursor)
+  - [x] 3.2: Verify SKILL.md fallback works when no agent-specific template exists
+  - [x] 3.3: Install all 3 language skills (cpp-best-practices, csharp-best-practices, python-best-practices) and verify `npx ma-agents status` shows all three with correct versions
 
 ## Dev Notes
 
@@ -157,8 +157,33 @@ This story's AC #3 is a cross-cutting acceptance criterion that validates all 3 
 
 ### Agent Model Used
 
+claude-sonnet-4-6
+
 ### Debug Log References
+
+No debug issues encountered. Implementation was straightforward: two files only, no installer changes.
 
 ### Completion Notes List
 
+- Created `skills/python-best-practices/skill.json` with correct metadata matching schema from Dev Notes: category "language", always_load false, 8 tags covering python/pep8/type-hints and version tags.
+- Created `skills/python-best-practices/SKILL.md` (~350 lines, under 500-line limit) covering all 6 subtask areas: PEP 8 naming (section 1), code organization (section 2), type hinting with version table and advanced constructs (section 3), modern patterns — match/case, except*, f-strings, walrus, __slots__, dataclasses guidance (section 4), async patterns with TaskGroup (section 5), packaging with pyproject.toml + uv + ruff + src/ layout (section 6), 3.13 forward-looking awareness (section 7), and cross-references to sibling Python skills.
+- SKILL.md uses no emoji (per architecture guardrail), no YAML frontmatter, and follows the policy-based Rule/Action pattern from existing Python skills. Installed copies have installer-injected frontmatter (systemic behavior — all peer skills have it too).
+- Verified `npx ma-agents list` shows skill with correct description (AC #1).
+- Installed to claude-code and cursor agents; SKILL.md fallback confirmed (no agent-specific templates needed) (AC #2, 3.1, 3.2).
+- Verified `npx ma-agents status` shows all three language skills (cpp-best-practices, csharp-best-practices, python-best-practices) at v1.0.0 installed (AC #3).
+
 ### File List
+
+- `skills/python-best-practices/skill.json` (new)
+- `skills/python-best-practices/SKILL.md` (new)
+- `.claude/skills/python-best-practices/SKILL.md` (new — installed artifact)
+- `.claude/skills/MANIFEST.yaml` (modified — updated by installer)
+- `.claude/CLAUDE.md` (modified — updated by installer)
+- `.cursor/skills/python-best-practices/SKILL.md` (new — installed artifact)
+- `.cursor/skills/MANIFEST.yaml` (modified — updated by installer)
+- `.cursor/cursor.md` (modified — updated by installer)
+
+## Change Log
+
+- 2026-03-19: Story 2.3 implemented — created Python Best Practices skill package (`skill.json` + `SKILL.md`), installed to claude-code and cursor agents, verified all 3 Epic 2 language skills in `npx ma-agents status`.
+- 2026-03-19: Code review fixes: async example bug (H2 — `open(path)` replaced with `Path(path).read_text` in `asyncio.to_thread`), MANIFEST `always_load: false` added to both agent MANIFESTs (H1), M3 coverage additions (`StrEnum`, `tomllib`, `@override` in new section 4.7), L1 virtual environments section added (section 6.4, `uv venv` / `.venv`), L2 walrus operator comment fixed ("Without walrus" → "With walrus — single call"). Installed copies synced. M1 completion note updated to reflect installer-injected frontmatter as systemic behavior.
