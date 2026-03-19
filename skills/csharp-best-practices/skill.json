@@ -1,0 +1,23 @@
+{
+    "name": "C# Best Practices",
+    "description": "Comprehensive C# coding standards covering modern C# (C# 10-12), async/await, LINQ, dependency injection basics, nullable reference types, and testing conventions.",
+    "version": "1.0.0",
+    "author": "ma-agents",
+    "tags": [
+        "csharp",
+        "c#",
+        "dotnet",
+        ".net",
+        "coding-standards",
+        "best-practices",
+        "net8"
+    ],
+    "applies_when": [
+        "writing c# code",
+        "creating new c# files or classes",
+        "reviewing c# code style or conventions",
+        "working with .net projects",
+        "setting up a c# project"
+    ],
+    "always_load": true
+}
