@@ -5,7 +5,7 @@ const chalk = require('chalk');
 const path = require('path');
 const { installSkill, uninstallSkill, getStatus, listSkills, listAgents } = require('../lib/installer');
 const bmad = require('../lib/bmad');
-const { handleCreateSkill } = require('../lib/skill-authoring');
+const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
 
 const PKG = require('../package.json');
 const NAME = PKG.name;
@@ -24,6 +24,10 @@ ${chalk.bold('Usage:')}
   ${chalk.cyan(`npx ${NAME} list`)}                         List available skills
   ${chalk.cyan(`npx ${NAME} agents`)}                       List supported agents
   ${chalk.cyan(`npx ${NAME} create-skill`)} <name>           Scaffold a new skill directory
+  ${chalk.cyan(`npx ${NAME} validate-skill`)} <name>         Validate a skill against the schema
+  ${chalk.cyan(`npx ${NAME} set-mandatory`)} <name> [--off]  Mark a skill as always-load (or remove)
+  ${chalk.cyan(`npx ${NAME} customize-agent`)} <agent>       Customize a BMAD agent persona and actions
+  ${chalk.cyan(`npx ${NAME} create-agent`)} <name>           Create a new specialized BMAD agent
   ${chalk.cyan(`npx ${NAME} help`)}                         Show this help
 
 ${chalk.bold('Install options:')}
@@ -46,9 +50,15 @@ ${chalk.bold('Examples:')}
 `);
 }
 
-function showSkills() {
-  const skills = listSkills();
-  console.log(chalk.bold('\n Available Skills:\n'));
+function showSkills(args) {
+  const mandatoryOnly = args && args.includes('--mandatory');
+  let skills = listSkills();
+  if (mandatoryOnly) {
+    skills = skills.filter(s => s.always_load === true);
+    console.log(chalk.bold('\n Mandatory Skills (always_load: true):\n'));
+  } else {
+    console.log(chalk.bold('\n Available Skills:\n'));
+  }
   skills.forEach(skill => {
     console.log(chalk.cyan(`  ${skill.id.padEnd(35)}`) + chalk.white(`${skill.name}`) + chalk.gray(` v${skill.version}`));
     console.log(chalk.gray(`  ${''.padEnd(35)}${skill.description}\n`));
@@ -634,14 +644,26 @@ async function main() {
       break;
     case 'list':
     case 'list-skills':
-      showSkills();
+      showSkills(args.slice(1));
       break;
     case 'agents':
     case 'list-agents':
       showAgents();
       break;
     case 'create-skill':
-      handleCreateSkill(args.slice(1));
+      await handleCreateSkill(args.slice(1));
+      break;
+    case 'validate-skill':
+      await handleValidateSkill(args.slice(1));
+      break;
+    case 'set-mandatory':
+      await handleSetMandatory(args.slice(1));
+      break;
+    case 'customize-agent':
+      await handleCustomizeAgent(args.slice(1));
+      break;
+    case 'create-agent':
+      await handleCreateAgent(args.slice(1));
       break;
     case 'help':
     case '--help':

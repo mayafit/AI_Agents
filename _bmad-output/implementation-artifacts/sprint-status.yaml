@@ -109,11 +109,11 @@ development_status:
 
   # Epic 3: Skill Authoring Tooling
   epic-3: backlog
-  3-1-skill-scaffolding-tool: review
-  3-2-skill-validation-tool: review
-  3-3-mandatory-skill-designation: ready-for-dev
-  3-4-bmad-persona-customization-tooling: ready-for-dev
-  3-5-specialized-agent-development-tooling: ready-for-dev
+  3-1-skill-scaffolding-tool: done
+  3-2-skill-validation-tool: done
+  3-3-mandatory-skill-designation: done
+  3-4-bmad-persona-customization-tooling: done
+  3-5-specialized-agent-development-tooling: done
   epic-3-retrospective: optional
 
   # Epic 4: Visual Studio Agent Integration

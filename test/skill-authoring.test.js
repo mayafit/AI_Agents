@@ -45,19 +45,43 @@ function cleanup() {
 // Ensure clean state before tests
 cleanup();
 
-// ─── Unit tests via module import ─────────────────────────────────────────────
-let validateSkillName, createSkill;
+// ─── Module imports ────────────────────────────────────────────────────────────
+let validateSkillName, createSkill, kebabToTitleCase;
 try {
-  ({ validateSkillName, createSkill } = require('../lib/skill-authoring'));
+  ({ validateSkillName, createSkill, kebabToTitleCase } = require('../lib/skill-authoring'));
 } catch (e) {
   console.error('\n  FATAL: Cannot load skill-authoring module');
   console.error(' ', e.message);
   process.exit(1);
 }
 
-console.log('\n skill-authoring unit tests\n');
+// ─── kebabToTitleCase unit tests (L2) ────────────────────────────────────────
+console.log('\n kebabToTitleCase unit tests\n');
 
-// ─── Name validation ──────────────────────────────────────────────────────────
+test('kebabToTitleCase: single word', () => {
+  assert.strictEqual(kebabToTitleCase('skill'), 'Skill');
+});
+
+test('kebabToTitleCase: multi-word', () => {
+  assert.strictEqual(kebabToTitleCase('my-new-skill'), 'My New Skill');
+  assert.strictEqual(kebabToTitleCase('python-best-practices'), 'Python Best Practices');
+  assert.strictEqual(kebabToTitleCase('api-security'), 'Api Security');
+});
+
+test('kebabToTitleCase: numeric segments', () => {
+  assert.strictEqual(kebabToTitleCase('a1b2-c3'), 'A1b2 C3');
+});
+
+test('kebabToTitleCase: does not crash on empty segment', () => {
+  // Defensive: empty segments (e.g. from '--') produce empty string, not crash
+  assert.doesNotThrow(() => kebabToTitleCase('a--b'));
+  const result = kebabToTitleCase('a--b');
+  assert.strictEqual(typeof result, 'string');
+});
+
+// ─── validateSkillName unit tests ─────────────────────────────────────────────
+console.log('\n validateSkillName unit tests\n');
+
 test('validateSkillName: accepts valid kebab-case names', () => {
   assert.strictEqual(validateSkillName('my-new-skill'), true);
   assert.strictEqual(validateSkillName('python-linting'), true);
@@ -91,12 +115,58 @@ test('validateSkillName: rejects names ending with hyphen', () => {
   assert.strictEqual(validateSkillName('skill-'), false);
 });
 
-// ─── Integration tests via CLI ────────────────────────────────────────────────
+test('validateSkillName: rejects consecutive hyphens', () => {
+  assert.strictEqual(validateSkillName('a--b'), false);
+});
+
+// ─── createSkill unit tests (uses injected skillsDir for isolation) ───────────
+console.log('\n createSkill unit tests\n');
+
+const os = require('os');
+const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-test-'));
+
+test('createSkill: creates directory structure in injected skillsDir', () => {
+  const result = createSkill('my-unit-skill', tmpBase);
+  assert.strictEqual(result.success, true, `Expected success, got: ${JSON.stringify(result)}`);
+
+  const skillDir = path.join(tmpBase, 'my-unit-skill');
+  assert.ok(fs.existsSync(skillDir), 'Expected skill dir');
+  assert.ok(fs.existsSync(path.join(skillDir, 'skill.json')), 'Expected skill.json');
+  assert.ok(fs.existsSync(path.join(skillDir, 'SKILL.md')), 'Expected SKILL.md');
+  assert.ok(fs.existsSync(path.join(skillDir, 'templates')), 'Expected templates/');
+  assert.ok(fs.existsSync(path.join(skillDir, 'references')), 'Expected references/');
+  assert.ok(fs.existsSync(path.join(skillDir, 'assets')), 'Expected assets/');
+});
+
+test('createSkill: skill.json name field uses Title Case', () => {
+  const skillDir = path.join(tmpBase, 'my-unit-skill');
+  const skillJson = JSON.parse(fs.readFileSync(path.join(skillDir, 'skill.json'), 'utf8'));
+  assert.strictEqual(skillJson.name, 'My Unit Skill');
+});
+
+test('createSkill: returns error for duplicate (does not overwrite)', () => {
+  const result = createSkill('my-unit-skill', tmpBase);
+  assert.strictEqual(result.success, false);
+  assert.ok(result.error.includes('already exists'), `Expected already exists, got: ${result.error}`);
+  assert.ok(result.hint.length > 0, 'Expected non-empty hint');
+});
+
+test('createSkill: error message and hint are label-free data (no embedded Error:/Hint: prefix)', () => {
+  const result = createSkill('my-unit-skill', tmpBase);
+  assert.ok(!result.error.startsWith('Error:'), 'error field should not start with "Error:"');
+  assert.ok(!result.hint.startsWith('Hint:'), 'hint field should not start with "Hint:"');
+});
+
+// Cleanup tmp dir
+fs.rmSync(tmpBase, { recursive: true, force: true });
+
+// ─── CLI integration tests ─────────────────────────────────────────────────────
+// These run from the repo root so CWD = project root — correct behavior
 console.log('\n create-skill CLI integration tests\n');
 
 // Task 5.3: Invalid name → kebab-case error
 test('create-skill: rejects uppercase name with error', () => {
-  const result = spawnSync('node', [CLI_PATH, 'create-skill', 'InvalidName'], { encoding: 'utf8' });
+  const result = spawnSync('node', [CLI_PATH, 'create-skill', 'InvalidName'], { encoding: 'utf8', cwd: path.join(__dirname, '..') });
   assert.strictEqual(result.status, 1, 'Expected exit code 1');
   assert.ok(
     result.stderr.includes('kebab-case') || result.stdout.includes('kebab-case'),
@@ -105,18 +175,23 @@ test('create-skill: rejects uppercase name with error', () => {
 });
 
 test('create-skill: rejects name with spaces', () => {
-  const result = spawnSync('node', [CLI_PATH, 'create-skill', 'my skill'], { encoding: 'utf8' });
+  const result = spawnSync('node', [CLI_PATH, 'create-skill', 'my skill'], { encoding: 'utf8', cwd: path.join(__dirname, '..') });
   assert.strictEqual(result.status, 1, 'Expected exit code 1');
 });
 
 test('create-skill: rejects name starting with number', () => {
-  const result = spawnSync('node', [CLI_PATH, 'create-skill', '1invalid'], { encoding: 'utf8' });
+  const result = spawnSync('node', [CLI_PATH, 'create-skill', '1invalid'], { encoding: 'utf8', cwd: path.join(__dirname, '..') });
+  assert.strictEqual(result.status, 1, 'Expected exit code 1');
+});
+
+test('create-skill: rejects consecutive hyphens', () => {
+  const result = spawnSync('node', [CLI_PATH, 'create-skill', 'a--b'], { encoding: 'utf8', cwd: path.join(__dirname, '..') });
   assert.strictEqual(result.status, 1, 'Expected exit code 1');
 });
 
 // Task 5.1: Successful creation
 test('create-skill: creates skill directory and files', () => {
-  const result = spawnSync('node', [CLI_PATH, 'create-skill', TEST_SKILL], { encoding: 'utf8' });
+  const result = spawnSync('node', [CLI_PATH, 'create-skill', TEST_SKILL], { encoding: 'utf8', cwd: path.join(__dirname, '..') });
   assert.strictEqual(result.status, 0, `Expected exit code 0, got ${result.status}. stderr: ${result.stderr}`);
 
   const output = result.stdout + result.stderr;
@@ -129,6 +204,19 @@ test('create-skill: creates skill directory and files', () => {
   assert.ok(fs.existsSync(path.join(TEST_SKILL_DIR, 'templates')), 'Expected templates/ dir');
   assert.ok(fs.existsSync(path.join(TEST_SKILL_DIR, 'references')), 'Expected references/ dir');
   assert.ok(fs.existsSync(path.join(TEST_SKILL_DIR, 'assets')), 'Expected assets/ dir');
+});
+
+test('create-skill: success output mentions MANIFEST.yaml', () => {
+  // Re-run on a fresh name to capture success output
+  const tmpSkill = 'test-manifest-hint';
+  const tmpSkillDir = path.join(SKILLS_DIR, tmpSkill);
+  try {
+    const result = spawnSync('node', [CLI_PATH, 'create-skill', tmpSkill], { encoding: 'utf8', cwd: path.join(__dirname, '..') });
+    assert.strictEqual(result.status, 0, `Expected exit code 0. stderr: ${result.stderr}`);
+    assert.ok(result.stdout.includes('MANIFEST'), 'Expected MANIFEST.yaml mention in output');
+  } finally {
+    if (fs.existsSync(tmpSkillDir)) fs.rmSync(tmpSkillDir, { recursive: true, force: true });
+  }
 });
 
 test('create-skill: skill.json has correct structure', () => {
@@ -155,21 +243,22 @@ test('create-skill: SKILL.md has template structure', () => {
 
 // Task 5.2: Duplicate detection
 test('create-skill: rejects duplicate skill name', () => {
-  const result = spawnSync('node', [CLI_PATH, 'create-skill', TEST_SKILL], { encoding: 'utf8' });
+  const result = spawnSync('node', [CLI_PATH, 'create-skill', TEST_SKILL], { encoding: 'utf8', cwd: path.join(__dirname, '..') });
   assert.strictEqual(result.status, 1, 'Expected exit code 1 for duplicate');
   const output = result.stdout + result.stderr;
   assert.ok(output.includes('already exists'), 'Expected already exists message');
   assert.ok(output.includes('Hint:'), 'Expected Hint message');
 });
 
-// Task 5.4: Skill appears in list
-test('create-skill: new skill appears in list', () => {
-  const result = spawnSync('node', [CLI_PATH, 'list'], { encoding: 'utf8' });
+// Task 5.4: Skill name appears in list output (M4 fix — real assertion)
+test('create-skill: new skill name appears in list output', () => {
+  const result = spawnSync('node', [CLI_PATH, 'list'], { encoding: 'utf8', cwd: path.join(__dirname, '..') });
   assert.strictEqual(result.status, 0, 'Expected exit code 0');
-  // The list shows skills from the skills/ directory
-  // The new skill may or may not appear depending on whether listSkills() scans custom skills
-  // This is acceptable; we verify the command runs without error
-  assert.ok(result.stdout.length > 0 || result.stderr.length >= 0, 'List command ran');
+  // listSkills() reads from skills/ directory — scaffolded skill's name or id should appear
+  assert.ok(
+    result.stdout.includes(TEST_SKILL),
+    `Expected '${TEST_SKILL}' to appear in list output`
+  );
 });
 
 // Cleanup

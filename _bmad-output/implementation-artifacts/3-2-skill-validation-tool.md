@@ -1,6 +1,6 @@
 # Story 3.2: Skill Validation Command
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -35,41 +35,41 @@ So that I can catch skill format errors before distribution.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Add `validate-skill` command to CLI router (AC: #1-#5)
-  - [ ] 1.1: Add `validate-skill` to command routing in `bin/cli.js`
-  - [ ] 1.2: Create `validateSkill(skillName)` function in `lib/skill-authoring.js` (created in Story 3-1)
-  - [ ] 1.3: Add `validate-skill` to help text
-- [ ] Task 2: Implement file existence checks (AC: #2, #3)
-  - [ ] 2.1: Check `skills/<skill-name>/` directory exists — if not: `Error: Skill '<skill-name>' not found` / `Hint: Run "list" to see available skills`
-  - [ ] 2.2: Check `skill.json` exists — if not: add to errors list "missing required file skill.json"
-  - [ ] 2.3: Check `SKILL.md` exists — if not: add to errors list "missing required file SKILL.md"
-- [ ] Task 3: Implement skill.json field validation (AC: #4)
-  - [ ] 3.1: Parse skill.json — if invalid JSON: `INVALID: skill.json is not valid JSON`
-  - [ ] 3.2: Validate required fields:
+- [x] Task 1: Add `validate-skill` command to CLI router (AC: #1-#5)
+  - [x] 1.1: Add `validate-skill` to command routing in `bin/cli.js`
+  - [x] 1.2: Create `validateSkill(skillName)` function in `lib/skill-authoring.js` (created in Story 3-1)
+  - [x] 1.3: Add `validate-skill` to help text
+- [x] Task 2: Implement file existence checks (AC: #2, #3)
+  - [x] 2.1: Check `skills/<skill-name>/` directory exists — if not: `Error: Skill '<skill-name>' not found` / `Hint: Run "list" to see available skills`
+  - [x] 2.2: Check `skill.json` exists — if not: add to errors list "missing required file skill.json"
+  - [x] 2.3: Check `SKILL.md` exists — if not: add to errors list "missing required file SKILL.md"
+- [x] Task 3: Implement skill.json field validation (AC: #4)
+  - [x] 3.1: Parse skill.json — if invalid JSON: `INVALID: skill.json is not valid JSON`
+  - [x] 3.2: Validate required fields:
     - `name` (string, non-empty)
     - `version` (string, semver pattern)
     - `description` (string, present)
-  - [ ] 3.3: Validate optional fields if present:
+  - [x] 3.3: Validate optional fields if present:
     - `category` (one of: security, architecture, testing, documentation, workflow, language)
     - `tags` (array of strings)
     - `always_load` (boolean)
     - `author` (string)
     - `applies_when` (array of strings)
-  - [ ] 3.4: Report each field error individually: `  - name: required, must be a non-empty string`
-- [ ] Task 4: Implement template validation (AC: #5)
-  - [ ] 4.1: If `templates/` directory exists, scan for `.md` files
-  - [ ] 4.2: Extract agent name from filename (e.g., `claude-code.md` -> `claude-code`)
-  - [ ] 4.3: Check each name against agent registry keys from `lib/agents.js` (call `listAgents()` or equivalent)
-  - [ ] 4.4: Warn (yellow) about unknown agents: `Warning: Template 'unknown-agent.md' targets unknown agent 'unknown-agent'`
-  - [ ] 4.5: Valid templates get a checkmark: `  Template: claude-code.md (valid agent)`
-- [ ] Task 5: Implement output summary (AC: #1)
-  - [ ] 5.1: If all checks pass: print `VALID` (green) + metadata summary (name, version, category, tags count, always_load)
-  - [ ] 5.2: If any errors: print `INVALID` (red) + list of all errors
-  - [ ] 5.3: Exit code 0 on valid, 1 on invalid
-- [ ] Task 6: Test the command
-  - [ ] 6.1: Run on a known valid skill (e.g., `git-workflow-skill`) — verify VALID
-  - [ ] 6.2: Create a deliberately broken skill and validate — verify all errors caught
-  - [ ] 6.3: Test with template targeting unknown agent — verify warning
+  - [x] 3.4: Report each field error individually: `  - name: required, must be a non-empty string`
+- [x] Task 4: Implement template validation (AC: #5)
+  - [x] 4.1: If `templates/` directory exists, scan for `.md` files
+  - [x] 4.2: Extract agent name from filename (e.g., `claude-code.md` -> `claude-code`)
+  - [x] 4.3: Check each name against agent registry keys from `lib/agents.js` (call `getAllAgents()`)
+  - [x] 4.4: Warn (yellow) about unknown agents: `Warning: Template 'unknown-agent.md' targets unknown agent 'unknown-agent'`
+  - [x] 4.5: Valid templates get a checkmark: `  Template: claude-code.md (valid agent)`
+- [x] Task 5: Implement output summary (AC: #1)
+  - [x] 5.1: If all checks pass: print `VALID` (green) + metadata summary (name, version, category, tags count, always_load)
+  - [x] 5.2: If any errors: print `INVALID` (red) + list of all errors
+  - [x] 5.3: Exit code 0 on valid, 1 on invalid
+- [x] Task 6: Test the command
+  - [x] 6.1: Run on a known valid skill (e.g., `git-workflow-skill`) — verify VALID
+  - [x] 6.2: Create a deliberately broken skill and validate — verify all errors caught
+  - [x] 6.3: Test with template targeting unknown agent — verify warning
 
 ## Dev Notes
 
@@ -148,8 +148,31 @@ This story depends on `lib/skill-authoring.js` being created in Story 3-1. If St
 
 ### Agent Model Used
 
+claude-sonnet-4-6
+
 ### Debug Log References
+
+None — implementation was straightforward.
 
 ### Completion Notes List
 
+- Added `validateSkill(skillName, skillsDir)` and `handleValidateSkill(args)` to `lib/skill-authoring.js`
+- Added `getAllAgents` import from `lib/agents.js` for template agent-ID validation
+- Added `VALID_CATEGORIES` constant and `SEMVER_PATTERN` regex at module scope
+- Wired `validate-skill` into `bin/cli.js` switch + help text + import
+- Added `validate-skill` to `npm test` in `package.json`
+- Created `test/skill-validation.test.js` with 21 tests: 14 unit + 7 CLI integration, all passing
+- Zero regressions across all 55 total project tests
+- `validateSkill` returns `{ valid, notFound?, errors[], warnings[], metadata? }` — label-free data, display handled by handler
+- Warnings (unknown agent templates) do not set `valid=false` — only errors do
+
 ### File List
+
+- `lib/skill-authoring.js` (modified — added validateSkill, handleValidateSkill, constants)
+- `bin/cli.js` (modified — added import, validate-skill case, help text)
+- `test/skill-validation.test.js` (new)
+- `package.json` (modified — added skill-validation.test.js to test script)
+
+### Change Log
+
+- 2026-03-19: Implemented Story 3.2 — validate-skill command with schema validation, template agent checks, and 21 tests
