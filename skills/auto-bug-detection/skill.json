@@ -1,0 +1,8 @@
+{
+  "name": "auto-bug-detection",
+  "version": "1.0.0",
+  "description": "Instructs agents to identify and report defects in already-delivered code",
+  "category": "workflow",
+  "tags": ["bug-detection", "quality"],
+  "always_load": false
+}

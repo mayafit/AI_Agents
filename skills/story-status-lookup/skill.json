@@ -1,0 +1,8 @@
+{
+  "name": "story-status-lookup",
+  "version": "1.0.0",
+  "description": "Looks up the current status of a story to classify code as delivered or work-in-progress. Supports file-system backend now; Jira backend reserved for future configuration.",
+  "category": "workflow",
+  "tags": ["story-status", "sprint-management", "bug-detection"],
+  "always_load": true
+}

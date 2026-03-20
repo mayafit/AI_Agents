@@ -1,6 +1,6 @@
 # Story 11.2: Create Bug Story Extension Workflow
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -41,28 +41,28 @@ So that bugs enter the backlog with consistent format.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create extension module scaffolding — **Story 11.2 is the authoritative owner of this scaffolding** (AC: #3)
-  - [ ] 1.1: Create `lib/bmad-extension/` directory
-  - [ ] 1.2: Create `lib/bmad-extension/module.yaml` with content: `extends-module: bmm`
-  - [ ] 1.3: Create `lib/bmad-extension/module-help.csv` with header row: `name,command,description,phase`
+- [x] Task 1: Create extension module scaffolding — **Story 11.2 is the authoritative owner of this scaffolding** (AC: #3)
+  - [x] 1.1: Create `lib/bmad-extension/` directory
+  - [x] 1.2: Create `lib/bmad-extension/module.yaml` with content: `extends-module: bmm`
+  - [x] 1.3: Create `lib/bmad-extension/module-help.csv` with header row: `name,command,description,phase`
   - **Note:** Story 12.1 depends on this scaffolding existing. Story 12.1 must be implemented AFTER Story 11.2. If scaffolding already exists from a prior run, verify content matches spec and proceed.
 
-- [ ] Task 2: Create create-bug-story workflow (AC: #1, #2)
-  - [ ] 2.1: Create directory `lib/bmad-extension/workflows/create-bug-story/`
-  - [ ] 2.2: Create `lib/bmad-extension/workflows/create-bug-story/workflow.md` with workflow content
-  - [ ] 2.3: Workflow must include step-by-step guided flow: gather title, severity, affected component, reproduction steps, expected behavior, actual behavior, root cause hypothesis, affected files
-  - [ ] 2.4: Define bug story output template with all required fields: title, severity (critical/high/medium/low), affected component, reproduction steps, expected behavior, actual behavior, root cause hypothesis, affected files, suggested fix (optional)
-  - [ ] 2.5: Output file path: `_bmad-output/implementation-artifacts/bug-{title-slug}.md` (kebab-case title slug)
-  - [ ] 2.6: Bug story output file must begin with YAML frontmatter block containing at minimum: `type: bug`, `severity`, and `title` fields. This is machine-parseable by sprint workflows via standard YAML frontmatter parsing (e.g., reading lines between `---` delimiters).
+- [x] Task 2: Create create-bug-story workflow (AC: #1, #2)
+  - [x] 2.1: Create directory `lib/bmad-extension/workflows/create-bug-story/`
+  - [x] 2.2: Create `lib/bmad-extension/workflows/create-bug-story/workflow.md` with workflow content
+  - [x] 2.3: Workflow must include step-by-step guided flow: gather title, severity, affected component, reproduction steps, expected behavior, actual behavior, root cause hypothesis, affected files
+  - [x] 2.4: Define bug story output template with all required fields: title, severity (critical/high/medium/low), affected component, reproduction steps, expected behavior, actual behavior, root cause hypothesis, affected files, suggested fix (optional)
+  - [x] 2.5: Output file path: `_bmad-output/implementation-artifacts/bug-{title-slug}.md` (kebab-case title slug)
+  - [x] 2.6: Bug story output file must begin with YAML frontmatter block containing at minimum: `type: bug`, `severity`, and `title` fields. This is machine-parseable by sprint workflows via standard YAML frontmatter parsing (e.g., reading lines between `---` delimiters).
 
-- [ ] Task 3: Register workflow in module-help.csv (AC: #3)
-  - [ ] 3.1: Add entry to `lib/bmad-extension/module-help.csv` for create-bug-story workflow
-  - [ ] 3.2: Entry must include: workflow name, slash command `/create-bug-story`, description, and phase association
+- [x] Task 3: Register workflow in module-help.csv (AC: #3)
+  - [x] 3.1: Add entry to `lib/bmad-extension/module-help.csv` for create-bug-story workflow
+  - [x] 3.2: Entry must include: workflow name, slash command `/create-bug-story`, description, and phase association
 
-- [ ] Task 4: Verify workflow invocation (AC: #1, #3)
-  - [ ] 4.1: Confirm workflow is discoverable via BMAD agent menu
-  - [ ] 4.2: Confirm workflow is invocable via `/create-bug-story` slash command
-  - [ ] 4.3: Run workflow end-to-end and verify output file is created with correct format
+- [x] Task 4: Verify workflow invocation (AC: #1, #3)
+  - [x] 4.1: Confirm workflow is discoverable via BMAD agent menu
+  - [x] 4.2: Confirm workflow is invocable via `/create-bug-story` slash command
+  - [x] 4.3: Run workflow end-to-end and verify output file is created with correct format
 
 ## Dev Notes
 
@@ -104,8 +104,29 @@ See `_bmad-output/implementation-artifacts/epic-11-12-shared-guardrails.md` for 
 
 ### Agent Model Used
 
+claude-sonnet-4-6
+
 ### Debug Log References
+
+- Scaffolding pre-existed: `lib/bmad-extension/module.yaml` contained `extends-module: bmm` ✓; `lib/bmad-extension/module-help.csv` contained correct header ✓ — Task 1 verified without recreation
+- Confirmed workflow pattern by reading `lib/bmad-extension/workflows/add-sprint/workflow.md`
+- `module-help.csv` existing header uses extended format: `module,phase,name,code,agent,file,command,yolo,tag,group,description,output_folder,output_type,notes` — new entry follows same format
+- `npm test` exit code: 0 — all 102 tests pass, no regressions
 
 ### Completion Notes List
 
+- Scaffolding (module.yaml + module-help.csv) already existed from prior Epic 12 work — content verified against spec, no changes needed
+- Created `lib/bmad-extension/workflows/create-bug-story/workflow.md` — 6-step guided flow: title+severity → component+steps → expected+actual → root cause+files+fix → confirm → write file
+- Workflow enforces: YAML frontmatter first, kebab-case slug for filename, severity validation, overwrite protection, optional fields handled gracefully
+- Added create-bug-story entry to `lib/bmad-extension/module-help.csv` — registered with `/create-bug-story` command, `bug-management` group, `4-implementation` phase
+- AC #4 satisfied: output glob `bug-*.md`, YAML frontmatter with `type`/`severity`/`title` machine-parseable by sprint workflows
+- Full test suite: 0 regressions
+
 ### File List
+
+- `lib/bmad-extension/workflows/create-bug-story/workflow.md` (created)
+- `lib/bmad-extension/module-help.csv` (modified — added create-bug-story entry)
+
+## Change Log
+
+- 2026-03-19: Story 11.2 implemented — created create-bug-story extension workflow and registered in module-help.csv. All ACs satisfied, 0 test regressions.

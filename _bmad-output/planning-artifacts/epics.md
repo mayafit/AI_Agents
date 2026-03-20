@@ -4,6 +4,8 @@ workflowStatus: 'complete'
 completedDate: '2026-03-08'
 lastEdited: '2026-03-19'
 phase2EditHistory:
+  - date: '2026-03-20'
+    changes: 'Added Epic 14: External Tooling Integration (Phase 3). 5 stories: analyst research for Jira (14.1) and Confluence/knowledge (14.2), architect abstraction layer design (14.3), and stub stories for Jira (14.4) and Confluence (14.5) implementations blocked on 14.3. Proposed FRs to be added to PRD after architecture is approved.'
   - date: '2026-03-19'
     changes: 'Added Epic 13: Project Context Auto-Generation (FR77-FR84, NFR22-NFR24). 4 stories: template+generator, install pipeline integration, BMAD critical_actions update, retrospective expansion trigger. Added FR77-FR84 to FR Coverage Map.'
   - date: '2026-03-15'
@@ -1410,3 +1412,104 @@ So that users understand what the generated file is, why it appeared, and how to
 **Given** the generated project-context.md template (Story 13.1)
 **When** reviewed alongside the README section
 **Then** the expansion instructions in the README match the inline comments in the file — no contradictions between the two
+
+---
+
+## Epic 14: External Tooling Integration (Phase 3)
+
+**Goal:** ma-agents can connect to external project management and knowledge management platforms (Jira, Confluence) as alternatives to the default file-system backends. The backend is configured at installation time via `project-context.md` or the root directives file (`CLAUDE.md` / equivalent), so agents and skills resolve data against the configured system without code changes.
+**FRs covered:** Proposed — to be formally added to PRD after Story 14.3 architecture is approved
+**Dependency:** Epic 12 (Sprint Management workflows), Epic 10 (Project Knowledge Preservation), Epic 13 (Project Context Auto-Generation — provides the config schema and installation pipeline)
+**Phase:** 3 — analyst research and architecture design must complete before any implementation story is detailed
+**Analyst + Architect required:** Yes — Stories 14.1, 14.2, and 14.3 are prerequisites for all implementation work
+
+---
+
+### Story 14.1: Analyst Research — Jira Sprint Management Integration
+
+As a **Product Manager / Analyst**,
+I want a research report on integrating Jira as a sprint management backend for ma-agents,
+So that the architect has clear requirements before designing the abstraction layer.
+
+**Acceptance Criteria:**
+
+**Given** the current file-system sprint management model (`sprint-status.yaml`, story files)
+**When** the analyst completes the research report
+**Then** it documents: Jira REST API capabilities, authentication models (API token, OAuth, service account), field mapping (Jira status → ma-agents story status), rate limits, and offline/air-gapped scenarios
+**And** it defines the proposed configuration schema to be set in `project-context.md` at installation time
+**And** it identifies the minimum viable Jira integration scope (read story status) vs full bidirectional sync (write back story state)
+**And** it covers both Jira Cloud and Jira Server/Data Center
+
+**Given** the `story-status-lookup` skill (implemented in Epic 11 review cycle) has a reserved Jira extension point
+**When** the report addresses credential handling
+**Then** it proposes how credentials are stored (env vars vs `project-context.md` vs OS keychain)
+**And** it clarifies what must be configured at install time vs at runtime
+
+**Technical notes:**
+- Output artifact: `_bmad-output/planning-artifacts/research-external-tooling-sprint-management.md`
+- This report is the primary input for Story 14.3 (architecture design)
+- Consider: what happens if Jira is unavailable mid-session (network failure, rate limit)?
+
+---
+
+### Story 14.2: Analyst Research — Knowledge Management Integration (Confluence)
+
+As a **Product Manager / Analyst**,
+I want a research report on integrating Confluence (and similar tools) as a knowledge management backend for ma-agents,
+So that the architect can design a unified external tooling abstraction that covers both sprint and knowledge management.
+
+**Acceptance Criteria:**
+
+**Given** the current file-system knowledge model (markdown files in `_bmad-output/`)
+**When** the analyst completes the research report
+**Then** it documents: Confluence REST API capabilities, space/page model mapping to ma-agents artifact types (PRD, architecture, epics, retrospectives), read vs write requirements, and versioning model
+**And** it identifies which ma-agents artifacts benefit most from Confluence sync and which should remain file-system-only
+**And** it flags risks: bidirectional sync conflicts, Confluence markup vs markdown conversion, large attachment handling
+
+**Given** agents read from knowledge artifacts during sessions
+**When** the report covers the user experience
+**Then** it proposes how agents know to read from Confluence vs the local file system
+**And** it clarifies whether the integration is read-only, write-only, or bidirectional
+
+**Technical notes:**
+- Output artifact: `_bmad-output/planning-artifacts/research-external-tooling-knowledge-management.md`
+- Input for Story 14.3 (architecture design)
+- Consider other platforms (Notion, Obsidian vaults, SharePoint) — flag capability gaps vs Confluence
+
+---
+
+### Story 14.3: Architecture Design — External Tooling Abstraction Layer
+
+As an **Architect**,
+I want to design the abstraction layer that decouples ma-agents sprint and knowledge operations from their backend implementation,
+So that future backends (Jira, Confluence, Linear, Notion) can be added without changing core workflows or skills.
+
+**Acceptance Criteria:**
+
+**Given** the research reports from Stories 14.1 and 14.2
+**When** the architecture design is complete
+**Then** it defines: backend interface contracts, the configuration schema in `project-context.md`, credential handling pattern, and how skills resolve their configured backend at runtime
+**And** it specifies exactly how the `story-status-lookup` skill's Jira extension point (reserved during implementation) is fulfilled — including the configuration key names that `project-context.md` / root directives must contain
+**And** it addresses: offline/air-gapped scenarios, partial configuration (only sprint management configured, or only knowledge management), and graceful degradation to file-system defaults
+
+**Given** the installation pipeline (Epic 13)
+**When** the architecture covers installation-time configuration
+**Then** it defines which configuration questions are asked at install time vs deferred to first use
+**And** it specifies how the installer writes the backend configuration into `project-context.md`
+
+**Technical notes:**
+- Output artifact: ADR in `_bmad-output/planning-artifacts/adr-external-tooling-abstraction.md`
+- Stories 14.4 and 14.5 are fully blocked on this story
+- After this story is approved, add formal FRs to the PRD and create detailed implementation stories for 14.4 and 14.5
+
+---
+
+### Story 14.4: Implement Jira Sprint Management Backend
+
+*(Blocked on Stories 14.1 + 14.3 — full story spec to be written after architecture ADR is approved and FRs are added to PRD)*
+
+---
+
+### Story 14.5: Implement Confluence Knowledge Management Backend
+
+*(Blocked on Stories 14.2 + 14.3 — full story spec to be written after architecture ADR is approved and FRs are added to PRD)*
