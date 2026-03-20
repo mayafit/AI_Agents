@@ -140,12 +140,13 @@ development_status:
 
   # ─── IN PROGRESS ──────────────────────────────────────────────────────────────
 
-  # ─── BACKLOG (not yet started) ────────────────────────────────────────────────
+  # ─── ON HOLD ──────────────────────────────────────────────────────────────────
 
-  # Epic 4: Visual Studio Agent Integration
-  epic-4: backlog
-  4-1-vs-agent-registry-entry: ready-for-dev
-  4-2-vs-skill-template-format: ready-for-dev
+  # Epic 4: Visual Studio Agent Integration — ON HOLD (2026-03-20)
+  # Paused: deprioritised in favour of Phase 2 epics; story specs may need revision before resuming
+  epic-4: on-hold
+  4-1-vs-agent-registry-entry: on-hold
+  4-2-vs-skill-template-format: on-hold
   epic-4-retrospective: optional
 
   # Epic 7: Test Suite Foundation — ON HOLD (2026-03-19)
