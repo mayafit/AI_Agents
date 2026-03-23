@@ -175,7 +175,7 @@ test('--yes exits 0 with piped stdin (no interactive prompts)', () => {
   // Note: this performs actual skill installation in the current project directory.
   // It verifies that the process exits without hanging on interactive prompts.
   const result = spawnSync(process.execPath, [CLI_PATH, 'install', '--yes'], {
-    timeout: 60000,
+    timeout: 300000, // 5 min — BMAD module installation copies hundreds of files
     encoding: 'utf-8',
     input: '',
     stdio: ['pipe', 'pipe', 'pipe'],

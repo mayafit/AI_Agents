@@ -77,6 +77,30 @@ The `ma-agents` installer automatically removes `_bmad-output/` from `.gitignore
 
 ---
 
+## Project Context
+
+When you run `npx ma-agents install` at the project level, ma-agents automatically generates
+`_bmad-output/project-context.md` — a constitutional document that governs how AI agents
+behave in this project.
+
+**What it contains:**
+- Mandatory pre-task rules: which MANIFEST.yaml files to read, which skills to load
+- Git workflow mandate: fresh worktrees per mission (not just branches)
+- Agent mission lifecycle: 8-step sequence from pre-flight to post-mission cleanup
+
+**It is safe to edit.** The installer never regenerates the file from scratch once it exists.
+On reinstall, only the `## AI Agent Mandatory Rules` MANIFEST paths section is updated
+if new agents have been added — all your custom edits are preserved. Edit it freely — it belongs to your project.
+
+**Expand it over time:**
+- After architecture phase: run `/bmad-generate-project-context` to auto-detect your stack
+- After each sprint: run `/bmad-retrospective`, then `/project-context-expansion`
+- Manually: add conventions you notice agents getting wrong
+
+The file is version-controlled as part of `_bmad-output/` project knowledge. Commit it.
+
+---
+
 ## Supported Agents
 
 | Agent | Project Path | Template | Instruction File |

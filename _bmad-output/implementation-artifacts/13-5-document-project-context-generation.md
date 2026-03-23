@@ -1,6 +1,6 @@
 # Story 13.5: Document Project-Context Generation in README and Installation Guidance
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -23,20 +23,20 @@ So that users understand what the generated file is, why it appeared, and how to
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Locate the correct section in README.md for insertion (AC: #1)
-  - [ ] 1.1 Read README.md to identify where skill installation and `_bmad-output/` are documented
-  - [ ] 1.2 Identify the most logical placement for a "Project Context" section (after the `_bmad-output/` policy section, if one exists from Epic 10)
-  - [ ] 1.3 Confirm the section header style used in the existing README
+- [x] Task 1: Locate the correct section in README.md for insertion (AC: #1)
+  - [x] 1.1 Read README.md to identify where skill installation and `_bmad-output/` are documented
+  - [x] 1.2 Identified placement: after `## Project Knowledge: _bmad-output/` section, before `## Supported Agents`
+  - [x] 1.3 README uses `##` level headers — section added with same style
 
-- [ ] Task 2: Write and insert the "Project Context" README section (AC: #1, #3, #4, #5)
-  - [ ] 2.1 Draft the section content following the README's voice and structure
-  - [ ] 2.2 Insert the section in the identified location
-  - [ ] 2.3 Verify expansion instructions match the template inline comments from Story 13.1 exactly
+- [x] Task 2: Write and insert the "Project Context" README section (AC: #1, #3, #4, #5)
+  - [x] 2.1 Section drafted following existing README voice and structure
+  - [x] 2.2 Section inserted at identified location
+  - [x] 2.3 Expansion instructions match template inline comments (AC #3 verified)
 
-- [ ] Task 3: Update QUICK_START.md (AC: #2)
-  - [ ] 3.1 Read QUICK_START.md to identify where post-install outputs are listed
-  - [ ] 3.2 Add a bullet or note: `_bmad-output/project-context.md` is generated automatically — see README for details
-  - [ ] 3.3 Verify the pointer to README is specific enough to be useful (section link if markdown supports it)
+- [x] Task 3: Update QUICK_START.md (AC: #2)
+  - [x] 3.1 Read QUICK_START.md — identified post-install step 6 "Done!" as insertion point
+  - [x] 3.2 Blockquote callout added after step 6 referencing project-context.md
+  - [x] 3.3 Link `[Project Context](README.md#project-context)` points to specific section
 
 ## Dev Notes
 
@@ -61,7 +61,7 @@ untouched. Edit it freely — it belongs to your project.
 
 **Expand it over time:**
 - After architecture phase: run `/bmad-generate-project-context` to auto-detect your stack
-- After each sprint: run `/bmad-retrospective` — includes a project-context update step
+- After each sprint: run `/bmad-retrospective`, then `/project-context-expansion`
 - Manually: add conventions you notice agents getting wrong
 
 The file is version-controlled as part of `_bmad-output/` project knowledge. Commit it.
@@ -97,16 +97,22 @@ Story 13.1 must be complete before this story can verify that expansion instruct
 ## Dev Agent Record
 
 ### Agent Model Used
-_To be filled by dev agent_
+claude-sonnet-4-6
 
 ### Debug Log References
-_To be filled by dev agent_
+- QUICK_START.md references `npx ai-agent-skills` (old package name) in examples — left as-is, not in scope. Only added the project-context note in the wizard steps section.
+- README.md expansion instructions match template inline comments from Story 13.1 exactly (same three bullet items: architecture phase, after each sprint, manually).
 
 ### Completion Notes List
-_To be filled by dev agent_
+- "Project Context" section added to README.md after the `## Project Knowledge: _bmad-output/` section (before `## Supported Agents`).
+- Project-context.md reference added to QUICK_START.md after step 6 "Done!" as a blockquote callout with a direct link to the README section.
+- No platform-specific paths in documentation (NFR22 compliant).
+- Expansion instructions match `lib/templates/project-context.template.md` inline comments (AC #3).
 
 ### File List
-_To be filled by dev agent_
+- `README.md` — MODIFIED: added "## Project Context" section
+- `QUICK_START.md` — MODIFIED: added project-context.md callout after step 6
 
 ## Change Log
 - 2026-03-19: Story created (Epic 13, Story 13.5) — added to address adversarial review finding #5 (missing documentation story analogous to Epic 10 Story 10.2)
+- 2026-03-20: Story implemented — README section added, QUICK_START reference added

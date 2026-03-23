@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node bin/cli.js",
-    "test": "node test/yes-flag.test.js && node test/skill-authoring.test.js && node test/skill-validation.test.js && node test/skill-mandatory.test.js && node test/skill-customize-agent.test.js && node test/create-agent.test.js",
+    "test": "node test/yes-flag.test.js && node test/skill-authoring.test.js && node test/skill-validation.test.js && node test/skill-mandatory.test.js && node test/skill-customize-agent.test.js && node test/create-agent.test.js && node test/generate-project-context.test.js",
     "build:bmad-cache": "node scripts/build-bmad-cache.js"
   },
   "keywords": [

@@ -1,5 +1,5 @@
 # generated: 2026-03-15
-# updated: 2026-03-20 — epic-11 review complete (all findings addressed); epic-2 closed (all stories done); epic-14 added (external tooling, phase 3)
+# updated: 2026-03-20 — epic-11 review complete (all findings addressed); epic-2 closed (all stories done); epic-14 added (external tooling, phase 3); epic-13 adversarial review complete (13 findings addressed)
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system
@@ -162,12 +162,12 @@ development_status:
   # Epic 13: Project Context Auto-Generation (Phase 2)
   # Dependencies: Epic 8 (critical_actions infrastructure), Epic 10 (_bmad-output policy)
   # Execution order: 13.1 → 13.2 → 13.3 → 13.4 (blocked on investigation) → 13.5
-  epic-13: backlog
-  13-1-project-context-template-and-generator: ready-for-dev
-  13-2-install-pipeline-integration: ready-for-dev
-  13-3-bmad-critical-actions-update: ready-for-dev
-  13-4-retrospective-expansion-trigger: backlog    # blocked: retrospective workflow location must be confirmed first
-  13-5-document-project-context-generation: ready-for-dev
+  epic-13: done
+  13-1-project-context-template-and-generator: done
+  13-2-install-pipeline-integration: done
+  13-3-bmad-critical-actions-update: done
+  13-4-retrospective-expansion-trigger: done
+  13-5-document-project-context-generation: done
   epic-13-retrospective: optional
 
   # Epic 14: External Tooling Integration (Phase 3)

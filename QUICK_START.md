@@ -7,14 +7,14 @@ Get started with AI Agent Skills in 2 minutes!
 No installation needed! Just run:
 
 ```bash
-npx ai-agent-skills
+npx ma-agents
 ```
 
 ## Using the CLI
 
 1. **Run the tool:**
    ```bash
-   npx ai-agent-skills
+   npx ma-agents
    ```
 
 2. **Select "Install a skill"**
@@ -38,23 +38,29 @@ npx ai-agent-skills
 
 6. **Done!** The skill is now available in your selected agents.
 
+> **Project-level install also generates `_bmad-output/project-context.md`** — a constitutional
+> document that tells AI agents which skills to load and how to run missions in this project.
+> It is never overwritten on reinstall, and its MANIFEST paths are kept up to date on every
+> subsequent install. See [Project Context](README.md#project-context) in the README for details
+> on what it contains and how to expand it over time.
+
 ## Quick Examples
 
 ### List all available skills
 ```bash
-npx ai-agent-skills
+npx ma-agents
 # Select: List available skills
 ```
 
 ### List supported agents
 ```bash
-npx ai-agent-skills
+npx ma-agents
 # Select: List supported agents
 ```
 
 ### Install a skill
 ```bash
-npx ai-agent-skills
+npx ma-agents
 # Select: Install a skill
 # Choose: code-review
 # Select agents: claude-code, cline
