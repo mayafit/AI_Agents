@@ -1,5 +1,5 @@
 # generated: 2026-03-15
-# updated: 2026-03-20 — epic-11 review complete (all findings addressed); epic-2 closed (all stories done); epic-14 added (external tooling, phase 3); epic-13 adversarial review complete (13 findings addressed)
+# updated: 2026-03-26 — Epic 5 reopened with stories 5.5 (explicit params) and 5.6 (space-in-path fix). Added Epic 15: BMAD 6.2.1 Migration (8 stories). Added Epic 16: Multi-Repo Layout (4 stories). Development execution order: Phase A (Epic 5 fixes → release), Phase B (Epic 15 migration → release), Phase C (Epic 16 + remaining).
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system
@@ -60,13 +60,16 @@ development_status:
   1-1-ci-cd-yes-flag: done
   epic-1-retrospective: optional
 
-  # Epic 5: Bundled BMAD Installation (Phase 2) — COMPLETED
-  # Execution order: 5.1 → 5.2 → 5.3 → 5.4
-  epic-5: done
+  # Epic 5: Bundled BMAD Installation (Phase 2) — REOPENED for installation fixes
+  # Stories 5.1-5.4 done. Stories 5.5, 5.6 added 2026-03-26.
+  # Execution order: 5.5 → 5.6 → release
+  epic-5: in-progress
   5-1-bmad-method-direct-dependency: done
   5-2-bmad-cache-build-script: done
   5-3-pre-populate-bmad-cache: done
   5-4-validate-bundled-installation: done
+  5-5-explicit-parameter-passing: backlog
+  5-6-fix-space-in-path-bug: backlog
   epic-5-retrospective: optional
 
   # Epic 6: Methodology Onboarding Package — COMPLETED
@@ -169,6 +172,51 @@ development_status:
   13-4-retrospective-expansion-trigger: done
   13-5-document-project-context-generation: done
   epic-13-retrospective: optional
+
+  # ─── PHASE A: Installation Fixes (next release) ─────────────────────────────
+  # Epic 5 stories 5.5-5.6 are listed above in the COMPLETED section (epic reopened)
+
+  # ─── PHASE B: BMAD 6.2.1 Alignment (release after Phase A) ─────────────────
+
+  # Epic 15: BMAD 6.2.1 Agent Architecture Migration (Phase 2)
+  # Dependencies: Epic 5 (explicit param passing). Restructures Epic 8's extension module.
+  # Execution order: 15.1 → 15.2 → 15.3 → 15.4 → 15.5 → 15.6 → 15.7 → 15.8
+  epic-15: backlog
+  15-1-bump-bmad-method-to-6-2-1: backlog
+  15-2-restructure-extension-module: backlog
+  15-3-convert-custom-agents-to-skill-folders: backlog
+  15-4-convert-mil498-workflows-to-skill-md: backlog
+  15-5-convert-sre-devops-cyber-workflows: backlog
+  15-6-separate-built-in-agent-customizations: backlog
+  15-7-migration-detection-and-upgrade-path: backlog
+  15-8-validate-migrated-agents-and-workflows: backlog
+  epic-15-retrospective: optional
+
+  # ─── PHASE C: Remaining Features ───────────────────────────────────────────
+
+  # Epic 16: Multi-Repository Project Layout (Phase 2)
+  # Dependencies: Epic 15 (module restructure), Epic 13 (project-context template)
+  # Execution order: 16.1 → 16.2 → 16.3 → 16.4
+  epic-16: backlog
+  16-1-repository-layout-wizard: backlog
+  16-2-config-storage-and-cross-reference: backlog
+  16-3-project-context-multi-repo-section: backlog
+  16-4-validate-cross-repo-path-resolution: backlog
+  epic-16-retrospective: optional
+
+  # Epic 17: Sprint Management Model Rework (Phase 2)
+  # Dependencies: Epic 11 (bug entity). Reworks Epic 12's workflow shells.
+  # Execution order: 17.1 → 17.2 → 17.3 → 17.4 → 17.5 → 17.6 → 17.7 → 17.8
+  epic-17: backlog
+  17-1-sprint-entity-model: backlog
+  17-2-flat-backlog-model: backlog
+  17-3-bug-as-story-type: backlog
+  17-4-backlog-to-sprint-workflow: backlog
+  17-5-sprint-to-backlog-workflow: backlog
+  17-6-done-item-cleanup: backlog
+  17-7-multi-criteria-prioritization: backlog
+  17-8-rework-sprint-status-display: backlog
+  epic-17-retrospective: optional
 
   # Epic 14: External Tooling Integration (Phase 3)
   # Dependencies: Epic 12, Epic 10, Epic 13 | Analyst + Architect required before any implementation

@@ -2,7 +2,11 @@
 stepsCompleted: ['step-01-init', 'step-02-context', 'step-03-starter', 'step-04-decisions', 'step-05-patterns', 'step-06-structure', 'step-07-validation', 'step-08-complete']
 phase2StepsCompleted: ['step-02-context', 'step-04-decisions', 'step-05-patterns', 'step-06-structure', 'step-07-validation', 'step-08-complete']
 phase2CompletedAt: '2026-03-11'
+phase2cStepsCompleted: ['step-02-context', 'step-04-decisions', 'step-06-structure', 'step-07-validation', 'step-08-complete']
+phase2cCompletedAt: '2026-03-26'
 phase2bEditHistory:
+  - date: '2026-03-26'
+    changes: 'Revised P2-6: Explicit CLI parameter passing replaces silent install (FR123-FR127). Added P2-9: BMAD 6.2.0 Migration — agents as skill folders, 34 workflows as SKILL.md packages, module.yaml with code field, --custom-content deployment, .customize.yaml for 8 built-in agents only. Added P2-10: Multi-repo project layout — config-driven path resolution, project-layout.yaml cross-reference. Verified architecture against CIS module source and BMAD 6.2.0 customize docs. Updated project structure tree, implementation sequence, cross-component dependencies. Moved F8 Dashboard to Phase 3. Added wds to bmad-cache, bumped bmad-method pin to 6.2.0.'
   - date: '2026-03-19'
     changes: 'Added Decision P2-7: Project Context Auto-Generation (FR79-FR86, NFR22-NFR25). Two-layer design: generator returns content, pipeline writes. Platform paths sourced from full manifest. Critical_actions update for 12 BMM+master agents; CIS agents explicitly excluded. NFR25 adds template version comment for upgrade detection.'
   - date: '2026-03-15'
@@ -354,13 +358,15 @@ Workflows are registered in `module-help.csv` for phase discovery. They function
 
 **Affects:** `lib/bmad-extension/workflows/` (4 workflow directories), `lib/bmad-extension/module-help.csv`
 
-#### Decision P2-6: Bundled BMAD Installation (FR74-FR76, NFR20-NFR21)
+#### Decision P2-6: Bundled BMAD Installation with Explicit Parameter Passing (FR74-FR76, FR123-FR127, NFR20-NFR21)
 
-**Decision:** Bundle bmad-method as npm dependency and pre-clone external modules inside the ma-agents npm package
+**Decision:** Bundle bmad-method as npm dependency, pre-clone external modules, and invoke bmad-method with explicit CLI parameters instead of silent mode
 
-**Problem:** bmad-method's external module installation uses `git clone` to fetch modules (bmb, cis, tea, gds) from GitHub into `~/.bmad/cache/external-modules/`. This fails in air-gapped environments. Additionally, `npx bmad-method` itself requires npm registry access. Since Node.js+npm is always available, bundling via npm dependency is the natural approach.
+**Problem (original):** bmad-method's external module installation uses `git clone` to fetch modules (bmb, cis, tea, gds, wds) from GitHub into `~/.bmad/cache/external-modules/`. This fails in air-gapped environments. Additionally, `npx bmad-method` itself requires npm registry access.
 
-**Architecture:**
+**Problem (updated — FR123-FR127):** The current silent install (`--yes` flag) skips critical configuration: selected tools/platforms are not passed to bmad-method (OpenCode not configured even when selected in ma-agents), and paths with spaces break due to improper quoting in `execSync` calls. The fix is not to invoke setup skills programmatically — bmad-method already supports full parameterized invocation via CLI flags.
+
+**Architecture — Bundling (unchanged):**
 
 ```
 lib/
@@ -370,24 +376,68 @@ lib/
 │   │   ├── package.json
 │   │   └── node_modules/           — pre-installed production dependencies
 │   ├── cis/                        — bmad-creative-intelligence-suite
-│   │   ├── src/
-│   │   ├── package.json
-│   │   └── node_modules/
 │   ├── tea/                        — bmad-method-test-architecture-enterprise
-│   │   ├── src/
-│   │   ├── package.json
-│   │   └── node_modules/
-│   └── gds/                        — bmad-game-dev-studio
-│       ├── src/
-│       ├── package.json
-│       └── node_modules/
+│   ├── gds/                        — bmad-game-dev-studio
+│   └── wds/                        — bmad-whiteport-design-studio
 ```
 
-**Mechanism — 2 steps in `bmad.js`:**
+**Architecture — Invocation (revised):**
+
+ma-agents maps its collected installation answers to bmad-method CLI parameters:
+
+```javascript
+// In bmad.js — buildBmadArgs() constructs the full parameter list
+function buildBmadArgs(installContext) {
+  const bmadPath = require.resolve('bmad-method/tools/bmad-npx-wrapper.js');
+  const args = [
+    'node', `"${bmadPath}"`, 'install',
+    '--directory', `"${installContext.projectRoot}"`,           // FR123: project path (quoted for spaces)
+    '--modules', installContext.selectedModules.join(','),      // e.g., "bmm,bmb,cis,tea,gds,wds"
+    '--tools', installContext.selectedTools.join(','),          // FR123: e.g., "claude-code,cursor,opencode"
+    '--user-name', `"${installContext.userName}"`,              // FR123: from ma-agents wizard
+    '--communication-language', installContext.commLang,        // FR123: default "English"
+    '--document-output-language', installContext.docLang,       // FR123: default "English"
+    '--output-folder', installContext.outputFolder,             // default "_bmad-output"
+    '--custom-content', `"${installContext.extensionPath}"`,    // path to lib/bmad-extension/
+    '--yes',                                                    // FR126: skip prompts for params already provided
+  ];
+  if (installContext.isUpdate) {
+    args.push('--action', 'update');                            // FR107: upgrade detection
+  }
+  return args;
+}
+```
+
+**Parameter mapping table (FR123):**
+
+| ma-agents collects | bmad-method flag | Source |
+|---|---|---|
+| Project path | `--directory` | Detected from cwd / package.json / .git |
+| Selected platforms (claude-code, cursor, opencode...) | `--tools` | Interactive wizard or `--yes` defaults |
+| BMAD modules to install | `--modules` | Always "bmm,bmb,cis,tea,gds,wds" (full bundle) |
+| User name | `--user-name` | Wizard prompt or system username |
+| Communication language | `--communication-language` | Wizard prompt or "English" default |
+| Document output language | `--document-output-language` | Wizard prompt or "English" default |
+| Output folder | `--output-folder` | Always "_bmad-output" |
+| Extension module | `--custom-content` | Always `lib/bmad-extension/` path |
+| Fresh vs upgrade | `--action` | Detected: "install" if no `_bmad/`, "update" if exists |
+
+**How this solves the three bugs:**
+1. **OpenCode not configured** → `--tools` explicitly lists all selected platforms including opencode
+2. **Spaces in paths** → all path arguments are quoted: `--directory "d:\My Projects\agents"`
+3. **Silent install skips config** → `--yes` only suppresses prompts for parameters already supplied via flags — it doesn't skip configuration
+
+**Default handling (FR125):** When bmad-method introduces new CLI parameters that ma-agents hasn't mapped, the `--yes` flag causes bmad-method to apply its own defaults for those parameters. No configuration is ever skipped — it's either explicitly provided by ma-agents or defaulted by bmad-method.
+
+**Single wizard UX (FR126):** The user interacts only with ma-agents' wizard. bmad-method runs non-interactively with full explicit parameters. No second wizard prompt ever appears.
+
+**CI/CD mode (FR127):** `npx ma-agents install --yes --force` → ma-agents uses its own defaults for all parameters → passes those defaults to bmad-method via the same `buildBmadArgs()` function → identical code path, just with pre-determined answers.
+
+**Mechanism — 2 steps in `bmad.js` (cache + invoke):**
 
 1. **Pre-populate cache:** Before calling bmad-method, copy `lib/bmad-cache/*` to `~/.bmad/cache/external-modules/` (only if target directory doesn't exist or `--force`). bmad-method's `cloneExternalModule()` checks `fs.pathExists(moduleCacheDir)` — if the cache directory exists, it skips git clone and uses the cached copy.
 
-2. **Invoke bmad-method from npm dependency:** Add `bmad-method` as a direct npm dependency in `package.json` with a pinned version (`"bmad-method": "6.0.4"`). When `npm install` or `npm pack` runs, bmad-method is included in `node_modules/`. Invoke via `require.resolve('bmad-method/tools/bmad-npx-wrapper.js')`. This eliminates the npm registry dependency at runtime.
+2. **Invoke bmad-method with explicit params:** `execSync(buildBmadArgs(installContext).join(' '))` — bmad-method is a direct npm dependency, resolved via `require.resolve()`. No `npx` download at runtime.
 
 **Pre-cloned cache creation (build step):**
 A new `npm run build:bmad-cache` script:
@@ -397,16 +447,16 @@ A new `npm run build:bmad-cache` script:
 4. This script runs on a connected machine; the output is committed to the repo
 
 **npm package size impact:**
-- bmad-method: ~555 KB (v6.1.0 optimized, v6.0.4 may be larger)
+- bmad-method: ~555 KB (v6.2.0 optimized — 91% smaller than 6.0.x)
 - External modules: estimated 2-5 MB each with node_modules
 - Total package size increase: ~10-20 MB — acceptable for enterprise/air-gapped use case
 
 **Version pinning (NFR20):**
-- `package.json` pins `bmad-method` to exact version: `"6.0.4"`
+- `package.json` pins `bmad-method` to exact version: `"6.2.0"`
 - `lib/bmad-cache/` modules are pinned at clone time
 - Upgrading is a deliberate operation: update version pin, re-run `npm run build:bmad-cache`, test, release
 
-**Affects:** `bmad.js` (cache pre-population + local invocation), `package.json` (new dependency), new `lib/bmad-cache/` directory, new build script
+**Affects:** `bmad.js` (cache pre-population + parameterized invocation), `package.json` (dependency pinned to 6.2.0), `lib/bmad-cache/` (5 modules incl. wds), build script
 
 #### Decision P2-7: Project Context Auto-Generation (FR79-FR86, NFR22-NFR25)
 
@@ -536,22 +586,344 @@ Project-context generation fires only on project-level installs (where a `packag
 
 **Affects:** `installer.js` (new `generateProjectContext()` function called at end of install pipeline), new `lib/templates/project-context.template.md`, `lib/bmad-extension/agents/*.customize.yaml` (all 11 updated with step 3 in `critical_actions`)
 
-#### Phase 2 Decision Impact Analysis
+#### Decision P2-9: BMAD 6.2.0 Agent Architecture Migration (FR94-FR110, NFR29-NFR33)
+
+**Decision:** Restructure the extension module to follow BMAD 6.2.0 module conventions — agents as skill folders, workflows as skill folders, `module.yaml` with `code` field, deployed via `--custom-content`
+
+**Problem:** The 4 custom agents (SRE, DevOps, Cyber, MIL-498) are currently delivered via `.customize.yaml` files. BMAD 6.2.0 modules deliver agents as skills (`SKILL.md` + `bmad-skill-manifest.yaml` with `type: agent`). `.customize.yaml` is for END-USER customization of other modules' agents, not for delivering module-owned agents. Additionally, MIL-498 workflows use the legacy YAML/XML workflow engine which is removed in 6.2.0.
+
+**Verified pattern (from CIS module source):**
+- Agents in modules: `skills/<agent-name>/SKILL.md` + `bmad-skill-manifest.yaml` (type: agent)
+- Workflows in modules: `skills/<workflow-name>/SKILL.md` + `bmad-skill-manifest.yaml` (type: skill)
+- Module identity: `module.yaml` with `code` field
+- Deployment: `--custom-content <module-path>`
+
+**Revised extension module structure:**
+
+```
+lib/bmad-extension/
+├── module.yaml                              — code: ma-skills, name, description
+├── module-help.csv                          — capability registry for all agents + workflows
+└── skills/
+    │
+    │ ── Agent Skills (type: agent) ──
+    ├── bmad-ma-agent-sre/
+    │   ├── SKILL.md                         — Alex: full agent instructions (persona, menu, activation, critical_actions)
+    │   └── bmad-skill-manifest.yaml         — type: agent, displayName: Alex, role: SRE, module: ma-skills
+    ├── bmad-ma-agent-devops/
+    │   ├── SKILL.md                         — Amit: DevOps agent
+    │   └── bmad-skill-manifest.yaml
+    ├── bmad-ma-agent-cyber/
+    │   ├── SKILL.md                         — Yael: Cyber Security Analyst
+    │   └── bmad-skill-manifest.yaml
+    ├── bmad-ma-agent-mil498/
+    │   ├── SKILL.md                         — Joseph: MIL-STD-498 Expert
+    │   └── bmad-skill-manifest.yaml
+    │
+    │ ── MIL-498 DID Workflows (type: skill, Complex Workflow) ──
+    ├── mil498-sss/
+    │   ├── SKILL.md                         — SSS generation entrypoint
+    │   ├── bmad-skill-manifest.yaml         — type: skill
+    │   ├── template.md                      — SSS DID template
+    │   └── prompts/                         — step files (progressive disclosure)
+    │       ├── 01-discovery.md
+    │       ├── 02-requirements.md
+    │       └── ...
+    ├── mil498-ssdd/                          — SSDD generation
+    ├── mil498-ocd/                           — OCD generation
+    ├── mil498-sdp/                           — SDP generation
+    ├── mil498-srs/                           — SRS generation
+    ├── mil498-sdd/                           — SDD generation
+    ├── mil498-std/                           — STD generation
+    ├── mil498-str/                           — STR generation
+    ├── mil498-idd/                           — IDD generation
+    ├── mil498-irs/                           — IRS generation
+    ├── mil498-hrs/                           — HRS generation
+    │
+    │ ── SRE Playbooks (type: skill) ──
+    ├── sre-health-check/
+    │   ├── SKILL.md                         — health check workflow
+    │   └── bmad-skill-manifest.yaml
+    ├── sre-fix-deployments/
+    ├── sre-performance-opt/
+    ├── sre-check-deployment-status/
+    ├── sre-check-secrets/
+    ├── sre-day-2-ops/
+    ├── sre-deployment-strategies/
+    ├── sre-gitops-status/
+    │   └── (1 more — 9 SRE workflows total)
+    │
+    │ ── DevOps Playbooks (type: skill) ──
+    ├── devops-configure-infrastructure/
+    ├── devops-optimize-pipelines/
+    ├── devops-manage-helm/
+    ├── devops-disconnected-deployment/
+    ├── devops-docker-compose-setup/
+    ├── devops-sign-docker-image/
+    │   └── (6 DevOps workflows total)
+    │
+    │ ── Cyber Playbooks (type: skill) ──
+    ├── cyber-vulnerability-scan/
+    ├── cyber-security-audit/
+    ├── cyber-threat-modeling/
+    ├── cyber-generate-certs/
+    ├── cyber-immunity-estimation/
+    ├── cyber-vault-secrets/
+    ├── cyber-verify-docker-users/
+    ├── cyber-verify-image-signature/
+    │   └── (8 Cyber workflows total)
+    │
+    │ ── BMAD Extension Workflows (type: skill) ──
+    ├── create-bug-story/                    — bug story from report (FR61)
+    │   ├── SKILL.md
+    │   └── bmad-skill-manifest.yaml
+    ├── add-sprint/                          — new sprint with capacity (FR68)
+    ├── modify-sprint/                       — change/modify sprint (FR70)
+    └── add-to-sprint/                       — assign items to sprint (FR69)
+```
+
+**Total skills in module:** 4 agents + 11 MIL-498 + 9 SRE + 6 DevOps + 8 Cyber + 4 extension workflows = **42 skills**
+
+**`bmad-skill-manifest.yaml` patterns:**
+
+Agent skill manifest:
+```yaml
+type: agent
+name: bmad-ma-agent-sre
+displayName: Alex
+title: Site Reliability Engineer
+icon: "🔧"
+capabilities: "system availability, Kubernetes ops, SLO/SLA management, deployment strategies"
+role: "Site Reliability Engineer"
+identity: "Experienced SRE focused on system reliability and operational excellence"
+communicationStyle: "Direct, data-driven, alert to risks"
+principles: "Reliability first. Automate everything. Measure what matters."
+module: ma-skills
+```
+
+Workflow skill manifest:
+```yaml
+type: skill
+name: mil498-srs
+module: ma-skills
+```
+
+**`module.yaml` update:**
+```yaml
+code: ma-skills
+name: "MA-Agents Skills & Agents"
+description: "Enterprise methodology enforcement, specialized agents, and operational workflows"
+extends-module: bmm
+default_selected: false
+```
+
+The `code` field is required for `--custom-content` deployment. `extends-module: bmm` is retained to indicate this module builds on BMM.
+
+**Agent SKILL.md content:** Each agent's `SKILL.md` contains the full agent definition that was previously split across `.customize.yaml` + XML `<agent>` definition:
+- Persona (role, identity, communication style, principles)
+- Menu items with trigger phrases
+- Activation sequence (including skill-loading critical_actions)
+- References to the agent's workflow skills (e.g., SRE agent's menu references `sre-health-check`, `sre-fix-deployments`, etc.)
+
+**Built-in BMM agent customization (7 agents + bmad-master):**
+The 8 built-in BMM agents that ma-agents does NOT own still use `.customize.yaml` files — these are deployed by `bmad.js` to `_bmad/_config/agents/` AFTER `--custom-content` installs the module. These files add `critical_actions` for skill loading only (no persona/menu override):
+
+```yaml
+# MA-AGENTS: skill enforcement for bmm-pm
+critical_actions:
+  - "Read the skills MANIFEST at {project-root}/skills/MANIFEST.yaml"
+  - "For each skill marked always_load: true, read the skill file completely"
+  - "If _bmad-output/project-context.md exists, read it completely"
+  - "Follow all skill directives and project-context rules during this session"
+```
+
+**Note:** In 6.2.0, `critical_actions` in `.customize.yaml` uses array syntax (list of strings), not numbered map syntax. Updated to match current BMAD documentation.
+
+**Deployment sequence in `bmad.js`:**
+1. Pre-populate `~/.bmad/cache/external-modules/` from `lib/bmad-cache/`
+2. Invoke bmad-method with `--custom-content "lib/bmad-extension/"` — installs the module including 4 agents and all workflow skills
+3. Deploy `.customize.yaml` files for 8 built-in BMM agents to `_bmad/_config/agents/`
+4. Run `--action quick-update` to apply customizations
+
+**MIL-498 workflow conversion detail (FR98-FR100):**
+Each DID workflow converts from `workflow.yaml` + `instructions.md` (legacy engine) to:
+- `SKILL.md` — workflow entrypoint with frontmatter triggers and routing logic
+- `prompts/` — step files for progressive disclosure (Layer 4), preserving strict sequential execution
+- `template.md` — DID output template (same content, new location)
+- The legacy `<template-output>` checkpoints become explicit user confirmation gates in step files
+
+**SRE/DevOps/Cyber workflow conversion detail (FR101-FR103):**
+These workflows are already `.md` files. Conversion is lighter:
+- Wrap existing `.md` content in `SKILL.md` with proper frontmatter
+- Add `bmad-skill-manifest.yaml` with `type: skill`
+- Multi-step workflows get `prompts/` for progressive disclosure
+- Single-pass playbooks remain as simple `SKILL.md` files
+
+**Migration detection and upgrade path (FR107-FR110):**
+
+```javascript
+// In bmad.js — detect BMAD version and migration need
+function detectMigrationNeed(projectRoot) {
+  const configPath = path.join(projectRoot, '_bmad', 'core', 'config.yaml');
+  if (!fs.existsSync(configPath)) return { action: 'install', migrate: false };
+
+  const config = yaml.load(fs.readFileSync(configPath, 'utf8'));
+  const version = config?.version || '0.0.0';
+
+  if (semver.lt(version, '6.2.0')) {
+    return { action: 'update', migrate: true, fromVersion: version };
+  }
+  return { action: 'update', migrate: false };
+}
+```
+
+**Migration steps (when upgrading from 6.0.4):**
+1. Detect old version from `_bmad/core/config.yaml`
+2. Back up existing `_bmad/_config/agents/*.customize.yaml` (user customizations to preserve)
+3. Invoke bmad-method with `--action update` + `--custom-content` — bmad-method handles the core upgrade
+4. Deploy new `.customize.yaml` files for built-in agents
+5. Merge user customizations back: if user had added custom `memories` or extra `critical_actions` to any of the 4 custom agents, carry those forward into the new agent SKILL.md
+6. Clean up legacy artifacts: old `.customize.yaml` files for custom agents (now replaced by module agent skills), XML agent definitions in `_bmad/custom/agents/`, YAML workflow files in `lib/bmad-workflows/mil498/`
+
+**Rollback (NFR29):** If bmad-method update fails, `bmad.js` restores the backed-up `.customize.yaml` files and logs the error. The project remains on the old version. Full atomicity is achieved by backing up before and restoring on failure.
+
+**Affects:** `lib/bmad-extension/` (complete restructure), `bmad.js` (migration detection, `--custom-content` deployment, `.customize.yaml` deployment for built-ins), `lib/bmad-workflows/` (migrated into extension module skills), `lib/bmad-customizations/` (eliminated — content moved to extension module)
+
+#### Decision P2-10: Multi-Repository Project Layout (FR111-FR122, NFR34-NFR37)
+
+**Decision:** Config-driven path resolution with `project-layout.yaml` cross-reference file
+
+**Problem:** Enterprise projects separate planning docs, sprint management, and code across repositories. BMAD workflows that produce/consume artifacts need to resolve paths to the correct repository. Agents operating in the code repo need to discover where planning and sprint data live.
+
+**Architecture:**
+
+**Installation flow (FR111-FR116):**
+```javascript
+// In cli.js — new wizard section after agent selection
+async function collectRepoLayout() {
+  const layout = { knowledgebase: null, sprintManagement: null };
+
+  for (const concern of ['knowledgebase', 'sprintManagement']) {
+    const mode = await prompt({
+      type: 'list',
+      message: `Where is your ${concern} managed?`,
+      choices: [
+        { name: 'Current repository (default)', value: 'same' },
+        { name: 'Local path', value: 'local' },
+        { name: 'Remote git repository', value: 'remote' },
+      ]
+    });
+
+    if (mode === 'same') {
+      layout[concern] = { mode: 'same', path: '.' };
+    } else if (mode === 'local') {
+      const localPath = await prompt({ message: 'Local path:' });
+      if (!fs.existsSync(localPath)) {
+        console.log(chalk.yellow(`⚠ Path does not exist: ${localPath}`));
+        const confirmed = await prompt({ type: 'confirm', message: 'Use this path anyway?' });
+        if (!confirmed) continue; // re-ask
+      }
+      layout[concern] = { mode: 'local', path: path.resolve(localPath) };
+    } else if (mode === 'remote') {
+      const gitUrl = await prompt({ message: 'Git URL:' });
+      const destPath = await prompt({ message: 'Local destination for cloning:' });
+      if (fs.existsSync(destPath)) {
+        console.log(chalk.blue(`ℹ Directory already exists: ${destPath}`));
+        const confirmed = await prompt({ type: 'confirm', message: 'Use existing directory?' });
+        if (!confirmed) continue;
+      } else {
+        execSync(`git clone "${gitUrl}" "${destPath}"`);
+      }
+      layout[concern] = { mode: 'remote', path: path.resolve(destPath), gitUrl };
+    }
+  }
+  return layout;
+}
+```
+
+**Config storage (FR117):**
+Repo paths are written to `_bmad/core/config.yaml` (shared, git-committed) alongside existing BMAD config:
+
+```yaml
+# Added by ma-agents installer
+knowledgebase_path: "d:/Code/agents-knowledgebase"    # or "." for same-repo
+sprint_management_path: "d:/Code/agents-sprints"       # or "." for same-repo
+```
+
+These values are also passed to bmad-method via `--custom-content` module config or written directly after installation.
+
+**Cross-reference file (FR122):**
+In multi-repo mode, the installer creates `_bmad-output/project-layout.yaml` in the CODE repository:
+
+```yaml
+# Generated by ma-agents — do not edit manually
+# Tells agents where to find planning and sprint data
+generated: '2026-03-26'
+knowledgebase:
+  mode: remote  # or local, or same
+  path: "d:/Code/agents-knowledgebase"
+  gitUrl: "https://github.com/org/agents-knowledgebase.git"  # only if remote
+sprint_management:
+  mode: local
+  path: "d:/Code/agents-sprints"
+```
+
+**Deterministic output (NFR36):** Same inputs → same file content. The `generated` date is the only varying field.
+
+**BMAD workflow path resolution (FR119-FR120):**
+BMAD workflows resolve artifact paths by reading config at runtime. The resolution chain:
+
+1. Workflow reads `knowledgebase_path` from `_bmad/core/config.yaml` (or equivalent module config)
+2. If value is `"."` → current repo (default, backward compatible)
+3. If value is an absolute path → use that path
+4. All planning artifact output goes to `{knowledgebase_path}/_bmad-output/planning-artifacts/`
+5. All sprint artifact output goes to `{sprint_management_path}/_bmad-output/sprints/`
+
+**Implementation note:** The actual path resolution happens inside BMAD workflows, not in ma-agents code. ma-agents' job is to (1) collect the paths during installation, (2) store them in config, and (3) stamp them into `project-context.md`. BMAD workflows use the config values. This means no changes to `installer.js`, `agents.js`, or `bmad.js` beyond the wizard collection and config write.
+
+**Project-context integration (FR118):**
+The `project-context.template.md` gains a new section when multi-repo is configured:
+
+```markdown
+### Repository Layout
+- **Knowledgebase:** {{KNOWLEDGEBASE_PATH}}
+- **Sprint Management:** {{SPRINT_MANAGEMENT_PATH}}
+- When creating or reading planning artifacts, use the knowledgebase path
+- When creating or reading sprint/story artifacts, use the sprint management path
+```
+
+Single-repo mode omits this section entirely (NFR34 backward compatibility).
+
+**CI/CD mode (FR127 integration):**
+In `--yes` mode, both concerns default to "current repository" — no repo layout prompts. Multi-repo is interactive-only configuration.
+
+**Affects:** `cli.js` (new wizard section), `_bmad/core/config.yaml` (new fields), `_bmad-output/project-layout.yaml` (new file), `lib/templates/project-context.template.md` (new section), BMAD workflows (path resolution from config — not ma-agents code changes)
+
+#### Phase 2 Decision Impact Analysis (Updated 2026-03-26)
 
 **Implementation Sequence:**
 1. Agent registry extension (`agents.js`) — add OpenCode + `injectionStrategy` to all agents
 2. Instruction injection refactor (`installer.js`) — TOP placement + JSON injection path
-3. BMAD extension module creation (`lib/bmad-extension/`) — module.yaml, agents, workflows
-4. Extension deployment (`bmad.js`) — deploy extension module during BMAD install
-5. `auto-bug-detection` skill creation (`skills/auto-bug-detection/`)
-6. `.gitignore` update logic (`installer.js`) — don't add `_bmad-output`
-7. Bundled BMAD installation (`bmad.js`, `package.json`, `lib/bmad-cache/`) — bundle bmad-method as npm dependency + external modules, pre-populate cache
-8. Project context auto-generation (`installer.js`, `lib/templates/project-context.template.md`, `lib/bmad-extension/agents/`) — generate constitutional document at install time, update all BMAD critical_actions
+3. Extension module restructure (`lib/bmad-extension/`) — 6.2.0 module pattern with `code` field, agents as skill folders, workflows as skill folders (P2-9)
+4. MIL-498 workflow conversion — 11 YAML/XML workflows → SKILL.md packages with progressive disclosure step files (P2-9)
+5. SRE/DevOps/Cyber workflow packaging — 23 `.md` workflows → SKILL.md skill packages (P2-9)
+6. Extension deployment via `--custom-content` (`bmad.js`) — replaces manual copy (P2-9)
+7. Built-in agent `.customize.yaml` deployment (`bmad.js`) — 8 files to `_bmad/_config/agents/` for critical_actions (P2-9)
+8. Explicit parameter passing (`bmad.js`) — replace silent install with `buildBmadArgs()` (P2-6 rev)
+9. `auto-bug-detection` skill creation (`skills/auto-bug-detection/`)
+10. `.gitignore` update logic (`installer.js`) — don't add `_bmad-output`
+11. Bundled BMAD installation (`bmad.js`, `package.json`, `lib/bmad-cache/`) — bmad-method v6.2.0 + 5 external modules (bmb, cis, tea, gds, wds)
+12. Project context auto-generation (`installer.js`, `lib/templates/project-context.template.md`)
+13. Multi-repo layout wizard (`cli.js`) — collect knowledgebase/sprint paths, write config + project-layout.yaml (P2-10)
+14. Migration detection (`bmad.js`) — detect 6.0.4, back up, upgrade, merge customizations (P2-9)
 
 **New Cross-Component Dependencies:**
 - `injectionStrategy` in `agents.js` drives `installer.js` injection behavior
-- `bmad.js` deploys `lib/bmad-extension/` as a unit — all extension content moves together
-- `critical_actions` in `.customize.yaml` reference `skills/MANIFEST.yaml` — depends on skill installation completing first
+- `bmad.js` deploys `lib/bmad-extension/` via `--custom-content` — all extension content moves together
+- `bmad.js` separately deploys `.customize.yaml` for 8 built-in agents AFTER `--custom-content`
+- `critical_actions` in agent SKILL.md and `.customize.yaml` reference `skills/MANIFEST.yaml` — depends on skill installation completing first
+- Multi-repo config in `_bmad/core/config.yaml` is read by BMAD workflows at runtime — ma-agents writes it, BMAD workflows consume it
+- `project-layout.yaml` in code repo enables agents to discover cross-repo paths without re-running installation
 
 ## Implementation Patterns & Consistency Rules
 
@@ -793,30 +1165,38 @@ ma-agents/
 │   │   ├── cis/                    — bmad-creative-intelligence-suite
 │   │   ├── tea/                    — bmad-method-test-architecture-enterprise
 │   │   └── gds/                    — bmad-game-dev-studio
-│   └── bmad-extension/             — BMAD extension module (deployed to _bmad/ at install)
-│       ├── module.yaml             — extends-module: bmm, module identity
-│       ├── module-help.csv         — phase registration for extension workflows
-│       ├── workflows/
-│       │   ├── create-bug-story/   — bug story from bug report (FR61)
-│       │   │   └── workflow.md
-│       │   ├── add-sprint/         — new sprint with capacity (FR68)
-│       │   │   └── workflow.md
-│       │   ├── modify-sprint/      — change/modify sprint (FR70)
-│       │   │   └── workflow.md
-│       │   └── add-to-sprint/      — assign items to sprint (FR69)
-│       │       └── workflow.md
-│       └── agents/                 — .customize.yaml files for all 11 BMAD agents
-│           ├── bmm-sre.customize.yaml       — full: persona + menu + critical_actions
-│           ├── bmm-devops.customize.yaml    — full: persona + menu + critical_actions
-│           ├── bmm-cyber.customize.yaml     — full: persona + menu + critical_actions
-│           ├── bmm-mil498.customize.yaml    — full: persona + menu + critical_actions
-│           ├── bmm-pm.customize.yaml        — minimal: critical_actions only
-│           ├── bmm-architect.customize.yaml — minimal: critical_actions only
-│           ├── bmm-dev.customize.yaml       — minimal: critical_actions only
-│           ├── bmm-qa.customize.yaml        — minimal: critical_actions only
-│           ├── bmm-sm.customize.yaml        — minimal: critical_actions only
-│           ├── bmm-tech-writer.customize.yaml — minimal: critical_actions only
-│           └── bmm-ux-designer.customize.yaml — minimal: critical_actions only
+│   ├── bmad-extension/             — BMAD extension module (deployed via --custom-content)
+│   │   ├── module.yaml             — code: ma-skills, extends-module: bmm
+│   │   ├── module-help.csv         — capability registry for agents + workflows
+│   │   └── skills/                 — all agents and workflows as BMAD 6.2.0 skills
+│   │       ├── bmad-ma-agent-sre/           — agent skill: Alex (SRE)
+│   │       │   ├── SKILL.md                 — full agent definition
+│   │       │   └── bmad-skill-manifest.yaml — type: agent
+│   │       ├── bmad-ma-agent-devops/        — agent skill: Amit (DevOps)
+│   │       ├── bmad-ma-agent-cyber/         — agent skill: Yael (Cyber)
+│   │       ├── bmad-ma-agent-mil498/        — agent skill: Joseph (MIL-498)
+│   │       ├── mil498-sss/                  — MIL-498 DID workflow (Complex Workflow)
+│   │       │   ├── SKILL.md
+│   │       │   ├── bmad-skill-manifest.yaml — type: skill
+│   │       │   ├── template.md
+│   │       │   └── prompts/                 — step files
+│   │       ├── mil498-ssdd/ ... mil498-hrs/ — (11 MIL-498 DID workflows total)
+│   │       ├── sre-health-check/ ... sre-gitops-status/ — (9 SRE playbooks)
+│   │       ├── devops-configure-infrastructure/ ... devops-sign-docker-image/ — (6 DevOps playbooks)
+│   │       ├── cyber-vulnerability-scan/ ... cyber-verify-image-signature/ — (8 Cyber playbooks)
+│   │       ├── create-bug-story/            — bug story from report (FR61)
+│   │       ├── add-sprint/                  — new sprint with capacity (FR68)
+│   │       ├── modify-sprint/               — change/modify sprint (FR70)
+│   │       └── add-to-sprint/               — assign items to sprint (FR69)
+│   └── bmad-customize/             — .customize.yaml for built-in BMM agents (deployed to _bmad/_config/agents/)
+│       ├── bmm-pm.customize.yaml            — critical_actions only
+│       ├── bmm-architect.customize.yaml
+│       ├── bmm-dev.customize.yaml
+│       ├── bmm-qa.customize.yaml
+│       ├── bmm-sm.customize.yaml
+│       ├── bmm-tech-writer.customize.yaml
+│       ├── bmm-ux-designer.customize.yaml
+│       └── core-bmad-master.customize.yaml  — bmad-master critical_actions
 │
 ├── skills/                         — skill library (28 skills incl. auto-bug-detection, self-contained directories)
 │   ├── <skill-name>/
@@ -910,28 +1290,29 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 ### Coherence Validation
 
 **Decision Compatibility:** PASS
-- Node.js runtime + plain JavaScript + no build step + no framework — all align. No conflicting technology choices
-- 4-module architecture with strict boundaries maps cleanly to the extensibility model (config-driven agents + directory-scanned skills)
-- Pipeline architectures (5-stage install, 6-stage BMAD) don't conflict — they operate on different data flows
-- Phase 2: P2-1 (TOP injection) and P2-2 (JSON injection) are independent strategies driven by `agents.js` registry — no conflict
-- Phase 2: P2-3 (extension module) uses BMAD's official `extends-module` API — compatible with existing BMAD pipeline (NFR17)
-- Phase 2: P2-4 (`critical_actions`) depends on P2-3 for deployment — correct ordering in implementation sequence
-- Phase 2: P2-5 (pre-built workflows) deploys via same extension module — no new deployment mechanism needed
+- Node.js runtime + plain JavaScript + no build step + no framework — all align
+- 4-module architecture with strict boundaries maps cleanly to the extensibility model
+- Pipeline architectures (5-stage install, 6-stage BMAD) don't conflict
+- P2-1 (TOP injection) and P2-2 (JSON injection) are independent strategies driven by `agents.js` registry
+- P2-6 rev (explicit params) + P2-9 (module restructure) work together: `--custom-content` deploys the restructured module, explicit params ensure correct tool/module selection
+- P2-9 (agents as skills) + P2-4 (critical_actions) — clean separation: custom agents embed critical_actions in SKILL.md, built-in agents get critical_actions via `.customize.yaml`
+- P2-10 (multi-repo) integrates cleanly: config values written at install time, consumed by BMAD workflows at runtime
+- bmad-method v6.2.0 pin aligns with skill-based module structure in P2-9
+
+**Note:** P2-3 (Extension Module Structure, 2026-03-11) is now HISTORICAL — superseded by P2-9 which restructures the extension module to follow BMAD 6.2.0 conventions. P2-4 (critical_actions) references updated: custom agents' critical_actions now live in SKILL.md (not `.customize.yaml`); built-in agent customizations now live in `lib/bmad-customize/` (not `lib/bmad-extension/agents/`).
 
 **Pattern Consistency:** PASS
-- Naming conventions (camelCase code, kebab-case files, snake_case skill.json) are consistent with established codebase
-- Process patterns (adding agents, adding skills) directly support the extensibility model decisions
-- Enforcement guidelines align with technology choices (no TypeScript, no frameworks, path.join everywhere)
-- Phase 2: `injectionStrategy` in `agents.js` follows established pattern of centralizing agent knowledge there
-- Phase 2: Extension module uses kebab-case naming consistent with existing conventions
-- Phase 2: `auto-bug-detection` skill follows standard skill schema — no special-casing
+- Agent skill naming (`bmad-ma-agent-sre`) follows verified CIS convention (`bmad-cis-agent-innovation-strategist`)
+- Workflow skill naming (`mil498-srs`, `sre-health-check`) follows CIS convention (`bmad-cis-innovation-strategy`)
+- `bmad-skill-manifest.yaml` uses same fields as CIS (type, name, displayName, module)
+- `.customize.yaml` array syntax for critical_actions matches BMAD 6.2.0 documentation
+- Naming conventions (camelCase code, kebab-case files, snake_case skill.json) remain consistent
 
 **Structure Alignment:** PASS
-- 4-module source structure maps 1:1 to module boundaries table
-- Skills directory structure enforces the schema contract from Data Architecture
-- Tests directory mirrors source structure per patterns decision
-- Phase 2: `lib/bmad-extension/` sits alongside existing `lib/` modules — consistent with module organization
-- Phase 2: 11 customize files map 1:1 to BMAD agent roster; 4 workflow directories map 1:1 to FRs
+- `lib/bmad-extension/skills/` mirrors CIS `src/skills/` pattern
+- `lib/bmad-customize/` cleanly separates module-owned agents from built-in agent customizations
+- `--custom-content` deployment replaces manual file copying — follows BMAD's official deployment mechanism
+- Module boundary table still holds: `bmad.js` handles extension deployment + customize deployment
 
 ### Requirements Coverage Validation
 
@@ -941,17 +1322,28 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 |-------------|----------------------|--------|
 | Skill Management (FR1-7) | Install pipeline + manifest manager | COVERED |
 | BMAD Integration (FR8-12) | BMAD pipeline architecture | COVERED |
-| MIL-STD-498 Generation (FR13-23) | BMAD workflows (delivered via BMAD, not ma-agents code) | COVERED |
+| MIL-STD-498 Generation (FR13-23) | BMAD workflows (via extension module skills) | COVERED |
 | SDLC Workflows (FR24-33) | BMAD workflows | COVERED |
 | Agent Targeting (FR34-38) | Agent registry + template resolution chain | COVERED |
 | Skill Authoring (FR39-43) | Skill schema contract + MANIFEST.yaml generation | COVERED |
 | Environment & Deployment (FR44-47) | Cross-platform paths + offline operation | COVERED |
 | Audit & Traceability (FR48-50) | BMAD workflows + ai-audit-trail skill | COVERED |
-| Skill Enforcement (FR51-55) | P2-1 + P2-3 + P2-4: injection strategies, extension module, critical_actions | COVERED |
-| OpenCode Support (FR56-58) | P2-2: JSON injection + new agent registry entry | COVERED |
-| Project Knowledge (FR59-60) | Gitignore pattern: remove `_bmad-output` from `.gitignore` | COVERED |
-| Bug Management (FR61-65) | P2-5: extension workflow + `auto-bug-detection` skill | COVERED |
-| Sprint Management (FR66-71) | P2-5: extension workflows (add/modify/add-to sprint) | COVERED |
+| Skill Enforcement (FR51-55) | P2-1 + P2-9 + P2-4: injection strategies, agent SKILL.md, built-in .customize.yaml | COVERED |
+| OpenCode Support (FR56-57) | P2-2: JSON injection + new agent registry entry | COVERED |
+| Project Knowledge (FR58-59) | Gitignore pattern: remove `_bmad-output` from `.gitignore` | COVERED |
+| Bug Management (FR60-64) | P2-5: extension workflow skill + `auto-bug-detection` skill | COVERED |
+| Sprint Management (FR65-71) | P2-5: extension workflow skills (add/modify/add-to sprint) | COVERED |
+| Agent Activity Dashboard (FR87-93) | Deferred to Phase 3 | N/A |
+| Agent Conversion (FR94-97) | P2-9: agent skill folders with SKILL.md + bmad-skill-manifest.yaml | COVERED |
+| MIL-498 Workflow Conversion (FR98-100) | P2-9: Complex Workflow skills with prompts/ step files | COVERED |
+| SRE/DevOps/Cyber Conversion (FR101-103) | P2-9: skill packages with SKILL.md | COVERED |
+| Module Architecture (FR104-106) | P2-9: module.yaml with code field, skills/ layout, dual-layer eliminated | COVERED |
+| Upgrade Path (FR107-110) | P2-9: migration detection, backup, upgrade, merge, cleanup | COVERED |
+| Multi-Repo Layout (FR111-122) | P2-10: wizard, config, project-layout.yaml, path resolution | COVERED |
+| Bundled Install + Params (FR74-76, FR123-127) | P2-6 rev: buildBmadArgs(), explicit flags, --custom-content | COVERED |
+| Developer Infrastructure (FR73) | Tests directory defined | COVERED |
+| Methodology Onboarding (FR72) | Bundled presentation deployment | COVERED |
+| Project Context (FR79-86) | P2-7: template-based generation, platform paths, critical_actions | COVERED |
 
 **Non-Functional Requirements Coverage:**
 
@@ -961,86 +1353,95 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 | NFR5-8 (Integration Reliability) | Pipeline ordering, atomic manifests, additive installs | COVERED |
 | NFR9-12 (Portability) | path.join centralization, template resolution chain, Node LTS | COVERED |
 | NFR13-15 (Maintainability) | Config-driven agent registry, directory-scanned skills, backward compat | COVERED |
-| NFR16 (Extension Survival) | `extends-module: bmm` identity in module.yaml, independent of BMAD updates | COVERED |
-| NFR17 (Zero Core Mods) | Extension module APIs only, no bmad-method core changes | COVERED |
-| NFR18 (Additive JSON) | OpenCode JSON merge pattern: append to instructions array, preserve all keys | COVERED |
-| NFR19 (Dual Invocation) | BMAD registration system supports both menu and slash command natively | COVERED |
-| NFR20 (Version Pinning) | `package.json` pins bmad-method exact version, `lib/bmad-cache/` pinned at clone time | COVERED |
-| NFR21 (Identical Output) | Same bmad-method version + same module cache = identical `_bmad/` output regardless of environment | COVERED |
+| NFR16-19 (BMAD Extension) | Module identity via code field, zero core mods, additive JSON, dual invocation | COVERED |
+| NFR20-21 (Bundled Install) | Version pinning to 6.2.0, deterministic bundled output | COVERED |
+| NFR22-25 (Project Context) | Template-based, idempotent, version comment | COVERED |
+| NFR26-28 (Dashboard) | Deferred to Phase 3 | N/A |
+| NFR29 (Atomic migration) | P2-9: backup before, restore on failure | COVERED |
+| NFR30 (Functional equivalence) | P2-9: same menus, same workflows in new format | COVERED |
+| NFR31 (Lint gate compliance) | P2-9: follows verified CIS module pattern | COVERED |
+| NFR32 (Output equivalence) | P2-9: same templates, same step files | COVERED |
+| NFR33 (Anti-zombie idempotency) | Depends on bmad-method setup skill behavior | MINOR GAP |
+| NFR34-37 (Multi-Repo) | P2-10: backward compat, air-gapped, deterministic, config-driven | COVERED |
 
 ### Implementation Readiness Validation
 
 **Decision Completeness:** HIGH
-- All Phase 1 decisions documented with rationale
-- Phase 2 decisions P2-1 through P2-5 now decided and documented (instruction injection, OpenCode, extension module, critical_actions, extension workflows)
-- Remaining Phase 2 items (Visual Studio integration, testing framework) still flagged as needs investigation
-- No ambiguous or conflicting decisions
+- 10 Phase 2 decisions documented (P2-1 through P2-10, with P2-3 superseded by P2-9)
+- P2-6 rev includes code example with full parameter mapping table
+- P2-9 includes verified module structure from CIS, manifest examples, migration detection code
+- P2-10 includes wizard flow, config storage format, cross-reference file schema
 
 **Pattern Completeness:** HIGH
-- All 6 Phase 1 conflict points addressed with concrete rules
-- 5 Phase 2 conflict areas addressed (injection strategy, extension module authoring, extension workflows, gitignore, auto-bug-detection skill)
-- Anti-patterns explicitly listed for both phases
-- Process patterns cover the 4 most common modification scenarios
+- CIS module pattern verified against actual source code — not assumed
+- Agent skill naming, manifest fields, module.yaml structure all confirmed
+- `.customize.yaml` behavior (appends vs replaces) documented from BMAD 6.2.0 official docs
+- `--custom-content` validation rules documented (requires module.yaml with code field)
 
 **Structure Completeness:** HIGH
-- Full directory tree with annotations
-- Module boundary table with explicit "Never Touches" column
-- FR-to-module mapping table provides traceability
+- Full directory tree updated with 42-skill extension module layout
+- `lib/bmad-customize/` separated from `lib/bmad-extension/`
+- Module boundary table still accurate — `bmad.js` handles both extension and customize deployment
 
 ### Gap Analysis Results
 
-**No Critical Gaps.** All 76 FRs and 21 NFRs have architectural support.
+**No Critical Gaps.** All 125 FRs and 37 NFRs have architectural support (excluding Phase 3 deferred items).
 
-**Important Gaps (Phase 2 — Known and Flagged):**
+**Important Gaps:**
 - Testing framework not yet decided — blocks regression testing
-- Visual Studio integration mechanism unknown — blocks new agent target
+- Visual Studio integration mechanism unknown — blocks new agent target (Phase 3)
+- P2-3 should be marked as HISTORICAL in the document to avoid confusion with P2-9
 
 **Minor Gaps:**
-- No formal error code catalog — errors are currently ad-hoc strings
-- No formal logging strategy — console output patterns defined but no structured logging for diagnostics
-- FR53 scope expansion (4 → 11 agents) — aligned across PRD, Architecture, and Epics (fixed 2026-03-15)
+- NFR33 (anti-zombie idempotency) depends on bmad-method behavior, not ma-agents architecture
+- No formal error code catalog
+- No formal logging strategy
 
 ### Architecture Completeness Checklist
 
 **Requirements Analysis**
-- [x] Project context thoroughly analyzed
+- [x] Project context thoroughly analyzed (125 FRs, 37 NFRs)
 - [x] Scale and complexity assessed
 - [x] Technical constraints identified
-- [x] Cross-cutting concerns mapped
+- [x] Cross-cutting concerns mapped (enforcement, multi-repo path resolution, 6.2.0 migration)
 
 **Architectural Decisions**
-- [x] Critical decisions documented with rationale
-- [x] Technology stack fully specified
-- [x] Pipeline architectures defined
-- [x] Extensibility model formalized
+- [x] Critical decisions documented with rationale (P2-1 through P2-10)
+- [x] Technology stack fully specified (Node.js, bmad-method v6.2.0)
+- [x] Pipeline architectures defined (5-stage install, 6-stage BMAD, 14-step Phase 2 implementation)
+- [x] Extensibility model formalized (config-driven agents, directory-scanned skills, BMAD module pattern)
+- [x] Module architecture verified against BMAD 6.2.0 source (CIS module reference)
 
 **Implementation Patterns**
-- [x] Naming conventions established
-- [x] Structure patterns defined
-- [x] Format patterns specified
-- [x] Process patterns documented
-- [x] Anti-patterns explicitly listed
+- [x] Naming conventions established (agent skills follow CIS naming)
+- [x] Structure patterns defined (skill folders, manifest files)
+- [x] Format patterns specified (YAML array syntax for critical_actions)
+- [x] Process patterns documented (adding agents, skills, workflows)
+- [x] Anti-patterns explicitly listed (both Phase 1 and Phase 2)
 
 **Project Structure**
-- [x] Complete directory structure defined
-- [x] Component boundaries established
-- [x] Integration points mapped
-- [x] Requirements to structure mapping complete
+- [x] Complete directory structure defined (42-skill extension module)
+- [x] Component boundaries established (extension module vs customize files)
+- [x] Integration points mapped (--custom-content, config.yaml, project-layout.yaml)
+- [x] Requirements to structure mapping complete (all FR groups mapped)
 
 ### Architecture Readiness Assessment
 
 **Overall Status:** READY FOR IMPLEMENTATION
 
-**Confidence Level:** High — brownfield project with established, working architecture being formalized
+**Confidence Level:** High — architecture verified against BMAD 6.2.0 source code (CIS module pattern), official documentation (customize, non-interactive install), and bmad-method CLI flags
 
 **Key Strengths:**
-- Configuration-driven extensibility eliminates code changes for the most common operations (adding agents, adding skills)
-- Strict pipeline ordering prevents the most dangerous class of bugs (BMAD customization loss)
-- Cross-platform path centralization in agents.js prevents the most common class of platform bugs
-- Simple, dependency-minimal architecture aligns with air-gapped deployment requirements
+- Configuration-driven extensibility eliminates code changes for the most common operations
+- BMAD 6.2.0 module pattern verified against actual CIS module source — not assumed
+- Explicit CLI parameter passing solves 3 known installer bugs with minimal code
+- Clean separation: module-owned agents (SKILL.md) vs. built-in agent customizations (.customize.yaml)
+- Multi-repo support is config-driven with no installer code changes for BMAD workflow path resolution
+- Air-gapped operation preserved through bundled cache + explicit params
 
 **Areas for Future Enhancement:**
-- Testing framework decision and test suite creation (Phase 2)
+- Testing framework decision and test suite creation
 - Error code standardization
 - Structured logging for diagnostic purposes
-- Visual Studio integration investigation
+- Visual Studio integration investigation (Phase 3)
+- Agent Activity Dashboard architecture (Phase 3)

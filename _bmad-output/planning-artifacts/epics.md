@@ -2,8 +2,10 @@
 stepsCompleted: [1, 2, 3, 4, 'phase2-step-01', 'phase2-step-02', 'phase2-step-03', 'phase2-step-04']
 workflowStatus: 'complete'
 completedDate: '2026-03-08'
-lastEdited: '2026-03-19'
+lastEdited: '2026-03-26'
 phase2EditHistory:
+  - date: '2026-03-26'
+    changes: 'Added Stories 5.5 (explicit parameter passing) and 5.6 (space-in-path fix) to Epic 5. Added Epic 15: BMAD 6.2.1 Agent Architecture Migration (8 stories: version bump, module restructure, 4 agent conversions, 11 MIL-498 workflow conversions, 23 SRE/DevOps/Cyber conversions, built-in agent separation, migration detection, validation). Added Epic 16: Multi-Repository Project Layout (4 stories: wizard, config+cross-ref, project-context section, validation). Updated FR coverage map with FR87-FR127. Updated development execution order with Phase A/B/C priority grouping. Updated cross-epic bmad.js coordination for 4 epics.'
   - date: '2026-03-20'
     changes: 'Added Epic 14: External Tooling Integration (Phase 3). 5 stories: analyst research for Jira (14.1) and Confluence/knowledge (14.2), architect abstraction layer design (14.3), and stub stories for Jira (14.4) and Confluence (14.5) implementations blocked on 14.3. Proposed FRs to be added to PRD after architecture is approved.'
   - date: '2026-03-19'
@@ -110,6 +112,48 @@ This document provides the complete epic and story breakdown for agents, decompo
 - FR75: The ma-agents npm package bundles pre-cloned BMAD external modules (bmb, cis, tea, gds) under `lib/bmad-cache/` — no git clone at install time
 - FR76: Before invoking bmad-method install, the installer pre-populates `~/.bmad/cache/external-modules/` from the bundled cache so bmad-method finds modules locally
 
+### Functional Requirements (Phase 2 — added 2026-03-26)
+
+#### Bundled Installation Update (FR123-FR127)
+- FR123: The installer passes all collected config to bmad-method as explicit CLI flags (`--tools`, `--modules`, `--directory`, `--user-name`, etc.)
+- FR124: bmad-method performs full configuration using explicit parameters — `--yes` suppresses prompts for already-supplied flags only
+- FR125: When bmad-method introduces new CLI params that ma-agents hasn't mapped, `--yes` causes bmad-method to apply defaults
+- FR126: Single unified wizard — no separate BMAD interactive prompt
+- FR127: CI/CD mode uses same explicit flag mechanism with pre-determined answers
+
+#### BMAD 6.2.0 Agent Architecture Migration (FR94-FR110)
+- FR94: Each custom agent (SRE, DevOps, Cyber, MIL-498) rebuilt as BMAD 6.2.0 skill-based agent (SKILL.md + bmad-skill-manifest.yaml)
+- FR95: Agent capabilities migrated from `.customize.yaml` critical_actions to internal commands in agent SKILL.md
+- FR96: Agent persona/identity defined in SKILL.md — replacing legacy XML `<agent>` definitions
+- FR97: Agent menu/routing via SKILL.md triggers and dynamic routing — replacing XML `<menu-handlers>`
+- FR98: All 11 MIL-498 DID workflows converted from YAML to SKILL.md Complex Workflow packages
+- FR99: MIL-498 instructions restructured as progressive disclosure step files in prompts/
+- FR100: MIL-498 template output checkpoints reimplemented as skill-level confirmation gates
+- FR101: 9 SRE playbooks packaged as SKILL.md skill packages
+- FR102: 6 DevOps playbooks packaged as SKILL.md skill packages
+- FR103: 8 Cyber playbooks packaged as SKILL.md skill packages
+- FR104: Extension module restructured with module.yaml `code` field
+- FR105: Module setup skill created for config management (anti-zombie pattern)
+- FR106: Dual-layer agent definition consolidated into single agent skill folder
+- FR107: Installer detects BMAD version and performs in-place migration during normal installation
+- FR108: Migration preserves user customizations
+- FR109: Legacy artifacts removed after successful migration
+- FR110: Fresh installations deploy directly in 6.2.0 format
+
+#### Multi-Repository Project Layout (FR111-FR122)
+- FR111: Installer asks where knowledgebase is managed (current repo / local / remote)
+- FR112: Installer asks where sprint management is managed
+- FR113: Remote option: ask git URL + local destination, confirm if exists
+- FR114: Remote: clone if destination doesn't exist
+- FR115: Local: validate path exists, alert if not
+- FR116: Same-repo default: no additional config
+- FR117: Paths stored in config.yaml (`knowledgebase_path`, `sprint_management_path`)
+- FR118: project-context.md includes configured paths as mandatory agent rules
+- FR119: Planning workflows resolve output from `{knowledgebase_path}`
+- FR120: Sprint workflows resolve paths from `{sprint_management_path}`
+- FR121: Dashboard (Phase 3) resolves from `{sprint_management_path}`
+- FR122: Multi-repo mode creates `project-layout.yaml` cross-reference file
+
 ### NonFunctional Requirements
 
 - NFR1: Skills must not transmit project data externally — all content is static instruction delivery, not data collection
@@ -136,6 +180,18 @@ This document provides the complete epic and story breakdown for agents, decompo
 - NFR19: Bug and sprint extension workflows must function identically whether invoked via BMAD agent menu or direct slash command
 - NFR20: The bundled BMAD cache must be version-pinned (v6.0.4 initial) — upgrading the bundled version is a deliberate, tested release operation
 - NFR21: The bundled installation must produce a complete, deterministic `_bmad/` output from the bundled npm package
+
+### NonFunctional Requirements (Phase 2 — added 2026-03-26)
+
+- NFR29: Migration from 6.0.4 to 6.2.0 must be atomic — all succeed or rollback
+- NFR30: Migrated agents must produce functionally equivalent behavior
+- NFR31: Migrated agent skill folders must pass BMAD Builder lint gate
+- NFR32: All 34 converted workflows must produce identical output artifacts
+- NFR33: Module setup skill anti-zombie cleanup must be idempotent
+- NFR34: Multi-repo config must be backward-compatible with single-repo mode
+- NFR35: Remote repo cloning must work with internal git URLs (air-gapped)
+- NFR36: project-layout.yaml must be deterministic
+- NFR37: All BMAD workflows must resolve paths through config, no hardcoded `_bmad-output/`
 
 ### Additional Requirements
 
@@ -197,6 +253,24 @@ This document provides the complete epic and story breakdown for agents, decompo
 | FR84 | Epic 13 | Idempotent generation — skip if exists |
 | FR85 | Epic 13 | Inline expansion comments + template version comment |
 | FR86 | Epic 13 | BMAD critical_actions updated for 12 BMM+master agents |
+| FR87-FR93 | Phase 3 | Agent Activity Dashboard (deferred) |
+| FR94-FR97 | Epic 15 | Custom agent conversion to SKILL.md skill folders |
+| FR98-FR100 | Epic 15 | MIL-498 workflow conversion to SKILL.md |
+| FR101-FR103 | Epic 15 | SRE/DevOps/Cyber workflow conversion to SKILL.md |
+| FR104-FR106 | Epic 15 | Module architecture update (module.yaml code field, setup skill) |
+| FR107-FR110 | Epic 15 | Migration detection, upgrade path, legacy cleanup |
+| FR111-FR116 | Epic 16 | Multi-repo wizard (local/remote/same prompts) |
+| FR117-FR118 | Epic 16 | Config storage + project-context stamping |
+| FR119-FR122 | Epic 16 | Cross-repo path resolution + project-layout.yaml |
+| FR123-FR127 | Epic 5 | Explicit parameter passing replacing silent install |
+| FR65 (rework) | Epic 17 | Flat backlog model (not epic-grouped) |
+| FR66 (rework) | Epic 17 | Sprint capacity with first-class sprint entity |
+| FR67 (rework) | Epic 17 | Multi-criteria prioritization |
+| FR128 | Epic 17 | Bug as story type in backlog |
+| FR129 | Epic 17 | Move items from sprint back to backlog |
+| FR130 | Epic 17 | Done items removed from sprint status file |
+| FR131 | Epic 17 | Done story files moved to done/ subfolder |
+| FR132 | Epic 17 | Sprints as first-class YAML entities |
 
 ## Epic List
 
@@ -274,23 +348,48 @@ At project-level installation, ma-agents generates `_bmad-output/project-context
 **Dependency:** Uses extension module from Epic 8 for critical_actions update; `_bmad-output/` policy from Epic 10
 **Dependency:** Uses extension module from Epic 8 for workflow deployment
 
+### Epic 17: Sprint Management Model Rework (Phase 2)
+Sprint management is rebuilt with a proper data model: sprints as first-class entities, flat backlog with bugs as a story type, multi-criteria prioritization, bidirectional item movement (backlog ↔ sprint), and automatic done-item cleanup.
+**FRs covered:** FR65, FR66, FR67, FR128, FR129, FR130, FR131, FR132 (plus rework of FR68-FR71 workflows to work with new model)
+**NFRs addressed:** NFR19 (menu + slash command invocation)
+**Dependencies:** Epic 11 (bug entity structure). Reworks Epic 12's workflow shells to use the new model.
+**Note:** Epic 12 delivered workflow files but not the underlying sprint data model. This epic builds the model and rewires the workflows.
+
+### Epic 15: BMAD 6.2.1 Agent Architecture Migration (Phase 2)
+ma-agents upgrades from bmad-method 6.0.4 to 6.2.1, restructures the extension module to follow BMAD 6.2.0 module conventions (agents as skill folders, workflows as skill folders, module.yaml with code field), and provides an installer-driven migration path for existing installations.
+**FRs covered:** FR94, FR95, FR96, FR97, FR98, FR99, FR100, FR101, FR102, FR103, FR104, FR105, FR106, FR107, FR108, FR109, FR110
+**NFRs addressed:** NFR29 (atomic migration), NFR30 (functional equivalence), NFR31 (lint gate), NFR32 (output equivalence), NFR33 (anti-zombie idempotency)
+**Dependencies:** Epic 5 must be complete first (explicit param passing is the foundation). Epic 8's extension module concept is restructured by this epic.
+
+### Epic 16: Multi-Repository Project Layout (Phase 2)
+Enterprise projects that separate planning knowledge, sprint management, and code across repositories are fully supported. The installer discovers repo locations, stores paths in config, and stamps them into project-context.md so agents resolve artifacts to the correct repository.
+**FRs covered:** FR111, FR112, FR113, FR114, FR115, FR116, FR117, FR118, FR119, FR120, FR121, FR122
+**NFRs addressed:** NFR34 (backward compat), NFR35 (air-gapped remote clone), NFR36 (deterministic), NFR37 (no hardcoded paths)
+**Dependencies:** Epic 15 must be complete (module restructure). Epic 13 (project-context) provides the template that gains multi-repo section.
+
 ### Cross-Epic Coordination: `bmad.js`
 
-Three epics modify `bmad.js`. Implementation order matters:
-1. **Epic 5** (Bundled BMAD) — changes invocation from `npx bmad-method` to vendored `node <resolved-path>`, adds cache pre-population before install
-2. **Epic 6** (Methodology Onboarding) — adds methodology deployment step
-3. **Epic 8** (Skill Enforcement) — adds extension module deployment
+Four epics modify `bmad.js`. Implementation order matters:
+1. **Epic 5** (Bundled BMAD + Explicit Params) — changes invocation from `npx bmad-method` to vendored `node <resolved-path>` with explicit CLI flags, adds cache pre-population
+2. **Epic 15** (6.2.1 Migration) — changes `--custom-content` deployment, adds migration detection, restructures extension module deployment
+3. **Epic 6** (Methodology Onboarding) — adds methodology deployment step
+4. **Epic 8** (Skill Enforcement) — adds extension module deployment (restructured by Epic 15)
 
-Stories in Epics 6 and 8 that touch `bmad.js` must build on Epic 5's vendored invocation pattern.
+Stories in Epics 6, 8, and 15 that touch `bmad.js` must build on Epic 5's vendored invocation + explicit parameter pattern.
 
 ### Development Execution Order
 
-1. **Epic 5** (Bundled BMAD Installation) — foundational, enables deterministic installation
-2. **Epic 9** (OpenCode Agent) — independent, can parallel with Epic 5
-3. **Epic 10** (Project Knowledge) — simple, no conflicts, can parallel
-4. **Epic 8** (Skill Enforcement) — touches `bmad.js`, must follow Epic 5
-5. **Epics 11, 12** (Bug/Sprint Management) — depend on Epic 8's extension module
-6. **Epics 1-4, 6-7** (Phase 1 remaining) — can run in parallel throughout, Epic 6 coordinates with Epic 5 on `bmad.js`
+**Phase A — Installation Fixes (release version after completion):**
+1. **Epic 5** (Bundled BMAD + Explicit Params) — fix installation bugs, explicit parameter passing → **release**
+
+**Phase B — BMAD 6.2.1 Alignment (release version after completion):**
+2. **Epic 15** (BMAD 6.2.1 Migration) — version bump, module restructure, agent/workflow conversion → **release**
+
+**Phase C — Remaining Features:**
+3. **Epic 17** (Sprint Management Model Rework) — reworks Epic 12, depends on Epic 11
+4. **Epic 16** (Multi-Repo Layout) — depends on Epic 15 module restructure
+5. **Epics 4, 7** (VS Integration, Test Suite) — on hold, can resume in parallel
+6. **Epic 14** (External Tooling) — Phase 3, depends on Epics 12, 13
 
 ---
 
@@ -428,6 +527,80 @@ So that deterministic installation is validated (NFR21).
 - Create a test procedure document verifying installation completeness
 - Verify that no git clone or npm registry fetch occurs during BMAD installation
 - Document any environment-specific considerations (e.g., cache-manifest.json dates)
+
+### Story 5.5: Explicit Parameter Passing to bmad-method
+
+As a **DevOps engineer**,
+I want ma-agents to pass all collected installation parameters to bmad-method as explicit CLI flags,
+So that BMAD is fully configured for all selected platforms (including OpenCode) without relying on the broken silent install mode.
+
+**Acceptance Criteria:**
+
+**Given** the user selects platforms during the ma-agents wizard (e.g., claude-code, cursor, opencode)
+**When** bmad.js invokes bmad-method
+**Then** it passes `--tools claude-code,cursor,opencode` explicitly
+**And** bmad-method configures all selected platforms correctly
+
+**Given** the user provides their name and language preference during the ma-agents wizard
+**When** bmad.js invokes bmad-method
+**Then** it passes `--user-name`, `--communication-language`, `--document-output-language`, and `--output-folder` as explicit flags
+**And** bmad-method uses these values without prompting
+
+**Given** all BMAD-relevant parameters are passed as explicit CLI flags
+**When** the `--yes` flag is also included
+**Then** bmad-method skips prompts only for parameters already supplied via flags
+**And** applies its own defaults for any new parameters ma-agents hasn't mapped (FR125)
+**And** no interactive BMAD prompt appears to the user (FR126)
+
+**Given** the installer runs in CI/CD mode (`--yes --force`)
+**When** bmad.js constructs the bmad-method command
+**Then** it uses the same `buildBmadArgs()` function with pre-determined default answers
+**And** produces identical BMAD configuration as interactive mode (FR127)
+
+**Given** the extension module exists at `lib/bmad-extension/`
+**When** bmad.js invokes bmad-method
+**Then** it passes `--custom-content` with the quoted path to the extension module
+**And** bmad-method validates the module.yaml and deploys the extension
+
+**Given** bmad-method is invoked with `--action update` for existing installations
+**When** the update completes
+**Then** all explicit parameters are applied to the update
+**And** existing customizations are preserved per bmad-method's update behavior
+
+**Technical notes:**
+- Create `buildBmadArgs(installContext)` function in `bmad.js` that constructs the full parameter list
+- All path arguments must be quoted: `--directory "${projectRoot}"` (fixes space-in-path bug)
+- The `--modules` flag always passes the full set: `bmm,bmb,cis,tea,gds`
+- The `--custom-content` flag points to the extension module: `lib/bmad-extension/`
+- Replaces all 3 existing `execSync('npx bmad-method ...')` calls
+- Must work with bmad-method v6.0.4 CLI flag interface
+
+### Story 5.6: Fix Space-in-Path Bug
+
+As an **engineer**,
+I want ma-agents installation to work in directories containing spaces,
+So that I can install in any project location without path-related failures.
+
+**Acceptance Criteria:**
+
+**Given** the project is located at a path with spaces (e.g., `d:\My Projects\agents`)
+**When** `npx ma-agents install` is run
+**Then** the installation completes without errors
+**And** all file paths are properly quoted in `execSync` calls
+
+**Given** any `execSync` call in `bmad.js` that constructs shell commands with paths
+**When** the path contains spaces, parentheses, or other shell-special characters
+**Then** the path is enclosed in double quotes in the command string
+
+**Given** `require.resolve()` returns a path with spaces
+**When** the resolved path is used in an `execSync` call
+**Then** the path is quoted: `execSync('node "${resolvedPath}" install ...')`
+
+**Technical notes:**
+- Audit all `execSync` calls in `bmad.js` for unquoted path interpolation
+- The `buildBmadArgs()` function from Story 5.5 should handle quoting for all path arguments
+- Test on Windows with paths like `C:\Users\John Smith\Documents\project`
+- This is a bug fix — can be combined with Story 5.5 implementation since both touch the same code
 
 ---
 
@@ -1513,3 +1686,699 @@ So that future backends (Jira, Confluence, Linear, Notion) can be added without 
 ### Story 14.5: Implement Confluence Knowledge Management Backend
 
 *(Blocked on Stories 14.2 + 14.3 — full story spec to be written after architecture ADR is approved and FRs are added to PRD)*
+
+---
+
+## Epic 15: BMAD 6.2.1 Agent Architecture Migration (Phase 2)
+
+ma-agents upgrades from bmad-method 6.0.4 to 6.2.1, restructures the extension module to follow BMAD 6.2.0 module conventions (agents as skill folders, workflows as skill folders, module.yaml with code field), converts all 34 operational workflows to SKILL.md packages, and provides an installer-driven migration path for existing installations.
+
+### Story 15.1: Bump bmad-method to 6.2.1 and Update Cache
+
+As a **Chief Architect**,
+I want bmad-method updated from 6.0.4 to 6.2.1 and the cache build script updated to include wds,
+So that the bundled BMAD installation uses the current stable version with all official modules.
+
+**Acceptance Criteria:**
+
+**Given** `package.json` currently pins `"bmad-method": "6.0.4"`
+**When** the version is updated to `"6.2.1"`
+**Then** `npm install` fetches bmad-method v6.2.1 into `node_modules/`
+**And** `require.resolve('bmad-method/tools/bmad-npx-wrapper.js')` resolves correctly
+
+**Given** the cache build script (`npm run build:bmad-cache`) currently clones 4 modules (bmb, cis, tea, gds)
+**When** the script is updated
+**Then** it clones 5 modules: bmb, cis, tea, gds, **wds** (bmad-whiteport-design-studio)
+**And** `lib/bmad-cache/wds/` is populated with the cloned module and pre-installed dependencies
+
+**Given** the bundled installation runs with bmad-method 6.2.1
+**When** `npx ma-agents install` completes
+**Then** the resulting `_bmad/` directory structure is valid for 6.2.1
+**And** all BMAD workflows execute correctly against the 6.2.1 core
+
+**Given** a project previously installed with bmad-method 6.0.4
+**When** the new version runs `npx ma-agents install`
+**Then** `buildBmadArgs()` passes `--action update` (detected from existing `_bmad/`)
+**And** bmad-method 6.2.1 handles the upgrade from 6.0.4
+
+**Technical notes:**
+- Update `package.json`: `"bmad-method": "6.2.1"`
+- Update `build:bmad-cache` script to read the updated `external-official-modules.yaml` from bmad-method 6.2.1 (which includes wds)
+- Verify that bmad-method 6.2.1's CLI accepts the same flags used in `buildBmadArgs()` (Story 5.5)
+- Test that `--custom-content` validation still works with our module.yaml
+
+### Story 15.2: Restructure Extension Module for 6.2.0 Conventions
+
+As a **Chief Architect**,
+I want the extension module restructured to follow the BMAD 6.2.0 module pattern (verified from CIS module source),
+So that `--custom-content` deployment works correctly and the module integrates natively with BMAD's module system.
+
+**Acceptance Criteria:**
+
+**Given** the current `lib/bmad-extension/module.yaml` contains `extends-module: bmm` but no `code` field
+**When** the module.yaml is updated
+**Then** it contains: `code: ma-skills`, `name`, `description`, and optionally `extends-module: bmm`
+**And** `--custom-content lib/bmad-extension/` passes bmad-method's validation (requires `module.yaml` with `code` field)
+
+**Given** the current module has `agents/*.customize.yaml` and `workflows/*/workflow.md`
+**When** the module is restructured
+**Then** all content moves under a `skills/` directory following the CIS pattern
+**And** the old `agents/` and `workflows/` directories are removed from the module
+
+**Given** the restructured module contains `module-help.csv`
+**When** bmad-method processes the module
+**Then** all 42 skills (4 agents + 38 workflows) are registered in the capability system
+
+**Technical notes:**
+- Create `lib/bmad-extension/skills/` directory
+- Move and convert content in subsequent stories (15.3-15.5)
+- The `module-help.csv` must list all skills with their type and trigger information
+- Verify `--custom-content` deployment with the new structure by running a test installation
+
+### Story 15.3: Convert 4 Custom Agents to Skill Folders
+
+As a **Chief Architect**,
+I want the 4 custom agents (SRE, DevOps, Cyber, MIL-498) converted from `.customize.yaml` files to BMAD 6.2.0 agent skill folders,
+So that they are delivered as native module agents following the verified CIS pattern.
+
+**Acceptance Criteria:**
+
+**Given** each agent currently exists as a `.customize.yaml` file with persona, menu, and critical_actions
+**When** the agent is converted
+**Then** a skill folder is created at `lib/bmad-extension/skills/bmad-ma-agent-{role}/`
+**And** it contains `SKILL.md` with the full agent definition (persona, menu, activation, critical_actions)
+**And** it contains `bmad-skill-manifest.yaml` with `type: agent`, `name`, `displayName`, `role`, `identity`, `communicationStyle`, `principles`, `module: ma-skills`
+
+**Given** the SRE agent (Alex) has persona fields, 9 menu items referencing SRE playbooks, and skill-loading critical_actions
+**When** converted to `bmad-ma-agent-sre/SKILL.md`
+**Then** the SKILL.md contains the complete persona, all menu items with trigger phrases, activation sequence, and critical_actions
+**And** menu items reference the SRE workflow skills by their new skill names (e.g., `sre-health-check`)
+
+**Given** the same conversion for DevOps (Amit), Cyber (Yael), and MIL-498 (Joseph)
+**When** all 4 agents are converted
+**Then** each has a valid skill folder under `lib/bmad-extension/skills/`
+**And** the `bmad-skill-manifest.yaml` fields match the agent's established persona
+
+**Given** the converted agents are deployed via `--custom-content`
+**When** a user activates any of the 4 agents
+**Then** the agent behaves identically to its pre-conversion behavior — same persona, same menu, same workflows (NFR30)
+
+**Technical notes:**
+- Source material: `lib/bmad-customizations/bmm-{agent}.customize.yaml` (base) + `lib/bmad-extension/agents/bmm-{agent}.customize.yaml` (extended) + `_bmad/custom/agents/{agent}.md` (XML definition)
+- Consolidate all three sources into a single SKILL.md per agent
+- Critical_actions in SKILL.md should use the BMAD 6.2.0 format observed in the customize docs
+- After conversion, the old `.customize.yaml` files for custom agents are no longer needed (removed in Story 15.6)
+
+### Story 15.4: Convert 11 MIL-498 Workflows to SKILL.md Packages
+
+As a **MIL-STD-498 expert**,
+I want all 11 DID workflows converted from legacy YAML format to BMAD 6.2.0 SKILL.md packages,
+So that they function without the removed legacy workflow engine.
+
+**Acceptance Criteria:**
+
+**Given** each MIL-498 workflow currently exists as `workflow.yaml` + `instructions.md` in `lib/bmad-workflows/mil498/`
+**When** converted to a SKILL.md package
+**Then** a skill folder is created at `lib/bmad-extension/skills/mil498-{did}/` (e.g., `mil498-srs/`)
+**And** it contains `SKILL.md` (workflow entrypoint with routing logic), `bmad-skill-manifest.yaml` (type: skill), `template.md` (DID output template), and `prompts/` (step files for progressive disclosure)
+
+**Given** a MIL-498 workflow has sequential steps that must execute in strict order (compliance-critical)
+**When** the workflow is converted
+**Then** each step becomes a separate file in `prompts/` (Layer 4 progressive disclosure)
+**And** the step files preserve the exact same sequence and content as the original instructions.md
+**And** template output checkpoints (previously `<template-output>` XML tags) become explicit user confirmation gates in step files
+
+**Given** all 11 DID workflows (SSS, SSDD, OCD, SDP, SRS, SDD, STD, STR, IDD, IRS, HRS) are converted
+**When** a user invokes any DID workflow
+**Then** it produces the same document output as before conversion (NFR32)
+**And** the same pause-and-confirm behavior for document section approval is preserved
+
+**Technical notes:**
+- 11 workflows: mil498-sss, mil498-ssdd, mil498-ocd, mil498-sdp, mil498-srs, mil498-sdd, mil498-std, mil498-str, mil498-idd, mil498-irs, mil498-hrs
+- These are Complex Workflow skill type — the most structured form in BMAD 6.2.0
+- The step file naming should follow a consistent pattern: `01-discovery.md`, `02-requirements.md`, etc.
+- Templates must be carried over verbatim — no content changes during conversion
+
+### Story 15.5: Convert 23 SRE/DevOps/Cyber Workflows to SKILL.md Packages
+
+As a **Chief Architect**,
+I want all SRE, DevOps, and Cyber operational playbooks converted to SKILL.md skill packages,
+So that they integrate with the BMAD 6.2.0 skill system consistently.
+
+**Acceptance Criteria:**
+
+**Given** SRE playbooks currently exist as standalone `.md` files in `lib/bmad-workflows/sre/` (9 workflows)
+**When** each is converted to a SKILL.md package
+**Then** a skill folder is created at `lib/bmad-extension/skills/sre-{workflow}/`
+**And** it contains `SKILL.md` (wrapping the existing workflow content with proper frontmatter) and `bmad-skill-manifest.yaml` (type: skill)
+
+**Given** DevOps playbooks in `lib/bmad-workflows/devops/` (6 workflows) and Cyber playbooks in `lib/bmad-workflows/cyber/` (8 workflows)
+**When** converted following the same pattern
+**Then** each gets its own skill folder under `lib/bmad-extension/skills/`
+
+**Given** a multi-step workflow (e.g., `sre-health-check` with discovery → diagnosis → remediation)
+**When** it is complex enough to benefit from progressive disclosure
+**Then** it uses `prompts/` for step files (Complex Workflow type)
+**Otherwise** single-pass playbooks remain as simple `SKILL.md` files (Simple Workflow type)
+
+**Given** all 23 workflows are converted
+**When** the agent menu references them
+**Then** agents can invoke them by the new skill name
+**And** the workflow behavior is identical to pre-conversion (NFR32)
+
+**Technical notes:**
+- 9 SRE: health-check, fix-deployments, performance-opt, check-deployment-status, check-secrets, day-2-ops, deployment-strategies, gitops-status, + 1 more
+- 6 DevOps: configure-infrastructure, optimize-pipelines, manage-helm, disconnected-deployment, docker-compose-setup, sign-docker-image
+- 8 Cyber: vulnerability-scan, security-audit, threat-modeling, generate-certs, immunity-estimation, vault-secrets, verify-docker-users, verify-image-signature
+- Conversion is lighter than MIL-498 — existing .md content wraps into SKILL.md with frontmatter
+- Also convert the 4 extension workflows (create-bug-story, add-sprint, modify-sprint, add-to-sprint) to skill format
+
+### Story 15.6: Separate Built-in Agent Customizations
+
+As a **Chief Architect**,
+I want the `.customize.yaml` files for 8 built-in BMM agents moved from `lib/bmad-extension/agents/` to `lib/bmad-customize/`,
+So that module-owned agents (in skill folders) are cleanly separated from customizations of other modules' agents.
+
+**Acceptance Criteria:**
+
+**Given** the 8 built-in agent `.customize.yaml` files (bmm-pm, bmm-architect, bmm-dev, bmm-qa, bmm-sm, bmm-tech-writer, bmm-ux-designer, core-bmad-master)
+**When** moved to `lib/bmad-customize/`
+**Then** each file contains only `critical_actions` (skill loading + project-context loading)
+**And** no persona, menu, or other overrides are present
+
+**Given** the `.customize.yaml` files use BMAD 6.2.0 syntax
+**When** the critical_actions are written
+**Then** they use array syntax (list of strings) per current BMAD documentation:
+```yaml
+critical_actions:
+  - "Read the skills MANIFEST at {project-root}/skills/MANIFEST.yaml"
+  - "For each skill marked always_load: true, read the skill file completely"
+  - "If _bmad-output/project-context.md exists, read it completely"
+  - "Follow all skill directives and project-context rules during this session"
+```
+
+**Given** `bmad.js` deploys these files
+**When** installation runs
+**Then** files are copied from `lib/bmad-customize/` to `_bmad/_config/agents/` AFTER `--custom-content` deploys the extension module
+
+**Given** the old `lib/bmad-extension/agents/` directory contained both custom and built-in agent files
+**When** the separation is complete
+**Then** `lib/bmad-extension/agents/` no longer exists (custom agents are now in `skills/`, built-ins are in `lib/bmad-customize/`)
+
+**Technical notes:**
+- `bmad.js` needs two deployment steps: (1) `--custom-content lib/bmad-extension/` for the module, (2) file copy from `lib/bmad-customize/*.customize.yaml` to `_bmad/_config/agents/`
+- The old `lib/bmad-customizations/` directory (base configs) is also eliminated — its content was merged into agent skill folders in Story 15.3
+
+### Story 15.7: Migration Detection and Upgrade Path
+
+As a **DevOps engineer**,
+I want the installer to automatically detect and upgrade from 6.0.4 to 6.2.1 during normal installation,
+So that I don't need a separate upgrade command and my existing customizations are preserved.
+
+**Acceptance Criteria:**
+
+**Given** an existing project with bmad-method 6.0.4 installed (detected from `_bmad/core/config.yaml` version field)
+**When** `npx ma-agents install` runs with the new version
+**Then** the installer detects the old version and logs: `"Upgrading BMAD from 6.0.4 to 6.2.1..."`
+**And** passes `--action update` to bmad-method
+
+**Given** the user had customized agent personas (e.g., changed SRE agent's name from Alex to Sasha)
+**When** the migration runs
+**Then** the installer backs up existing `_bmad/_config/agents/*.customize.yaml` before updating
+**And** after the module deploys, it checks backed-up files for user-added `memories`, extra `critical_actions`, or persona overrides
+**And** carries forward user customizations that don't conflict with the new structure
+
+**Given** legacy artifacts exist (old `.customize.yaml` for custom agents in `_bmad/_config/agents/`, XML agent definitions in `_bmad/custom/agents/`, YAML workflow files)
+**When** migration completes successfully
+**Then** legacy artifacts are removed
+**And** a migration log is printed listing what was cleaned up
+
+**Given** the bmad-method update fails (e.g., file permission error, corrupted state)
+**When** the error is caught
+**Then** the installer restores backed-up `.customize.yaml` files
+**And** logs the error with a recovery suggestion
+**And** the project remains functional on the old version (NFR29)
+
+**Given** a fresh project with no existing BMAD installation
+**When** `npx ma-agents install` runs
+**Then** it deploys directly in 6.2.1 format with skill-based agents and workflows
+**And** no migration logic executes (FR110)
+
+**Technical notes:**
+- `detectMigrationNeed()` function reads `_bmad/core/config.yaml` for version
+- Backup directory: `_bmad/_config/agents/.backup-pre-migration/`
+- Customization merge is best-effort — if a user customized something that no longer exists in the new format, log a warning
+- The migration sequence: back up → invoke bmad-method update → deploy new extension module → deploy built-in customizes → merge user customizations → clean up legacy
+
+### Story 15.8: Validate Migrated Agents and Workflows
+
+As a **Chief Architect**,
+I want to verify that all migrated agents and workflows function identically to their pre-migration behavior,
+So that functional equivalence (NFR30) and output equivalence (NFR32) are confirmed.
+
+**Acceptance Criteria:**
+
+**Given** all 4 custom agents have been converted to skill folders
+**When** each agent is activated
+**Then** the agent displays the same persona, same greeting, and same menu items as before
+**And** every menu item routes to the correct workflow
+
+**Given** all 11 MIL-498 workflows have been converted
+**When** each DID workflow is invoked
+**Then** it produces the same document structure with the same template sections
+**And** the progressive disclosure step files execute in the same order
+
+**Given** all 23 SRE/DevOps/Cyber workflows have been converted
+**When** each playbook is invoked
+**Then** it produces the same output as the pre-conversion `.md` version
+
+**Given** the migrated extension module is deployed
+**When** BMAD Builder lint gate scripts are run against the skill folders
+**Then** `scan-path-standards.py` passes without critical violations
+**And** `scan-scripts.py` passes without critical violations (NFR31)
+
+**Technical notes:**
+- This is a validation/testing story
+- Create a checklist document: each agent menu item → expected behavior → actual behavior
+- Compare MIL-498 DID output before/after conversion using diff
+- Run BMAD Builder QO (Quality Optimize) if available against the module
+
+---
+
+## Epic 16: Multi-Repository Project Layout (Phase 2)
+
+Enterprise projects that separate planning knowledge, sprint management, and code across repositories are fully supported. The installer discovers repo locations, stores paths in config, and stamps them into project-context.md so agents resolve artifacts to the correct repository.
+
+### Story 16.1: Repository Layout Wizard
+
+As a **Chief Architect**,
+I want the installer to ask where the knowledgebase and sprint management are managed during installation,
+So that the project layout is configured correctly for multi-repo environments.
+
+**Acceptance Criteria:**
+
+**Given** the user runs `npx ma-agents install`
+**When** the wizard reaches the repository layout section
+**Then** it asks: "Where is your knowledgebase managed?" with options: Current repository (default), Local path, Remote git repository
+**And** it asks: "Where is your sprint management managed?" with the same options
+
+**Given** the user selects "Remote git repository" for knowledgebase
+**When** prompted for details
+**Then** the wizard asks for the git URL
+**And** asks for the local destination path for cloning
+**And** if the destination already exists, displays its contents summary and asks the user to confirm (FR113)
+**And** if the destination does not exist, clones the repository to that path (FR114)
+
+**Given** the user selects "Local path" for sprint management
+**When** prompted for the path
+**Then** the wizard validates the path exists
+**And** if it does not exist, alerts the user and asks to confirm or correct (FR115)
+
+**Given** the user selects "Current repository" for both concerns
+**When** the wizard completes
+**Then** no additional configuration is needed — single-repo mode preserved (FR116)
+
+**Given** the user runs with `--yes` flag (CI/CD mode)
+**When** the wizard reaches the repository layout section
+**Then** both concerns default to "Current repository" without prompting
+
+**Technical notes:**
+- New section in `cli.js` wizard, after agent selection
+- Use existing inquirer prompts pattern
+- `git clone` command must quote the URL and destination path for space-safety
+
+### Story 16.2: Config Storage and Cross-Reference File
+
+As a **DevOps engineer**,
+I want the configured repo paths stored persistently and a cross-reference file created in the code repo,
+So that agents and BMAD workflows can discover the correct paths without re-running installation.
+
+**Acceptance Criteria:**
+
+**Given** the user configured knowledgebase at `d:/Code/kb-repo` and sprint management at `d:/Code/sprint-repo`
+**When** the installation completes
+**Then** `_bmad/core/config.yaml` contains:
+```yaml
+knowledgebase_path: "d:/Code/kb-repo"
+sprint_management_path: "d:/Code/sprint-repo"
+```
+
+**Given** multi-repo mode is configured
+**When** the installation completes
+**Then** `_bmad-output/project-layout.yaml` is created in the CODE repository containing:
+```yaml
+generated: '2026-03-26'
+knowledgebase:
+  mode: remote
+  path: "d:/Code/kb-repo"
+  gitUrl: "https://..."
+sprint_management:
+  mode: local
+  path: "d:/Code/sprint-repo"
+```
+
+**Given** single-repo mode is configured (both set to "current repository")
+**When** the installation completes
+**Then** config.yaml contains `knowledgebase_path: "."` and `sprint_management_path: "."`
+**And** no `project-layout.yaml` is created (NFR34)
+
+**Given** the installation runs multiple times with the same multi-repo configuration
+**When** `project-layout.yaml` is regenerated
+**Then** the output is identical except for the `generated` date field (NFR36)
+
+**Technical notes:**
+- Write config values after bmad-method installation completes
+- `project-layout.yaml` is generated by ma-agents installer, not by bmad-method
+- The file is created in `_bmad-output/` which is version-controlled (per F3)
+
+### Story 16.3: Project-Context Multi-Repo Section
+
+As an **AI agent**,
+I want project-context.md to include the configured repository paths,
+So that I know where to read and write planning and sprint artifacts.
+
+**Acceptance Criteria:**
+
+**Given** multi-repo is configured with knowledgebase at `/path/to/kb` and sprint at `/path/to/sprint`
+**When** project-context.md is generated (or regenerated)
+**Then** it includes a "Repository Layout" section:
+```markdown
+### Repository Layout
+- **Knowledgebase:** /path/to/kb
+- **Sprint Management:** /path/to/sprint
+- When creating or reading planning artifacts, use the knowledgebase path
+- When creating or reading sprint/story artifacts, use the sprint management path
+```
+
+**Given** single-repo mode is configured
+**When** project-context.md is generated
+**Then** the "Repository Layout" section is omitted entirely (NFR34 backward compatibility)
+
+**Given** project-context.md already exists when the installer runs
+**When** multi-repo is configured for the first time
+**Then** project-context.md is NOT modified (idempotency per FR84)
+**And** the installer logs: "project-context.md exists — add Repository Layout section manually or run /bmad-generate-project-context"
+
+**Technical notes:**
+- Update `lib/templates/project-context.template.md` to include conditional multi-repo section
+- Add `{{REPO_LAYOUT_SECTION}}` placeholder that resolves to the section or empty string
+- The generator function needs the repo layout config as input alongside installedAgents
+
+### Story 16.4: Validate Cross-Repo Path Resolution
+
+As a **Chief Architect**,
+I want to verify that BMAD workflows correctly resolve artifact paths from the configured repo layout,
+So that planning and sprint artifacts are read from and written to the correct repositories.
+
+**Acceptance Criteria:**
+
+**Given** a multi-repo configuration where knowledgebase is at a different path than the code repo
+**When** a BMAD planning workflow (e.g., `/bmad-bmm-create-prd`) runs
+**Then** it reads existing planning artifacts from `{knowledgebase_path}/_bmad-output/planning-artifacts/`
+**And** writes output to the same path
+
+**Given** a multi-repo configuration where sprint management is at a different path
+**When** a BMAD sprint workflow (e.g., `/bmad-bmm-sprint-planning`) runs
+**Then** it reads/writes sprint artifacts from `{sprint_management_path}/_bmad-output/sprints/`
+
+**Given** single-repo configuration
+**When** any BMAD workflow runs
+**Then** artifacts are read from and written to the current project's `_bmad-output/` as before (NFR34)
+
+**Given** an agent is working in the code repository with multi-repo configured
+**When** the agent needs planning context (e.g., reading the PRD during story implementation)
+**Then** it discovers the knowledgebase path from `_bmad-output/project-layout.yaml` or `_bmad/core/config.yaml`
+**And** reads the PRD from the knowledgebase repository
+
+**Technical notes:**
+- This is a validation/testing story
+- Verify that BMAD workflows use config values for path resolution, not hardcoded `_bmad-output/`
+- If BMAD workflows don't natively support configurable output paths, this story identifies the gap and documents what workflow changes are needed
+- Test both directions: writing artifacts to external repo AND reading artifacts from external repo
+
+---
+
+## Epic 17: Sprint Management Model Rework (Phase 2)
+
+Sprint management is rebuilt with a proper data model: sprints as first-class entities, flat backlog with bugs as a story type, multi-criteria prioritization, bidirectional item movement (backlog ↔ sprint), and automatic done-item cleanup. Epic 12 delivered workflow shells — this epic builds the underlying model and rewires everything.
+
+### Story 17.1: Sprint Entity Model
+
+As a **Scrum Master**,
+I want sprints defined as first-class YAML entities with capacity, assigned items, and status,
+So that sprint planning is based on real sprint definitions, not just a flat status list.
+
+**Acceptance Criteria:**
+
+**Given** the Scrum Master creates a sprint
+**When** the sprint is persisted
+**Then** a YAML file is created at `{implementation_artifacts}/sprints/sprint-{id}.yaml` containing:
+```yaml
+id: sprint-3
+name: "Sprint 3"
+status: planning  # planning | active | closed
+capacity: 6       # max items (stories + bugs)
+start: "2026-04-01"
+end: "2026-04-14"
+items: []          # assigned story/bug IDs
+```
+
+**Given** a sprint has items assigned
+**When** the sprint file is read
+**Then** `items` contains an ordered list of story/bug IDs (e.g., `["5-5-explicit-parameter-passing", "5-6-fix-space-in-path-bug", "BUG-path-spaces"]`)
+**And** the count of items never exceeds `capacity`
+
+**Given** a sprint transitions from `planning` to `active`
+**When** the sprint is activated
+**Then** only one sprint can be `active` at a time
+**And** the previous active sprint (if any) must be `closed` first
+
+**Technical notes:**
+- Sprint files live in `{implementation_artifacts}/sprints/` directory
+- Sprint ID format: `sprint-{number}` (kebab-case)
+- Rework the existing add-sprint workflow (Story 12.1) to write this YAML format instead of the old format
+
+### Story 17.2: Flat Backlog Model
+
+As a **Scrum Master**,
+I want a flat backlog file listing all stories and bugs in priority order, independent of their parent epic,
+So that sprint planning works from a single prioritized list, not epic-grouped sections.
+
+**Acceptance Criteria:**
+
+**Given** the backlog is generated from the epics document
+**When** the backlog file is created at `{implementation_artifacts}/backlog.yaml`
+**Then** it contains ALL stories and bugs as a flat ordered list:
+```yaml
+backlog:
+  - id: "5-5-explicit-parameter-passing"
+    type: story
+    epic: 5
+    title: "Explicit Parameter Passing"
+    priority: 1
+    status: backlog
+  - id: "BUG-path-spaces"
+    type: bug
+    epic: null
+    title: "Fix space-in-path bug"
+    priority: 2
+    status: backlog
+    severity: high
+```
+
+**Given** a story is assigned to a sprint
+**When** the backlog is viewed
+**Then** the item shows `sprint: sprint-3` indicating its assignment
+**And** it is still visible in the backlog (with sprint annotation) for reference
+
+**Given** stories exist across multiple epics
+**When** the backlog is ordered
+**Then** ordering is by the `priority` field, not by epic number
+**And** items from different epics can be interleaved based on priority
+
+**Technical notes:**
+- The backlog is the single source of truth for item priority
+- Sprint-status.yaml continues to exist but is now derived from backlog + sprint files
+- The `sprint-planning` workflow should regenerate the backlog from epics when run
+- Items with status `done` are NOT included in the backlog (they're in the done archive)
+
+### Story 17.3: Bug as Story Type
+
+As a **Test Engineer**,
+I want bugs to appear in the backlog alongside stories as a distinct type,
+So that bugs are prioritized and assigned to sprints using the same workflow as stories.
+
+**Acceptance Criteria:**
+
+**Given** a bug is created via the bug-story workflow (Epic 11, FR61)
+**When** the bug story file is created
+**Then** it is added to the backlog with `type: bug`
+**And** it includes bug-specific fields: `severity` (critical/high/medium/low), `version_found`, `bug_type`
+
+**Given** bugs and stories coexist in the backlog
+**When** the backlog is displayed or used for sprint planning
+**Then** bugs are visually distinguished (type field) but sorted by the same priority field as stories
+**And** a critical bug can be prioritized above any story
+
+**Given** a bug follows the same lifecycle as a story
+**When** the bug progresses through statuses
+**Then** it uses the same flow: `backlog → ready-for-dev → in-progress → review → done`
+**And** done bugs are archived the same way as done stories (FR130, FR131)
+
+**Technical notes:**
+- Bug story files follow the naming convention: `BUG-{kebab-case-title}.md`
+- Bug entries in backlog.yaml have `type: bug` and `epic: null` (bugs don't belong to epics per FR64)
+- The bug-story workflow (Epic 11) may need updating to write to the backlog file
+
+### Story 17.4: Backlog-to-Sprint Workflow
+
+As a **Scrum Master**,
+I want a workflow to move items from the backlog into a sprint,
+So that I can populate sprints by selecting prioritized items across epics.
+
+**Acceptance Criteria:**
+
+**Given** the backlog contains unassigned items (no `sprint` field)
+**When** the Scrum Master invokes the assign-to-sprint workflow
+**Then** it displays the active or planning sprint and its current capacity usage
+**And** shows the top N unassigned backlog items in priority order
+**And** the Scrum Master selects which items to add
+
+**Given** the Scrum Master selects items for the sprint
+**When** the items are assigned
+**Then** each item's `sprint` field in backlog.yaml is set to the sprint ID
+**And** the sprint file's `items` array is updated with the new IDs
+**And** the workflow validates that capacity is not exceeded — warns if over capacity
+
+**Given** the workflow is invoked via menu or slash command
+**When** it executes
+**Then** it works identically in both invocation modes (NFR19)
+
+**Technical notes:**
+- Reworks the existing add-to-sprint workflow (Story 12.2) to use the new backlog + sprint file model
+- Must read backlog.yaml, filter unassigned items, present to user, update both backlog.yaml and sprint file
+
+### Story 17.5: Sprint-to-Backlog Workflow
+
+As a **Scrum Master**,
+I want a workflow to move items from a sprint back to the backlog,
+So that I can adjust sprint scope when priorities change without losing the item.
+
+**Acceptance Criteria:**
+
+**Given** a sprint has assigned items
+**When** the Scrum Master invokes the remove-from-sprint workflow
+**Then** it displays the sprint's currently assigned items
+**And** the Scrum Master selects which items to remove
+
+**Given** items are removed from the sprint
+**When** the removal completes
+**Then** the item's `sprint` field in backlog.yaml is cleared
+**And** the item is removed from the sprint file's `items` array
+**And** the item's status is NOT changed — it retains its current status (e.g., stays `ready-for-dev`)
+**And** the item remains in the backlog at its current priority position
+
+**Technical notes:**
+- New workflow: `lib/bmad-extension/skills/remove-from-sprint/` (or update existing modify-sprint from Story 12.3)
+- This is the inverse of Story 17.4
+
+### Story 17.6: Done Item Cleanup
+
+As a **Scrum Master**,
+I want done stories and bugs automatically removed from the sprint status and their files moved to a done/ subfolder,
+So that the active sprint view stays clean and the archive is organized.
+
+**Acceptance Criteria:**
+
+**Given** a story or bug status changes to `done`
+**When** the sprint status is refreshed (via sprint-planning workflow or sprint-status workflow)
+**Then** the done item is removed from sprint-status.yaml's `development_status` section
+**And** the done item is removed from its sprint file's `items` array
+**And** the sprint file's effective capacity increases by 1 (slot freed)
+
+**Given** a story file exists at `{implementation_artifacts}/{story-id}.md`
+**When** the story reaches `done` status
+**Then** the file is moved to `{implementation_artifacts}/done/{story-id}.md`
+**And** if the `done/` subfolder doesn't exist, it is created
+
+**Given** a bug file exists at `{implementation_artifacts}/BUG-{title}.md`
+**When** the bug reaches `done` status
+**Then** the file is moved to `{implementation_artifacts}/done/BUG-{title}.md`
+
+**Given** all items in a sprint reach `done` status
+**When** the sprint is refreshed
+**Then** the sprint status changes to `closed`
+**And** the sprint file is preserved (historical record) but items array is empty
+
+**Technical notes:**
+- The `done/` subfolder already exists at `_bmad-output/implementation-artifacts/done/` — this story formalizes its use
+- The sprint-planning and sprint-status workflows should trigger cleanup as part of their execution
+- File move uses `fs.rename()` — not copy+delete
+- The sprint-status.yaml `development_status` section should only show items that are NOT done
+
+### Story 17.7: Multi-Criteria Prioritization Workflow
+
+As a **Scrum Master**,
+I want a workflow to reprioritize the backlog using multiple criteria,
+So that sprint planning is based on business value, severity, and dependencies — not just epic order.
+
+**Acceptance Criteria:**
+
+**Given** the backlog contains stories and bugs
+**When** the Scrum Master invokes the prioritize-backlog workflow
+**Then** it presents each item with its current priority and metadata (type, epic, severity for bugs, dependencies)
+**And** the Scrum Master can reorder items using criteria: severity, business value, dependencies, item type, age
+
+**Given** the Scrum Master reorders items
+**When** the new priority order is confirmed
+**Then** backlog.yaml is updated with new `priority` values (sequential integers starting from 1)
+**And** the reordering is logged with date and reason
+
+**Given** items have dependencies (e.g., Story 15.2 depends on 15.1)
+**When** the Scrum Master tries to prioritize the dependent item above its dependency
+**Then** the workflow warns about the dependency conflict
+**And** allows the Scrum Master to override or adjust
+
+**Technical notes:**
+- New workflow: `lib/bmad-extension/skills/prioritize-backlog/`
+- The workflow should support both full reprioritization and quick adjustments (move single item up/down)
+- Dependencies can be inferred from epic story ordering or explicitly stated in story files
+
+### Story 17.8: Rework Sprint Status Display
+
+As a **Project Manager**,
+I want sprint status to show real sprint definitions with their assigned items and capacity usage,
+So that I can see at a glance what's in each sprint and how much capacity remains.
+
+**Acceptance Criteria:**
+
+**Given** the sprint-status workflow is invoked
+**When** the status is displayed
+**Then** it shows:
+```
+Sprint 3 (active) — 4/6 items
+  ● 5-5-explicit-parameter-passing [story] — in-progress
+  ● 5-6-fix-space-in-path-bug [story] — backlog
+  ○ BUG-path-spaces [bug, high] — ready-for-dev
+  ● 15-1-bump-bmad-method [story] — backlog
+
+Backlog — 12 unassigned items
+  1. 15-2-restructure-extension-module [story]
+  2. 15-3-convert-custom-agents [story]
+  ...
+```
+
+**Given** done items have been cleaned up (Story 17.6)
+**When** the sprint status is viewed
+**Then** done items do NOT appear in the sprint or backlog sections
+**And** a summary line shows: "X items completed this sprint"
+
+**Given** the sprint-status.yaml file is generated
+**When** it is written
+**Then** it only contains non-done items in `development_status`
+**And** sprint metadata is included in the header comments
+
+**Technical notes:**
+- Reworks the existing sprint-status workflow and the sprint-status-template.yaml
+- The display format should work well for both human reading and LLM parsing
+- sprint-status.yaml becomes a derived file: generated from backlog.yaml + sprint files
