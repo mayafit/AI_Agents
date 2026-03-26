@@ -68,8 +68,8 @@ development_status:
   5-2-bmad-cache-build-script: done
   5-3-pre-populate-bmad-cache: done
   5-4-validate-bundled-installation: done
-  5-5-explicit-parameter-passing: backlog
-  5-6-fix-space-in-path-bug: backlog
+  5-5-explicit-parameter-passing: review
+  5-6-fix-space-in-path-bug: ready-for-dev
   epic-5-retrospective: optional
 
   # Epic 6: Methodology Onboarding Package — COMPLETED
@@ -181,15 +181,15 @@ development_status:
   # Epic 15: BMAD 6.2.1 Agent Architecture Migration (Phase 2)
   # Dependencies: Epic 5 (explicit param passing). Restructures Epic 8's extension module.
   # Execution order: 15.1 → 15.2 → 15.3 → 15.4 → 15.5 → 15.6 → 15.7 → 15.8
-  epic-15: backlog
-  15-1-bump-bmad-method-to-6-2-1: backlog
-  15-2-restructure-extension-module: backlog
-  15-3-convert-custom-agents-to-skill-folders: backlog
-  15-4-convert-mil498-workflows-to-skill-md: backlog
-  15-5-convert-sre-devops-cyber-workflows: backlog
-  15-6-separate-built-in-agent-customizations: backlog
-  15-7-migration-detection-and-upgrade-path: backlog
-  15-8-validate-migrated-agents-and-workflows: backlog
+  epic-15: in-progress
+  15-1-bump-bmad-method-to-6-2-1: ready-for-dev
+  15-2-restructure-extension-module: ready-for-dev
+  15-3-convert-custom-agents-to-skill-folders: ready-for-dev
+  15-4-convert-mil498-workflows-to-skill-md: ready-for-dev
+  15-5-convert-sre-devops-cyber-workflows: ready-for-dev
+  15-6-separate-built-in-agent-customizations: ready-for-dev
+  15-7-migration-detection-and-upgrade-path: ready-for-dev
+  15-8-validate-migrated-agents-and-workflows: ready-for-dev
   epic-15-retrospective: optional
 
   # ─── PHASE C: Remaining Features ───────────────────────────────────────────
