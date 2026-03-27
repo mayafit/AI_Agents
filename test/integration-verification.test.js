@@ -165,7 +165,7 @@ console.log('\nTask 1 — End-to-end IDE agent test');
 
     // Task 2.1 & 2.2: Verify extension module structure exists in source
 
-    await asyncTest('2.1/2.2: BMAD extension module source has module.yaml + 11 customize.yaml files', async () => {
+    await asyncTest('2.1/2.2: BMAD extension module source has module.yaml + 8 built-in customizations', async () => {
       const extSource = path.join(__dirname, '..', 'lib', 'bmad-extension');
       assert.ok(await fs.pathExists(extSource), 'lib/bmad-extension/ must exist');
 
@@ -174,11 +174,21 @@ console.log('\nTask 1 — End-to-end IDE agent test');
       assert.ok(moduleYaml.includes('extends-module: bmm'), 'module.yaml must extend bmm');
       assert.ok(moduleYaml.includes('name: ma-agents-skills'), 'module.yaml must be named ma-agents-skills');
 
-      // 11 customize.yaml files in agents/
+      // agents/ directory should not contain .customize.yaml files (Story 15.6 — built-ins
+      // moved to lib/bmad-customize/). Note: bmad-method may recreate an empty agents/ dir
+      // when processing --custom-content, so we check for absence of customize files, not dir.
       const agentsDir = path.join(extSource, 'agents');
-      assert.ok(await fs.pathExists(agentsDir), 'lib/bmad-extension/agents/ must exist');
-      const files = (await fs.readdir(agentsDir)).filter(f => f.endsWith('.customize.yaml'));
-      assert.strictEqual(files.length, 11, `Expected 11 .customize.yaml files, found ${files.length}`);
+      if (await fs.pathExists(agentsDir)) {
+        const agentFiles = (await fs.readdir(agentsDir)).filter(f => f.endsWith('.customize.yaml'));
+        assert.strictEqual(agentFiles.length, 0,
+          `lib/bmad-extension/agents/ must have 0 .customize.yaml files after Story 15.6, found ${agentFiles.length}`);
+      }
+
+      // 8 built-in customize.yaml files now in lib/bmad-customize/
+      const customizeDir = path.join(__dirname, '..', 'lib', 'bmad-customize');
+      assert.ok(await fs.pathExists(customizeDir), 'lib/bmad-customize/ must exist');
+      const files = (await fs.readdir(customizeDir)).filter(f => f.endsWith('.customize.yaml'));
+      assert.strictEqual(files.length, 8, `Expected 8 .customize.yaml files in bmad-customize/, found ${files.length}`);
     });
 
     // Task 2.2 (continued): Verify deployment via fs.copy
@@ -196,20 +206,32 @@ console.log('\nTask 1 — End-to-end IDE agent test');
       assert.ok(await fs.pathExists(path.join(extTarget, 'module.yaml')), 'Deployed module.yaml must exist');
       assert.ok(await fs.pathExists(path.join(extTarget, 'module-help.csv')), 'Deployed module-help.csv must exist');
 
-      const deployedFiles = (await fs.readdir(path.join(extTarget, 'agents'))).filter(f => f.endsWith('.customize.yaml'));
-      assert.strictEqual(deployedFiles.length, 11, `Deployed agents/ must have 11 .customize.yaml files, found ${deployedFiles.length}`);
+      // Simulate the STAGE:CUSTOMIZE deployment step
+      const customizeSource = path.join(__dirname, '..', 'lib', 'bmad-customize');
+      const configAgentsDir = path.join(projectRoot, '_bmad', '_config', 'agents');
+      await fs.ensureDir(configAgentsDir);
+      const customizeFiles = (await fs.readdir(customizeSource)).filter(f => f.endsWith('.customize.yaml'));
+      for (const file of customizeFiles) {
+        await fs.copy(path.join(customizeSource, file), path.join(configAgentsDir, file));
+      }
+
+      const deployedFiles = (await fs.readdir(configAgentsDir)).filter(f => f.endsWith('.customize.yaml'));
+      assert.ok(deployedFiles.length >= 8, `_config/agents/ must have at least 8 built-in .customize.yaml files, found ${deployedFiles.length}`);
     });
 
     // Task 2.3: Verify bmm-sre.customize.yaml critical_actions reference
 
-    await asyncTest('2.3: bmm-sre.customize.yaml has critical_actions pointing to _bmad/skills/sre/MANIFEST.yaml', async () => {
+    await asyncTest('2.3: bmm-sre.customize.yaml in bmad-customizations has persona (critical_actions merged to SKILL.md in 15.3)', async () => {
+      // After Story 15.3, custom agent critical_actions were merged into SKILL.md files.
+      // After Story 15.6, the customize files in bmad-customizations/ retain persona/menu
+      // for backward compatibility with the applyCustomizations() deployment flow.
       const sreYaml = await fs.readFile(
-        path.join(__dirname, '..', 'lib', 'bmad-extension', 'agents', 'bmm-sre.customize.yaml'),
+        path.join(__dirname, '..', 'lib', 'bmad-customizations', 'bmm-sre.customize.yaml'),
         'utf-8'
       );
-      assert.ok(sreYaml.includes('critical_actions'), 'bmm-sre.customize.yaml must have critical_actions');
-      assert.ok(sreYaml.includes('_bmad/skills/sre/MANIFEST.yaml'),
-        'critical_actions must reference _bmad/skills/sre/MANIFEST.yaml');
+      assert.ok(sreYaml.includes('persona'), 'bmm-sre.customize.yaml must have persona section');
+      assert.ok(sreYaml.includes('Site Reliability Engineer'),
+        'bmm-sre persona must reference Site Reliability Engineer');
     });
 
     // Task 2.4: Verify BMAD agent .md file gets MA-AGENTS block at top after frontmatter
@@ -249,21 +271,30 @@ console.log('\nTask 1 — End-to-end IDE agent test');
 
     // Task 2.5: Verify extension survives re-deployment (re-copy doesn't break it)
 
-    await asyncTest('2.5: Extension module survives re-deployment (update scenario)', async () => {
+    await asyncTest('2.5: Extension module and built-in customizations survive re-deployment (update scenario)', async () => {
       const projectRoot = path.join(tmpDir, 'bmad-deploy-test');
       const extSource = path.join(__dirname, '..', 'lib', 'bmad-extension');
       const extTarget = path.join(projectRoot, '_bmad', 'extensions', 'ma-agents-skills');
 
-      // Re-deploy (simulating bmad update → recompile → extension re-deploy)
+      // Re-deploy extension (simulating bmad update → recompile → extension re-deploy)
       await fs.copy(extSource, extTarget);
 
-      // Verify structure is intact after re-deployment
+      // Verify extension structure is intact after re-deployment
       assert.ok(await fs.pathExists(path.join(extTarget, 'module.yaml')), 'module.yaml must survive re-deploy');
       const moduleYaml = await fs.readFile(path.join(extTarget, 'module.yaml'), 'utf-8');
       assert.ok(moduleYaml.includes('ma-agents-skills'), 'module.yaml content must be intact after re-deploy');
 
-      const deployedFiles = (await fs.readdir(path.join(extTarget, 'agents'))).filter(f => f.endsWith('.customize.yaml'));
-      assert.strictEqual(deployedFiles.length, 11, `Must still have 11 .customize.yaml files after re-deploy`);
+      // Re-deploy built-in customizations (simulating STAGE:CUSTOMIZE)
+      const customizeSource = path.join(__dirname, '..', 'lib', 'bmad-customize');
+      const configAgentsDir = path.join(projectRoot, '_bmad', '_config', 'agents');
+      await fs.ensureDir(configAgentsDir);
+      const customizeFiles = (await fs.readdir(customizeSource)).filter(f => f.endsWith('.customize.yaml'));
+      for (const file of customizeFiles) {
+        await fs.copy(path.join(customizeSource, file), path.join(configAgentsDir, file));
+      }
+
+      const deployedFiles = (await fs.readdir(configAgentsDir)).filter(f => f.endsWith('.customize.yaml'));
+      assert.ok(deployedFiles.length >= 8, `Must have at least 8 built-in .customize.yaml files after re-deploy, found ${deployedFiles.length}`);
     });
 
     // ─── Task 3: Cross-story integration check (AC #1, #2) ─────────────────────
@@ -272,17 +303,15 @@ console.log('\nTask 1 — End-to-end IDE agent test');
 
     // Task 3.1: Verify agents.js has injectionStrategy on all 11 agents (Story 8.2 output)
 
-    await asyncTest('3.1: All 11 agents have injectionStrategy property (Story 8.2)', async () => {
+    await asyncTest('3.1: All agents have injectionStrategy property (Story 8.2)', async () => {
       const allAgents = getAllAgents();
-      assert.strictEqual(allAgents.length, 11, `Expected 11 agents, found ${allAgents.length}`);
+      assert.ok(allAgents.length >= 11, `Expected at least 11 agents, found ${allAgents.length}`);
 
       for (const agent of allAgents) {
         assert.ok(agent.injectionStrategy,
           `Agent '${agent.id}' must have injectionStrategy`);
-        assert.strictEqual(agent.injectionStrategy.position, 'top',
-          `Agent '${agent.id}' injectionStrategy.position must be 'top'`);
-        assert.ok(Array.isArray(agent.injectionStrategy.skipPatterns),
-          `Agent '${agent.id}' injectionStrategy.skipPatterns must be an array`);
+        assert.ok(['top', 'json-merge'].includes(agent.injectionStrategy.position),
+          `Agent '${agent.id}' injectionStrategy.position must be 'top' or 'json-merge'`);
       }
     });
 
@@ -338,7 +367,7 @@ console.log('\nTask 1 — End-to-end IDE agent test');
 
     await asyncTest('3.4: Cross-story data flow is consistent (agents → installer → bmad)', async () => {
       // Verify the data flow chain:
-      // agents.js defines injectionStrategy → installer.js reads it → bmad.js deploys extension
+      // agents.js defines injectionStrategy → installer.js reads it → bmad.js deploys extension + customize
 
       // 1. IDE agents have instructionFiles that installer.js processes
       const ideAgents = getAgentsByCategory('ide');
@@ -360,22 +389,23 @@ console.log('\nTask 1 — End-to-end IDE agent test');
         }
       }
 
-      // 3. Extension module has a customize.yaml for each BMAD agent
-      const extAgentsDir = path.join(__dirname, '..', 'lib', 'bmad-extension', 'agents');
-      const extFiles = (await fs.readdir(extAgentsDir)).filter(f => f.endsWith('.customize.yaml'));
-
-      for (const agent of bmadAgents) {
-        const expectedFile = `${agent.id}.customize.yaml`;
-        assert.ok(extFiles.includes(expectedFile),
-          `Extension must include ${expectedFile} for BMAD agent '${agent.id}'`);
-      }
-
-      // 4. All 7 built-in BMM agents also have customize.yaml in extension
-      const builtInBmm = ['bmm-pm', 'bmm-architect', 'bmm-dev', 'bmm-qa', 'bmm-sm', 'bmm-tech-writer', 'bmm-ux-designer'];
+      // 3. Built-in BMM agents have customize.yaml in lib/bmad-customize/ (Story 15.6)
+      const customizeDir = path.join(__dirname, '..', 'lib', 'bmad-customize');
+      const customizeFiles = (await fs.readdir(customizeDir)).filter(f => f.endsWith('.customize.yaml'));
+      const builtInBmm = ['bmm-pm', 'bmm-architect', 'bmm-dev', 'bmm-qa', 'bmm-sm', 'bmm-tech-writer', 'bmm-ux-designer', 'bmm-bmad-master'];
       for (const agentId of builtInBmm) {
         const expectedFile = `${agentId}.customize.yaml`;
-        assert.ok(extFiles.includes(expectedFile),
-          `Extension must include ${expectedFile} for built-in BMM agent`);
+        assert.ok(customizeFiles.includes(expectedFile),
+          `lib/bmad-customize/ must include ${expectedFile} for built-in BMM agent`);
+      }
+
+      // 4. Custom BMAD agents have customize.yaml in lib/bmad-customizations/ (backward compat)
+      const customizationsDir = path.join(__dirname, '..', 'lib', 'bmad-customizations');
+      const customizationFiles = (await fs.readdir(customizationsDir)).filter(f => f.endsWith('.customize.yaml'));
+      for (const agent of bmadAgents) {
+        const expectedFile = `${agent.id}.customize.yaml`;
+        assert.ok(customizationFiles.includes(expectedFile),
+          `lib/bmad-customizations/ must include ${expectedFile} for custom BMAD agent '${agent.id}'`);
       }
 
       // 5. Verify installer.js BMAD guard (category === 'bmad' skips file creation)

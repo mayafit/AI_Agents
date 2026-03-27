@@ -1,6 +1,6 @@
 # Story 15.6: Separate Built-in Agent Customizations
 
-Status: ready-for-dev
+Status: delivered
 
 ## Story
 
@@ -18,32 +18,32 @@ So that module-owned agents (in skill folders) are cleanly separated from custom
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create lib/bmad-customize/ with built-in agent files (AC: #1, #2)
-  - [ ] 1.1 Create `lib/bmad-customize/` directory
-  - [ ] 1.2 Create `lib/bmad-customize/bmm-pm.customize.yaml` with critical_actions array only
-  - [ ] 1.3 Create `lib/bmad-customize/bmm-architect.customize.yaml`
-  - [ ] 1.4 Create `lib/bmad-customize/bmm-dev.customize.yaml`
-  - [ ] 1.5 Create `lib/bmad-customize/bmm-qa.customize.yaml`
-  - [ ] 1.6 Create `lib/bmad-customize/bmm-sm.customize.yaml`
-  - [ ] 1.7 Create `lib/bmad-customize/bmm-tech-writer.customize.yaml`
-  - [ ] 1.8 Create `lib/bmad-customize/bmm-ux-designer.customize.yaml`
-  - [ ] 1.9 Create `lib/bmad-customize/bmm-bmad-master.customize.yaml` (note: filename may be `core-bmad-master` — check current naming)
+- [x] Task 1: Create lib/bmad-customize/ with built-in agent files (AC: #1, #2)
+  - [x] 1.1 Create `lib/bmad-customize/` directory
+  - [x] 1.2 Create `lib/bmad-customize/bmm-pm.customize.yaml` with critical_actions array only
+  - [x] 1.3 Create `lib/bmad-customize/bmm-architect.customize.yaml`
+  - [x] 1.4 Create `lib/bmad-customize/bmm-dev.customize.yaml`
+  - [x] 1.5 Create `lib/bmad-customize/bmm-qa.customize.yaml`
+  - [x] 1.6 Create `lib/bmad-customize/bmm-sm.customize.yaml`
+  - [x] 1.7 Create `lib/bmad-customize/bmm-tech-writer.customize.yaml`
+  - [x] 1.8 Create `lib/bmad-customize/bmm-ux-designer.customize.yaml`
+  - [x] 1.9 Create `lib/bmad-customize/bmm-bmad-master.customize.yaml` (confirmed filename is `bmm-bmad-master`, not `core-bmad-master`)
 
-- [ ] Task 2: Update bmad.js deployment logic (AC: #3)
-  - [ ] 2.1 Read current `applyCustomizations()` function in `lib/bmad.js` (lines ~199-212)
-  - [ ] 2.2 Add deployment step: copy files from `lib/bmad-customize/*.customize.yaml` to `_bmad/_config/agents/`
-  - [ ] 2.3 Ensure this runs AFTER `--custom-content` deploys the extension module
-  - [ ] 2.4 Ensure this runs BEFORE `--action quick-update` to apply customizations
+- [x] Task 2: Update bmad.js deployment logic (AC: #3)
+  - [x] 2.1 Read current `applyCustomizations()` function in `lib/bmad.js`
+  - [x] 2.2 Add STAGE:CUSTOMIZE deployment step: copy files from `lib/bmad-customize/*.customize.yaml` to `_bmad/_config/agents/`
+  - [x] 2.3 Runs AFTER STAGE:EXTENSION (--custom-content deploys extension module)
+  - [x] 2.4 Runs BEFORE STAGE:WORKFLOWS
 
-- [ ] Task 3: Clean up old directories (AC: #4, #5)
-  - [ ] 3.1 Verify all 4 custom agent files from `lib/bmad-extension/agents/` are now in `skills/` (from Story 15.3)
-  - [ ] 3.2 Verify all 8 built-in agent files from `lib/bmad-extension/agents/` are now in `lib/bmad-customize/`
-  - [ ] 3.3 Delete `lib/bmad-extension/agents/` directory
-  - [ ] 3.4 Verify `lib/bmad-customizations/` content is fully migrated:
-    - 4 custom agent `.customize.yaml` → merged into SKILL.md (Story 15.3)
-    - 4 custom agent `.md` persona files → merged into SKILL.md (Story 15.3)
-    - Agent-platform `.customize.yaml` files (claude-code, cursor, cline, etc.) → evaluate if still needed or if they should move too
-  - [ ] 3.5 Handle remaining `lib/bmad-customizations/` files (platform-specific customizations: `claude-code.customize.yaml`, `cursor.customize.yaml`, etc.)
+- [x] Task 3: Clean up old directories (AC: #4, #5)
+  - [x] 3.1 Verified: 4 custom agents (bmm-cyber, bmm-devops, bmm-mil498, bmm-sre) are defined in `lib/agents.js` with skill dirs; their persona/menu customize files remain in `lib/bmad-customizations/` for backward compat
+  - [x] 3.2 Verified: all 8 built-in agent files are now in `lib/bmad-customize/`
+  - [x] 3.3 Deleted `lib/bmad-extension/agents/` directory (12 .customize.yaml files removed)
+  - [x] 3.4 Verified `lib/bmad-customizations/` content disposition:
+    - 4 custom agent `.customize.yaml` (bmm-sre, bmm-devops, bmm-cyber, bmm-mil498) — retained for backward compat, persona/menu still deployed by `applyCustomizations()` stage 1
+    - 4 custom agent `.md` persona files (sre.md, devops.md, cyber.md, mil498.md) — retained, deployed by `applyCustomizations()` stages 2 and 6
+    - Platform-specific `.customize.yaml` files — retained, NOT deleted (see 3.5)
+  - [x] 3.5 Platform-specific files evaluated: `claude-code.customize.yaml`, `cursor.customize.yaml`, `cline.customize.yaml`, `gemini.customize.yaml`, `generic.customize.yaml`, `antigravity.customize.yaml` — all retained. These are deployed by `applyCustomizations()` stage 1 to `_bmad/_config/agents/` and are NOT referenced by `agents.js`. They remain in `lib/bmad-customizations/` for the existing deployment flow.
 
 ## Dev Notes
 
@@ -132,9 +132,32 @@ After Stories 15.3 and 15.6, the following files in `lib/bmad-customizations/` n
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6 (1M context)
 
 ### Debug Log References
 
 ### Completion Notes List
+- All 8 existing built-in agent customize.yaml files had identical content (4 critical_actions using numbered-key syntax). No agent-specific additional critical_actions found.
+- Converted from numbered-key syntax (`1: "..."`) to 6.2.0 array syntax (`- "..."`) in the new files.
+- The `bmm-bmad-master` filename was confirmed correct (not `core-bmad-master`).
+- bmad-method CLI recreates an empty `agents/` directory inside `lib/bmad-extension/` when processing `--custom-content`. Tests updated to tolerate this (check for 0 customize files rather than directory absence).
+- The `lib/bmad-customizations/` directory is NOT deleted. It contains: (a) 4 custom agent `.customize.yaml` and `.md` files still deployed by `applyCustomizations()` stages 1/2/6, and (b) 6 platform-specific `.customize.yaml` files deployed by stage 1. None are referenced by `agents.js`.
+- Updated test files: `test/bmad-extension.test.js` (rewritten for new structure), `test/integration-verification.test.js` (4 tests updated for new directory layout and agent count).
+- All 18 test files pass with 0 failures.
 
 ### File List
+| File | Change |
+|------|--------|
+| `lib/bmad-customize/bmm-pm.customize.yaml` | NEW |
+| `lib/bmad-customize/bmm-architect.customize.yaml` | NEW |
+| `lib/bmad-customize/bmm-dev.customize.yaml` | NEW |
+| `lib/bmad-customize/bmm-qa.customize.yaml` | NEW |
+| `lib/bmad-customize/bmm-sm.customize.yaml` | NEW |
+| `lib/bmad-customize/bmm-tech-writer.customize.yaml` | NEW |
+| `lib/bmad-customize/bmm-ux-designer.customize.yaml` | NEW |
+| `lib/bmad-customize/bmm-bmad-master.customize.yaml` | NEW |
+| `lib/bmad.js` | MODIFIED — added STAGE:CUSTOMIZE deployment step |
+| `lib/bmad-extension/agents/` | DELETED — 12 .customize.yaml files removed |
+| `test/bmad-extension.test.js` | MODIFIED — rewritten for 15.6 structure |
+| `test/integration-verification.test.js` | MODIFIED — updated 4 tests for new layout |
+| `_bmad-output/implementation-artifacts/15-6-separate-built-in-agent-customizations.md` | MODIFIED — status → delivered |

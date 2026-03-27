@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 /**
- * Tests for Story 8.3: Create BMAD Extension Module Structure
+ * Tests for BMAD Extension Module and Built-in Agent Customizations
  *
- * Validates extension module files, directory structure, customize.yaml contents,
- * and deployment logic in bmad.js.
+ * Story 8.3: Extension module structure (module.yaml, module-help.csv, workflows)
+ * Story 15.6: Built-in agent customizations separated to lib/bmad-customize/
+ *
+ * Validates extension module files, directory structure, built-in customize.yaml
+ * contents, and deployment logic in bmad.js.
  */
 'use strict';
 
@@ -28,9 +31,9 @@ function test(name, fn) {
 }
 
 const extDir = path.join(__dirname, '..', 'lib', 'bmad-extension');
-const agentsDir = path.join(extDir, 'agents');
+const customizeDir = path.join(__dirname, '..', 'lib', 'bmad-customize');
 
-// ─── AC #1: module.yaml, module-help.csv, and 11 agent files exist ──────────
+// ─── AC #1: Extension module structure (module.yaml, module-help.csv, workflows) ──
 
 console.log('\nAC #1 — Extension module structure');
 
@@ -38,8 +41,15 @@ test('1.1: lib/bmad-extension/ directory exists', () => {
   assert.ok(fs.existsSync(extDir), 'lib/bmad-extension/ must exist');
 });
 
-test('1.2: lib/bmad-extension/agents/ directory exists', () => {
-  assert.ok(fs.existsSync(agentsDir), 'lib/bmad-extension/agents/ must exist');
+test('1.2: lib/bmad-extension/agents/ has no .customize.yaml files (Story 15.6)', () => {
+  const agentsDir = path.join(extDir, 'agents');
+  // bmad-method may recreate an empty agents/ dir when processing --custom-content,
+  // so we check for absence of customize files, not absence of the directory itself.
+  if (fs.existsSync(agentsDir)) {
+    const files = fs.readdirSync(agentsDir).filter(f => f.endsWith('.customize.yaml'));
+    assert.strictEqual(files.length, 0, `agents/ must have 0 .customize.yaml files, found ${files.length}`);
+  }
+  // If directory doesn't exist, that's also correct
 });
 
 test('1.3: module.yaml exists with extends-module: bmm', () => {
@@ -55,81 +65,79 @@ test('1.4: module-help.csv exists', () => {
   assert.ok(fs.existsSync(filePath), 'module-help.csv must exist');
 });
 
-test('1.5: agents/ contains exactly 11 .customize.yaml files', () => {
-  const files = fs.readdirSync(agentsDir).filter(f => f.endsWith('.customize.yaml'));
-  assert.strictEqual(files.length, 11, `Expected 11 .customize.yaml files, found ${files.length}`);
+test('1.5: workflows/ directory exists in extension module', () => {
+  const workflowsDir = path.join(extDir, 'workflows');
+  assert.ok(fs.existsSync(workflowsDir), 'lib/bmad-extension/workflows/ must exist');
 });
 
-// ─── AC #2: 4 custom agents have full customization + critical_actions ──────
+// ─── AC #2: 8 built-in agents in lib/bmad-customize/ with critical_actions only ──
 
-console.log('\nAC #2 — Custom agents: persona + menu + critical_actions');
+console.log('\nAC #2 — Built-in agent customizations in lib/bmad-customize/');
 
-const customAgents = [
-  { id: 'bmm-sre', slug: 'sre' },
-  { id: 'bmm-devops', slug: 'devops' },
-  { id: 'bmm-cyber', slug: 'cyber' },
-  { id: 'bmm-mil498', slug: 'mil498' }
-];
-
-for (const agent of customAgents) {
-  test(`2.${customAgents.indexOf(agent) + 1}: ${agent.id}.customize.yaml has persona, menu, AND critical_actions`, () => {
-    const filePath = path.join(agentsDir, `${agent.id}.customize.yaml`);
-    assert.ok(fs.existsSync(filePath), `${agent.id}.customize.yaml must exist`);
-    const content = fs.readFileSync(filePath, 'utf-8');
-
-    assert.ok(content.includes('persona:'), `${agent.id} must have persona section`);
-    assert.ok(content.includes('menu:'), `${agent.id} must have menu section`);
-    assert.ok(content.includes('critical_actions:'), `${agent.id} must have critical_actions section`);
-    assert.ok(content.includes(`skills/${agent.slug}/MANIFEST.yaml`),
-      `${agent.id} critical_actions must reference skills/${agent.slug}/MANIFEST.yaml`);
-  });
-}
-
-test('2.5: custom agent critical_actions have all 3 steps', () => {
-  for (const agent of customAgents) {
-    const content = fs.readFileSync(path.join(agentsDir, `${agent.id}.customize.yaml`), 'utf-8');
-    assert.ok(content.includes('1:'), `${agent.id} must have step 1`);
-    assert.ok(content.includes('2:'), `${agent.id} must have step 2`);
-    assert.ok(content.includes('3:'), `${agent.id} must have step 3`);
-    assert.ok(content.includes('always_load: true'), `${agent.id} step 2 must reference always_load`);
-    assert.ok(content.includes('Follow all skill directives'), `${agent.id} step 3 must follow directives`);
-  }
+test('2.1: lib/bmad-customize/ directory exists', () => {
+  assert.ok(fs.existsSync(customizeDir), 'lib/bmad-customize/ must exist');
 });
-
-// ─── AC #3: 7 built-in agents have ONLY critical_actions ────────────────────
-
-console.log('\nAC #3 — Built-in agents: critical_actions only');
 
 const builtinAgents = [
   'bmm-pm', 'bmm-architect', 'bmm-dev', 'bmm-qa',
-  'bmm-sm', 'bmm-tech-writer', 'bmm-ux-designer'
+  'bmm-sm', 'bmm-tech-writer', 'bmm-ux-designer', 'bmm-bmad-master'
 ];
 
+test('2.2: lib/bmad-customize/ contains exactly 8 .customize.yaml files', () => {
+  const files = fs.readdirSync(customizeDir).filter(f => f.endsWith('.customize.yaml'));
+  assert.strictEqual(files.length, 8, `Expected 8 .customize.yaml files, found ${files.length}`);
+});
+
 for (const agentId of builtinAgents) {
-  test(`3.${builtinAgents.indexOf(agentId) + 1}: ${agentId}.customize.yaml has ONLY critical_actions (no persona/menu)`, () => {
-    const filePath = path.join(agentsDir, `${agentId}.customize.yaml`);
+  test(`2.3-${agentId}: ${agentId}.customize.yaml exists with correct content`, () => {
+    const filePath = path.join(customizeDir, `${agentId}.customize.yaml`);
     assert.ok(fs.existsSync(filePath), `${agentId}.customize.yaml must exist`);
     const content = fs.readFileSync(filePath, 'utf-8');
 
+    // Must have critical_actions
     assert.ok(content.includes('critical_actions:'), `${agentId} must have critical_actions`);
+
+    // Must use 6.2.0 array syntax (- "...") not numbered keys (1: "...")
+    assert.ok(content.includes('  - "'), `${agentId} must use array syntax (- "...")`);
+    assert.ok(!content.match(/^\s+\d+:/m), `${agentId} must NOT use numbered key syntax`);
+
+    // Must NOT have persona or menu
     assert.ok(!content.includes('persona:'), `${agentId} must NOT have persona section`);
     assert.ok(!content.includes('menu:'), `${agentId} must NOT have menu section`);
+
+    // Must reference project-level skills/MANIFEST.yaml
     assert.ok(content.includes('skills/MANIFEST.yaml'), `${agentId} must reference project-level skills/MANIFEST.yaml`);
+
+    // Must have all 4 critical actions
+    assert.ok(content.includes('Read the skills MANIFEST'), `${agentId} must have MANIFEST read action`);
+    assert.ok(content.includes('always_load: true'), `${agentId} must reference always_load`);
+    assert.ok(content.includes('project-context.md'), `${agentId} must reference project-context.md`);
+    assert.ok(content.includes('Follow all skill directives'), `${agentId} must have follow directives action`);
+
+    // Must have agent-specific comment header
+    assert.ok(content.includes(`MA-AGENTS: skill enforcement for ${agentId}`),
+      `${agentId} must have agent-specific comment header`);
   });
 }
 
-// ─── AC #4: bmad.js has extension deployment stage ──────────────────────────
+// ─── AC #3: bmad.js has extension and customize deployment stages ─────────
 
-console.log('\nAC #4 — bmad.js extension deployment');
+console.log('\nAC #3 — bmad.js deployment logic');
 
-test('4.1: bmad.js contains extension deployment code', () => {
+test('3.1: bmad.js contains extension deployment code', () => {
   const bmadSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
   assert.ok(bmadSrc.includes("'bmad-extension'"), 'bmad.js must reference bmad-extension source dir');
   assert.ok(bmadSrc.includes("'extensions'"), 'bmad.js must reference extensions target dir');
   assert.ok(bmadSrc.includes("'ma-agents-skills'"), 'bmad.js must reference ma-agents-skills');
 });
 
-test('4.2: extension deployment uses path.join for all paths', () => {
+test('3.2: bmad.js contains customize deployment code', () => {
+  const bmadSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
+  assert.ok(bmadSrc.includes("'bmad-customize'"), 'bmad.js must reference bmad-customize source dir');
+  assert.ok(bmadSrc.includes('Applied built-in customization'), 'bmad.js must log built-in customization deployment');
+});
+
+test('3.3: extension deployment uses path.join for all paths', () => {
   const bmadSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
   assert.ok(bmadSrc.includes("path.join(__dirname, 'bmad-extension')"),
     'extensionSource must use path.join');
@@ -137,37 +145,51 @@ test('4.2: extension deployment uses path.join for all paths', () => {
     'extensionTarget must use path.join');
 });
 
-test('4.3: extension deployment is AFTER recompile and BEFORE workflows', () => {
-  // Uses STAGE: markers in bmad.js comments — these are test-coupled anchors (see M2 review)
+test('3.4: customize deployment uses path.join for source', () => {
+  const bmadSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
+  assert.ok(bmadSrc.includes("path.join(__dirname, 'bmad-customize')"),
+    'customizeSource must use path.join');
+});
+
+test('3.5: deployment order is RECOMPILE > EXTENSION > CUSTOMIZE > WORKFLOWS', () => {
   const bmadSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
   const recompileIdx = bmadSrc.indexOf('STAGE:RECOMPILE');
   const extensionIdx = bmadSrc.indexOf('STAGE:EXTENSION');
+  const customizeIdx = bmadSrc.indexOf('STAGE:CUSTOMIZE');
   const workflowIdx = bmadSrc.indexOf('STAGE:WORKFLOWS');
 
   assert.ok(recompileIdx > 0, 'STAGE:RECOMPILE marker must exist');
   assert.ok(extensionIdx > 0, 'STAGE:EXTENSION marker must exist');
+  assert.ok(customizeIdx > 0, 'STAGE:CUSTOMIZE marker must exist');
   assert.ok(workflowIdx > 0, 'STAGE:WORKFLOWS marker must exist');
   assert.ok(extensionIdx > recompileIdx, 'extension deployment must come after recompile');
-  assert.ok(extensionIdx < workflowIdx, 'extension deployment must come before workflows');
+  assert.ok(customizeIdx > extensionIdx, 'customize deployment must come after extension');
+  assert.ok(customizeIdx < workflowIdx, 'customize deployment must come before workflows');
 });
 
-test('4.4: extension deployment logs with chalk.cyan', () => {
+test('3.6: extension deployment logs with chalk.cyan', () => {
   const bmadSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
   assert.ok(bmadSrc.includes("chalk.cyan('    + Deployed BMAD extension module: ma-agents-skills')"),
     'must log deployment with chalk.cyan');
 });
 
-test('4.5: existing bmad-customizations files are preserved (backward compatibility)', () => {
+test('3.7: existing bmad-customizations files are preserved (backward compatibility)', () => {
   const customDir = path.join(__dirname, '..', 'lib', 'bmad-customizations');
+  const customAgents = [
+    { id: 'bmm-sre' },
+    { id: 'bmm-devops' },
+    { id: 'bmm-cyber' },
+    { id: 'bmm-mil498' }
+  ];
   for (const agent of customAgents) {
     const filePath = path.join(customDir, `${agent.id}.customize.yaml`);
     assert.ok(fs.existsSync(filePath), `${agent.id}.customize.yaml must still exist in bmad-customizations/`);
   }
 });
 
-// ─── M3: Integration test — actual fs.copy deployment ───────────────────────
+// ─── Integration tests — actual fs.copy deployment ───────────────────────
 
-console.log('\nIntegration — applyCustomizations() deploys extension');
+console.log('\nIntegration — applyCustomizations() deployment');
 
 const fsExtra = require('fs-extra');
 const os = require('os');
@@ -206,12 +228,34 @@ async function runIntegrationTests() {
     const content = fsExtra.readFileSync(deployedModule, 'utf-8');
     assert.ok(content.includes('extends-module: bmm'),
       'deployed module.yaml must contain extends-module: bmm');
+  });
 
-    // Verify agent files deployed
-    const deployedAgents = path.join(tmpDir, '_bmad', 'extensions', 'ma-agents-skills', 'agents');
-    assert.ok(fsExtra.existsSync(deployedAgents), 'agents/ directory must be deployed');
-    const files = fsExtra.readdirSync(deployedAgents).filter(f => f.endsWith('.customize.yaml'));
-    assert.strictEqual(files.length, 11, `Expected 11 deployed agent files, found ${files.length}`);
+  await asyncTest('INT-2: applyCustomizations deploys built-in customizations to _bmad/_config/agents/', async () => {
+    // Verify built-in customizations were deployed to config dir
+    const configAgentsDir = path.join(tmpDir, '_bmad', '_config', 'agents');
+
+    for (const agentId of builtinAgents) {
+      const deployedFile = path.join(configAgentsDir, `${agentId}.customize.yaml`);
+      assert.ok(fsExtra.existsSync(deployedFile),
+        `${agentId}.customize.yaml must be deployed to _bmad/_config/agents/`);
+
+      const content = fsExtra.readFileSync(deployedFile, 'utf-8');
+      assert.ok(content.includes('critical_actions:'),
+        `deployed ${agentId}.customize.yaml must contain critical_actions`);
+      assert.ok(content.includes('skills/MANIFEST.yaml'),
+        `deployed ${agentId}.customize.yaml must reference skills/MANIFEST.yaml`);
+    }
+  });
+
+  await asyncTest('INT-3: deployed customizations use array syntax not numbered keys', async () => {
+    const configAgentsDir = path.join(tmpDir, '_bmad', '_config', 'agents');
+
+    for (const agentId of builtinAgents) {
+      const deployedFile = path.join(configAgentsDir, `${agentId}.customize.yaml`);
+      const content = fsExtra.readFileSync(deployedFile, 'utf-8');
+      assert.ok(content.includes('  - "'), `deployed ${agentId} must use array syntax`);
+      assert.ok(!content.match(/^\s+\d+:/m), `deployed ${agentId} must NOT use numbered keys`);
+    }
   });
 
   // Cleanup

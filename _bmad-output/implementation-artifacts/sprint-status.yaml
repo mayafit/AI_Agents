@@ -187,7 +187,7 @@ development_status:
   15-3-convert-custom-agents-to-skill-folders: done
   15-4-convert-mil498-workflows-to-skill-md: done
   15-5-convert-sre-devops-cyber-workflows: done
-  15-6-separate-built-in-agent-customizations: ready-for-dev
+  15-6-separate-built-in-agent-customizations: done
   15-7-migration-detection-and-upgrade-path: ready-for-dev
   15-8-validate-migrated-agents-and-workflows: ready-for-dev
   epic-15-retrospective: optional
