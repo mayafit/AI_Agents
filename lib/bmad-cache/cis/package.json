@@ -1,7 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "bmad-creative-intelligence-suite",
-  "version": "0.1.8",
+  "version": "0.1.9",
+  "private": true,
   "description": "A BMad MEthod Core Module that offers a suite of very creative agents and workflows",
   "keywords": [
     "bmad",
@@ -31,9 +32,7 @@
     "release:minor": "npm version minor && git push --follow-tags",
     "release:patch": "npm version patch && git push --follow-tags",
     "release:prerelease": "npm version prerelease && git push --follow-tags",
-    "test": "npm run test:schemas && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
-    "test:schemas": "node test/test-agent-schema.js",
-    "validate:schemas": "node test/validate-agent-schema.js"
+    "test": "npm run lint && npm run lint:md && npm run format:check"
   },
   "lint-staged": {
     "*.{js,cjs,mjs}": [
