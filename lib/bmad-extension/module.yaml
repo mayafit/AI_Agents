@@ -1,3 +1,5 @@
+code: ma-skills
+name: "MA-Agents Skills & Agents"
+description: "Enterprise methodology enforcement, specialized agents, and operational workflows"
 extends-module: bmm
-name: ma-agents-skills
-description: MA-Agents skill enforcement extension for BMM agents
+default_selected: false
