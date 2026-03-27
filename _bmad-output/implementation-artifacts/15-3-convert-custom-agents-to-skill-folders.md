@@ -1,6 +1,6 @@
 # Story 15.3: Convert 4 Custom Agents to Skill Folders
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -19,39 +19,39 @@ So that they are delivered as native module agents following the verified CIS pa
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Consolidate SRE agent source material (AC: #1, #2, #4)
-  - [ ] 1.1 Read `lib/bmad-customizations/bmm-sre.customize.yaml` (base config)
-  - [ ] 1.2 Read `lib/bmad-extension/agents/bmm-sre.customize.yaml` (extended config with critical_actions)
-  - [ ] 1.3 Read `lib/bmad-customizations/sre.md` (full agent persona/menu XML definition)
-  - [ ] 1.4 Merge all three sources into unified agent definition
-  - [ ] 1.5 Create `lib/bmad-extension/skills/bmad-ma-agent-sre/SKILL.md` with complete definition
-  - [ ] 1.6 Create `lib/bmad-extension/skills/bmad-ma-agent-sre/bmad-skill-manifest.yaml`
-  - [ ] 1.7 Update menu item references from old workflow paths to new skill names (e.g., `sre-health-check`, `sre-fix-deployments`, etc.)
+- [x] Task 1: Consolidate SRE agent source material (AC: #1, #2, #4)
+  - [x] 1.1 Read `lib/bmad-customizations/bmm-sre.customize.yaml` (base config)
+  - [x] 1.2 Read `lib/bmad-extension/agents/bmm-sre.customize.yaml` (extended config with critical_actions)
+  - [x] 1.3 Read `lib/bmad-customizations/sre.md` (full agent persona/menu XML definition)
+  - [x] 1.4 Merge all three sources into unified agent definition
+  - [x] 1.5 Create `lib/bmad-extension/skills/bmad-ma-agent-sre/SKILL.md` with complete definition
+  - [x] 1.6 Create `lib/bmad-extension/skills/bmad-ma-agent-sre/bmad-skill-manifest.yaml`
+  - [x] 1.7 Update menu item references from old workflow paths to new skill names (e.g., `sre-health-check`, `sre-fix-deployments`, etc.)
 
-- [ ] Task 2: Consolidate DevOps agent (AC: #1, #2, #5)
-  - [ ] 2.1 Read `lib/bmad-customizations/bmm-devops.customize.yaml`
-  - [ ] 2.2 Read `lib/bmad-extension/agents/bmm-devops.customize.yaml`
-  - [ ] 2.3 Read `lib/bmad-customizations/devops.md`
-  - [ ] 2.4 Create `lib/bmad-extension/skills/bmad-ma-agent-devops/SKILL.md`
-  - [ ] 2.5 Create `lib/bmad-extension/skills/bmad-ma-agent-devops/bmad-skill-manifest.yaml`
+- [x] Task 2: Consolidate DevOps agent (AC: #1, #2, #5)
+  - [x] 2.1 Read `lib/bmad-customizations/bmm-devops.customize.yaml`
+  - [x] 2.2 Read `lib/bmad-extension/agents/bmm-devops.customize.yaml`
+  - [x] 2.3 Read `lib/bmad-customizations/devops.md`
+  - [x] 2.4 Create `lib/bmad-extension/skills/bmad-ma-agent-devops/SKILL.md`
+  - [x] 2.5 Create `lib/bmad-extension/skills/bmad-ma-agent-devops/bmad-skill-manifest.yaml`
 
-- [ ] Task 3: Consolidate Cyber agent (AC: #1, #2, #5)
-  - [ ] 3.1 Read `lib/bmad-customizations/bmm-cyber.customize.yaml`
-  - [ ] 3.2 Read `lib/bmad-extension/agents/bmm-cyber.customize.yaml`
-  - [ ] 3.3 Read `lib/bmad-customizations/cyber.md`
-  - [ ] 3.4 Create `lib/bmad-extension/skills/bmad-ma-agent-cyber/SKILL.md`
-  - [ ] 3.5 Create `lib/bmad-extension/skills/bmad-ma-agent-cyber/bmad-skill-manifest.yaml`
+- [x] Task 3: Consolidate Cyber agent (AC: #1, #2, #5)
+  - [x] 3.1 Read `lib/bmad-customizations/bmm-cyber.customize.yaml`
+  - [x] 3.2 Read `lib/bmad-extension/agents/bmm-cyber.customize.yaml`
+  - [x] 3.3 Read `lib/bmad-customizations/cyber.md`
+  - [x] 3.4 Create `lib/bmad-extension/skills/bmad-ma-agent-cyber/SKILL.md`
+  - [x] 3.5 Create `lib/bmad-extension/skills/bmad-ma-agent-cyber/bmad-skill-manifest.yaml`
 
-- [ ] Task 4: Consolidate MIL-498 agent (AC: #1, #2, #5)
-  - [ ] 4.1 Read `lib/bmad-customizations/bmm-mil498.customize.yaml`
-  - [ ] 4.2 Read `lib/bmad-extension/agents/bmm-mil498.customize.yaml`
-  - [ ] 4.3 Read `lib/bmad-customizations/mil498.md`
-  - [ ] 4.4 Create `lib/bmad-extension/skills/bmad-ma-agent-mil498/SKILL.md`
-  - [ ] 4.5 Create `lib/bmad-extension/skills/bmad-ma-agent-mil498/bmad-skill-manifest.yaml`
+- [x] Task 4: Consolidate MIL-498 agent (AC: #1, #2, #5)
+  - [x] 4.1 Read `lib/bmad-customizations/bmm-mil498.customize.yaml`
+  - [x] 4.2 Read `lib/bmad-extension/agents/bmm-mil498.customize.yaml`
+  - [x] 4.3 Read `lib/bmad-customizations/mil498.md`
+  - [x] 4.4 Create `lib/bmad-extension/skills/bmad-ma-agent-mil498/SKILL.md`
+  - [x] 4.5 Create `lib/bmad-extension/skills/bmad-ma-agent-mil498/bmad-skill-manifest.yaml`
 
-- [ ] Task 5: Verify behavioral equivalence (AC: #6)
-  - [ ] 5.1 Compare each SKILL.md against its source files — ensure NO persona, menu item, or critical_action is lost
-  - [ ] 5.2 Verify all workflow references in menus use the new skill names
+- [x] Task 5: Verify behavioral equivalence (AC: #6)
+  - [x] 5.1 Compare each SKILL.md against its source files — ensure NO persona, menu item, or critical_action is lost
+  - [x] 5.2 Verify all workflow references in menus use the new skill names
 
 ## Dev Notes
 
@@ -112,13 +112,13 @@ principles: "Reliability first. Automate everything. Measure what matters."
 module: ma-skills
 ```
 
-### Menu Item → Skill Name Mapping
+### Menu Item -> Skill Name Mapping
 
 Map old workflow references to new skill names:
-- SRE agent menus → `sre-*` skill names
-- DevOps agent menus → `devops-*` skill names
-- Cyber agent menus → `cyber-*` skill names
-- MIL-498 agent menus → `mil498-*` skill names
+- SRE agent menus -> `sre-*` skill names
+- DevOps agent menus -> `devops-*` skill names
+- Cyber agent menus -> `cyber-*` skill names
+- MIL-498 agent menus -> `mil498-*` skill names
 
 ### Anti-Patterns to Avoid
 
@@ -156,9 +156,28 @@ Map old workflow references to new skill names:
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6 (1M context)
 
 ### Debug Log References
+N/A
 
 ### Completion Notes List
+- Consolidated all 4 agents (SRE/Alex, DevOps/Amit, Cyber/Yael, MIL-498/Joseph) from 3 source files each into BMAD 6.2.0 skill folders
+- Each agent has SKILL.md (persona, activation sequence, menu, critical actions) and bmad-skill-manifest.yaml (type: agent, all required fields, module: ma-skills)
+- All menu items reference new skill names (sre-*, devops-*, cyber-*, mil498-*) — no old workflow paths remain
+- Persona text copied verbatim from authoritative .md source files; critical_actions copied from extension .customize.yaml files
+- Test file (test/convert-agents-to-skills.test.js) validates all 136 assertions across file existence, content sections, manifest fields, skill name references, and no-old-path regression
+- Test added to package.json test script
 
 ### File List
+- `lib/bmad-extension/skills/bmad-ma-agent-sre/SKILL.md` — NEW
+- `lib/bmad-extension/skills/bmad-ma-agent-sre/bmad-skill-manifest.yaml` — NEW
+- `lib/bmad-extension/skills/bmad-ma-agent-devops/SKILL.md` — NEW
+- `lib/bmad-extension/skills/bmad-ma-agent-devops/bmad-skill-manifest.yaml` — NEW
+- `lib/bmad-extension/skills/bmad-ma-agent-cyber/SKILL.md` — NEW
+- `lib/bmad-extension/skills/bmad-ma-agent-cyber/bmad-skill-manifest.yaml` — NEW
+- `lib/bmad-extension/skills/bmad-ma-agent-mil498/SKILL.md` — NEW
+- `lib/bmad-extension/skills/bmad-ma-agent-mil498/bmad-skill-manifest.yaml` — NEW
+- `test/convert-agents-to-skills.test.js` — NEW
+- `package.json` — MODIFIED (added test to test script)
+- `_bmad-output/implementation-artifacts/15-3-convert-custom-agents-to-skill-folders.md` — MODIFIED (status: review, all tasks checked)
