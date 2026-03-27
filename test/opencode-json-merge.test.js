@@ -4,6 +4,9 @@
  *
  * Validates that updateAgentInstructions() merges skill instructions into an
  * existing opencode.json without destroying user configuration.
+ *
+ * Updated: instructions entries are now plain strings (OpenCode schema compliance).
+ * Legacy object-format entries ({ _source, text }) are cleaned up during merge.
  */
 'use strict';
 
@@ -57,13 +60,20 @@ function createOpenCodeAgent(projectRoot) {
   };
 }
 
+// Helper: check if an entry is an ma-agents entry (new string or legacy object format)
+function isMaEntry(entry) {
+  return (typeof entry === 'string' && entry.startsWith(`[${MA_AGENTS_SOURCE}]`)) ||
+    (typeof entry === 'object' && entry != null && entry._source === MA_AGENTS_SOURCE);
+}
+
 // Helper: create a fixture opencode.json with mixed entries and extra top-level key
+// Includes a legacy object-format ma-agents entry to test backward compat cleanup
 async function writeFixture(filePath) {
   const fixture = {
     theme: 'dark',
     instructions: [
       'user instruction',
-      { text: 'another user entry' },
+      'another user instruction',
       { _source: MA_AGENTS_SOURCE, text: 'old instruction' }
     ]
   };
@@ -84,7 +94,7 @@ console.log('\nStory 9.3 — JSON injection: file-present merge path');
       await updateFn(agent, tmpDir);
 
       const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      const userEntries = parsed.instructions.filter(e => e._source !== MA_AGENTS_SOURCE);
+      const userEntries = parsed.instructions.filter(e => !isMaEntry(e));
       assert.strictEqual(userEntries.length, 2,
         `Expected 2 user entries, got ${userEntries.length}`);
     });
@@ -99,15 +109,15 @@ console.log('\nStory 9.3 — JSON injection: file-present merge path');
       await updateFn(agent, tmpDir);
 
       const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      const userEntries = parsed.instructions.filter(e => e._source !== MA_AGENTS_SOURCE);
+      const userEntries = parsed.instructions.filter(e => !isMaEntry(e));
       assert.strictEqual(userEntries[0], 'user instruction',
-        `First user entry should be plain string "user instruction", got: ${JSON.stringify(userEntries[0])}`);
-      assert.deepStrictEqual(userEntries[1], { text: 'another user entry' },
-        `Second user entry should be { text: "another user entry" }, got: ${JSON.stringify(userEntries[1])}`);
+        `First user entry should be "user instruction", got: ${JSON.stringify(userEntries[0])}`);
+      assert.strictEqual(userEntries[1], 'another user instruction',
+        `Second user entry should be "another user instruction", got: ${JSON.stringify(userEntries[1])}`);
     });
   });
 
-  await asyncTest('9.3.3: stale ma-agents entry is removed', async () => {
+  await asyncTest('9.3.3: legacy object-format ma-agents entry is removed', async () => {
     await withTempDir(async (tmpDir) => {
       const agent = createOpenCodeAgent(tmpDir);
       const filePath = path.join(tmpDir, 'opencode.json');
@@ -116,15 +126,15 @@ console.log('\nStory 9.3 — JSON injection: file-present merge path');
       await updateFn(agent, tmpDir);
 
       const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      const oldEntry = parsed.instructions.find(
-        e => typeof e === 'object' && e._source === MA_AGENTS_SOURCE && e.text === 'old instruction'
+      const legacyEntry = parsed.instructions.find(
+        e => typeof e === 'object' && e != null && e._source === MA_AGENTS_SOURCE
       );
-      assert.strictEqual(oldEntry, undefined,
-        'Stale ma-agents entry with text "old instruction" should have been removed');
+      assert.strictEqual(legacyEntry, undefined,
+        'Legacy object-format ma-agents entry should have been removed');
     });
   });
 
-  await asyncTest('9.3.4: fresh ma-agents entries are appended', async () => {
+  await asyncTest('9.3.4: fresh ma-agents entry is a plain string', async () => {
     await withTempDir(async (tmpDir) => {
       const agent = createOpenCodeAgent(tmpDir);
       const filePath = path.join(tmpDir, 'opencode.json');
@@ -133,16 +143,14 @@ console.log('\nStory 9.3 — JSON injection: file-present merge path');
       await updateFn(agent, tmpDir);
 
       const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      const freshEntries = parsed.instructions.filter(
-        e => typeof e === 'object' && e._source === MA_AGENTS_SOURCE
-      );
+      const freshEntries = parsed.instructions.filter(e => isMaEntry(e));
       assert.ok(freshEntries.length > 0,
         'At least one fresh ma-agents entry should be present');
       for (const entry of freshEntries) {
-        assert.strictEqual(typeof entry.text, 'string',
-          `Fresh entry "text" should be a string, got: ${typeof entry.text}`);
-        assert.ok(entry.text.length > 0,
-          'Fresh entry "text" should not be empty');
+        assert.strictEqual(typeof entry, 'string',
+          `Fresh entry should be a plain string, got ${typeof entry}: ${JSON.stringify(entry)}`);
+        assert.ok(entry.startsWith(`[${MA_AGENTS_SOURCE}]`),
+          `Fresh entry should start with [${MA_AGENTS_SOURCE}]`);
       }
     });
   });
@@ -157,12 +165,10 @@ console.log('\nStory 9.3 — JSON injection: file-present merge path');
 
       const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
       const instructions = parsed.instructions;
-      // Find the last index of a user entry and first index of ma-agents entry
       let lastUserIdx = -1;
       let firstMaIdx = -1;
       for (let i = 0; i < instructions.length; i++) {
-        const e = instructions[i];
-        if (typeof e === 'object' && e._source === MA_AGENTS_SOURCE) {
+        if (isMaEntry(instructions[i])) {
           if (firstMaIdx === -1) firstMaIdx = i;
         } else {
           lastUserIdx = i;
@@ -250,9 +256,7 @@ console.log('\nStory 9.3 — JSON injection: file-present merge path');
       await updateFn(agent, tmpDir);
 
       const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      const maEntries = parsed.instructions.filter(
-        e => typeof e === 'object' && e._source === MA_AGENTS_SOURCE
-      );
+      const maEntries = parsed.instructions.filter(e => isMaEntry(e));
       // Should have same count as after first run (no accumulation)
       await withTempDir(async (tmpDir2) => {
         const agent2 = createOpenCodeAgent(tmpDir2);
@@ -260,9 +264,7 @@ console.log('\nStory 9.3 — JSON injection: file-present merge path');
         await writeFixture(filePath2);
         await updateFn(agent2, tmpDir2);
         const parsed2 = JSON.parse(fs.readFileSync(filePath2, 'utf-8'));
-        const maEntries2 = parsed2.instructions.filter(
-          e => typeof e === 'object' && e._source === MA_AGENTS_SOURCE
-        );
+        const maEntries2 = parsed2.instructions.filter(e => isMaEntry(e));
         assert.strictEqual(maEntries.length, maEntries2.length,
           `Running installer twice should not accumulate ma-agents entries. Got ${maEntries.length} after 2 runs, ${maEntries2.length} after 1 run`);
       });
@@ -273,19 +275,36 @@ console.log('\nStory 9.3 — JSON injection: file-present merge path');
     await withTempDir(async (tmpDir) => {
       const agent = createOpenCodeAgent(tmpDir);
       const filePath = path.join(tmpDir, 'opencode.json');
-      // Hand-edited file with null entry and a valid user entry
-      const fixture = { instructions: [null, { text: 'user entry' }, { _source: MA_AGENTS_SOURCE, text: 'old ma-entry' }] };
+      // Hand-edited file with null entry, a valid user entry, and a legacy ma-agents object
+      const fixture = { instructions: [null, 'user entry', { _source: MA_AGENTS_SOURCE, text: 'old ma-entry' }] };
       await fs.writeFile(filePath, JSON.stringify(fixture, null, 2), 'utf-8');
 
       await updateFn(agent, tmpDir);
 
       const result = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      // null should be filtered out — only user entry + fresh ma-agents entry remain
+      // null should be filtered out — only user entry + fresh ma-agents string remain
       assert.ok(!result.instructions.includes(null), 'null entry should be removed from instructions array');
-      const userEntries = result.instructions.filter(e => e != null && e._source !== MA_AGENTS_SOURCE);
+      const userEntries = result.instructions.filter(e => e != null && !isMaEntry(e));
       assert.strictEqual(userEntries.length, 1, 'valid user entry should be preserved');
-      const maEntries = result.instructions.filter(e => e != null && e._source === MA_AGENTS_SOURCE);
+      const maEntries = result.instructions.filter(e => isMaEntry(e));
       assert.ok(maEntries.length > 0, 'fresh ma-agents entry should be present');
+      assert.strictEqual(typeof maEntries[0], 'string', 'fresh ma-agents entry should be a plain string');
+    });
+  });
+
+  await asyncTest('9.3.12: all entries in output are plain strings (OpenCode schema compliance)', async () => {
+    await withTempDir(async (tmpDir) => {
+      const agent = createOpenCodeAgent(tmpDir);
+      const filePath = path.join(tmpDir, 'opencode.json');
+      await writeFixture(filePath);
+
+      await updateFn(agent, tmpDir);
+
+      const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      for (const entry of parsed.instructions) {
+        assert.strictEqual(typeof entry, 'string',
+          `All entries should be plain strings for OpenCode compatibility, got ${typeof entry}: ${JSON.stringify(entry)}`);
+      }
     });
   });
 

@@ -185,7 +185,7 @@ development_status:
   15-1-bump-bmad-method-to-6-2-1: done
   15-2-restructure-extension-module: done
   15-3-convert-custom-agents-to-skill-folders: done
-  15-4-convert-mil498-workflows-to-skill-md: review
+  15-4-convert-mil498-workflows-to-skill-md: done
   15-5-convert-sre-devops-cyber-workflows: ready-for-dev
   15-6-separate-built-in-agent-customizations: ready-for-dev
   15-7-migration-detection-and-upgrade-path: ready-for-dev

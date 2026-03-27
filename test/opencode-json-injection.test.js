@@ -4,6 +4,9 @@
  *
  * Validates that updateAgentInstructions() creates a valid opencode.json
  * from scratch when the file does not yet exist, using the json-merge strategy.
+ *
+ * Updated: instructions entries are now plain strings (OpenCode schema compliance).
+ * ma-agents entries are identified by a [ma-agents] prefix in the string.
  */
 'use strict';
 
@@ -69,6 +72,12 @@ function createOpenCodeAgent(projectRoot) {
   };
 }
 
+// Helper: check if an entry is an ma-agents entry (string with prefix)
+function isMaEntry(entry) {
+  return (typeof entry === 'string' && entry.startsWith(`[${MA_AGENTS_SOURCE}]`)) ||
+    (typeof entry === 'object' && entry != null && entry._source === MA_AGENTS_SOURCE);
+}
+
 // ─── Creation path tests (file absent) ───────────────────────────────────────
 
 console.log('\nStory 9.2 — JSON injection: file-absent creation path');
@@ -126,7 +135,7 @@ console.log('\nStory 9.2 — JSON injection: file-absent creation path');
     });
   });
 
-  await asyncTest('9.2.5: every entry has _source === MA_AGENTS_SOURCE', async () => {
+  await asyncTest('9.2.5: every entry is a plain string (OpenCode schema compliance)', async () => {
     await withTempDir(async (tmpDir) => {
       const agent = createOpenCodeAgent(tmpDir);
       const filePath = path.join(tmpDir, 'opencode.json');
@@ -134,13 +143,13 @@ console.log('\nStory 9.2 — JSON injection: file-absent creation path');
       await updateFn(agent, tmpDir);
       const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
       for (const entry of parsed.instructions) {
-        assert.strictEqual(entry._source, MA_AGENTS_SOURCE,
-          `Entry _source should be "${MA_AGENTS_SOURCE}", got: "${entry._source}"`);
+        assert.strictEqual(typeof entry, 'string',
+          `Entry should be a plain string, got ${typeof entry}: ${JSON.stringify(entry)}`);
       }
     });
   });
 
-  await asyncTest('9.2.6: every entry has a non-empty "text" string', async () => {
+  await asyncTest('9.2.6: every entry starts with [ma-agents] prefix', async () => {
     await withTempDir(async (tmpDir) => {
       const agent = createOpenCodeAgent(tmpDir);
       const filePath = path.join(tmpDir, 'opencode.json');
@@ -148,10 +157,8 @@ console.log('\nStory 9.2 — JSON injection: file-absent creation path');
       await updateFn(agent, tmpDir);
       const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
       for (const entry of parsed.instructions) {
-        assert.strictEqual(typeof entry.text, 'string',
-          `Entry "text" should be a string, got: ${typeof entry.text}`);
-        assert.ok(entry.text.length > 0,
-          'Entry "text" should not be empty');
+        assert.ok(entry.startsWith(`[${MA_AGENTS_SOURCE}]`),
+          `Entry should start with [${MA_AGENTS_SOURCE}], got: "${entry.substring(0, 30)}..."`);
       }
     });
   });
@@ -189,7 +196,7 @@ console.log('\nStory 9.2 — JSON injection: file-absent creation path');
 
       await updateFn(agent, tmpDir);
       const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      const allText = parsed.instructions.map(e => e.text).join('\n');
+      const allText = parsed.instructions.join('\n');
       assert.ok(allText.includes('MANIFEST.yaml'),
         'Instruction text should reference MANIFEST.yaml');
     });
@@ -222,27 +229,28 @@ console.log('\nStory 9.2 — JSON injection: file-absent creation path');
     });
   });
 
-  await asyncTest('9.2.12: file present — user entries preserved, fresh ma-agents entries appended (Story 9.3)', async () => {
+  await asyncTest('9.2.12: file present — user entries preserved, fresh ma-agents string appended', async () => {
     await withTempDir(async (tmpDir) => {
       const agent = createOpenCodeAgent(tmpDir);
       const filePath = path.join(tmpDir, 'opencode.json');
 
-      // Pre-create a file with a single user entry
-      const existingContent = { instructions: [{ _source: 'user', text: 'user instruction' }] };
+      // Pre-create a file with a single user entry (plain string, no _source)
+      const existingContent = { instructions: ['user instruction'] };
       await fs.writeFile(filePath, JSON.stringify(existingContent, null, 2), 'utf-8');
 
       await updateFn(agent, tmpDir);
 
-      // Story 9.3 merge: user entry preserved, fresh ma-agents entries appended
       const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      const userEntries = parsed.instructions.filter(e => e._source !== MA_AGENTS_SOURCE);
-      const maEntries = parsed.instructions.filter(e => e._source === MA_AGENTS_SOURCE);
+      const userEntries = parsed.instructions.filter(e => !isMaEntry(e));
+      const maEntries = parsed.instructions.filter(e => isMaEntry(e));
       assert.strictEqual(userEntries.length, 1,
         'Existing user entry should be preserved');
-      assert.strictEqual(userEntries[0]._source, 'user',
-        'User entry _source should remain "user"');
+      assert.strictEqual(userEntries[0], 'user instruction',
+        'User entry value should remain unchanged');
       assert.ok(maEntries.length > 0,
         'Fresh ma-agents entries should be appended');
+      assert.strictEqual(typeof maEntries[0], 'string',
+        'Fresh ma-agents entry should be a plain string');
     });
   });
 

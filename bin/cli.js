@@ -360,7 +360,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
   // Step 3.5: BMAD-METHOD Integration
   if (installScope === 'project') {
-    const bmadToolsFilter = ['claude-code', 'cursor', 'cline', 'gemini', 'antigravity'];
+    const bmadToolsFilter = agents.filter(a => a.category === 'ide').map(a => a.id);
 
     if (yesFlag) {
       // Warn about IDE agents not supported for BMAD customizations
