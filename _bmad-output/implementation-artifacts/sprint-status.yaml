@@ -182,10 +182,10 @@ development_status:
   # Dependencies: Epic 5 (explicit param passing). Restructures Epic 8's extension module.
   # Execution order: 15.1 → 15.2 → 15.3 → 15.4 → 15.5 → 15.6 → 15.7 → 15.8
   epic-15: in-progress
-  15-1-bump-bmad-method-to-6-2-1: ready-for-dev
-  15-2-restructure-extension-module: ready-for-dev
-  15-3-convert-custom-agents-to-skill-folders: ready-for-dev
-  15-4-convert-mil498-workflows-to-skill-md: ready-for-dev
+  15-1-bump-bmad-method-to-6-2-1: done
+  15-2-restructure-extension-module: done
+  15-3-convert-custom-agents-to-skill-folders: done
+  15-4-convert-mil498-workflows-to-skill-md: review
   15-5-convert-sre-devops-cyber-workflows: ready-for-dev
   15-6-separate-built-in-agent-customizations: ready-for-dev
   15-7-migration-detection-and-upgrade-path: ready-for-dev

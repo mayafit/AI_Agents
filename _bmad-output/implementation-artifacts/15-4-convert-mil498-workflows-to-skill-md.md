@@ -1,6 +1,6 @@
 # Story 15.4: Convert MIL-498 Workflows to SKILL.md Packages
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -19,42 +19,42 @@ So that they function without the removed legacy workflow engine.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Convert SSS workflow (AC: #1-#4)
-  - [ ] 1.1 Read `lib/bmad-workflows/mil498/sss/workflow.yaml` — extract metadata and variables
-  - [ ] 1.2 Read `lib/bmad-workflows/mil498/sss/instructions.md` — map all steps
-  - [ ] 1.3 Create `lib/bmad-extension/skills/mil498-sss/SKILL.md` — workflow entrypoint with routing logic
-  - [ ] 1.4 Create `lib/bmad-extension/skills/mil498-sss/bmad-skill-manifest.yaml` — `type: skill, name: mil498-sss, module: ma-skills`
-  - [ ] 1.5 Copy template to `lib/bmad-extension/skills/mil498-sss/template.md`
-  - [ ] 1.6 Split instructions into `prompts/01-*.md`, `02-*.md`, etc. — one file per logical step
-  - [ ] 1.7 Add user confirmation gates at each `<template-output>` boundary
+- [x] Task 1: Convert SSS workflow (AC: #1-#4)
+  - [x] 1.1 Read `lib/bmad-workflows/mil498/sss/workflow.yaml` — extract metadata and variables
+  - [x] 1.2 Read `lib/bmad-workflows/mil498/sss/instructions.md` — map all steps
+  - [x] 1.3 Create `lib/bmad-extension/skills/mil498-sss/SKILL.md` — workflow entrypoint with routing logic
+  - [x] 1.4 Create `lib/bmad-extension/skills/mil498-sss/bmad-skill-manifest.yaml` — `type: skill, name: mil498-sss, module: ma-skills`
+  - [x] 1.5 Copy template to `lib/bmad-extension/skills/mil498-sss/template.md`
+  - [x] 1.6 Split instructions into `prompts/01-*.md`, `02-*.md`, etc. — one file per logical step
+  - [x] 1.7 Add user confirmation gates at each `<template-output>` boundary
 
-- [ ] Task 2: Convert SSDD workflow (AC: #1-#4)
-  - [ ] 2.1-2.7 Same pattern as Task 1 for `lib/bmad-workflows/mil498/ssdd/`
+- [x] Task 2: Convert SSDD workflow (AC: #1-#4)
+  - [x] 2.1-2.7 Same pattern as Task 1 for `lib/bmad-workflows/mil498/ssdd/`
 
-- [ ] Task 3: Convert OCD workflow (AC: #1-#4)
-  - [ ] 3.1-3.7 Same pattern for `lib/bmad-workflows/mil498/ocd/`
+- [x] Task 3: Convert OCD workflow (AC: #1-#4)
+  - [x] 3.1-3.7 Same pattern for `lib/bmad-workflows/mil498/ocd/`
 
-- [ ] Task 4: Convert SDP workflow (AC: #1-#4)
-  - [ ] 4.1-4.7 Same pattern for `lib/bmad-workflows/mil498/sdp/`
+- [x] Task 4: Convert SDP workflow (AC: #1-#4)
+  - [x] 4.1-4.7 Same pattern for `lib/bmad-workflows/mil498/sdp/`
 
-- [ ] Task 5: Convert SRS workflow (AC: #1-#4)
-  - [ ] 5.1-5.7 Same pattern for `lib/bmad-workflows/mil498/srs/`
+- [x] Task 5: Convert SRS workflow (AC: #1-#4)
+  - [x] 5.1-5.7 Same pattern for `lib/bmad-workflows/mil498/srs/`
 
-- [ ] Task 6: Convert SDD workflow (AC: #1-#4)
-  - [ ] 6.1-6.7 Same pattern for `lib/bmad-workflows/mil498/sdd/`
+- [x] Task 6: Convert SDD workflow (AC: #1-#4)
+  - [x] 6.1-6.7 Same pattern for `lib/bmad-workflows/mil498/sdd/`
 
-- [ ] Task 7: Convert STD workflow (AC: #1-#4)
-  - [ ] 7.1-7.7 Same pattern for `lib/bmad-workflows/mil498/std/`
+- [x] Task 7: Convert STD workflow (AC: #1-#4)
+  - [x] 7.1-7.7 Same pattern for `lib/bmad-workflows/mil498/std/`
 
-- [ ] Task 8: Verify missing DID workflows (AC: #5)
-  - [ ] 8.1 Check if STR, IDD, IRS, HRS exist in `lib/bmad-workflows/mil498/` — the epics reference 11 DIDs but only 7 directories were found in codebase
-  - [ ] 8.2 If they don't exist, document which are missing and note in completion log
-  - [ ] 8.3 Create empty placeholder skill folders for any missing DIDs that should be implemented later
+- [x] Task 8: Verify missing DID workflows (AC: #5)
+  - [x] 8.1 Check if STR, IDD, IRS, HRS exist in `lib/bmad-workflows/mil498/` — confirmed NOT FOUND
+  - [x] 8.2 If they don't exist, document which are missing and note in completion log
+  - [x] 8.3 No placeholder skill folders created per anti-pattern guidance (DO NOT create DID workflows that don't exist in source)
 
-- [ ] Task 9: Verify output equivalence (AC: #5, #6)
-  - [ ] 9.1 For each converted workflow, compare template content — must be byte-identical to original
-  - [ ] 9.2 Verify step count and order matches original instructions
-  - [ ] 9.3 Verify user confirmation gates exist at all template-output boundaries
+- [x] Task 9: Verify output equivalence (AC: #5, #6)
+  - [x] 9.1 For each converted workflow, compare template content — all 7 templates byte-identical to original
+  - [x] 9.2 Verify step count and order matches original instructions — all 7 match (SSS:6, SSDD:7, OCD:6, SDP:6, SRS:6, SDD:6, STD:6)
+  - [x] 9.3 Verify user confirmation gates exist at all template-output boundaries — all 43 prompt files have CONFIRMATION GATE
 
 ## Dev Notes
 
@@ -161,9 +161,92 @@ Output template: [template.md](template.md)
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6 (1M context)
 
 ### Debug Log References
+None required — clean implementation with no errors.
 
 ### Completion Notes List
+- All 7 MIL-498 DID workflows (SSS, SSDD, OCD, SDP, SRS, SDD, STD) converted from legacy YAML/instructions format to BMAD 6.2.0 SKILL.md packages
+- Templates located at `lib/mil498-templates/{DID}.md`, copied verbatim to each skill folder as `template.md`
+- Original instructions.md files did not use `<template-output>` XML tags; step boundaries identified by `## Step N` headings. Confirmation gates added as `**CONFIRMATION GATE**` blocks at the end of each prompt file
+- SSDD has 7 steps (extra CSCI Discovery Interview step); all others have 6 steps
+- SDD workflow.yaml references the SSDD template (not a separate SDD template), which is correct per MIL-STD-498 (SDD uses same DID structure as SSDD adapted for CSCI-level)
+- Missing DIDs (STR, IDD, IRS, HRS) confirmed not present in source — no placeholders created per anti-pattern guidance
+- All 7 template copies verified byte-identical to originals
+- All 43 prompt files across 7 skills contain user confirmation gates
+
+### Change Log
+| Date | Change |
+|------|--------|
+| 2026-03-27 | Initial implementation: 7 MIL-498 DID workflows converted to SKILL.md packages |
 
 ### File List
+| File | Change |
+|------|--------|
+| `lib/bmad-extension/skills/mil498-sss/SKILL.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sss/bmad-skill-manifest.yaml` | NEW |
+| `lib/bmad-extension/skills/mil498-sss/template.md` | NEW (verbatim copy) |
+| `lib/bmad-extension/skills/mil498-sss/prompts/01-discover-project-artifacts.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sss/prompts/02-load-template.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sss/prompts/03-generate-document.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sss/prompts/04-validate.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sss/prompts/05-review.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sss/prompts/06-save.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ssdd/SKILL.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ssdd/bmad-skill-manifest.yaml` | NEW |
+| `lib/bmad-extension/skills/mil498-ssdd/template.md` | NEW (verbatim copy) |
+| `lib/bmad-extension/skills/mil498-ssdd/prompts/01-discover-project-artifacts.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ssdd/prompts/02-load-template.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ssdd/prompts/03-csci-discovery-interview.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ssdd/prompts/04-generate-document.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ssdd/prompts/05-validate.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ssdd/prompts/06-review.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ssdd/prompts/07-save.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ocd/SKILL.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ocd/bmad-skill-manifest.yaml` | NEW |
+| `lib/bmad-extension/skills/mil498-ocd/template.md` | NEW (verbatim copy) |
+| `lib/bmad-extension/skills/mil498-ocd/prompts/01-discover-project-artifacts.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ocd/prompts/02-load-template.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ocd/prompts/03-generate-document.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ocd/prompts/04-validate.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ocd/prompts/05-review.md` | NEW |
+| `lib/bmad-extension/skills/mil498-ocd/prompts/06-save.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdp/SKILL.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdp/bmad-skill-manifest.yaml` | NEW |
+| `lib/bmad-extension/skills/mil498-sdp/template.md` | NEW (verbatim copy) |
+| `lib/bmad-extension/skills/mil498-sdp/prompts/01-discover-project-artifacts.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdp/prompts/02-load-template.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdp/prompts/03-generate-document.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdp/prompts/04-validate.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdp/prompts/05-review.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdp/prompts/06-save.md` | NEW |
+| `lib/bmad-extension/skills/mil498-srs/SKILL.md` | NEW |
+| `lib/bmad-extension/skills/mil498-srs/bmad-skill-manifest.yaml` | NEW |
+| `lib/bmad-extension/skills/mil498-srs/template.md` | NEW (verbatim copy) |
+| `lib/bmad-extension/skills/mil498-srs/prompts/01-discover-project-artifacts.md` | NEW |
+| `lib/bmad-extension/skills/mil498-srs/prompts/02-load-template.md` | NEW |
+| `lib/bmad-extension/skills/mil498-srs/prompts/03-generate-document.md` | NEW |
+| `lib/bmad-extension/skills/mil498-srs/prompts/04-validate.md` | NEW |
+| `lib/bmad-extension/skills/mil498-srs/prompts/05-review.md` | NEW |
+| `lib/bmad-extension/skills/mil498-srs/prompts/06-save.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdd/SKILL.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdd/bmad-skill-manifest.yaml` | NEW |
+| `lib/bmad-extension/skills/mil498-sdd/template.md` | NEW (verbatim copy) |
+| `lib/bmad-extension/skills/mil498-sdd/prompts/01-discover-project-artifacts.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdd/prompts/02-load-template.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdd/prompts/03-generate-document.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdd/prompts/04-validate.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdd/prompts/05-review.md` | NEW |
+| `lib/bmad-extension/skills/mil498-sdd/prompts/06-save.md` | NEW |
+| `lib/bmad-extension/skills/mil498-std/SKILL.md` | NEW |
+| `lib/bmad-extension/skills/mil498-std/bmad-skill-manifest.yaml` | NEW |
+| `lib/bmad-extension/skills/mil498-std/template.md` | NEW (verbatim copy) |
+| `lib/bmad-extension/skills/mil498-std/prompts/01-discover-project-artifacts.md` | NEW |
+| `lib/bmad-extension/skills/mil498-std/prompts/02-load-template.md` | NEW |
+| `lib/bmad-extension/skills/mil498-std/prompts/03-generate-document.md` | NEW |
+| `lib/bmad-extension/skills/mil498-std/prompts/04-validate.md` | NEW |
+| `lib/bmad-extension/skills/mil498-std/prompts/05-review.md` | NEW |
+| `lib/bmad-extension/skills/mil498-std/prompts/06-save.md` | NEW |
+| `_bmad-output/implementation-artifacts/15-4-convert-mil498-workflows-to-skill-md.md` | UPDATED |
+| `_bmad-output/implementation-artifacts/sprint-status.yaml` | UPDATED |
