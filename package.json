@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node bin/cli.js",
-    "test": "node test/yes-flag.test.js && node test/skill-authoring.test.js && node test/skill-validation.test.js && node test/skill-mandatory.test.js && node test/skill-customize-agent.test.js && node test/create-agent.test.js && node test/generate-project-context.test.js && node test/build-bmad-args.test.js",
+    "test": "node test/yes-flag.test.js && node test/skill-authoring.test.js && node test/skill-validation.test.js && node test/skill-mandatory.test.js && node test/skill-customize-agent.test.js && node test/create-agent.test.js && node test/generate-project-context.test.js && node test/build-bmad-args.test.js && node test/bmad-version-bump.test.js",
     "build:bmad-cache": "node scripts/build-bmad-cache.js"
   },
   "keywords": [
@@ -26,7 +26,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "bmad-method": "6.0.4",
+    "bmad-method": "6.2.1",
     "prompts": "^2.4.2",
     "chalk": "^4.1.2",
     "fs-extra": "^11.1.1"

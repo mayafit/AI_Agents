@@ -149,16 +149,16 @@ If the BMAD installer can run but cannot fetch the Test Architect module from Gi
 
 **Solutions**:
 
-1. Verify TEA agent file exists:
+1. Verify TEA agent skill exists:
 
    ```bash
-   ls -la _bmad/tea/agents/tea.agent.yaml
+   ls -la _bmad/tea/agents/bmad-tea/SKILL.md
    ```
 
-2. Validate agent YAML syntax:
+2. Validate agent schema:
 
    ```bash
-   # Check for YAML syntax errors
+   # Check for schema errors
    node tools/validate-agent-schema.js
    ```
 
@@ -203,6 +203,20 @@ If the BMAD installer can run but cannot fetch the Test Architect module from Gi
    # Codex skill-mode alternative
    $bmad-tea-testarch-test-design
    ```
+
+### Custom TEA Workflow Does Not Appear
+
+**Symptom**: A custom workflow used to be available from TEA, but it no longer appears in the `bmad-tea` menu after updates.
+
+**Cause**: TEA is now a standalone module. Custom workflows are not merged into TEA core automatically.
+
+**Solution**:
+
+1. Package the workflow as custom content or a custom module instead of editing TEA directly.
+2. Attach it to `bmad-tea` using the generated agent customization file under `_bmad/_config/agents/`.
+3. Re-run `npx bmad-method install` so the customization and workflow registration are refreshed.
+
+See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
 
 ---
 
@@ -682,7 +696,6 @@ When reporting issues, include:
 1. **Documentation**: [test-architect.bmad-method.org](https://test-architect.bmad-method.org)
 2. **GitHub Issues**: [Report a bug](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues/new?template=issue.md)
 3. **GitHub Discussions**: [Ask a question](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/discussions)
-4. **Migration Guide**: [docs/MIGRATION.md](/docs/MIGRATION.md) for upgrade issues
 
 ### Before Reporting an Issue
 
@@ -737,11 +750,11 @@ Run this validation script:
 #!/bin/bash
 echo "Validating TEA Installation..."
 
-# Check agent file
-if [ -f "_bmad/tea/agents/tea.agent.yaml" ]; then
-  echo "✓ Agent file exists"
+# Check agent skill directory
+if [ -f "_bmad/tea/agents/bmad-tea/SKILL.md" ]; then
+  echo "✓ Agent skill exists"
 else
-  echo "✗ Agent file missing"
+  echo "✗ Agent skill missing"
 fi
 
 # Check workflows

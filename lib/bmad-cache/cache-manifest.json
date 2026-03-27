@@ -1,30 +1,36 @@
 {
-  "generated": "2026-03-17T12:12:36.622Z",
-  "bmadMethodVersion": "6.0.4",
+  "generated": "2026-03-27T08:10:00.449Z",
+  "bmadMethodVersion": "6.2.1",
   "modules": {
     "bmb": {
       "url": "https://github.com/bmad-code-org/bmad-builder",
       "branch": "main",
-      "commitSha": "4a790580a7812415bf7122c0e5680679af0527a9",
-      "clonedAt": "2026-03-17T12:11:16.328Z"
+      "commitSha": "efe793176757365fa9eb639270484a64c70296db",
+      "clonedAt": "2026-03-27T08:09:36.007Z"
     },
     "cis": {
       "url": "https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite",
       "branch": "main",
-      "commitSha": "e6f643917d5493f097fd04b2b79644b16d7890dc",
-      "clonedAt": "2026-03-17T12:11:26.877Z"
+      "commitSha": "1384f150290b63ec3d03b3a09413e5111ee0aebb",
+      "clonedAt": "2026-03-27T08:09:37.915Z"
     },
     "gds": {
       "url": "https://github.com/bmad-code-org/bmad-module-game-dev-studio.git",
       "branch": "main",
-      "commitSha": "de35f329fd0583066c3f18909162fa55301cba47",
-      "clonedAt": "2026-03-17T12:11:42.947Z"
+      "commitSha": "4744dea5fbfd5d23f3604aa9e83904b99473f6b7",
+      "clonedAt": "2026-03-27T08:09:40.525Z"
     },
     "tea": {
       "url": "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise",
       "branch": "main",
-      "commitSha": "494044af3cb1723c2f32ca06cc5f5adaddfa24a7",
-      "clonedAt": "2026-03-17T12:12:36.622Z"
+      "commitSha": "296b67bbe3385dcc20cd20c817e86e1f4eae2b0c",
+      "clonedAt": "2026-03-27T08:09:55.927Z"
+    },
+    "wds": {
+      "url": "https://github.com/bmad-code-org/bmad-method-wds-expansion",
+      "branch": "main",
+      "commitSha": "ecb05128973f2a8c6f7da4eead6c682fb1b413bc",
+      "clonedAt": "2026-03-27T08:10:00.449Z"
     }
   }
 }
