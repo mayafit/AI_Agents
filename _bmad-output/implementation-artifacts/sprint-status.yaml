@@ -197,18 +197,18 @@ development_status:
   # Epic 16: Multi-Repository Project Layout (Phase 2)
   # Dependencies: Epic 15 (module restructure), Epic 13 (project-context template)
   # Execution order: 16.1 → 16.2 → 16.3 → 16.4
-  epic-16: backlog
-  16-1-repository-layout-wizard: backlog
-  16-2-config-storage-and-cross-reference: backlog
-  16-3-project-context-multi-repo-section: backlog
-  16-4-validate-cross-repo-path-resolution: backlog
+  epic-16: in-progress
+  16-1-repository-layout-wizard: ready-for-dev
+  16-2-config-storage-and-cross-reference: ready-for-dev
+  16-3-project-context-multi-repo-section: ready-for-dev
+  16-4-validate-cross-repo-path-resolution: ready-for-dev
   epic-16-retrospective: optional
 
   # Epic 17: Sprint Management Model Rework (Phase 2)
   # Dependencies: Epic 11 (bug entity). Reworks Epic 12's workflow shells.
   # Execution order: 17.1 → 17.2 → 17.3 → 17.4 → 17.5 → 17.6 → 17.7 → 17.8
-  epic-17: backlog
-  17-1-sprint-entity-model: backlog
+  epic-17: in-progress
+  17-1-sprint-entity-model: ready-for-dev
   17-2-flat-backlog-model: backlog
   17-3-bug-as-story-type: backlog
   17-4-backlog-to-sprint-workflow: backlog
