@@ -1,6 +1,6 @@
 # Story 15.1: Bump bmad-method to 6.2.1 and Update Cache
 
-Status: review
+Status: done
 
 ## Story
 

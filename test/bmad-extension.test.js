@@ -57,7 +57,7 @@ test('1.3: module.yaml exists with extends-module: bmm', () => {
   assert.ok(fs.existsSync(filePath), 'module.yaml must exist');
   const content = fs.readFileSync(filePath, 'utf-8');
   assert.ok(content.includes('extends-module: bmm'), 'module.yaml must declare extends-module: bmm');
-  assert.ok(content.includes('name: ma-agents-skills'), 'module.yaml must have name: ma-agents-skills');
+  assert.ok(content.includes('name: "MA-Agents Skills & Agents"'), 'module.yaml must have name: "MA-Agents Skills & Agents"');
 });
 
 test('1.4: module-help.csv exists', () => {
@@ -173,17 +173,19 @@ test('3.6: extension deployment logs with chalk.cyan', () => {
     'must log deployment with chalk.cyan');
 });
 
-test('3.7: existing bmad-customizations files are preserved (backward compatibility)', () => {
+test('3.7: bmad-customizations retains platform and generic files (agent files removed in Epic 15)', () => {
   const customDir = path.join(__dirname, '..', 'lib', 'bmad-customizations');
-  const customAgents = [
-    { id: 'bmm-sre' },
-    { id: 'bmm-devops' },
-    { id: 'bmm-cyber' },
-    { id: 'bmm-mil498' }
-  ];
-  for (const agent of customAgents) {
-    const filePath = path.join(customDir, `${agent.id}.customize.yaml`);
-    assert.ok(fs.existsSync(filePath), `${agent.id}.customize.yaml must still exist in bmad-customizations/`);
+  // Platform-specific and generic files must still exist
+  const expectedFiles = ['claude-code', 'cursor', 'cline', 'gemini', 'generic', 'antigravity'];
+  for (const name of expectedFiles) {
+    const filePath = path.join(customDir, `${name}.customize.yaml`);
+    assert.ok(fs.existsSync(filePath), `${name}.customize.yaml must still exist in bmad-customizations/`);
+  }
+  // Custom agent files (bmm-sre, bmm-devops, etc.) were removed — now in skill folders
+  const removedAgents = ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-mil498'];
+  for (const id of removedAgents) {
+    const filePath = path.join(customDir, `${id}.customize.yaml`);
+    assert.ok(!fs.existsSync(filePath), `${id}.customize.yaml should NOT exist in bmad-customizations/ (moved to skill folders)`);
   }
 });
 

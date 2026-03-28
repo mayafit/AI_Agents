@@ -1,6 +1,6 @@
 # Story 15.6: Separate Built-in Agent Customizations
 
-Status: delivered
+Status: done
 
 ## Story
 

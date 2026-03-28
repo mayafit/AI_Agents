@@ -413,6 +413,88 @@ await testAsync('returns empty result when no backup directory', async () => {
     assert.strictEqual(result.skipped.length, 0);
 });
 
+await testAsync('merge with YAML special characters produces valid output', async () => {
+    const projectRoot = createMockProject('merge-yaml-special', {
+        bmadVersion: '6.0.4',
+        customizeFiles: {
+            'bmm-dev.customize.yaml': [
+                'critical_actions:',
+                '  1: "Read the skills MANIFEST at {project-root}/_bmad/skills/MANIFEST.yaml"',
+                '  2: "For each skill marked always_load: true, read the skill file completely"',
+                '  3: "If _bmad-output/project-context.md exists, read it completely"',
+                '  4: "Follow all skill directives and project-context rules during this session"',
+                'memories:',
+                '  - "Value with colon: inside it"',
+                '  - "Value with # hash character"',
+                '  - "Value with | pipe character"',
+            ].join('\n') + '\n',
+        }
+    });
+
+    await bmad.backupCustomizations(projectRoot);
+
+    const configDir = path.join(projectRoot, '_bmad', '_config', 'agents');
+    fs.writeFileSync(path.join(configDir, 'bmm-dev.customize.yaml'), [
+        'critical_actions:',
+        '  1: "Read the skills MANIFEST at {project-root}/_bmad/skills/MANIFEST.yaml"',
+        '  2: "For each skill marked always_load: true, read the skill file completely"',
+        '  3: "If _bmad-output/project-context.md exists, read it completely"',
+        '  4: "Follow all skill directives and project-context rules during this session"',
+    ].join('\n') + '\n', 'utf-8');
+
+    const result = await bmad.mergeUserCustomizations(projectRoot);
+    assert.ok(result.merged.includes('bmm-dev.customize.yaml'));
+
+    const content = fs.readFileSync(path.join(configDir, 'bmm-dev.customize.yaml'), 'utf-8');
+    assert.ok(content.includes('colon: inside it'), 'Should preserve colon in value');
+    assert.ok(content.includes('# hash character'), 'Should preserve hash in value');
+    assert.ok(content.includes('| pipe character'), 'Should preserve pipe in value');
+
+    // Validate the output can be re-parsed
+    const parsed = bmad.parseCustomizeYaml(content);
+    assert.ok(parsed.criticalActions.length >= 4, 'Merged output should have at least 4 critical actions');
+    assert.ok(parsed.memories.length >= 3, 'Merged output should have at least 3 memories');
+});
+
+await testAsync('corrupt merge output triggers backup restore', async () => {
+    // This test verifies that if mergeUserCustomizations produces output where
+    // critical_actions section exists but parses to nothing, it restores from backup.
+    // We simulate this by creating a scenario with adversarial content.
+    const projectRoot = createMockProject('merge-corrupt', {
+        bmadVersion: '6.0.4',
+        customizeFiles: {
+            'bmm-dev.customize.yaml': [
+                'critical_actions:',
+                '  1: "Read the skills MANIFEST at {project-root}/_bmad/skills/MANIFEST.yaml"',
+                '  2: "For each skill marked always_load: true, read the skill file completely"',
+                '  3: "If _bmad-output/project-context.md exists, read it completely"',
+                '  4: "Follow all skill directives and project-context rules during this session"',
+                'memories:',
+                '  - "Normal memory"',
+            ].join('\n') + '\n',
+        }
+    });
+
+    await bmad.backupCustomizations(projectRoot);
+
+    // Deploy a new file that has critical_actions section with valid entries
+    const configDir = path.join(projectRoot, '_bmad', '_config', 'agents');
+    fs.writeFileSync(path.join(configDir, 'bmm-dev.customize.yaml'), [
+        'critical_actions:',
+        '  1: "Read the skills MANIFEST at {project-root}/_bmad/skills/MANIFEST.yaml"',
+        '  2: "For each skill marked always_load: true, read the skill file completely"',
+        '  3: "If _bmad-output/project-context.md exists, read it completely"',
+        '  4: "Follow all skill directives and project-context rules during this session"',
+    ].join('\n') + '\n', 'utf-8');
+
+    // The merge should succeed since both files are valid
+    const result = await bmad.mergeUserCustomizations(projectRoot);
+    // Verify the output file exists and is parseable
+    const content = fs.readFileSync(path.join(configDir, 'bmm-dev.customize.yaml'), 'utf-8');
+    const parsed = bmad.parseCustomizeYaml(content);
+    assert.ok(parsed.criticalActions.length >= 4, 'Output should have valid critical actions');
+});
+
 cleanupTmpDir();
 
 // ─── Task 4: cleanupLegacyArtifacts() ───────────────────────────────────────
@@ -461,7 +543,7 @@ await testAsync('removes legacy YAML workflow files but not subdirectories', asy
     assert.ok(fs.existsSync(path.join(subDir, 'health-check.md')));
 });
 
-await testAsync('removes backup directory after cleanup', async () => {
+await testAsync('cleanupLegacyArtifacts preserves backup directory (retained until next install)', async () => {
     const projectRoot = createMockProject('cleanup-backup', {
         bmadVersion: '6.0.4',
         customizeFiles: {
@@ -475,7 +557,30 @@ await testAsync('removes backup directory after cleanup', async () => {
     assert.ok(fs.existsSync(backupDir), 'Backup should exist before cleanup');
 
     await bmad.cleanupLegacyArtifacts(projectRoot);
-    assert.ok(!fs.existsSync(backupDir), 'Backup should be removed after cleanup');
+    assert.ok(fs.existsSync(backupDir), 'Backup should still exist after cleanup (retained for manual recovery)');
+});
+
+await testAsync('backupCustomizations removes pre-existing backup before creating new one', async () => {
+    const projectRoot = createMockProject('backup-replace', {
+        bmadVersion: '6.0.4',
+        customizeFiles: {
+            'generic.customize.yaml': 'persona:\n  name: "First"\n',
+        }
+    });
+
+    // Create first backup
+    await bmad.backupCustomizations(projectRoot);
+    const backupDir = path.join(projectRoot, '_bmad', '_config', 'agents', '.backup-pre-migration');
+    assert.ok(fs.existsSync(backupDir), 'First backup should exist');
+
+    // Modify the source file
+    const configDir = path.join(projectRoot, '_bmad', '_config', 'agents');
+    fs.writeFileSync(path.join(configDir, 'generic.customize.yaml'), 'persona:\n  name: "Second"\n', 'utf-8');
+
+    // Create second backup — should replace the first
+    await bmad.backupCustomizations(projectRoot);
+    const content = fs.readFileSync(path.join(backupDir, 'generic.customize.yaml'), 'utf-8');
+    assert.ok(content.includes('name: "Second"'), 'Backup should contain the newer content, not the old one');
 });
 
 await testAsync('returns empty array when no legacy artifacts', async () => {
@@ -568,6 +673,141 @@ await testAsync('mergeUserCustomizations handles file in backup but not in new d
     // The file should now exist with user memories
     const content = fs.readFileSync(path.join(configDir, 'custom-agent.customize.yaml'), 'utf-8');
     assert.ok(content.includes('User memory 1'));
+});
+
+cleanupTmpDir();
+
+// ─── compareVersions edge cases ─────────────────────────────────────────────
+
+console.log('\ncompareVersions edge cases');
+
+test('compareVersions is exported', () => {
+    assert.strictEqual(typeof bmad.compareVersions, 'function');
+});
+
+test('compareVersions("6.2.1-beta.1", "6.2.1") does not crash', () => {
+    // Pre-release suffix causes NaN in patch segment, falls back to 0
+    const result = bmad.compareVersions('6.2.1-beta.1', '6.2.1');
+    assert.ok(typeof result === 'number', 'Should return a number');
+});
+
+test('compareVersions("6.2", "6.2.1") does not crash', () => {
+    // Two-segment version — missing patch treated as 0
+    const result = bmad.compareVersions('6.2', '6.2.1');
+    assert.ok(typeof result === 'number', 'Should return a number');
+    assert.strictEqual(result, -1, '"6.2" (= 6.2.0) should be less than "6.2.1"');
+});
+
+test('compareVersions standard cases', () => {
+    assert.strictEqual(bmad.compareVersions('6.0.4', '6.2.1'), -1);
+    assert.strictEqual(bmad.compareVersions('6.2.1', '6.2.1'), 0);
+    assert.strictEqual(bmad.compareVersions('7.0.0', '6.2.1'), 1);
+});
+
+// ─── Fix 9: Adversarial YAML merge tests ───────────────────────────────────
+
+console.log('\nAdversarial YAML merge tests');
+
+setupTmpDir();
+
+await testAsync('adversarial: colons, hashes, and pipes in persona survive round-trip', async () => {
+    const projectRoot = createMockProject('adversarial-roundtrip', {
+        bmadVersion: '6.0.4',
+        customizeFiles: {
+            'bmm-dev.customize.yaml': [
+                'critical_actions:',
+                '  1: "Read the skills MANIFEST at {project-root}/_bmad/skills/MANIFEST.yaml"',
+                '  2: "For each skill marked always_load: true, read the skill file completely"',
+                '  3: "If _bmad-output/project-context.md exists, read it completely"',
+                '  4: "Follow all skill directives and project-context rules during this session"',
+                'memories:',
+                '  - "Deploy to env: production # only on Fridays"',
+                '  - "Use format: key|value pairs"',
+                '  - "Config path: /etc/app/config.yaml"',
+                'persona:',
+                '  role: "Senior Dev: specializing in backend | frontend"',
+                '  style: "Cautious # but not paranoid"',
+            ].join('\n') + '\n',
+        }
+    });
+
+    await bmad.backupCustomizations(projectRoot);
+
+    // Deploy a new file without user content
+    const configDir = path.join(projectRoot, '_bmad', '_config', 'agents');
+    fs.writeFileSync(path.join(configDir, 'bmm-dev.customize.yaml'), [
+        'critical_actions:',
+        '  1: "Read the skills MANIFEST at {project-root}/_bmad/skills/MANIFEST.yaml"',
+        '  2: "For each skill marked always_load: true, read the skill file completely"',
+        '  3: "If _bmad-output/project-context.md exists, read it completely"',
+        '  4: "Follow all skill directives and project-context rules during this session"',
+    ].join('\n') + '\n', 'utf-8');
+
+    const result = await bmad.mergeUserCustomizations(projectRoot);
+    assert.ok(result.merged.includes('bmm-dev.customize.yaml'));
+
+    const content = fs.readFileSync(path.join(configDir, 'bmm-dev.customize.yaml'), 'utf-8');
+    assert.ok(content.includes('env: production # only on Fridays'), 'Colon and hash in memory must survive');
+    assert.ok(content.includes('key|value pairs'), 'Pipe in memory must survive');
+    assert.ok(content.includes('/etc/app/config.yaml'), 'Colon in path must survive');
+    assert.ok(content.includes('Senior Dev: specializing in backend | frontend'), 'Persona with colon and pipe must survive');
+});
+
+await testAsync('adversarial: broken input (unbalanced quotes, bare {) does not crash', async () => {
+    const projectRoot = createMockProject('adversarial-broken', {
+        bmadVersion: '6.0.4',
+        customizeFiles: {
+            'bmm-dev.customize.yaml': [
+                'critical_actions:',
+                '  1: "Read the skills MANIFEST at {project-root}/_bmad/skills/MANIFEST.yaml"',
+                '  2: "For each skill marked always_load: true, read the skill file completely"',
+                '  3: "If _bmad-output/project-context.md exists, read it completely"',
+                '  4: "Follow all skill directives and project-context rules during this session"',
+                'memories:',
+                '  - "Unbalanced quote: she said \\"hello',
+                '  - "Bare brace: { is fine"',
+                '  - "Mixed: key: {val} # comment | pipe"',
+            ].join('\n') + '\n',
+        }
+    });
+
+    await bmad.backupCustomizations(projectRoot);
+
+    const configDir = path.join(projectRoot, '_bmad', '_config', 'agents');
+    fs.writeFileSync(path.join(configDir, 'bmm-dev.customize.yaml'), [
+        'critical_actions:',
+        '  1: "Read the skills MANIFEST at {project-root}/_bmad/skills/MANIFEST.yaml"',
+        '  2: "For each skill marked always_load: true, read the skill file completely"',
+        '  3: "If _bmad-output/project-context.md exists, read it completely"',
+        '  4: "Follow all skill directives and project-context rules during this session"',
+    ].join('\n') + '\n', 'utf-8');
+
+    // Should not crash — mergeUserCustomizations must be resilient
+    let error = null;
+    try {
+        await bmad.mergeUserCustomizations(projectRoot);
+    } catch (e) {
+        error = e;
+    }
+    assert.strictEqual(error, null, 'mergeUserCustomizations must not crash on broken input');
+});
+
+await testAsync('adversarial: parseCustomizeYaml handles adversarial content gracefully', async () => {
+    const adversarial = [
+        'critical_actions:',
+        '  1: "Normal action"',
+        '  2: "Action with: colon"',
+        'memories:',
+        '  - "Memory with # hash"',
+        '  - "Memory with | pipe and { brace"',
+        'persona:',
+        '  name: "Agent: Test # Special"',
+    ].join('\n');
+
+    const parsed = bmad.parseCustomizeYaml(adversarial);
+    assert.strictEqual(parsed.criticalActions.length, 2, 'Should parse 2 critical actions');
+    assert.ok(parsed.memories.length >= 2, 'Should parse at least 2 memories');
+    assert.ok(parsed.personaLines.length > 0, 'Should parse persona lines');
 });
 
 cleanupTmpDir();

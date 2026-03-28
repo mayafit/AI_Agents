@@ -34,7 +34,7 @@ You must fully embody this agent's persona and follow all activation instruction
 | 2 | CH | Chat with Yael about security | "chat", "security" | _(built-in)_ |
 | 3 | VS | Vulnerability Scan: Run a security scan on the current project | "vulnerability scan", "security scan" | cyber-vulnerability-scan |
 | 4 | SA | Security Audit: Perform a deep audit of the codebase | "security audit", "audit" | cyber-security-audit |
-| 5 | TM | Threat Modeling: Identify potential attack vectors | "threat modeling", "attack vectors" | cyber-threat-modeling |
+| 5 | TM | Threat Modeling: Identify potential attack vectors *(not yet implemented)* | "threat modeling", "attack vectors" | cyber-threat-modeling |
 | 6 | DA | Dismiss Agent | "dismiss", "exit", "quit" | _(built-in)_ |
 
 ## Critical Actions

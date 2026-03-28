@@ -172,7 +172,7 @@ console.log('\nTask 1 — End-to-end IDE agent test');
       // module.yaml
       const moduleYaml = await fs.readFile(path.join(extSource, 'module.yaml'), 'utf-8');
       assert.ok(moduleYaml.includes('extends-module: bmm'), 'module.yaml must extend bmm');
-      assert.ok(moduleYaml.includes('name: ma-agents-skills'), 'module.yaml must be named ma-agents-skills');
+      assert.ok(moduleYaml.includes('name: "MA-Agents Skills & Agents"'), 'module.yaml must be named "MA-Agents Skills & Agents"');
 
       // agents/ directory should not contain .customize.yaml files (Story 15.6 — built-ins
       // moved to lib/bmad-customize/). Note: bmad-method may recreate an empty agents/ dir
@@ -221,17 +221,17 @@ console.log('\nTask 1 — End-to-end IDE agent test');
 
     // Task 2.3: Verify bmm-sre.customize.yaml critical_actions reference
 
-    await asyncTest('2.3: bmm-sre.customize.yaml in bmad-customizations has persona (critical_actions merged to SKILL.md in 15.3)', async () => {
-      // After Story 15.3, custom agent critical_actions were merged into SKILL.md files.
-      // After Story 15.6, the customize files in bmad-customizations/ retain persona/menu
-      // for backward compatibility with the applyCustomizations() deployment flow.
-      const sreYaml = await fs.readFile(
-        path.join(__dirname, '..', 'lib', 'bmad-customizations', 'bmm-sre.customize.yaml'),
+    await asyncTest('2.3: SRE agent persona now lives in SKILL.md (bmad-customizations file removed in Epic 15)', async () => {
+      // After Epic 15, custom agent files were removed from bmad-customizations/ and
+      // their personas/menus moved to SKILL.md in skill folders.
+      const skillMd = await fs.readFile(
+        path.join(__dirname, '..', 'lib', 'bmad-extension', 'skills', 'bmad-ma-agent-sre', 'SKILL.md'),
         'utf-8'
       );
-      assert.ok(sreYaml.includes('persona'), 'bmm-sre.customize.yaml must have persona section');
-      assert.ok(sreYaml.includes('Site Reliability Engineer'),
-        'bmm-sre persona must reference Site Reliability Engineer');
+      assert.ok(skillMd.includes('Site Reliability Engineer'),
+        'SRE SKILL.md must reference Site Reliability Engineer');
+      assert.ok(skillMd.includes('Persona'),
+        'SRE SKILL.md must have Persona section');
     });
 
     // Task 2.4: Verify BMAD agent .md file gets MA-AGENTS block at top after frontmatter
@@ -282,7 +282,7 @@ console.log('\nTask 1 — End-to-end IDE agent test');
       // Verify extension structure is intact after re-deployment
       assert.ok(await fs.pathExists(path.join(extTarget, 'module.yaml')), 'module.yaml must survive re-deploy');
       const moduleYaml = await fs.readFile(path.join(extTarget, 'module.yaml'), 'utf-8');
-      assert.ok(moduleYaml.includes('ma-agents-skills'), 'module.yaml content must be intact after re-deploy');
+      assert.ok(moduleYaml.includes('MA-Agents Skills & Agents'), 'module.yaml content must be intact after re-deploy');
 
       // Re-deploy built-in customizations (simulating STAGE:CUSTOMIZE)
       const customizeSource = path.join(__dirname, '..', 'lib', 'bmad-customize');
@@ -399,13 +399,14 @@ console.log('\nTask 1 — End-to-end IDE agent test');
           `lib/bmad-customize/ must include ${expectedFile} for built-in BMM agent`);
       }
 
-      // 4. Custom BMAD agents have customize.yaml in lib/bmad-customizations/ (backward compat)
+      // 4. Custom BMAD agent customize.yaml files removed from lib/bmad-customizations/ (Epic 15)
+      // Agent personas/menus now live in skill folders under lib/bmad-extension/skills/
       const customizationsDir = path.join(__dirname, '..', 'lib', 'bmad-customizations');
       const customizationFiles = (await fs.readdir(customizationsDir)).filter(f => f.endsWith('.customize.yaml'));
       for (const agent of bmadAgents) {
         const expectedFile = `${agent.id}.customize.yaml`;
-        assert.ok(customizationFiles.includes(expectedFile),
-          `lib/bmad-customizations/ must include ${expectedFile} for custom BMAD agent '${agent.id}'`);
+        assert.ok(!customizationFiles.includes(expectedFile),
+          `lib/bmad-customizations/ must NOT include ${expectedFile} (moved to skill folders)`);
       }
 
       // 5. Verify installer.js BMAD guard (category === 'bmad' skips file creation)
