@@ -1,6 +1,6 @@
 # Story 15.2: Restructure Extension Module for 6.2.0 Conventions
 
-Status: review
+Status: done
 
 ## Story
 

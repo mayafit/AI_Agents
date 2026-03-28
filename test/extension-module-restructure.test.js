@@ -319,20 +319,17 @@ test('CSV has entries for all 6 extension workflow skills', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  Task 4: Old directories preserved
+//  Task 4: Directory state after Story 15.6 migration
 // ═══════════════════════════════════════════════════════════════════════════════
-console.log('\n--- Task 4: Old directories preserved ---');
+console.log('\n--- Task 4: Directory state after Story 15.6 ---');
 
-test('agents/ directory still exists', () => {
+test('agents/ directory is empty or absent (Story 15.6 moved files to bmad-customize/)', () => {
   const agentsDir = path.join(EXTENSION_DIR, 'agents');
-  assert.ok(fs.existsSync(agentsDir), 'agents/ directory must be preserved');
-  assert.ok(fs.statSync(agentsDir).isDirectory(), 'agents/ must be a directory');
-});
-
-test('agents/ directory contains customize.yaml files', () => {
-  const agentsDir = path.join(EXTENSION_DIR, 'agents');
-  const files = fs.readdirSync(agentsDir).filter(f => f.endsWith('.customize.yaml'));
-  assert.ok(files.length >= 4, `Expected at least 4 customize.yaml files, found ${files.length}`);
+  if (fs.existsSync(agentsDir)) {
+    const files = fs.readdirSync(agentsDir).filter(f => f.endsWith('.customize.yaml'));
+    assert.strictEqual(files.length, 0, `agents/ must have 0 .customize.yaml files after 15.6, found ${files.length}`);
+  }
+  // If directory doesn't exist, that's also correct
 });
 
 test('workflows/ directory still exists', () => {

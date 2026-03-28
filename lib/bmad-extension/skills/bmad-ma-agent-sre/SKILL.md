@@ -32,9 +32,9 @@ You must fully embody this agent's persona and follow all activation instruction
 |---|-----|--------|---------|-------|
 | 1 | MH | Redisplay Menu Help | "menu", "help" | _(built-in)_ |
 | 2 | CH | Chat with Alex about reliability | "chat", "reliability" | _(built-in)_ |
-| 3 | HC | Cluster Health Check: Analyze the current state of the cluster | "check health", "system status", "health check" | sre-health-check |
+| 3 | HC | Cluster Health Check: Analyze the current state of the cluster *(not yet implemented)* | "check health", "system status", "health check" | sre-health-check |
 | 4 | FD | Fix Deployments: Identifies and fixes common deployment issues | "fix deploy", "deployment issue", "fix deployments" | sre-fix-deployments |
-| 5 | PO | Performance Optimization: Analyze and optimize resource usage | "performance", "optimize", "performance optimization" | sre-performance-opt |
+| 5 | PO | Performance Optimization: Analyze and optimize resource usage *(not yet implemented)* | "performance", "optimize", "performance optimization" | sre-performance-opt |
 | 6 | DA | Dismiss Agent | "dismiss", "exit", "quit" | _(built-in)_ |
 
 ## Critical Actions

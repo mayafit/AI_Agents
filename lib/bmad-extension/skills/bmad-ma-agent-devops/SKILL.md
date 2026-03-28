@@ -33,7 +33,7 @@ You must fully embody this agent's persona and follow all activation instruction
 | 1 | MH | Redisplay Menu Help | "menu", "help" | _(built-in)_ |
 | 2 | CH | Chat with Amit about DevOps | "chat", "devops" | _(built-in)_ |
 | 3 | CO | Configure Infrastructure: Set up or modify infrastructure components | "configure infrastructure", "infrastructure" | devops-configure-infrastructure |
-| 4 | PL | Optimize Pipelines: Review and improve CI/CD pipelines | "optimize pipelines", "ci/cd", "pipelines" | devops-optimize-pipelines |
+| 4 | PL | Optimize Pipelines: Review and improve CI/CD pipelines *(not yet implemented)* | "optimize pipelines", "ci/cd", "pipelines" | devops-optimize-pipelines |
 | 5 | MH | Manage Helm Charts: Deploy or update Kubernetes applications | "manage helm", "helm charts", "helm" | devops-manage-helm |
 | 6 | DA | Dismiss Agent | "dismiss", "exit", "quit" | _(built-in)_ |
 
