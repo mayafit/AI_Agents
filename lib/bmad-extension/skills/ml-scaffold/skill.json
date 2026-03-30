@@ -1,0 +1,7 @@
+{
+  "name": "ML Project Scaffolding",
+  "description": "Scaffolds or repairs the Machine Learning project structure (folders, IDE configs, uv initialization).",
+  "version": "2.0.0",
+  "author": "Isaac (AI Scientist)",
+  "tags": ["Machine Learning", "Scaffolding", "Meta", "Setup", "Isaac"]
+}

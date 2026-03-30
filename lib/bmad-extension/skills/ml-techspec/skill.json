@@ -1,0 +1,7 @@
+{
+  "name": "ML Pre-Experiment TechSpec",
+  "description": "Produces a pre-experiment contract that pins hypotheses, parameters, and success criteria.",
+  "version": "2.0.0",
+  "author": "Isaac (AI Scientist)",
+  "tags": ["Machine Learning", "TechSpec", "Experiment Design", "Contract"]
+}

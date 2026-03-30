@@ -1,0 +1,7 @@
+{
+  "name": "ML Ideation & Framing",
+  "description": "Frames the Machine Learning problem, defines the Research Thesis, and produces the PRD requirements.",
+  "version": "2.0.0",
+  "author": "Isaac (AI Scientist)",
+  "tags": ["Machine Learning", "Planning", "Ideation"]
+}

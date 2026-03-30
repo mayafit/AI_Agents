@@ -1,0 +1,7 @@
+{
+  "name": "ML Infrastructure Build",
+  "description": "Builds all engineering infrastructure (data pipelines, training loops, tracking, eval) for experiments.",
+  "version": "2.0.0",
+  "author": "Isaac (AI Scientist)",
+  "tags": ["Machine Learning", "Infrastructure", "MLOps", "Data Pipeline", "Training"]
+}
