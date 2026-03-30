@@ -1,6 +1,6 @@
 # Story 17.8: Rework Sprint Status Display
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -40,10 +40,10 @@ So that I can see at a glance what's in each sprint and how much capacity remain
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Rework sprint-status-view SKILL.md (AC: #1, #2)
-  - [ ] 1.1: Rewrite `lib/bmad-extension/skills/sprint-status-view/SKILL.md` — replace the entire workflow with the new model. The current workflow reads from `sprint-plan-*.yaml` and `sprint-status.yaml` — the new version reads from `sprints/sprint-*.yaml`, `backlog.yaml`, and `bug-*.md`.
-  - [ ] 1.2: Update YAML frontmatter (keep existing triggers: "sprint status view", "view sprint status")
-  - [ ] 1.3: Implement new workflow steps:
+- [x] Task 1: Rework sprint-status-view SKILL.md (AC: #1, #2)
+  - [x] 1.1: Rewrite `lib/bmad-extension/skills/sprint-status-view/SKILL.md` — replace the entire workflow with the new model. The current workflow reads from `sprint-plan-*.yaml` and `sprint-status.yaml` — the new version reads from `sprints/sprint-*.yaml`, `backlog.yaml`, and `bug-*.md`.
+  - [x] 1.2: Update YAML frontmatter (keep existing triggers: "sprint status view", "view sprint status")
+  - [x] 1.3: Implement new workflow steps:
 
     **Step 1: Run cleanup pre-step**
     - Suggest: "Consider running `/cleanup-done` first to archive completed items."
@@ -93,8 +93,8 @@ So that I can see at a glance what's in each sprint and how much capacity remain
       6. Archive done items — `/cleanup-done`
       7. Exit
 
-- [ ] Task 2: Rework sprint-status.yaml generation (AC: #3)
-  - [ ] 2.1: Add a new step to the sprint-status-view SKILL.md (or create a separate internal protocol) that regenerates `sprint-status.yaml` from the current data sources:
+- [x] Task 2: Rework sprint-status.yaml generation (AC: #3)
+  - [x] 2.1: Add a new step to the sprint-status-view SKILL.md (or create a separate internal protocol) that regenerates `sprint-status.yaml` from the current data sources:
     - Read `backlog.yaml` for all items with their current statuses
     - Read `sprints/sprint-*.yaml` for sprint membership
     - Generate `development_status` section containing ONLY non-done items
@@ -107,37 +107,37 @@ So that I can see at a glance what's in each sprint and how much capacity remain
       # Backlog items: {count}
       ```
     - Write to `sprint-status.yaml`, preserving STATUS DEFINITIONS comment block
-  - [ ] 2.2: The regeneration should happen at the END of the sprint-status-view workflow (after display), so the YAML file reflects what was just shown
-  - [ ] 2.3: Sprint-status.yaml is now officially a **derived file** — this story makes it generated, not manually maintained
+  - [x] 2.2: The regeneration should happen at the END of the sprint-status-view workflow (after display), so the YAML file reflects what was just shown
+  - [x] 2.3: Sprint-status.yaml is now officially a **derived file** — this story makes it generated, not manually maintained
 
-- [ ] Task 3: Update sprint-status-template.yaml (AC: #3)
-  - [ ] 3.1: Update `_bmad/bmm/4-implementation/bmad-sprint-planning/sprint-status-template.yaml` to include a note that sprint-status.yaml is now derived
-  - [ ] 3.2: **Wait** — do NOT modify bmm core files. Instead, document in guardrails that the template is superseded by the generation logic in sprint-status-view
+- [x] Task 3: Update sprint-status-template.yaml (AC: #3)
+  - [x] 3.1: Update `_bmad/bmm/4-implementation/bmad-sprint-planning/sprint-status-template.yaml` to include a note that sprint-status.yaml is now derived
+  - [x] 3.2: **Wait** — do NOT modify bmm core files. Instead, document in guardrails that the template is superseded by the generation logic in sprint-status-view
 
-- [ ] Task 4: Update module-help.csv (AC: #1)
-  - [ ] 4.1: Update the `sprint-status-view` row in `lib/bmad-extension/module-help.csv`:
+- [x] Task 4: Update module-help.csv (AC: #1)
+  - [x] 4.1: Update the `sprint-status-view` row in `lib/bmad-extension/module-help.csv`:
     - Update `description` to: "View sprint status with capacity, items, and backlog. Regenerates sprint-status.yaml."
 
-- [ ] Task 5: Sync or remove legacy workflow.md
-  - [ ] 5.1: `lib/bmad-extension/workflows/sprint-status-view/workflow.md` is a legacy copy. Either:
+- [x] Task 5: Sync or remove legacy workflow.md
+  - [x] 5.1: `lib/bmad-extension/workflows/sprint-status-view/workflow.md` is a legacy copy. Either:
     - Delete it if SKILL.md is the sole source of truth
     - Or add a redirect note
 
-- [ ] Task 6: Update guardrails (AC: #3)
-  - [ ] 6.1: Add to `sprint-management-guardrails.md`:
+- [x] Task 6: Update guardrails (AC: #3)
+  - [x] 6.1: Add to `sprint-management-guardrails.md`:
     - Sprint-Status.yaml Derivation section: document that it's now generated from backlog.yaml + sprint files
     - Document that manual edits to sprint-status.yaml will be overwritten on next generation
     - Document the generation trigger: `/sprint-status-view` regenerates the file after display
 
-- [ ] Task 7: Verify (AC: #1, #2, #3)
-  - [ ] 7.1: Verify sprint display reads from `sprints/sprint-*.yaml` and `backlog.yaml` (not `sprint-plan-*.yaml`)
-  - [ ] 7.2: Verify done items do NOT appear in sprint or backlog display sections
-  - [ ] 7.3: Verify completed items summary count is shown
-  - [ ] 7.4: Verify sprint-status.yaml is regenerated with only non-done items
-  - [ ] 7.5: Verify STATUS DEFINITIONS comment block is preserved in generated sprint-status.yaml
-  - [ ] 7.6: Verify sprint metadata is in header comments
-  - [ ] 7.7: Verify unassigned backlog shows items sorted by priority
-  - [ ] 7.8: Verify closed sprints show collapsed summary only
+- [x] Task 7: Verify (AC: #1, #2, #3)
+  - [x] 7.1: Verify sprint display reads from `sprints/sprint-*.yaml` and `backlog.yaml` (not `sprint-plan-*.yaml`)
+  - [x] 7.2: Verify done items do NOT appear in sprint or backlog display sections
+  - [x] 7.3: Verify completed items summary count is shown
+  - [x] 7.4: Verify sprint-status.yaml is regenerated with only non-done items
+  - [x] 7.5: Verify STATUS DEFINITIONS comment block is preserved in generated sprint-status.yaml
+  - [x] 7.6: Verify sprint metadata is in header comments
+  - [x] 7.7: Verify unassigned backlog shows items sorted by priority
+  - [x] 7.8: Verify closed sprints show collapsed summary only
 
 ## Dev Notes
 
@@ -259,14 +259,27 @@ Recent commits show Epic 15/16 patterns:
 - Conventional commit format: `feat(epic-17): story 17-8 rework sprint status display`
 - Complete SKILL.md rewrites are acceptable when the model fundamentally changes
 
+## Change Log
+
+- 2026-03-30: Story implemented — rewrote sprint-status-view SKILL.md for new sprint+backlog model with sprint-status.yaml regeneration.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6 (1M context)
 
 ### Debug Log References
 
+None — clean implementation.
+
 ### Completion Notes List
 
+Rewrote sprint-status-view SKILL.md for new sprint+backlog model with sprint-status.yaml regeneration. Replaced legacy workflow.md with redirect. Updated module-help.csv description. Updated guardrails with derived sprint-status.yaml documentation.
+
 ### File List
+
+- `lib/bmad-extension/skills/sprint-status-view/SKILL.md` (rewritten)
+- `lib/bmad-extension/workflows/sprint-status-view/workflow.md` (replaced with redirect)
+- `lib/bmad-extension/module-help.csv` (modified)
+- `sprint-management-guardrails.md` (modified)

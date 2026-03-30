@@ -1,6 +1,6 @@
 # Story 17.4: Backlog-to-Sprint Workflow
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -30,10 +30,10 @@ So that I can populate sprints by selecting prioritized items across epics.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Rework add-to-sprint SKILL.md to use backlog + sprint model (AC: #1, #2, #3)
-  - [ ] 1.1: Rewrite `lib/bmad-extension/skills/add-to-sprint/SKILL.md` — replace the entire workflow with the new model. The current workflow reads from `sprint-status.yaml` and `sprint-plan-*.yaml` — the new version reads from `backlog.yaml` and `sprints/sprint-*.yaml`.
-  - [ ] 1.2: Update YAML frontmatter triggers (keep existing triggers: "add to sprint", "assign to sprint")
-  - [ ] 1.3: Implement new workflow steps:
+- [x] Task 1: Rework add-to-sprint SKILL.md to use backlog + sprint model (AC: #1, #2, #3)
+  - [x] 1.1: Rewrite `lib/bmad-extension/skills/add-to-sprint/SKILL.md` — replace the entire workflow with the new model. The current workflow reads from `sprint-status.yaml` and `sprint-plan-*.yaml` — the new version reads from `backlog.yaml` and `sprints/sprint-*.yaml`.
+  - [x] 1.2: Update YAML frontmatter triggers (keep existing triggers: "add to sprint", "assign to sprint")
+  - [x] 1.3: Implement new workflow steps:
 
     **Step 1: Load backlog and identify unassigned items**
     - Read `_bmad-output/implementation-artifacts/backlog.yaml`
@@ -74,32 +74,32 @@ So that I can populate sprints by selecting prioritized items across epics.
     - Write updated sprint file (with new items and last_modified)
     - Display summary: items assigned, new capacity usage, remaining slots
 
-- [ ] Task 2: Update bmad-skill-manifest.yaml (AC: #3)
-  - [ ] 2.1: Verify/update `lib/bmad-extension/skills/add-to-sprint/bmad-skill-manifest.yaml` description to reflect new model
+- [x] Task 2: Update bmad-skill-manifest.yaml (AC: #3)
+  - [x] 2.1: Verify/update `lib/bmad-extension/skills/add-to-sprint/bmad-skill-manifest.yaml` description to reflect new model
 
-- [ ] Task 3: Update module-help.csv (AC: #3)
-  - [ ] 3.1: Update the `add-to-sprint` row in `lib/bmad-extension/module-help.csv`:
+- [x] Task 3: Update module-help.csv (AC: #3)
+  - [x] 3.1: Update the `add-to-sprint` row in `lib/bmad-extension/module-help.csv`:
     - Update `output-location` from `_bmad-output/implementation-artifacts` to `_bmad-output/implementation-artifacts` (unchanged path but now writes to both backlog.yaml and sprints/)
     - Update `description` to: "Assign backlog items to a sprint from flat prioritized backlog."
 
-- [ ] Task 4: Sync or remove legacy workflow.md (AC: #3)
-  - [ ] 4.1: `lib/bmad-extension/workflows/add-to-sprint/workflow.md` is a legacy copy. Either:
+- [x] Task 4: Sync or remove legacy workflow.md (AC: #3)
+  - [x] 4.1: `lib/bmad-extension/workflows/add-to-sprint/workflow.md` is a legacy copy. Either:
     - Delete it if SKILL.md is the sole source of truth (verify via module-help.csv `skill:add-to-sprint` resolution)
     - Or add a redirect note: "This workflow has moved to `skills/add-to-sprint/SKILL.md`"
 
-- [ ] Task 5: Update guardrails (AC: #2)
-  - [ ] 5.1: Update `sprint-management-guardrails.md` Data Authority Rules:
+- [x] Task 5: Update guardrails (AC: #2)
+  - [x] 5.1: Update `sprint-management-guardrails.md` Data Authority Rules:
     - `backlog.yaml` is now written by add-to-sprint (sets `sprint` field)
     - Sprint files under `sprints/` are now written by add-to-sprint (appends to `items` array)
-  - [ ] 5.2: Document the dual-write contract: when assigning an item, BOTH `backlog.yaml` AND the sprint file must be updated atomically (within same workflow invocation). If one fails, the other must be rolled back or the user must be warned.
+  - [x] 5.2: Document the dual-write contract: when assigning an item, BOTH `backlog.yaml` AND the sprint file must be updated atomically (within same workflow invocation). If one fails, the other must be rolled back or the user must be warned.
 
-- [ ] Task 6: Verify (AC: #1, #2, #3)
-  - [ ] 6.1: Trace SKILL.md — confirm all paths read from `backlog.yaml` and `sprints/sprint-*.yaml` (never from `sprint-plan-*.yaml` or `sprint-status.yaml`)
-  - [ ] 6.2: Verify capacity enforcement: warn when exceeding, allow override
-  - [ ] 6.3: Verify dual-write: both backlog.yaml `sprint` field and sprint file `items` array are updated
-  - [ ] 6.4: Verify `last_modified` timestamp is updated on sprint file
-  - [ ] 6.5: Verify item IDs in sprint `items` array follow the Item ID Format Contract from Story 17.1
-  - [ ] 6.6: Verify closed sprints are not selectable as targets
+- [x] Task 6: Verify (AC: #1, #2, #3)
+  - [x] 6.1: Trace SKILL.md — confirm all paths read from `backlog.yaml` and `sprints/sprint-*.yaml` (never from `sprint-plan-*.yaml` or `sprint-status.yaml`)
+  - [x] 6.2: Verify capacity enforcement: warn when exceeding, allow override
+  - [x] 6.3: Verify dual-write: both backlog.yaml `sprint` field and sprint file `items` array are updated
+  - [x] 6.4: Verify `last_modified` timestamp is updated on sprint file
+  - [x] 6.5: Verify item IDs in sprint `items` array follow the Item ID Format Contract from Story 17.1
+  - [x] 6.6: Verify closed sprints are not selectable as targets
 
 ## Dev Notes
 
@@ -183,14 +183,27 @@ Recent commits show Epic 15/16 patterns:
 - Conventional commit format: `feat(epic-17): story 17-4 backlog-to-sprint workflow`
 - Complete SKILL.md rewrites are acceptable when the model fundamentally changes
 
+## Change Log
+
+- 2026-03-30: Story implemented — rewrote add-to-sprint SKILL.md for new backlog+sprint model with dual-write contract.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6 (1M context)
 
 ### Debug Log References
 
+None — clean implementation.
+
 ### Completion Notes List
 
+Rewrote add-to-sprint SKILL.md for new backlog+sprint model. Replaced legacy workflow.md with redirect. Updated module-help.csv description. Updated guardrails with dual-write contract.
+
 ### File List
+
+- `lib/bmad-extension/skills/add-to-sprint/SKILL.md` (rewritten)
+- `lib/bmad-extension/workflows/add-to-sprint/workflow.md` (replaced with redirect)
+- `lib/bmad-extension/module-help.csv` (modified)
+- `sprint-management-guardrails.md` (modified)

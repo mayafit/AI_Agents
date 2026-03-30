@@ -55,7 +55,32 @@ Guided workflow to create a structured bug story from a detected defect and add 
   <action>Store as {{actual_behavior}}</action>
 </step>
 
-<step n="4" goal="Gather root cause hypothesis and affected files">
+<step n="4" goal="Gather version and bug type">
+  <ask>What version was this bug found in? (optional — press Enter to skip; e.g., "2.3.1", "v1.0.0-rc2")</ask>
+  <action>Store as {{version_found}} (empty string if skipped)</action>
+
+  <output>
+**Bug type classifications:**
+- `regression` — Previously working feature now broken
+- `functional` — Feature does not work as specified
+- `performance` — Unacceptable latency, throughput, or resource usage
+- `security` — Vulnerability or authentication/authorization flaw
+- `ui` — Visual or interaction defect
+- `data` — Data corruption, loss, or incorrect transformation
+- `integration` — Failure at system/service boundaries
+- `other` — Does not fit the above categories
+  </output>
+  <ask>What is the bug type? [regression / functional / performance / security / ui / data / integration / other] (default: functional)</ask>
+  <action>Store as {{bug_type}}</action>
+  <action>If empty or blank, default to "functional"</action>
+  <action>Normalize to lowercase</action>
+  <check if="{{bug_type}} is not one of: regression, functional, performance, security, ui, data, integration, other">
+    <output>❌ Bug type must be one of: regression, functional, performance, security, ui, data, integration, other.</output>
+    <goto step="4" />
+  </check>
+</step>
+
+<step n="5" goal="Gather root cause hypothesis and affected files">
   <ask>What is your root cause hypothesis? (optional — press Enter to skip; e.g., "Null check missing in validateUser()")</ask>
   <action>Store as {{root_cause}} (empty string if skipped)</action>
 
@@ -67,7 +92,7 @@ Guided workflow to create a structured bug story from a detected defect and add 
   <action>Store as {{suggested_fix}} (empty string if skipped)</action>
 </step>
 
-<step n="5" goal="Confirm all bug details before writing">
+<step n="6" goal="Confirm all bug details before writing">
   <action>Derive {{title_slug}} by converting {{bug_title}} to lowercase kebab-case:
     - Convert to lowercase
     - Replace spaces and underscores with hyphens
@@ -82,6 +107,8 @@ Guided workflow to create a structured bug story from a detected defect and add 
 
 - **Title:** {{bug_title}}
 - **Severity:** {{severity}}
+- **Bug Type:** {{bug_type}}
+- **Version Found:** {{version_found}} *(empty if skipped)*
 - **Affected Component:** {{affected_component}}
 - **Reproduction Steps:** {{reproduction_steps}}
 - **Expected Behavior:** {{expected_behavior}}
@@ -93,14 +120,15 @@ Guided workflow to create a structured bug story from a detected defect and add 
   </output>
   <ask>Confirm creation? [y] Yes / [n] Cancel / [e] Edit a field:</ask>
   <check if="user selects 'e'">
-    <ask>Which field to edit? (title / severity / component / steps / expected / actual / root-cause / files / fix)</ask>
+    <ask>Which field to edit? (title / severity / component / steps / expected / actual / version / bug-type / root-cause / files / fix)</ask>
     <check if="field == 'title' OR field == 'severity'"><goto step="1" /></check>
     <check if="field == 'component' OR field == 'steps'"><goto step="2" /></check>
     <check if="field == 'expected' OR field == 'actual'"><goto step="3" /></check>
-    <check if="field == 'root-cause' OR field == 'files' OR field == 'fix'"><goto step="4" /></check>
+    <check if="field == 'version' OR field == 'bug-type'"><goto step="4" /></check>
+    <check if="field == 'root-cause' OR field == 'files' OR field == 'fix'"><goto step="5" /></check>
     <check if="none of the above matched">
-      <output>❌ Unrecognized field. Valid options: title / severity / component / steps / expected / actual / root-cause / files / fix</output>
-      <goto step="5" />
+      <output>❌ Unrecognized field. Valid options: title / severity / component / steps / expected / actual / version / bug-type / root-cause / files / fix</output>
+      <goto step="6" />
     </check>
   </check>
   <check if="user selects 'n'">
@@ -109,7 +137,7 @@ Guided workflow to create a structured bug story from a detected defect and add 
   </check>
 </step>
 
-<step n="6" goal="Write bug story file">
+<step n="7" goal="Write bug story file">
   <action>Check if {{output_file}} already exists</action>
   <check if="file already exists">
     <output>⚠️ A bug story already exists at `{{output_file}}`.</output>
@@ -136,7 +164,10 @@ Guided workflow to create a structured bug story from a detected defect and add 
 ```
 ---
 type: bug
+status: backlog
 severity: {{severity}}
+bug_type: {{bug_type}}
+version_found: {{version_found}}
 title: {{bug_title}}
 ---
 
@@ -183,8 +214,45 @@ title: {{bug_title}}
 - **File:** `{{output_file}}`
 - **Title:** {{bug_title}}
 - **Severity:** {{severity}}
+- **Bug Type:** {{bug_type}}
 - **Component:** {{affected_component}}
+  </output>
+</step>
 
+<step n="8" goal="Add bug entry to backlog.yaml">
+  <action>Check if `_bmad-output/implementation-artifacts/backlog.yaml` exists</action>
+
+  <check if="backlog.yaml exists">
+    <action>Read `_bmad-output/implementation-artifacts/backlog.yaml`</action>
+    <action>Determine the next priority number by finding the highest existing priority value and adding 1</action>
+    <action>Append a new entry at the end of the backlog items list with the following format:
+```yaml
+- id: "BUG-{{title_slug}}"
+  type: bug
+  epic: null
+  title: "{{bug_title}}"
+  priority: N
+  status: backlog
+  sprint: null
+  severity: {{severity}}
+```
+    Where N is the next priority number.
+    </action>
+    <action>Re-number all priorities sequentially (1, 2, 3, ...) from top to bottom to ensure no gaps</action>
+    <action>Write the updated backlog.yaml back to disk</action>
+    <output>
+📋 **Backlog updated!** Added `BUG-{{title_slug}}` to `_bmad-output/implementation-artifacts/backlog.yaml` with priority {{N}}.
+    </output>
+  </check>
+
+  <check if="backlog.yaml does not exist">
+    <output>
+ℹ️ No `backlog.yaml` found at `_bmad-output/implementation-artifacts/backlog.yaml`.
+Run `/generate-backlog` to create a backlog that will include this bug story.
+    </output>
+  </check>
+
+  <output>
 **Next Steps:**
 - Use `/add-to-sprint` to assign this bug to the current sprint
 - Use `/sprint-status-view` to see all sprint items including this bug

@@ -12,6 +12,10 @@ triggers:
 
 > **DEPRECATED:** This workflow references the old `sprint-plan-{n}.yaml` format. It will be reworked in Story 17.4. Use `/add-sprint` to create sprints in the new format.
 
+<!-- NOTE: Item removal from sprints is now handled by /remove-from-sprint (Story 17.5).
+     The "Remove item" option in this workflow's menu is superseded.
+     This workflow will be fully reworked when converted to the new sprint model. -->
+
 # Modify Sprint Workflow
 
 Guided workflow to modify an existing sprint — add/remove items, change capacity, update metadata.

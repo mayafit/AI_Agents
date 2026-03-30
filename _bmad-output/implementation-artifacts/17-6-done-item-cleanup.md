@@ -1,6 +1,6 @@
 # Story 17.6: Done Item Cleanup
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -35,8 +35,8 @@ So that the active sprint view stays clean and the archive is organized.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create cleanup-done SKILL.md (AC: #1, #2, #3, #4)
-  - [ ] 1.1: Create skill package at `lib/bmad-extension/skills/cleanup-done/SKILL.md` with YAML frontmatter:
+- [x] Task 1: Create cleanup-done SKILL.md (AC: #1, #2, #3, #4)
+  - [x] 1.1: Create skill package at `lib/bmad-extension/skills/cleanup-done/SKILL.md` with YAML frontmatter:
     ```yaml
     ---
     name: cleanup-done
@@ -47,8 +47,8 @@ So that the active sprint view stays clean and the archive is organized.
       - "archive done items"
     ---
     ```
-  - [ ] 1.2: Create `lib/bmad-extension/skills/cleanup-done/bmad-skill-manifest.yaml`
-  - [ ] 1.3: Implement workflow steps:
+  - [x] 1.2: Create `lib/bmad-extension/skills/cleanup-done/bmad-skill-manifest.yaml`
+  - [x] 1.3: Implement workflow steps:
 
     **Step 1: Identify done items**
     - Read `_bmad-output/implementation-artifacts/sprint-status.yaml` — find all entries in `development_status` with status `done`
@@ -108,31 +108,31 @@ So that the active sprint view stays clean and the archive is organized.
       - Items removed from sprint-status.yaml: count
     - Display: "Sprint capacity freed: {count} slot(s)"
 
-- [ ] Task 2: Register in module-help.csv (AC: #1)
-  - [ ] 2.1: Add row to `lib/bmad-extension/module-help.csv`:
+- [x] Task 2: Register in module-help.csv (AC: #1)
+  - [x] 2.1: Add row to `lib/bmad-extension/module-help.csv`:
     ```
     ma-skills,4-implementation,Cleanup Done,cleanup-done,,skill:cleanup-done,cleanup-done,false,bmm-sm,,"Archive done items — move files to done/ and remove from sprint/backlog.",_bmad-output/implementation-artifacts,"archived items",
     ```
 
-- [ ] Task 3: Add cleanup trigger to sprint-status and sprint-planning workflows
-  - [ ] 3.1: Add a note in the cleanup-done SKILL.md output section that sprint-status and sprint-planning workflows should invoke `/cleanup-done` as a pre-step to ensure the view is clean before display/planning
-  - [ ] 3.2: Do NOT modify `_bmad/bmm/4-implementation/bmad-sprint-planning/workflow.md` or `_bmad/bmm/4-implementation/bmad-sprint-status/workflow.md` directly — those are bmm core workflows. Instead, document the integration point.
+- [x] Task 3: Add cleanup trigger to sprint-status and sprint-planning workflows
+  - [x] 3.1: Add a note in the cleanup-done SKILL.md output section that sprint-status and sprint-planning workflows should invoke `/cleanup-done` as a pre-step to ensure the view is clean before display/planning
+  - [x] 3.2: Do NOT modify `_bmad/bmm/4-implementation/bmad-sprint-planning/workflow.md` or `_bmad/bmm/4-implementation/bmad-sprint-status/workflow.md` directly — those are bmm core workflows. Instead, document the integration point.
 
-- [ ] Task 4: Update guardrails (AC: #1, #2, #3, #4)
-  - [ ] 4.1: Add to `sprint-management-guardrails.md`:
+- [x] Task 4: Update guardrails (AC: #1, #2, #3, #4)
+  - [x] 4.1: Add to `sprint-management-guardrails.md`:
     - Done Item Archive section: files move to `done/` subfolder via rename
     - Sprint Auto-Close rule: sprint closes when all items are done and removed
     - Document that cleanup-done is the ONLY workflow that removes items from sprint-status.yaml's development_status (other than manual edits)
 
-- [ ] Task 5: Verify (AC: #1, #2, #3, #4)
-  - [ ] 5.1: Verify file move uses rename (not copy+delete) for stories and bugs
-  - [ ] 5.2: Verify done/ directory is created if missing
-  - [ ] 5.3: Verify sprint file items array is updated and last_modified set
-  - [ ] 5.4: Verify sprint auto-close when items array becomes empty on active sprint
-  - [ ] 5.5: Verify backlog.yaml is cleaned and priorities re-numbered
-  - [ ] 5.6: Verify sprint-status.yaml comments and structure are preserved
-  - [ ] 5.7: Verify epic status is updated to done when all stories removed
-  - [ ] 5.8: Verify existing done/ files are not overwritten (skip with warning)
+- [x] Task 5: Verify (AC: #1, #2, #3, #4)
+  - [x] 5.1: Verify file move uses rename (not copy+delete) for stories and bugs
+  - [x] 5.2: Verify done/ directory is created if missing
+  - [x] 5.3: Verify sprint file items array is updated and last_modified set
+  - [x] 5.4: Verify sprint auto-close when items array becomes empty on active sprint
+  - [x] 5.5: Verify backlog.yaml is cleaned and priorities re-numbered
+  - [x] 5.6: Verify sprint-status.yaml comments and structure are preserved
+  - [x] 5.7: Verify epic status is updated to done when all stories removed
+  - [x] 5.8: Verify existing done/ files are not overwritten (skip with warning)
 
 ## Dev Notes
 
@@ -247,14 +247,27 @@ Recent commits show Epic 15/16 patterns:
 - Conventional commit format: `feat(epic-17): story 17-6 done item cleanup`
 - New skill creation follows: SKILL.md + bmad-skill-manifest.yaml + module-help.csv registration
 
+## Change Log
+
+- 2026-03-30: Story implemented — created cleanup-done skill with multi-source done detection, file archival, and sprint auto-close.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6 (1M context)
 
 ### Debug Log References
 
+None — clean implementation.
+
 ### Completion Notes List
 
+Created cleanup-done skill (SKILL.md + manifest). Registered in module-help.csv. Updated guardrails with archive rules, sprint auto-close, epic auto-done.
+
 ### File List
+
+- `lib/bmad-extension/skills/cleanup-done/SKILL.md` (new)
+- `lib/bmad-extension/skills/cleanup-done/bmad-skill-manifest.yaml` (new)
+- `lib/bmad-extension/module-help.csv` (modified)
+- `sprint-management-guardrails.md` (modified)
