@@ -312,7 +312,7 @@ None — clean implementation, no debugging needed.
 - `lib/bmad-extension/workflows/modify-sprint/workflow.md` — added deprecation notice
 - `lib/bmad-extension/workflows/sprint-status-view/workflow.md` — added deprecation notice
 - `_bmad-output/implementation-artifacts/17-1-sprint-entity-model.md` — this story file (tasks, status, dev record)
-- `_bmad-output/implementation-artifacts/sprint-status.yaml` — story status updated to in-progress
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — story status updated to review
 
 **Deleted files:**
 - `_bmad-output/implementation-artifacts/epic-11-12-shared-guardrails.md` — renamed (git mv)

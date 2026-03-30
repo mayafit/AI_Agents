@@ -10,6 +10,8 @@ triggers:
 <!-- DEPRECATED: This workflow references the old sprint-plan-{n}.yaml format.
      It will be reworked in Story 17.4. Use /add-sprint to create sprints in the new format. -->
 
+> **DEPRECATED:** This workflow references the old `sprint-plan-{n}.yaml` format. It will be reworked in Story 17.4. Use `/add-sprint` to create sprints in the new format.
+
 # Add-to-Sprint Workflow
 
 Guided workflow to assign backlog items (stories + bugs) to a sprint using multi-criteria prioritization.

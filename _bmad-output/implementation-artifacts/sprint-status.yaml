@@ -1,5 +1,5 @@
 # generated: 2026-03-15
-# updated: 2026-03-28 — Epic 16 expanded from 4 to 9 stories after adversarial review. Stories 16.5 (bug: config lost on update), 16.6 (repo sync check skill), 16.7 (portable paths), 16.8 (CI/CD remote mode), 16.9 (reconfigure workflow) added. Execution order: 16.5 → 16.7 → 16.8 → 16.6 → 16.9.
+# updated: 2026-03-30 — Story 17-1 (sprint entity model) moved to review.
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system

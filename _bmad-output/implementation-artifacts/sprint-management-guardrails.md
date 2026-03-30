@@ -14,6 +14,7 @@ All stories in Epics 11, 12, and 17 inherit the following guardrails. Individual
 | Concern | Authoritative Source | Read By |
 |---|---|---|
 | Sprint entity (membership, capacity, dates, status) | `sprints/sprint-{id}.yaml` | 17.4, 17.5, 17.6, 17.8 |
+| Sprint membership (old format, **deprecated**) | `sprint-plan-{n}.yaml` | 12.2, 12.3, 12.4 *(to be reworked in Epic 17)* |
 | User story execution status (not-started/in-progress/done) | `sprint-status.yaml` | 12.2, 12.4, 17.8 |
 | Bug story metadata (type, severity, title) | `bug-{slug}.md` YAML frontmatter | 12.2, 12.4, 17.3 |
 
@@ -81,6 +82,7 @@ Epic 11:  11.1 → 11.2 → 11.3 (blocked until 11.1 + 11.2 done)
 Epic 12: 12.1 (depends on 11.2 scaffolding)
                    ↓
                  12.2 → 12.3 → 12.4
-                   ↓
+
 Epic 17: 17.1 → 17.2 → 17.3 → 17.4 → 17.5 → 17.6 → 17.7 → 17.8
+         (depends on Epic 11 bug entity, reworks Epic 12 workflow shells)
 ```
