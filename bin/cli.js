@@ -5,7 +5,8 @@ const chalk = require('chalk');
 const path = require('path');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
-const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout } = require('../lib/installer');
+const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout, checkUvInstalled, scaffoldMlProject } = require('../lib/installer');
+
 const bmad = require('../lib/bmad');
 const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
 
@@ -32,7 +33,9 @@ ${chalk.bold('Usage:')}
   ${chalk.cyan(`npx ${NAME} create-agent`)} <name>           Create a new specialized BMAD agent
   ${chalk.cyan(`npx ${NAME} config layout`)}                Reconfigure repository layout
   ${chalk.cyan(`npx ${NAME} config layout --show`)}         Show current layout (read-only)
+  ${chalk.cyan(`npx ${NAME} init ml`)}                      Scaffold a new Machine Learning project
   ${chalk.cyan(`npx ${NAME} help`)}                         Show this help
+
 
 ${chalk.bold('Install options:')}
   ${chalk.cyan('--global')}          Install to global/user-level paths (default: project-level)
@@ -971,22 +974,62 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     }
   }
 
-  // Step 6: Update project-context.md with repo layout section (after skills installed project-context.md)
-  if (installScope === 'project') {
-    const outputPath = path.join(process.cwd(), '_bmad-output', 'project-context.md');
-    try {
-      if (fs.existsSync(outputPath)) {
-        const updated = await updateProjectContextRepoLayout(outputPath, repoLayout);
-        if (updated) {
-          console.log(chalk.green(' project-context.md repo layout section updated'));
-        }
+  // Step 7: uv Validation for ML skills
+  const hasMlSkills = selectedSkillIds.some(id => id.startsWith('ml-'));
+  if (hasMlSkills) {
+    const uvInstalled = checkUvInstalled();
+    if (!uvInstalled) {
+      console.log(chalk.red('\n ⚠️  Warning: Machine Learning skills require "uv" to be installed.'));
+      console.log(chalk.gray(' Please install uv (https://github.com/astral-sh/uv) before running ML experiments.'));
+      
+      if (!yesFlag) {
+        const { proceed } = await prompts({
+          type: 'confirm',
+          name: 'proceed',
+          message: 'Proceed with installation anyway?',
+          initial: false
+        });
+        if (!proceed) process.exit(0);
       }
-    } catch (err) {
-      console.log(chalk.yellow(` project-context repo layout update skipped: ${err.message}`));
     }
   }
 
   console.log(chalk.bold.green('\n Done!\n'));
+}
+
+async function handleInit(args) {
+  const type = args[0];
+  if (type !== 'ml') {
+    console.error(chalk.red(`Unknown init type: ${type || '(none)'}`));
+    console.error(chalk.gray('  Usage: npx ma-agents init ml'));
+    process.exit(1);
+  }
+
+  const { projectName } = await prompts({
+    type: 'text',
+    name: 'projectName',
+    message: 'Enter ML project name (snake_case):',
+    initial: path.basename(process.cwd()).replace(/[-\s]/g, '_')
+  });
+
+  const { trackingTool } = await prompts({
+    type: 'select',
+    name: 'trackingTool',
+    message: 'Select experiment tracking tool:',
+    choices: [
+      { title: 'Weights & Biases', value: 'wandb' },
+      { title: 'MLflow', value: 'mlflow' },
+      { title: 'ClearML', value: 'clearml' },
+      { title: 'Undecided / Local', value: 'undecided' }
+    ]
+  });
+
+  await scaffoldMlProject(process.cwd(), projectName, trackingTool);
+  
+  console.log(chalk.bold.cyan('\n Next steps:'));
+  console.log(chalk.white(`  1. Install ML skills:   ${chalk.cyan(`npx ${NAME} install`)} (select ml-ideation, etc.)`));
+  console.log(chalk.white(`  2. Source your env:     ${chalk.cyan('uv venv && . .venv/bin/activate')}`));
+  console.log(chalk.white(`  3. Start ideation:      ${chalk.cyan('/ml-ideation')}\n`));
 }
 
 // --- Command handlers ---
@@ -1170,7 +1213,11 @@ async function main() {
     case 'install':
       await handleInstall(args.slice(1));
       break;
+    case 'init':
+      await handleInit(args.slice(1));
+      break;
     case 'uninstall':
+
     case 'remove':
       await handleUninstall(args.slice(1));
       break;
