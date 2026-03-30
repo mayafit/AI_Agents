@@ -37,7 +37,7 @@
 6. **Human review gate:** Await approval — do NOT auto-merge under any circumstance
 7. **Merge + cleanup:** After approval: merge, `git worktree remove`, delete branch
 8. **Post-mission:** Update story status to done, append session to AiAudit.md
-
+{{REPO_LAYOUT_SECTION}}
 ## Technology Stack
 <!-- TODO: Populated after architecture phase via /bmad-generate-project-context -->
 <!-- Run: /bmad-generate-project-context to auto-detect your stack -->

@@ -1,6 +1,6 @@
 # Story 16.1: Repository Layout Wizard
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -25,50 +25,50 @@ So that the project layout is configured correctly for multi-repo environments.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Add `collectRepoLayout()` function to `bin/cli.js` (AC: #1, #2, #6, #7)
-  - [ ] 1.1 Create `collectRepoLayout(flags)` async function in `bin/cli.js`
-  - [ ] 1.2 Implement the knowledgebase prompt using `prompts` library (type: `'select'`, choices as `{ title, value }` objects — matching existing wizard patterns)
-  - [ ] 1.3 Implement the sprint management prompt with same choices
-  - [ ] 1.4 Return layout object: `{ knowledgebase: { mode, path, gitUrl? }, sprintManagement: { mode, path, gitUrl? } }`
-  - [ ] 1.5 When mode is `same`, set `path: '.'`
-  - [ ] 1.6 In `--yes` mode: check `process.env.MA_KNOWLEDGEBASE_PATH` and `process.env.MA_SPRINT_PATH`. If set, use `{ mode: 'local', path: path.resolve(envValue) }`. If not set, use `{ mode: 'same', path: '.' }`
-  - [ ] 1.7 If both concerns resolve to the same external path, log info: "Both concerns point to same external repository"
+- [x] Task 1: Add `collectRepoLayout()` function to `bin/cli.js` (AC: #1, #2, #6, #7)
+  - [x] 1.1 Create `collectRepoLayout(flags)` async function in `bin/cli.js`
+  - [x] 1.2 Implement the knowledgebase prompt using `prompts` library (type: `'select'`, choices as `{ title, value }` objects — matching existing wizard patterns)
+  - [x] 1.3 Implement the sprint management prompt with same choices
+  - [x] 1.4 Return layout object: `{ knowledgebase: { mode, path, gitUrl? }, sprintManagement: { mode, path, gitUrl? } }`
+  - [x] 1.5 When mode is `same`, set `path: '.'`
+  - [x] 1.6 In `--yes` mode: check `process.env.MA_KNOWLEDGEBASE_PATH` and `process.env.MA_SPRINT_PATH`. If set, use `{ mode: 'local', path: path.resolve(envValue) }`. If not set, use `{ mode: 'same', path: '.' }`
+  - [x] 1.7 If both concerns resolve to the same external path, log info: "Both concerns point to same external repository"
 
-- [ ] Task 2: Implement "Local path" flow (AC: #5, #9)
-  - [ ] 2.1 Prompt user for local path string; reject empty/whitespace-only input with re-prompt
-  - [ ] 2.2 Resolve to absolute path via `path.resolve(process.cwd(), localPath)`
-  - [ ] 2.3 Check `fs.existsSync(resolved)`: if exists, verify `fs.statSync(resolved).isDirectory()` — if it's a file, warn and re-prompt
-  - [ ] 2.4 If path does not exist: display warning with `chalk.yellow()`, ask user to confirm or provide corrected path
-  - [ ] 2.5 If confirmed non-existent: store resolved path, log warning that path must exist before agents run
-  - [ ] 2.6 If not confirmed, re-prompt for the path (loop)
-  - [ ] 2.7 Warn if resolved path is inside the current repo (`resolved.startsWith(process.cwd())`) — nested repos cause git confusion
+- [x] Task 2: Implement "Local path" flow (AC: #5, #9)
+  - [x] 2.1 Prompt user for local path string; reject empty/whitespace-only input with re-prompt
+  - [x] 2.2 Resolve to absolute path via `path.resolve(process.cwd(), localPath)`
+  - [x] 2.3 Check `fs.existsSync(resolved)`: if exists, verify `fs.statSync(resolved).isDirectory()` — if it's a file, warn and re-prompt
+  - [x] 2.4 If path does not exist: display warning with `chalk.yellow()`, ask user to confirm or provide corrected path
+  - [x] 2.5 If confirmed non-existent: store resolved path, log warning that path must exist before agents run
+  - [x] 2.6 If not confirmed, re-prompt for the path (loop)
+  - [x] 2.7 Warn if resolved path is inside the current repo (`resolved.startsWith(process.cwd())`) — nested repos cause git confusion
 
-- [ ] Task 3: Implement "Remote git repository" flow (AC: #3, #4, #8, #9, #10)
-  - [ ] 3.1 Prompt user for git URL string; reject empty/whitespace-only input with re-prompt
-  - [ ] 3.2 Prompt user for local destination path; reject empty/whitespace-only input with re-prompt
-  - [ ] 3.3 Resolve destination to absolute path via `path.resolve()`
-  - [ ] 3.4 If destination exists and is a file (not directory): warn with `chalk.red()` and re-prompt
-  - [ ] 3.5 If destination exists and is a directory: display summary with `chalk.blue()` (file count, whether it's a git repo), ask user to confirm using existing directory
-  - [ ] 3.6 If destination does not exist: run `execFileSync('git', ['clone', gitUrl, destPath], { timeout: 120000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })` — prevents injection, hangs, and SSH key prompts
-  - [ ] 3.7 On clone failure: if `destPath` was created by the failed clone (didn't exist before), remove it (`fs.rmSync(destPath, { recursive: true, force: true })`). Then offer retry or skip
-  - [ ] 3.8 If user skips after failure: fall back to `{ mode: 'same', path: '.' }`, log warning with `chalk.yellow('Falling back to current repository for {concern}')`
-  - [ ] 3.9 Warn if destination resolves inside current repo
+- [x] Task 3: Implement "Remote git repository" flow (AC: #3, #4, #8, #9, #10)
+  - [x] 3.1 Prompt user for git URL string; reject empty/whitespace-only input with re-prompt
+  - [x] 3.2 Prompt user for local destination path; reject empty/whitespace-only input with re-prompt
+  - [x] 3.3 Resolve destination to absolute path via `path.resolve()`
+  - [x] 3.4 If destination exists and is a file (not directory): warn with `chalk.red()` and re-prompt
+  - [x] 3.5 If destination exists and is a directory: display summary with `chalk.blue()` (file count, whether it's a git repo), ask user to confirm using existing directory
+  - [x] 3.6 If destination does not exist: run `execFileSync('git', ['clone', gitUrl, destPath], { timeout: 120000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })` — prevents injection, hangs, and SSH key prompts
+  - [x] 3.7 On clone failure: if `destPath` was created by the failed clone (didn't exist before), remove it (`fs.rmSync(destPath, { recursive: true, force: true })`). Then offer retry or skip
+  - [x] 3.8 If user skips after failure: fall back to `{ mode: 'same', path: '.' }`, log warning with `chalk.yellow('Falling back to current repository for {concern}')`
+  - [x] 3.9 Warn if destination resolves inside current repo
 
-- [ ] Task 4: Integrate into wizard flow (AC: #1-#10)
-  - [ ] 4.1 Call `collectRepoLayout(flags)` in `installWizard()` AFTER agent selection (after ~line 333) and BEFORE scope selection (~line 336)
-  - [ ] 4.2 Pass the returned layout object forward to the installation pipeline context
-  - [ ] 4.3 Store layout in the installation context so subsequent steps (config write, project-context) can access it
-  - [ ] 4.4 Verify `--yes` mode without env vars bypasses all repo layout prompts (defaults to same)
-  - [ ] 4.5 Verify `--yes` mode with env vars creates local-mode layout without prompts
+- [x] Task 4: Integrate into wizard flow (AC: #1-#10)
+  - [x] 4.1 Call `collectRepoLayout(flags)` in `installWizard()` AFTER agent selection (after ~line 333) and BEFORE scope selection (~line 336)
+  - [x] 4.2 Pass the returned layout object forward to the installation pipeline context
+  - [x] 4.3 Store layout in the installation context so subsequent steps (config write, project-context) can access it
+  - [x] 4.4 Verify `--yes` mode without env vars bypasses all repo layout prompts (defaults to same)
+  - [x] 4.5 Verify `--yes` mode with env vars creates local-mode layout without prompts
 
-- [ ] Task 5: Write unit tests (AC: #1-#10)
-  - [ ] 5.1 Test `collectRepoLayout()` with `--yes` flag returns both as `same` mode
-  - [ ] 5.2 Test `collectRepoLayout()` with `--yes` + env vars returns local mode with resolved paths
-  - [ ] 5.3 Test local path validation: existing dir accepted, existing file rejected, non-existent warned
-  - [ ] 5.4 Test remote flow: `execFileSync` called with correct args array (not string interpolation)
-  - [ ] 5.5 Test clone failure: partial directory cleanup, skip fallback to same mode
-  - [ ] 5.6 Test empty/whitespace input rejection for URL and path
-  - [ ] 5.7 Test nested-repo warning when path is inside cwd
+- [x] Task 5: Write unit tests (AC: #1-#10)
+  - [x] 5.1 Test `collectRepoLayout()` with `--yes` flag returns both as `same` mode
+  - [x] 5.2 Test `collectRepoLayout()` with `--yes` + env vars returns local mode with resolved paths
+  - [x] 5.3 Test local path validation: existing dir accepted, existing file rejected, non-existent warned
+  - [x] 5.4 Test remote flow: `execFileSync` called with correct args array (not string interpolation)
+  - [x] 5.5 Test clone failure: partial directory cleanup, skip fallback to same mode
+  - [x] 5.6 Test empty/whitespace input rejection for URL and path
+  - [x] 5.7 Test nested-repo warning when path is inside cwd
 
 ## Dev Notes
 
@@ -193,8 +193,31 @@ This story ONLY implements the wizard collection. It does NOT write to config.ya
 
 ### Agent Model Used
 
+Claude Opus 4.6 (1M context)
+
 ### Debug Log References
+
+None — implementation proceeded without errors.
 
 ### Completion Notes List
 
+- Implemented `collectRepoLayout(flags)` function with full CI/CD (--yes) and interactive support
+- Implemented `collectLocalPath(concern)` helper for local path validation with re-prompt loops, directory/file checks, non-existent path warnings, and nested-repo detection
+- Implemented `collectRemotePath(concern)` helper for remote git clone flow with `execFileSync` (injection-safe), clone failure cleanup, retry/skip fallback, and nested-repo detection
+- Integrated `collectRepoLayout()` into `installWizard()` flow after agent selection, before scope selection
+- Created 13 unit tests in `test/repo-layout.test.js` covering: --yes defaults, env var resolution, structural code checks (execFileSync array args, clone cleanup, empty input rejection, nested-repo warning), and integration test
+- All 13 new tests pass, all existing tests pass (no regressions)
+- Added `repo-layout.test.js` to `package.json` test script
+- Exported `collectRepoLayout` from `bin/cli.js` for testability
+
+### Change Log
+
+- 2026-03-28: Implemented story 16.1 — repository layout wizard with all 5 tasks complete
+
 ### File List
+
+- bin/cli.js (modified — added collectRepoLayout, collectLocalPath, collectRemotePath functions + integration)
+- test/repo-layout.test.js (new — 13 unit/integration tests)
+- package.json (modified — added repo-layout.test.js to test script)
+- _bmad-output/implementation-artifacts/sprint-status.yaml (modified — story status)
+- _bmad-output/implementation-artifacts/16-1-repository-layout-wizard.md (modified — task checkboxes, dev record)

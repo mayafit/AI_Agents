@@ -47,9 +47,9 @@ async function test(name, fn) {
 // Template path derived directly — not imported from module (avoids leaking internals)
 const _TEMPLATE_PATH = path.join(__dirname, '..', 'lib', 'templates', 'project-context.template.md');
 
-let generateProjectContext, updateProjectContextManifestPaths;
+let generateProjectContext, updateProjectContextManifestPaths, generateRepoLayoutSection, updateProjectContextRepoLayout;
 try {
-  ({ generateProjectContext, _updateProjectContextManifestPaths: updateProjectContextManifestPaths } = require('../lib/installer'));
+  ({ generateProjectContext, _updateProjectContextManifestPaths: updateProjectContextManifestPaths, generateRepoLayoutSection, updateProjectContextRepoLayout } = require('../lib/installer'));
 } catch (e) {
   console.error('\n  FATAL: Cannot load installer module');
   console.error(' ', e.message);
@@ -324,6 +324,152 @@ async function runAll() {
     assert.ok(!content.includes('undefined'), 'must not introduce undefined paths');
 
     fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  // ─── Story 16.3: generateRepoLayoutSection tests ─────────────────────────
+
+  // 5.1 null layout → empty string
+  await test('5.1 generateRepoLayoutSection: null layout returns empty string', async () => {
+    assert.strictEqual(generateRepoLayoutSection(null), '');
+  });
+
+  // 5.2 single-repo (both same) → empty string
+  await test('5.2 generateRepoLayoutSection: both same mode returns empty string', async () => {
+    const result = generateRepoLayoutSection({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' }
+    });
+    assert.strictEqual(result, '');
+  });
+
+  // 5.3 multi-repo returns section with markers
+  await test('5.3 generateRepoLayoutSection: multi-repo returns section with markers', async () => {
+    const result = generateRepoLayoutSection({
+      knowledgebase: { mode: 'local', path: '/path/to/kb' },
+      sprintManagement: { mode: 'local', path: '/path/to/sprint' }
+    });
+    assert.ok(result.includes('<!-- ma-agents:repo-layout-start -->'), 'should have start marker');
+    assert.ok(result.includes('<!-- ma-agents:repo-layout-end -->'), 'should have end marker');
+    assert.ok(result.includes('### Repository Layout'), 'should have section header');
+    assert.ok(result.includes('/path/to/kb'), 'should include kb path');
+    assert.ok(result.includes('/path/to/sprint'), 'should include sprint path');
+  });
+
+  // 5.4 mixed config: one external + one same
+  await test('5.4 generateRepoLayoutSection: mixed config shows "current repository" for same', async () => {
+    const result = generateRepoLayoutSection({
+      knowledgebase: { mode: 'local', path: '/ext/kb' },
+      sprintManagement: { mode: 'same', path: '.' }
+    });
+    assert.ok(result.includes('/ext/kb'), 'should include external kb path');
+    assert.ok(result.includes('current repository (default)'), 'should show default for same mode');
+    assert.ok(result.includes('planning artifacts'), 'should have kb usage instruction');
+    assert.ok(!result.includes('sprint/story artifacts'), 'should NOT have sprint instruction when sprint is same');
+  });
+
+  // 5.5 path normalization
+  await test('5.5 generateRepoLayoutSection: normalizes backslashes', async () => {
+    const result = generateRepoLayoutSection({
+      knowledgebase: { mode: 'local', path: 'C:\\Users\\dev\\kb' },
+      sprintManagement: { mode: 'same', path: '.' }
+    });
+    assert.ok(result.includes('C:/Users/dev/kb'), 'should normalize backslashes');
+    assert.ok(!result.includes('\\'), 'should not contain backslashes');
+  });
+
+  // 5.6 backward compat: generateProjectContext without layout still works
+  await test('5.6 generateProjectContext: no layout param → no crash, no placeholder in output', async () => {
+    const content = await generateProjectContext('/some/root', [agent('.claude/skills')]);
+    assert.ok(!content.includes('{{REPO_LAYOUT_SECTION}}'), 'placeholder should be removed');
+    assert.ok(!content.includes('repo-layout-start'), 'should not have layout markers without layout');
+  });
+
+  // 5.7 generateProjectContext with multi-repo layout inserts section
+  await test('5.7 generateProjectContext: multi-repo layout inserts Repository Layout section', async () => {
+    const layout = {
+      knowledgebase: { mode: 'local', path: '/ext/kb' },
+      sprintManagement: { mode: 'same', path: '.' }
+    };
+    const content = await generateProjectContext('/some/root', [agent('.claude/skills')], layout);
+    assert.ok(content.includes('### Repository Layout'), 'should include Repository Layout section');
+    assert.ok(content.includes('/ext/kb'), 'should include kb path');
+    assert.ok(content.includes('<!-- ma-agents:repo-layout-start -->'), 'should have start marker');
+  });
+
+  // 5.8 no double blank lines when section is empty
+  await test('5.8 generateProjectContext: single-repo layout → no double blank lines', async () => {
+    const layout = {
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' }
+    };
+    const content = await generateProjectContext('/some/root', [agent('.claude/skills')], layout);
+    assert.ok(!content.includes('\n\n\n'), 'should not have triple newlines (double blank lines)');
+    assert.ok(!content.includes('repo-layout'), 'should not have any layout markers');
+  });
+
+  // ─── updateProjectContextRepoLayout tests ──────────────────────────────────
+
+  // 5.9 markers present → update content
+  await test('5.9 updateProjectContextRepoLayout: existing markers → updates content', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-test-'));
+    const outputPath = path.join(tmpDir, 'project-context.md');
+    const initial = [
+      '# Project Context',
+      '<!-- ma-agents:repo-layout-start -->',
+      '### Repository Layout',
+      '- old content',
+      '<!-- ma-agents:repo-layout-end -->',
+      '## Technology Stack'
+    ].join('\n');
+    fs.writeFileSync(outputPath, initial, 'utf8');
+
+    const result = await updateProjectContextRepoLayout(outputPath, {
+      knowledgebase: { mode: 'local', path: '/new/kb' },
+      sprintManagement: { mode: 'local', path: '/new/sprint' }
+    });
+    assert.strictEqual(result, true, 'should return true');
+    const content = fs.readFileSync(outputPath, 'utf8');
+    assert.ok(content.includes('/new/kb'), 'should have new kb path');
+    assert.ok(!content.includes('old content'), 'old content should be replaced');
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  // 5.10 no markers + multi-repo → inserts before Technology Stack
+  await test('5.10 updateProjectContextRepoLayout: no markers → inserts before Technology Stack', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-test-'));
+    const outputPath = path.join(tmpDir, 'project-context.md');
+    const initial = '# Project Context\nSome content\n\n## Technology Stack\nmore content';
+    fs.writeFileSync(outputPath, initial, 'utf8');
+
+    const result = await updateProjectContextRepoLayout(outputPath, {
+      knowledgebase: { mode: 'local', path: '/ext/kb' },
+      sprintManagement: { mode: 'same', path: '.' }
+    });
+    assert.strictEqual(result, true, 'should return true');
+    const content = fs.readFileSync(outputPath, 'utf8');
+    assert.ok(content.includes('### Repository Layout'), 'should insert section');
+    assert.ok(content.indexOf('Repository Layout') < content.indexOf('## Technology Stack'), 'section before Tech Stack');
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  // 5.11 single-repo + no markers → returns false (nothing to do)
+  await test('5.11 updateProjectContextRepoLayout: single-repo + no markers → returns false', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-test-'));
+    const outputPath = path.join(tmpDir, 'project-context.md');
+    fs.writeFileSync(outputPath, '# Project Context\n## Technology Stack\n', 'utf8');
+
+    const result = await updateProjectContextRepoLayout(outputPath, {
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' }
+    });
+    assert.strictEqual(result, false, 'should return false for single-repo with no markers');
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  // 5.12 missing layout fields → no crash
+  await test('5.12 generateRepoLayoutSection: missing layout fields returns empty string', async () => {
+    assert.strictEqual(generateRepoLayoutSection({}), '');
+    assert.strictEqual(generateRepoLayoutSection({ knowledgebase: null }), '');
   });
 
   // ─── Report ────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 # Story 16.3: Project-Context Multi-Repo Section
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -21,61 +21,20 @@ So that I know where to read and write planning and sprint artifacts.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Update project-context template (AC: #1, #2, #4)
-  - [ ] 1.1 Open `lib/templates/project-context.template.md`
-  - [ ] 1.2 Add `{{REPO_LAYOUT_SECTION}}` placeholder after the "Agent Mission Lifecycle" section and before "Technology Stack"
-  - [ ] 1.3 When multi-repo: placeholder resolves to the full "Repository Layout" section wrapped in marker comments
-  - [ ] 1.4 When single-repo: placeholder resolves to empty string
-  - [ ] 1.5 Ensure the placeholder replacement doesn't leave double blank lines — replace `{{REPO_LAYOUT_SECTION}}\n\n` as a unit when empty
+- [x] Task 1: Update project-context template (AC: #1, #2, #4)
+  - [x] 1.1-1.5 Added `{{REPO_LAYOUT_SECTION}}` placeholder; clean removal for single-repo
 
-- [ ] Task 2: Implement Repository Layout section generator (AC: #1, #2, #5, #6)
-  - [ ] 2.1 Create `generateRepoLayoutSection(layout)` function
-  - [ ] 2.2 Guard: if `!layout?.knowledgebase || !layout?.sprintManagement` return `''`
-  - [ ] 2.3 If both concerns are `same` mode: return `''` (section omitted)
-  - [ ] 2.4 Normalize all paths: `.replace(/\\/g, '/')` before inserting into markdown
-  - [ ] 2.5 Multi-repo output format (with markers):
-    ```markdown
-    <!-- ma-agents:repo-layout-start -->
-    ### Repository Layout
-    - **Knowledgebase:** /path/to/kb
-    - **Sprint Management:** /path/to/sprint
-    - When creating or reading planning artifacts, use the knowledgebase path
-    - When creating or reading sprint/story artifacts, use the sprint management path
-    <!-- ma-agents:repo-layout-end -->
-    ```
-  - [ ] 2.6 Mixed configuration: if one concern is `same`, show it as "current repository (default)" and only give path instructions for the external concern
-  - [ ] 2.7 Example mixed output:
-    ```markdown
-    ### Repository Layout
-    - **Knowledgebase:** /path/to/external/kb
-    - **Sprint Management:** current repository (default)
-    - When creating or reading planning artifacts, use the knowledgebase path
-    ```
+- [x] Task 2: Implement Repository Layout section generator (AC: #1, #2, #5, #6)
+  - [x] 2.1-2.7 `generateRepoLayoutSection(layout)` with guards, markers, mixed config, path normalization
 
-- [ ] Task 3: Integrate with project-context generator (AC: #1, #2, #4, #5)
-  - [ ] 3.1 Open `lib/installer.js` and find `generateProjectContext(projectRoot, installedAgents)` function
-  - [ ] 3.2 Add `layout` as a third parameter: `generateProjectContext(projectRoot, installedAgents, layout)`
-  - [ ] 3.3 Call `generateRepoLayoutSection(layout)` to get section content
-  - [ ] 3.4 Replace `{{REPO_LAYOUT_SECTION}}` placeholder with generated content or empty string
-  - [ ] 3.5 Update ALL callers of `generateProjectContext()` to pass the layout parameter (or `null` for backward compatibility)
+- [x] Task 3: Integrate with project-context generator (AC: #1, #2, #4, #5)
+  - [x] 3.1-3.5 Added `layout` parameter to `generateProjectContext()`, backward-compatible
 
-- [ ] Task 4: Implement marker-based update for existing files (AC: #3)
-  - [ ] 4.1 Create `updateProjectContextRepoLayout(outputPath, layout)` function following the pattern of existing `updateProjectContextManifestPaths()`
-  - [ ] 4.2 Read existing `_bmad-output/project-context.md`
-  - [ ] 4.3 If markers `<!-- ma-agents:repo-layout-start -->` and `<!-- ma-agents:repo-layout-end -->` exist: replace content between them
-  - [ ] 4.4 If markers don't exist AND multi-repo is configured: find the end of "AI Agent Mandatory Rules" section (before `## Technology Stack`) and insert the section with markers
-  - [ ] 4.5 If markers don't exist AND single-repo: do nothing (no section needed)
-  - [ ] 4.6 If file doesn't contain expected structure (heavily customized): log `chalk.blue('Could not auto-insert Repository Layout section — add manually or run /bmad-generate-project-context')` and skip
-  - [ ] 4.7 Call this function from the installation pipeline when project-context.md already exists
+- [x] Task 4: Implement marker-based update for existing files (AC: #3)
+  - [x] 4.1-4.7 `updateProjectContextRepoLayout()` with marker update/insert, integrated into installWizard
 
-- [ ] Task 5: Write/update unit tests (AC: #1-#6)
-  - [ ] 5.1 Update existing tests in `test/generate-project-context.test.js` for new `layout` parameter
-  - [ ] 5.2 Test `generateRepoLayoutSection()`: multi-repo returns section with markers, single-repo returns empty, null layout returns empty
-  - [ ] 5.3 Test mixed config: one external + one same-repo
-  - [ ] 5.4 Test path normalization: backslashes converted before markdown insertion
-  - [ ] 5.5 Test marker-based update: existing markers updated, missing markers triggers insertion or warning
-  - [ ] 5.6 Test backward compat: calling `generateProjectContext(root, agents)` without layout still works (no crash)
-  - [ ] 5.7 Test no double blank lines when section is empty
+- [x] Task 5: Write/update unit tests (AC: #1-#6)
+  - [x] 5.1-5.7 12 new tests added to generate-project-context.test.js (27 total, all pass)
 
 ## Dev Notes
 
@@ -152,9 +111,26 @@ The generator function is `generateProjectContext()` in `lib/installer.js` (line
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6 (1M context)
 
 ### Debug Log References
+None.
 
 ### Completion Notes List
+- Added `{{REPO_LAYOUT_SECTION}}` placeholder to `lib/templates/project-context.template.md`
+- Implemented `generateRepoLayoutSection(layout)` in `lib/installer.js` — generates markdown with markers for multi-repo, empty string for single-repo
+- Updated `generateProjectContext()` to accept optional `layout` parameter (backward-compatible)
+- Implemented `updateProjectContextRepoLayout()` for marker-based updates to existing project-context.md
+- Integrated into `installWizard()` — calls `updateProjectContextRepoLayout()` after skill installation
+- 12 new tests added to `test/generate-project-context.test.js`, all 27 pass
+
+### Change Log
+- 2026-03-28: Implemented story 16.3 — project-context multi-repo section
 
 ### File List
+- lib/installer.js (modified — generateRepoLayoutSection, updateProjectContextRepoLayout, generateProjectContext layout param)
+- lib/templates/project-context.template.md (modified — added REPO_LAYOUT_SECTION placeholder)
+- bin/cli.js (modified — import updateProjectContextRepoLayout, call after skill install)
+- test/generate-project-context.test.js (modified — 12 new tests)
+- _bmad-output/implementation-artifacts/sprint-status.yaml (modified)
+- _bmad-output/implementation-artifacts/16-3-project-context-multi-repo-section.md (modified)

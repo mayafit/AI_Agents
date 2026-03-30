@@ -3,7 +3,9 @@
 const prompts = require('prompts');
 const chalk = require('chalk');
 const path = require('path');
-const { installSkill, uninstallSkill, getStatus, listSkills, listAgents } = require('../lib/installer');
+const fs = require('fs');
+const { execFileSync } = require('child_process');
+const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout } = require('../lib/installer');
 const bmad = require('../lib/bmad');
 const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
 
@@ -28,6 +30,8 @@ ${chalk.bold('Usage:')}
   ${chalk.cyan(`npx ${NAME} set-mandatory`)} <name> [--off]  Mark a skill as always-load (or remove)
   ${chalk.cyan(`npx ${NAME} customize-agent`)} <agent>       Customize a BMAD agent persona and actions
   ${chalk.cyan(`npx ${NAME} create-agent`)} <name>           Create a new specialized BMAD agent
+  ${chalk.cyan(`npx ${NAME} config layout`)}                Reconfigure repository layout
+  ${chalk.cyan(`npx ${NAME} config layout --show`)}         Show current layout (read-only)
   ${chalk.cyan(`npx ${NAME} help`)}                         Show this help
 
 ${chalk.bold('Install options:')}
@@ -156,6 +160,452 @@ function parseFlags(args) {
     scope: globalFlag ? 'global' : 'project',
     positional
   };
+}
+
+// --- Repository layout wizard ---
+
+async function collectLocalPath(concern) {
+  while (true) {
+    const { localPath } = await prompts({
+      type: 'text',
+      name: 'localPath',
+      message: `Enter local path for ${concern}:`
+    });
+
+    if (!localPath || !localPath.trim()) {
+      console.log(chalk.red('  Path cannot be empty. Please try again.'));
+      continue;
+    }
+
+    const resolved = path.resolve(process.cwd(), localPath.trim());
+
+    if (fs.existsSync(resolved)) {
+      if (!fs.statSync(resolved).isDirectory()) {
+        console.log(chalk.red(`  "${resolved}" exists but is a file, not a directory. Please try again.`));
+        continue;
+      }
+    } else {
+      console.log(chalk.yellow(`  Warning: "${resolved}" does not exist.`));
+      const { confirmed } = await prompts({
+        type: 'confirm',
+        name: 'confirmed',
+        message: 'Use this path anyway? (It must exist before agents run)',
+        initial: false
+      });
+      if (!confirmed) continue;
+      console.log(chalk.yellow(`  Note: Path "${resolved}" must exist before agents run.`));
+    }
+
+    if (resolved.startsWith(process.cwd())) {
+      console.log(chalk.yellow(`  Warning: Path is inside the current repository. Nested repos may cause git confusion.`));
+    }
+
+    return { mode: 'local', path: resolved };
+  }
+}
+
+async function collectRemotePath(concern) {
+  while (true) {
+    // Collect git URL
+    let gitUrl;
+    while (true) {
+      const { url } = await prompts({
+        type: 'text',
+        name: 'url',
+        message: `Enter git URL for ${concern}:`
+      });
+      if (!url || !url.trim()) {
+        console.log(chalk.red('  Git URL cannot be empty. Please try again.'));
+        continue;
+      }
+      gitUrl = url.trim();
+      break;
+    }
+
+    // Collect destination path
+    let destPath;
+    while (true) {
+      const { dest } = await prompts({
+        type: 'text',
+        name: 'dest',
+        message: `Enter local destination path for clone:`
+      });
+      if (!dest || !dest.trim()) {
+        console.log(chalk.red('  Destination path cannot be empty. Please try again.'));
+        continue;
+      }
+      destPath = path.resolve(process.cwd(), dest.trim());
+      break;
+    }
+
+    // Check destination
+    if (fs.existsSync(destPath)) {
+      if (!fs.statSync(destPath).isDirectory()) {
+        console.log(chalk.red(`  "${destPath}" exists but is a file, not a directory. Please try again.`));
+        continue;
+      }
+      // Existing directory — show summary and confirm
+      const files = fs.readdirSync(destPath);
+      const isGitRepo = fs.existsSync(path.join(destPath, '.git'));
+      console.log(chalk.blue(`  Directory exists: ${files.length} items${isGitRepo ? ' (git repo)' : ''}`));
+      const { confirmed } = await prompts({
+        type: 'confirm',
+        name: 'confirmed',
+        message: 'Use this existing directory?',
+        initial: true
+      });
+      if (!confirmed) continue;
+    } else {
+      // Clone
+      const existedBefore = fs.existsSync(destPath);
+      try {
+        console.log(chalk.cyan(`  Cloning ${gitUrl}...`));
+        execFileSync('git', ['clone', gitUrl, destPath], {
+          timeout: 120000,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+          stdio: 'inherit'
+        });
+      } catch (err) {
+        console.log(chalk.red(`  Clone failed: ${err.message}`));
+        if (!existedBefore && fs.existsSync(destPath)) {
+          fs.rmSync(destPath, { recursive: true, force: true });
+        }
+        const { retry } = await prompts({
+          type: 'confirm',
+          name: 'retry',
+          message: 'Retry?',
+          initial: true
+        });
+        if (retry) continue;
+        console.log(chalk.yellow(`  Falling back to current repository for ${concern}`));
+        return { mode: 'same', path: '.' };
+      }
+    }
+
+    if (destPath.startsWith(process.cwd())) {
+      console.log(chalk.yellow(`  Warning: Destination is inside the current repository. Nested repos may cause git confusion.`));
+    }
+
+    return { mode: 'remote', path: destPath, gitUrl };
+  }
+}
+
+function normalizePath(p) {
+  return p.replace(/\\/g, '/');
+}
+
+function yamlEscapeValue(v) {
+  if (!v) return '""';
+  const s = String(v);
+  if (/[:"#\[\]{}&*!|>%@`]/.test(s) || s !== s.trim() || s === '') {
+    return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  }
+  return '"' + s + '"';
+}
+
+function toPortablePath(absolutePath, projectRoot) {
+  if (!absolutePath || absolutePath === '.') return { portable: '.', isAbsolute: false };
+
+  const rel = normalizePath(path.relative(projectRoot, absolutePath));
+
+  // Same directory: path.relative returns '' — treat as '.'
+  if (rel === '') return { portable: '.', isAbsolute: false };
+
+  // Cross-drive on Windows: path.relative returns the absolute target unchanged
+  if (path.isAbsolute(rel) || /^[A-Za-z]:/.test(rel)) {
+    return { portable: normalizePath(absolutePath), isAbsolute: true };
+  }
+
+  // Too many levels up — treat as non-portable
+  const upLevels = (rel.match(/\.\./g) || []).length;
+  if (upLevels > 3) {
+    return { portable: normalizePath(absolutePath), isAbsolute: true };
+  }
+
+  return { portable: rel, isAbsolute: false };
+}
+
+function writeConfigField(content, fieldName, value) {
+  const regex = new RegExp(`^${fieldName}:.*$`, 'm');
+  const newLine = `${fieldName}: ${yamlEscapeValue(value)}`;
+  if (regex.test(content)) {
+    return content.replace(regex, newLine);
+  }
+  return content.trimEnd() + '\n' + newLine + '\n';
+}
+
+function writeRepoLayoutConfig(layout) {
+  const configPath = path.join(process.cwd(), '_bmad', 'bmm', 'config.yaml');
+  try {
+    if (!fs.existsSync(configPath)) {
+      console.log(chalk.yellow('  _bmad/bmm/config.yaml not found — skipping config write'));
+      return;
+    }
+    let content = fs.readFileSync(configPath, 'utf-8');
+    const projectRoot = process.cwd();
+    const kbPortable = toPortablePath(layout.knowledgebase.path, projectRoot);
+    const spPortable = toPortablePath(layout.sprintManagement.path, projectRoot);
+    const kbPath = kbPortable.portable;
+    const spPath = spPortable.portable;
+    content = writeConfigField(content, 'knowledgebase_path', kbPath);
+    content = writeConfigField(content, 'sprint_management_path', spPath);
+    // Derive workflow-consumable artifact paths from layout paths (relative when base is relative)
+    const planningArtifacts = kbPath === '.' ? '_bmad-output/planning-artifacts' : `${kbPath}/_bmad-output/planning-artifacts`;
+    const implArtifacts = spPath === '.' ? '_bmad-output/implementation-artifacts' : `${spPath}/_bmad-output/implementation-artifacts`;
+    content = writeConfigField(content, 'planning_artifacts', planningArtifacts);
+    content = writeConfigField(content, 'implementation_artifacts', implArtifacts);
+    fs.writeFileSync(configPath, content, 'utf-8');
+    console.log(chalk.gray(`  Config: knowledgebase_path="${kbPath}", sprint_management_path="${spPath}"`));
+  } catch (e) {
+    console.log(chalk.red(`  Cannot write config.yaml: ${e.message}`));
+  }
+}
+
+function writeProjectLayoutYaml(layout) {
+  const layoutPath = path.join(process.cwd(), '_bmad-output', 'project-layout.yaml');
+  const bothSame = layout.knowledgebase.mode === 'same' && layout.sprintManagement.mode === 'same';
+
+  if (bothSame) {
+    // Single-repo mode: delete stale file if exists
+    if (fs.existsSync(layoutPath)) {
+      fs.unlinkSync(layoutPath);
+      console.log(chalk.blue('  Removed stale project-layout.yaml (now in single-repo mode)'));
+    }
+    return;
+  }
+
+  // Multi-repo: generate project-layout.yaml
+  fs.mkdirSync(path.join(process.cwd(), '_bmad-output'), { recursive: true });
+
+  const date = new Date().toISOString().slice(0, 10);
+  let content = `# Generated by ma-agents — do not edit manually\n`;
+  content += `# Tells agents where to find planning and sprint data\n`;
+  content += `generated: "${date}"\n`;
+
+  const projectRoot = process.cwd();
+
+  // Knowledgebase section
+  const kbPortable = toPortablePath(layout.knowledgebase.path, projectRoot);
+  content += `knowledgebase:\n`;
+  content += `  mode: ${layout.knowledgebase.mode}\n`;
+  content += `  path: ${yamlEscapeValue(kbPortable.portable)}\n`;
+  if (kbPortable.isAbsolute) {
+    content += `  # PORTABILITY: absolute path — other developers may need to reconfigure\n`;
+  }
+  if (layout.knowledgebase.mode === 'remote' && layout.knowledgebase.gitUrl) {
+    content += `  gitUrl: ${yamlEscapeValue(layout.knowledgebase.gitUrl)}\n`;
+  }
+
+  // Sprint management section
+  const spPortable = toPortablePath(layout.sprintManagement.path, projectRoot);
+  content += `sprint_management:\n`;
+  content += `  mode: ${layout.sprintManagement.mode}\n`;
+  content += `  path: ${yamlEscapeValue(spPortable.portable)}\n`;
+  if (spPortable.isAbsolute) {
+    content += `  # PORTABILITY: absolute path — other developers may need to reconfigure\n`;
+  }
+  if (layout.sprintManagement.mode === 'remote' && layout.sprintManagement.gitUrl) {
+    content += `  gitUrl: ${yamlEscapeValue(layout.sprintManagement.gitUrl)}\n`;
+  }
+
+  fs.writeFileSync(layoutPath, content, 'utf-8');
+  console.log(chalk.gray(`  Created _bmad-output/project-layout.yaml`));
+}
+
+function resolveStoredPath(storedPath, projectRoot) {
+  if (!storedPath) return '.';
+  if (storedPath === '.') return storedPath;
+  // If already absolute, use as-is (backward compat)
+  if (path.isAbsolute(storedPath) || /^[A-Za-z]:/.test(storedPath)) return storedPath;
+  // Relative path — resolve from project root
+  return normalizePath(path.resolve(projectRoot, storedPath));
+}
+
+function readExistingLayout() {
+  const projectRoot = process.cwd();
+  // Try project-layout.yaml first (authoritative source written by Story 16.2)
+  const layoutPath = path.join(projectRoot, '_bmad-output', 'project-layout.yaml');
+  try {
+    if (fs.existsSync(layoutPath)) {
+      const content = fs.readFileSync(layoutPath, 'utf-8');
+      const layout = { knowledgebase: null, sprintManagement: null };
+
+      // Parse each concern section from the simple YAML
+      for (const [section, key] of [['knowledgebase', 'knowledgebase'], ['sprint_management', 'sprintManagement']]) {
+        const sectionMatch = content.match(new RegExp(`^${section}:\\s*$`, 'm'));
+        if (!sectionMatch) continue;
+
+        const afterSection = content.slice(sectionMatch.index + sectionMatch[0].length);
+        const modeMatch = afterSection.match(/^\s+mode:\s*(\S+)/m);
+        const pathMatch = afterSection.match(/^\s+path:\s*"?([^"\n]+)"?/m);
+        const gitUrlMatch = afterSection.match(/^\s+gitUrl:\s*"?([^"\n]+)"?/m);
+
+        if (modeMatch && pathMatch) {
+          const resolvedPath = resolveStoredPath(pathMatch[1], projectRoot);
+          const entry = { mode: modeMatch[1], path: resolvedPath };
+          if (modeMatch[1] === 'remote' && gitUrlMatch) {
+            entry.gitUrl = gitUrlMatch[1];
+          }
+          layout[key] = entry;
+        }
+      }
+
+      // Only return if we parsed at least one valid concern
+      if (layout.knowledgebase || layout.sprintManagement) {
+        // Fill in defaults for any missing section
+        if (!layout.knowledgebase) layout.knowledgebase = { mode: 'same', path: '.' };
+        if (!layout.sprintManagement) layout.sprintManagement = { mode: 'same', path: '.' };
+        return layout;
+      }
+    }
+  } catch (e) {
+    console.log(chalk.yellow(`  Warning: could not read project-layout.yaml: ${e.message}`));
+  }
+
+  // Fallback: check config.yaml for path fields
+  const configPath = path.join(projectRoot, '_bmad', 'bmm', 'config.yaml');
+  try {
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf-8');
+      const kbMatch = content.match(/^knowledgebase_path:\s*"?([^"\n]+)"?/m);
+      const spMatch = content.match(/^sprint_management_path:\s*"?([^"\n]+)"?/m);
+
+      const kbPath = kbMatch ? resolveStoredPath(kbMatch[1], projectRoot) : null;
+      const spPath = spMatch ? resolveStoredPath(spMatch[1], projectRoot) : null;
+
+      // Only return if at least one non-default path exists
+      if ((kbPath && kbPath !== '.') || (spPath && spPath !== '.')) {
+        return {
+          knowledgebase: kbPath && kbPath !== '.'
+            ? { mode: 'local', path: kbPath }
+            : { mode: 'same', path: '.' },
+          sprintManagement: spPath && spPath !== '.'
+            ? { mode: 'local', path: spPath }
+            : { mode: 'same', path: '.' },
+        };
+      }
+    }
+  } catch (e) {
+    console.log(chalk.yellow(`  Warning: could not read config.yaml layout: ${e.message}`));
+  }
+
+  return null;
+}
+
+function ciCloneIfNeeded(destPath, gitUrl, clonedRepos) {
+  // Deduplicate: same URL + path already cloned
+  const key = `${gitUrl}::${destPath}`;
+  if (clonedRepos.has(key)) return;
+
+  if (fs.existsSync(destPath)) {
+    if (fs.existsSync(path.join(destPath, '.git'))) {
+      console.log(chalk.gray(`  Using existing clone at ${destPath}`));
+      clonedRepos.set(key, true);
+      return;
+    }
+    throw new Error(`Destination exists but is not a git repo — remove it or use a different path: ${destPath}`);
+  }
+
+  try {
+    console.log(chalk.cyan(`  Cloning ${gitUrl} → ${destPath}`));
+    execFileSync('git', ['clone', '--depth', '1', gitUrl, destPath], { stdio: 'pipe' });
+    clonedRepos.set(key, true);
+  } catch (e) {
+    throw new Error(`Failed to clone ${gitUrl}: ${e.message}`);
+  }
+}
+
+async function collectRepoLayout(flags, existingLayout = null) {
+  // CI/CD mode: env vars > existing layout > defaults
+  if (flags.yes) {
+    const kbPath = process.env.MA_KNOWLEDGEBASE_PATH;
+    const sprintPath = process.env.MA_SPRINT_PATH;
+    const kbGitUrl = process.env.MA_KNOWLEDGEBASE_GIT_URL;
+    const sprintGitUrl = process.env.MA_SPRINT_GIT_URL;
+
+    // Validate: git URL requires corresponding path
+    if (kbGitUrl && !kbPath) {
+      throw new Error('MA_KNOWLEDGEBASE_GIT_URL requires MA_KNOWLEDGEBASE_PATH to be set (clone destination)');
+    }
+    if (sprintGitUrl && !sprintPath) {
+      throw new Error('MA_SPRINT_GIT_URL requires MA_SPRINT_PATH to be set (clone destination)');
+    }
+
+    // Env vars take precedence
+    if (kbPath || sprintPath || kbGitUrl || sprintGitUrl) {
+      const result = { knowledgebase: null, sprintManagement: null };
+
+      // Track cloned repos to avoid duplicate clones (AC #8)
+      const clonedRepos = new Map();
+
+      for (const [concern, envPath, envGitUrl] of [
+        ['knowledgebase', kbPath, kbGitUrl],
+        ['sprintManagement', sprintPath, sprintGitUrl],
+      ]) {
+        if (envGitUrl && envPath) {
+          const resolvedPath = path.resolve(envPath);
+          // Clone if needed (CI-mode: fail loudly, no fallback)
+          ciCloneIfNeeded(resolvedPath, envGitUrl, clonedRepos);
+          result[concern] = { mode: 'remote', path: resolvedPath, gitUrl: envGitUrl };
+        } else if (envPath) {
+          result[concern] = { mode: 'local', path: path.resolve(envPath) };
+        } else {
+          result[concern] = existingLayout ? existingLayout[concern] : { mode: 'same', path: '.' };
+        }
+      }
+
+      return result;
+    }
+    // No env vars: preserve existing layout if available
+    if (existingLayout) {
+      return existingLayout;
+    }
+    // No env vars, no existing layout: default to single-repo
+    return {
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' },
+    };
+  }
+
+  const layout = { knowledgebase: null, sprintManagement: null };
+  const labels = { knowledgebase: 'knowledgebase', sprintManagement: 'sprint management' };
+
+  for (const concern of ['knowledgebase', 'sprintManagement']) {
+    const existingMode = existingLayout && existingLayout[concern] ? existingLayout[concern].mode : null;
+    const modeChoices = [
+      { title: 'Current repository (default)', value: 'same' },
+      { title: 'Local path', value: 'local' },
+      { title: 'Remote git repository', value: 'remote' },
+    ];
+    // Pre-select existing mode if available
+    const initialIndex = existingMode ? modeChoices.findIndex(c => c.value === existingMode) : 0;
+
+    const { mode } = await prompts({
+      type: 'select',
+      name: 'mode',
+      message: `Where is your ${labels[concern]} managed?`,
+      choices: modeChoices,
+      initial: initialIndex >= 0 ? initialIndex : 0
+    });
+
+    if (!mode) process.exit(0);
+
+    if (mode === 'same') {
+      layout[concern] = { mode: 'same', path: '.' };
+    } else if (mode === 'local') {
+      layout[concern] = await collectLocalPath(labels[concern]);
+    } else if (mode === 'remote') {
+      layout[concern] = await collectRemotePath(labels[concern]);
+    }
+  }
+
+  // Check if both concerns point to same external path
+  if (layout.knowledgebase.mode !== 'same' && layout.sprintManagement.mode !== 'same'
+      && layout.knowledgebase.path === layout.sprintManagement.path) {
+    console.log(chalk.cyan('  Both concerns point to same external repository'));
+  }
+
+  return layout;
 }
 
 // --- Install wizard ---
@@ -332,6 +782,10 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     }
   }
 
+  // Step 2.5: Repository layout (preserve existing config on update)
+  const existingLayout = isUpdate ? readExistingLayout() : null;
+  const repoLayout = await collectRepoLayout({ yes: yesFlag }, existingLayout);
+
   // Step 3: Scope (Skip if update, yesFlag, or path already set)
   if (!isUpdate && !installPath && !yesFlag) {
     const { pathChoice } = await prompts({
@@ -433,6 +887,12 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     }
   }
 
+  // Step 3.6: Write repo layout config (after BMAD install creates config.yaml)
+  if (installScope === 'project') {
+    writeRepoLayoutConfig(repoLayout);
+    writeProjectLayoutYaml(repoLayout);
+  }
+
   // Step 4: Confirm
   console.log('');
   console.log(chalk.bold('  Summary:'));
@@ -511,6 +971,21 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     }
   }
 
+  // Step 6: Update project-context.md with repo layout section (after skills installed project-context.md)
+  if (installScope === 'project') {
+    const outputPath = path.join(process.cwd(), '_bmad-output', 'project-context.md');
+    try {
+      if (fs.existsSync(outputPath)) {
+        const updated = await updateProjectContextRepoLayout(outputPath, repoLayout);
+        if (updated) {
+          console.log(chalk.green(' project-context.md repo layout section updated'));
+        }
+      }
+    } catch (err) {
+      console.log(chalk.yellow(` project-context repo layout update skipped: ${err.message}`));
+    }
+  }
+
   console.log(chalk.bold.green('\n Done!\n'));
 }
 
@@ -580,6 +1055,66 @@ async function handleUninstall(args) {
     console.error(chalk.red('\n Uninstall failed:'), error.message);
     process.exit(1);
   }
+}
+
+// --- Config layout command ---
+
+function showCurrentLayout() {
+  const layout = readExistingLayout();
+  if (!layout) {
+    console.log(chalk.cyan('\n  Single-repo layout (default)'));
+    console.log(chalk.gray('  Knowledgebase:      . (current repository)'));
+    console.log(chalk.gray('  Sprint management:  . (current repository)'));
+    return;
+  }
+
+  console.log(chalk.bold.cyan('\n  Current Repository Layout:\n'));
+  for (const [label, key] of [['Knowledgebase', 'knowledgebase'], ['Sprint Management', 'sprintManagement']]) {
+    const concern = layout[key];
+    console.log(chalk.white(`  ${label}:`));
+    console.log(chalk.gray(`    Mode:    ${concern.mode}`));
+    console.log(chalk.gray(`    Path:    ${concern.path}`));
+    if (concern.gitUrl) {
+      console.log(chalk.gray(`    Git URL: ${concern.gitUrl}`));
+    }
+  }
+  console.log('');
+}
+
+async function handleConfigLayout(args) {
+  const { yesFlag } = parseFlags(args);
+  const showOnly = args.includes('--show');
+
+  if (showOnly) {
+    showCurrentLayout();
+    return;
+  }
+
+  // Show current before reconfiguring
+  showCurrentLayout();
+
+  // Read existing and present pre-populated wizard
+  const existingLayout = readExistingLayout();
+  const newLayout = await collectRepoLayout({ yes: yesFlag }, existingLayout);
+
+  // Write updated config
+  writeRepoLayoutConfig(newLayout);
+  writeProjectLayoutYaml(newLayout);
+
+  // Update project-context.md
+  const outputPath = path.join(process.cwd(), '_bmad-output', 'project-context.md');
+  try {
+    if (fs.existsSync(outputPath)) {
+      const updated = await updateProjectContextRepoLayout(outputPath, newLayout);
+      if (updated) {
+        console.log(chalk.green('  project-context.md repo layout section updated'));
+      }
+    }
+  } catch (err) {
+    console.log(chalk.yellow(`  project-context repo layout update skipped: ${err.message}`));
+  }
+
+  console.log(chalk.bold.green('\n  Layout reconfigured!\n'));
 }
 
 // --- Interactive mode ---
@@ -665,6 +1200,15 @@ async function main() {
     case 'create-agent':
       await handleCreateAgent(args.slice(1));
       break;
+    case 'config':
+      if (args[1] === 'layout') {
+        await handleConfigLayout(args.slice(2));
+      } else {
+        console.error(chalk.red(`Unknown config subcommand: ${args[1] || '(none)'}`));
+        console.error(chalk.gray('  Usage: npx ma-agents config layout [--show] [--yes]'));
+        process.exit(1);
+      }
+      break;
     case 'help':
     case '--help':
     case '-h':
@@ -688,4 +1232,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseFlags };
+module.exports = { parseFlags, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue };

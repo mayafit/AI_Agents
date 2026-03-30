@@ -2116,6 +2116,147 @@ So that planning and sprint artifacts are read from and written to the correct r
 - If BMAD workflows don't natively support configurable output paths, this story identifies the gap and documents what workflow changes are needed
 - Test both directions: writing artifacts to external repo AND reading artifacts from external repo
 
+### Story 16.5: Fix Config Lost on Update (Bug)
+
+As a **user with a multi-repo layout configured**,
+I want my repo layout configuration to be preserved when I update ma-agents,
+So that I don't silently lose my multi-repo paths every time I add a skill or update agents.
+
+**Acceptance Criteria:**
+
+**Given** an existing installation with multi-repo layout configured in `project-layout.yaml`
+**When** the user runs `ma-agents` again and selects "Update"
+**Then** the repo layout prompts are pre-populated with the existing configuration
+
+**Given** an update with `--yes` flag and no env vars
+**When** `project-layout.yaml` exists with multi-repo paths
+**Then** the existing layout is preserved instead of defaulting to single-repo
+
+**Given** an update with `--yes` flag and env vars set
+**When** `project-layout.yaml` also exists
+**Then** the env vars take precedence over the file (explicit override wins)
+
+**Technical notes:**
+- BUG: `collectRepoLayout()` runs unconditionally on every install/update — no `isUpdate` guard
+- Implement `readExistingLayout()` to parse `project-layout.yaml` and pre-populate prompts
+- In `--yes` mode without env vars, preserve existing config from file
+- Origin: Adversarial Review Finding #1
+
+### Story 16.6: Repository Sync Check Skill
+
+As a **developer using multi-repo layout**,
+I want a skill that checks whether external repos are in sync and properly scaffolded,
+So that I catch stale clones and missing directory structures before agents fail at runtime.
+
+**Acceptance Criteria:**
+
+**Given** a multi-repo layout is configured
+**When** the user or agent runs the repo-sync-check skill
+**Then** it reads config.yaml, checks each external path exists, verifies expected directory structure, and checks git sync status
+
+**Given** an external path missing `_bmad-output/planning-artifacts/`
+**When** the skill runs
+**Then** it reports the missing structure and offers to scaffold it
+
+**Given** an external git repo where local is behind remote
+**When** the skill runs
+**Then** it reports how many commits behind and advises `git pull`
+
+**Given** a single-repo layout
+**When** the skill runs
+**Then** it reports "no external repos to check" and exits cleanly
+
+**Technical notes:**
+- Covers both scaffolding gap (external repo never initialized) and sync gap (no pull after clone)
+- Read-only git operations: `git fetch`, `git rev-list --count`, `git status --porcelain`
+- Implemented as a skill (not workflow) — short, self-contained check
+- Origin: Adversarial Review Findings #3 and #4
+
+### Story 16.7: Portable Path Storage
+
+As a **team member cloning a project with multi-repo layout**,
+I want stored paths to be relative rather than absolute,
+So that `project-layout.yaml` and `config.yaml` work across different machines.
+
+**Acceptance Criteria:**
+
+**Given** a local multi-repo path that is relative to the project root
+**When** the config is written
+**Then** the path is stored as relative (e.g., `../kb-repo` instead of `d:/Code/kb-repo`)
+
+**Given** a path that cannot be expressed as a relative path (cross-drive on Windows)
+**When** the config is written
+**Then** the absolute path is stored with a portability warning comment
+
+**Given** stored relative paths
+**When** `readExistingLayout()` reads them back
+**Then** it resolves to absolute paths using `path.resolve(projectRoot, storedPath)`
+
+**Technical notes:**
+- Add `toPortablePath(absolutePath, projectRoot)` utility using `path.relative()`
+- Update `writeProjectLayoutYaml()` and `writeRepoLayoutConfig()` to use portable paths
+- Backward compatible: existing absolute paths still work when read back
+- Origin: Adversarial Review Finding #7
+
+### Story 16.8: CI/CD Remote Repository Mode
+
+As a **CI/CD pipeline operator**,
+I want to configure remote git repositories headlessly via env vars,
+So that automated pipelines can set up multi-repo remote layouts without prompts.
+
+**Acceptance Criteria:**
+
+**Given** `--yes` flag and `MA_KNOWLEDGEBASE_GIT_URL` env var set
+**When** `collectRepoLayout()` runs
+**Then** it clones the repo to `MA_KNOWLEDGEBASE_PATH` and returns `mode: 'remote'`
+
+**Given** git URL env var set but corresponding path env var missing
+**When** `collectRepoLayout()` runs
+**Then** it exits with error: "MA_KNOWLEDGEBASE_GIT_URL requires MA_KNOWLEDGEBASE_PATH"
+
+**Given** clone destination already exists with `.git` directory
+**When** clone is attempted
+**Then** it skips cloning (idempotent for CI re-runs)
+
+**Given** clone failure in CI mode
+**When** the error occurs
+**Then** it exits non-zero with clear error (no silent fallback to same mode)
+
+**Technical notes:**
+- New env vars: `MA_KNOWLEDGEBASE_GIT_URL`, `MA_SPRINT_GIT_URL`
+- CI mode must fail loudly — no fallback to `same` on error
+- Idempotent: existing valid clone at destination is reused
+- Origin: Adversarial Review Finding #8
+
+### Story 16.9: Reconfigure Layout Workflow
+
+As a **user who needs to change repo layout after installation**,
+I want a dedicated command and workflow to reconfigure repo layout,
+So that I can change paths without re-running the full installer.
+
+**Acceptance Criteria:**
+
+**Given** the user runs `ma-agents config layout`
+**When** the command starts
+**Then** it displays current layout and presents the layout wizard pre-populated with current values
+
+**Given** the user runs `ma-agents config layout --show`
+**Then** it displays current configuration in read-only mode (no prompts)
+
+**Given** reconfiguration completes
+**When** new paths are confirmed
+**Then** `config.yaml`, `project-layout.yaml`, and `project-context.md` are all updated
+
+**Given** reconfiguration from multi-repo to single-repo
+**When** update completes
+**Then** `project-layout.yaml` is deleted and config reverts to single-repo defaults
+
+**Technical notes:**
+- Reuses all existing functions: `readExistingLayout()`, `collectRepoLayout()`, `writeRepoLayoutConfig()`, `writeProjectLayoutYaml()`, `updateProjectContextRepoLayout()`
+- Also create a BMAD skill so agents can guide users to the command
+- Depends on Stories 16.5, 16.7, 16.8
+- Origin: Adversarial Review Finding #10
+
 ---
 
 ## Epic 17: Sprint Management Model Rework (Phase 2)

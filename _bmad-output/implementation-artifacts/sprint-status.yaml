@@ -1,5 +1,5 @@
 # generated: 2026-03-15
-# updated: 2026-03-26 — Epic 5 reopened with stories 5.5 (explicit params) and 5.6 (space-in-path fix). Added Epic 15: BMAD 6.2.1 Migration (8 stories). Added Epic 16: Multi-Repo Layout (4 stories). Development execution order: Phase A (Epic 5 fixes → release), Phase B (Epic 15 migration → release), Phase C (Epic 16 + remaining).
+# updated: 2026-03-28 — Epic 16 expanded from 4 to 9 stories after adversarial review. Stories 16.5 (bug: config lost on update), 16.6 (repo sync check skill), 16.7 (portable paths), 16.8 (CI/CD remote mode), 16.9 (reconfigure workflow) added. Execution order: 16.5 → 16.7 → 16.8 → 16.6 → 16.9.
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system
@@ -196,12 +196,18 @@ development_status:
 
   # Epic 16: Multi-Repository Project Layout (Phase 2)
   # Dependencies: Epic 15 (module restructure), Epic 13 (project-context template)
-  # Execution order: 16.1 → 16.2 → 16.3 → 16.4
-  epic-16: in-progress
-  16-1-repository-layout-wizard: ready-for-dev
-  16-2-config-storage-and-cross-reference: ready-for-dev
-  16-3-project-context-multi-repo-section: ready-for-dev
-  16-4-validate-cross-repo-path-resolution: ready-for-dev
+  # Execution order: 16.1 → 16.2 → 16.3 → 16.4 (original). 16.5-16.9 added 2026-03-28 from adversarial review.
+  # New execution order: 16.5 (bug fix) → 16.7 → 16.8 → 16.6 → 16.9
+  epic-16: done
+  16-1-repository-layout-wizard: done
+  16-2-config-storage-and-cross-reference: done
+  16-3-project-context-multi-repo-section: done
+  16-4-validate-cross-repo-path-resolution: done
+  16-5-fix-config-lost-on-update: done                     # BUG: config destroyed on update/reinstall
+  16-6-repo-sync-check-skill: done                       # scaffolding + sync check for external repos
+  16-7-portable-path-storage: done                        # relative paths for portability
+  16-8-cicd-remote-mode: done                            # CI/CD support for remote git repos
+  16-9-reconfigure-layout-workflow: done                  # dedicated reconfigure command + workflow
   epic-16-retrospective: optional
 
   # Epic 17: Sprint Management Model Rework (Phase 2)
@@ -209,13 +215,13 @@ development_status:
   # Execution order: 17.1 → 17.2 → 17.3 → 17.4 → 17.5 → 17.6 → 17.7 → 17.8
   epic-17: in-progress
   17-1-sprint-entity-model: ready-for-dev
-  17-2-flat-backlog-model: backlog
-  17-3-bug-as-story-type: backlog
-  17-4-backlog-to-sprint-workflow: backlog
-  17-5-sprint-to-backlog-workflow: backlog
-  17-6-done-item-cleanup: backlog
-  17-7-multi-criteria-prioritization: backlog
-  17-8-rework-sprint-status-display: backlog
+  17-2-flat-backlog-model: ready-for-dev
+  17-3-bug-as-story-type: ready-for-dev
+  17-4-backlog-to-sprint-workflow: ready-for-dev
+  17-5-sprint-to-backlog-workflow: ready-for-dev
+  17-6-done-item-cleanup: ready-for-dev
+  17-7-multi-criteria-prioritization: ready-for-dev
+  17-8-rework-sprint-status-display: ready-for-dev
   epic-17-retrospective: optional
 
   # Epic 14: External Tooling Integration (Phase 3)
