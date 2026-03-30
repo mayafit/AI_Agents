@@ -74,8 +74,19 @@ const AGENTS = [
     oldPaths: ['bmm/workflows/mil498/', '_bmad/bmm/workflows/mil498/'],
     chatTopic: 'MIL-STD-498',
     menuItemCount: 10 // MH, CH, GS, GD, GP, GO, SS, GT, SD, DA
+  },
+  {
+    folder: 'bmad-ma-agent-isaac',
+    name: 'bmad-ma-agent-isaac',
+    displayName: 'Isaac',
+    title: 'AI Scientist',
+    skillNames: ['ml-ideation', 'ml-eda', 'ml-architecture', 'ml-techspec', 'ml-infra', 'ml-experiment', 'ml-analysis', 'ml-retrospective'],
+    oldPaths: ['bmm/workflows/ml/', '_bmad/bmm/workflows/ml/'],
+    chatTopic: 'Machine Learning',
+    menuItemCount: 9 // MH, CH, MLI, MLE, MLA, MLS, MLNF, MLX, MLAN, MLRT, DA
   }
 ];
+
 
 const REQUIRED_MANIFEST_FIELDS = [
   'type', 'name', 'displayName', 'title', 'capabilities',
@@ -180,12 +191,13 @@ for (const agent of AGENTS) {
 
   // Parse simple YAML key-value pairs (no nested structures expected)
   const fields = {};
-  for (const line of content.split('\n')) {
+  for (const line of content.split(/\r?\n/)) {
     const match = line.match(/^(\w+):\s*(.+)$/);
     if (match) {
-      fields[match[1]] = match[2].replace(/^["']|["']$/g, '');
+      fields[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
     }
   }
+
 
   for (const field of REQUIRED_MANIFEST_FIELDS) {
     test(`${agent.folder}: manifest has required field "${field}"`, () => {

@@ -168,6 +168,13 @@ const expectedExtensionSkills = [
   'add-to-sprint', 'project-context-expansion', 'sprint-status-view',
 ];
 
+const expectedMlSkills = [
+  'bmad-ma-agent-isaac',
+  'ml-ideation', 'ml-eda', 'ml-architecture', 'ml-detailed-design',
+  'ml-techspec', 'ml-infra', 'ml-experiment', 'ml-analysis',
+  'ml-hparam', 'ml-revision', 'ml-advise', 'ml-retrospective', 'ml-scaffold',
+];
+
 const allExpectedSkills = [
   ...expectedAgentSkills,
   ...expectedMil498Skills,
@@ -175,14 +182,17 @@ const allExpectedSkills = [
   ...expectedDevopsSkills,
   ...expectedCyberSkills,
   ...expectedExtensionSkills,
+  ...expectedMlSkills,
 ];
 
-test('skills/ has exactly 36 subdirectories', () => {
+
+test('skills/ has exactly 50 subdirectories', () => {
   const entries = fs.readdirSync(skillsDir).filter(e =>
     fs.statSync(path.join(skillsDir, e)).isDirectory()
   );
-  assert.strictEqual(entries.length, 36, `Expected 36 skill dirs, found ${entries.length}`);
+  assert.strictEqual(entries.length, 50, `Expected 50 skill dirs, found ${entries.length}`);
 });
+
 
 test('all 4 agent skill directories exist', () => {
   for (const skill of expectedAgentSkills) {
@@ -226,6 +236,14 @@ test('all 6 extension workflow skill directories exist', () => {
   }
 });
 
+test('all 14 ML lifecycle and Isaac skill directories exist', () => {
+  for (const skill of expectedMlSkills) {
+    const p = path.join(skillsDir, skill);
+    assert.ok(fs.existsSync(p), `Missing ML skill dir: ${skill}`);
+  }
+});
+
+
 test('every skill directory contains a .gitkeep file', () => {
   for (const skill of allExpectedSkills) {
     const gk = path.join(skillsDir, skill, '.gitkeep');
@@ -259,9 +277,10 @@ test('module-help.csv has correct header columns', () => {
   }
 });
 
-test('module-help.csv has 36 skill entries (excluding header)', () => {
-  assert.strictEqual(csvData.rows.length, 36, `Expected 36 rows, found ${csvData.rows.length}`);
+test('module-help.csv has 50 skill entries (excluding header)', () => {
+  assert.strictEqual(csvData.rows.length, 50, `Expected 50 rows, found ${csvData.rows.length}`);
 });
+
 
 test('all CSV entries use module code ma-skills', () => {
   const moduleIdx = csvData.headers.indexOf('module');
@@ -317,6 +336,15 @@ test('CSV has entries for all 6 extension workflow skills', () => {
     assert.ok(codes.includes(skill), `Missing CSV entry for extension skill: ${skill}`);
   }
 });
+
+test('CSV has entries for all 14 ML lifecycle and Isaac skills', () => {
+  const codeIdx = csvData.headers.indexOf('code');
+  const codes = csvData.rows.map(r => r[codeIdx]);
+  for (const skill of expectedMlSkills) {
+    assert.ok(codes.includes(skill), `Missing CSV entry for ML skill: ${skill}`);
+  }
+});
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Task 4: Directory state after Story 15.6 migration
