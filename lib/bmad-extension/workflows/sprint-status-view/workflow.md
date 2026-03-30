@@ -1,3 +1,6 @@
+<!-- DEPRECATED: This workflow references the old sprint-plan-{n}.yaml format.
+     It will be reworked in Story 17.8. Use /add-sprint to create sprints in the new format. -->
+
 # Sprint Status View Workflow
 
 Extension workflow that displays sprint progress with assigned items (stories + bugs), type distinction, and remaining capacity.

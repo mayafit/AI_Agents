@@ -1,6 +1,6 @@
 # Story 17.1: Sprint Entity Model
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -49,29 +49,29 @@ So that sprint planning is based on real sprint definitions, not just a flat sta
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create sprints directory structure (AC: #1)
-  - [ ] 1.1: Create `_bmad-output/implementation-artifacts/sprints/` directory with `.gitkeep`
-  - [ ] 1.2: Check for existing `sprint-plan-*.yaml` files at the old path (`_bmad-output/implementation-artifacts/`). If any exist, add a note to the story completion log documenting them. Do NOT auto-migrate.
+- [x] Task 1: Create sprints directory structure (AC: #1)
+  - [x] 1.1: Create `_bmad-output/implementation-artifacts/sprints/` directory with `.gitkeep`
+  - [x] 1.2: Check for existing `sprint-plan-*.yaml` files at the old path (`_bmad-output/implementation-artifacts/`). If any exist, add a note to the story completion log documenting them. Do NOT auto-migrate.
 
-- [ ] Task 2: Rework add-sprint SKILL.md to new YAML schema (AC: #1)
-  - [ ] 2.1: Update `lib/bmad-extension/skills/add-sprint/SKILL.md` step 1 to gather sprint number as a positive integer:
+- [x] Task 2: Rework add-sprint SKILL.md to new YAML schema (AC: #1)
+  - [x] 2.1: Update `lib/bmad-extension/skills/add-sprint/SKILL.md` step 1 to gather sprint number as a positive integer:
     - Validate: must match `^[1-9]\d*$` (positive integer, no leading zeros, no non-numeric)
     - Reject zero, negative, non-numeric, and leading-zero inputs (e.g., `03`) with error and re-prompt
     - Add reasonable upper bound: sprint number <= 9999
     - Construct ID as `sprint-{number}` (e.g., user enters `3` -> ID is `sprint-3`)
-  - [ ] 2.2: Capacity validation (step 2) — retain existing positive-integer validation unchanged
-  - [ ] 2.3: Rework step 3 for `start` and `end` dates:
+  - [x] 2.2: Capacity validation (step 2) — retain existing positive-integer validation unchanged
+  - [x] 2.3: Rework step 3 for `start` and `end` dates:
     - Dates are **optional** (press Enter to skip -> stored as empty string `""`)
     - When provided, validate ISO format via regex `^\d{4}-\d{2}-\d{2}$` AND verify it resolves to a real calendar date (reject `2026-02-30`, `2026-13-45`, etc.)
     - If invalid, display error and re-prompt for that field
     - If both dates provided, validate `start <= end` (reject inverted ranges with error and re-prompt)
     - This preserves FR132's "start/end context" semantics while preferring structured dates
-  - [ ] 2.4: Update step 4 confirmation display:
+  - [x] 2.4: Update step 4 confirmation display:
     - Show new schema fields (id, name, status, capacity, start, end)
     - Show output path as `_bmad-output/implementation-artifacts/sprints/sprint-{number}.yaml`
     - After editing sprint number via 'e' option, re-run overwrite protection check against new path before returning to confirmation
     - Handle unrecognized input at confirmation prompt (not y/n/e) with error and re-prompt
-  - [ ] 2.5: Rework step 5 to write new YAML schema:
+  - [x] 2.5: Rework step 5 to write new YAML schema:
     - Ensure `_bmad-output/implementation-artifacts/sprints/` directory exists before writing (mkdir -p equivalent — do not assume Task 1 has run)
     - Always quote the `name` field in YAML output to handle special characters (colons, hash, quotes)
     - Output path: `_bmad-output/implementation-artifacts/sprints/sprint-{number}.yaml`
@@ -87,51 +87,51 @@ So that sprint planning is based on real sprint definitions, not just a flat sta
       created_date: "{iso_timestamp}"
       last_modified: "{iso_timestamp}"
       ```
-  - [ ] 2.6: Overwrite protection for new path `sprints/sprint-{number}.yaml`
+  - [x] 2.6: Overwrite protection for new path `sprints/sprint-{number}.yaml`
     - Also add advisory check: if `sprint-plan-{number}.yaml` exists at the OLD path, warn user about potential duplication between old and new format
 
-- [ ] Task 3: Update SKILL.md frontmatter and workflow.md (AC: #1)
-  - [ ] 3.1: Update `lib/bmad-extension/skills/add-sprint/SKILL.md` frontmatter description to reflect new schema
-  - [ ] 3.2: Update `lib/bmad-extension/workflows/add-sprint/workflow.md` to match SKILL.md content (keep files in sync, or delete workflow.md if SKILL.md is the sole source of truth — verify which file is authoritative via module-help.csv `skill:add-sprint` resolution)
-  - [ ] 3.3: Update `lib/bmad-extension/skills/add-sprint/bmad-skill-manifest.yaml` if any fields need updating
+- [x] Task 3: Update SKILL.md frontmatter and workflow.md (AC: #1)
+  - [x] 3.1: Update `lib/bmad-extension/skills/add-sprint/SKILL.md` frontmatter description to reflect new schema
+  - [x] 3.2: Update `lib/bmad-extension/workflows/add-sprint/workflow.md` to match SKILL.md content (keep files in sync, or delete workflow.md if SKILL.md is the sole source of truth — verify which file is authoritative via module-help.csv `skill:add-sprint` resolution)
+  - [x] 3.3: Update `lib/bmad-extension/skills/add-sprint/bmad-skill-manifest.yaml` if any fields need updating
 
-- [ ] Task 4: Update module-help.csv registration (AC: #1)
-  - [ ] 4.1: Verify `lib/bmad-extension/module-help.csv` add-sprint entry points to `skill:add-sprint`
-  - [ ] 4.2: Update the `output-location` column from `_bmad-output/implementation-artifacts` to `_bmad-output/implementation-artifacts/sprints`
-  - [ ] 4.3: Update the `description` column — remove "optional start/end context" phrasing, reflect new schema
+- [x] Task 4: Update module-help.csv registration (AC: #1)
+  - [x] 4.1: Verify `lib/bmad-extension/module-help.csv` add-sprint entry points to `skill:add-sprint`
+  - [x] 4.2: Update the `output-location` column from `_bmad-output/implementation-artifacts` to `_bmad-output/implementation-artifacts/sprints`
+  - [x] 4.3: Update the `description` column — remove "optional start/end context" phrasing, reflect new schema
 
-- [ ] Task 5: Update and rename shared guardrails document (AC: #1, #3)
-  - [ ] 5.1: Rename `_bmad-output/implementation-artifacts/epic-11-12-shared-guardrails.md` to `_bmad-output/implementation-artifacts/sprint-management-guardrails.md` to reflect its expanded scope across Epics 11, 12, and 17
-  - [ ] 5.2: Update Sprint Artifact Naming section:
+- [x] Task 5: Update and rename shared guardrails document (AC: #1, #3)
+  - [x] 5.1: Rename `_bmad-output/implementation-artifacts/epic-11-12-shared-guardrails.md` to `_bmad-output/implementation-artifacts/sprint-management-guardrails.md` to reflect its expanded scope across Epics 11, 12, and 17
+  - [x] 5.2: Update Sprint Artifact Naming section:
     - New path: `_bmad-output/implementation-artifacts/sprints/sprint-{id}.yaml`
     - New discovery glob: `sprints/sprint-*.yaml`
-  - [ ] 5.3: Add Sprint Status Transitions section with the full valid transition matrix:
+  - [x] 5.3: Add Sprint Status Transitions section with the full valid transition matrix:
     - `planning` -> `active` (requires no other active sprint)
     - `active` -> `closed`
     - All others invalid. Document: no reopening closed sprints, no deactivation without closing, no direct creation in non-planning status.
-  - [ ] 5.4: Add Item ID Format Contract section:
+  - [x] 5.4: Add Item ID Format Contract section:
     - Story IDs: `{epic}-{story}-{slug}` (e.g., `5-5-explicit-parameter-passing`)
     - Bug IDs: `BUG-{slug}` (e.g., `BUG-path-spaces`)
-  - [ ] 5.5: Update Data Authority Rules table to reflect new sprint file path and add concurrency note: glob-then-write is not atomic; concurrent sprint modification is unsupported
+  - [x] 5.5: Update Data Authority Rules table to reflect new sprint file path and add concurrency note: glob-then-write is not atomic; concurrent sprint modification is unsupported
 
-- [ ] Task 6: Add deprecation notices to broken workflows (interim mitigation)
-  - [ ] 6.1: Add a deprecation notice at the TOP of `lib/bmad-extension/skills/add-to-sprint/SKILL.md` (if exists) or `lib/bmad-extension/workflows/add-to-sprint/workflow.md`:
+- [x] Task 6: Add deprecation notices to broken workflows (interim mitigation)
+  - [x] 6.1: Add a deprecation notice at the TOP of `lib/bmad-extension/skills/add-to-sprint/SKILL.md` (if exists) or `lib/bmad-extension/workflows/add-to-sprint/workflow.md`:
     ```
     <!-- DEPRECATED: This workflow references the old sprint-plan-{n}.yaml format.
          It will be reworked in Story 17.4. Use /add-sprint to create sprints in the new format. -->
     ```
-  - [ ] 6.2: Add same deprecation notice to `modify-sprint` and `sprint-status-view` SKILL.md/workflow.md files
-  - [ ] 6.3: These are informational notices only — do NOT modify the workflow logic itself
+  - [x] 6.2: Add same deprecation notice to `modify-sprint` and `sprint-status-view` SKILL.md/workflow.md files
+  - [x] 6.3: These are informational notices only — do NOT modify the workflow logic itself
 
-- [ ] Task 7: Verify workflow (AC: #1, #2, #3)
-  - [ ] 7.1: Trace add-sprint SKILL.md step paths — confirm all routes produce valid YAML at correct path
-  - [ ] 7.2: Verify schema fields match AC #1 (all 9 fields: id, name, status, capacity, start, end, items, created_date, last_modified)
-  - [ ] 7.3: Verify sprint number validation rejects: zero, negative, non-numeric, leading zeros, values > 9999
-  - [ ] 7.4: Verify date validation rejects: non-ISO format, impossible dates, inverted ranges; accepts empty string (skip)
-  - [ ] 7.5: Verify `items` array is initialized empty
-  - [ ] 7.6: Verify overwrite protection works for new path and advisory check for old path
-  - [ ] 7.7: Verify unrecognized input at confirmation prompt triggers re-prompt
-  - [ ] 7.8: Verify directory creation (sprints/) happens before file write
+- [x] Task 7: Verify workflow (AC: #1, #2, #3)
+  - [x] 7.1: Trace add-sprint SKILL.md step paths — confirm all routes produce valid YAML at correct path
+  - [x] 7.2: Verify schema fields match AC #1 (all 9 fields: id, name, status, capacity, start, end, items, created_date, last_modified)
+  - [x] 7.3: Verify sprint number validation rejects: zero, negative, non-numeric, leading zeros, values > 9999
+  - [x] 7.4: Verify date validation rejects: non-ISO format, impossible dates, inverted ranges; accepts empty string (skip)
+  - [x] 7.5: Verify `items` array is initialized empty
+  - [x] 7.6: Verify overwrite protection works for new path and advisory check for old path
+  - [x] 7.7: Verify unrecognized input at confirmation prompt triggers re-prompt
+  - [x] 7.8: Verify directory creation (sprints/) happens before file write
 
 ## Dev Notes
 
@@ -276,10 +276,47 @@ Recent commits show Epic 15 (BMAD 6.2.1 migration) converted workflows to SKILL.
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6 (1M context)
 
 ### Debug Log References
 
+None — clean implementation, no debugging needed.
+
 ### Completion Notes List
 
+- Task 1.1: Created `_bmad-output/implementation-artifacts/sprints/` directory with `.gitkeep`
+- Task 1.2: No existing `sprint-plan-*.yaml` files found at old path — nothing to document
+- Task 2: Rewrote `lib/bmad-extension/skills/add-sprint/SKILL.md` with new sprint entity YAML schema. Step 1 validates sprint number (regex `^[1-9]\d*$`, upper bound 9999, constructs `sprint-{n}` ID). Step 2 retains capacity validation unchanged. Step 3 reworked for optional ISO dates with real-date validation and inverted-range rejection. Step 4 updated confirmation display with new fields and unrecognized-input handling. Step 5 reworked to write 9-field schema to `sprints/sprint-{id}.yaml` with directory creation, overwrite protection, and old-path advisory check.
+- Task 3.1: Updated SKILL.md frontmatter description to reflect new schema
+- Task 3.2: Synced `lib/bmad-extension/workflows/add-sprint/workflow.md` with SKILL.md body content (SKILL.md is authoritative via `skill:add-sprint` resolution)
+- Task 3.3: Verified `bmad-skill-manifest.yaml` — no changes needed (type, name, module all correct)
+- Task 4: Updated `module-help.csv` — output-location changed to `_bmad-output/implementation-artifacts/sprints`, description updated to reflect new schema, outputs column updated to `sprint entity`
+- Task 5: Renamed `epic-11-12-shared-guardrails.md` to `sprint-management-guardrails.md` via `git mv`. Updated title, scope (Epics 11, 12, 17), Data Authority Rules table (sprint entity path), Sprint Artifact Naming section, added Sprint Status Transitions section with full matrix, added Item ID Format Contract section, added concurrency note, updated implementation order diagram
+- Task 6: Added deprecation notices to SKILL.md and workflow.md for add-to-sprint (Story 17.4), modify-sprint (Story 17.4), and sprint-status-view (Story 17.8) — informational notices only, no logic changes
+- Task 7: Verified all 8 verification criteria pass — all workflow paths produce valid YAML, all 9 schema fields present, validations correct, items empty, overwrite protection working, unrecognized input handled, directory creation precedes file write
+
 ### File List
+
+**New files:**
+- `_bmad-output/implementation-artifacts/sprints/.gitkeep`
+
+**Modified files:**
+- `lib/bmad-extension/skills/add-sprint/SKILL.md` — reworked to new sprint entity YAML schema
+- `lib/bmad-extension/workflows/add-sprint/workflow.md` — synced with SKILL.md
+- `lib/bmad-extension/module-help.csv` — updated output-location and description for add-sprint
+- `_bmad-output/implementation-artifacts/sprint-management-guardrails.md` — renamed from `epic-11-12-shared-guardrails.md`, updated contents
+- `lib/bmad-extension/skills/add-to-sprint/SKILL.md` — added deprecation notice
+- `lib/bmad-extension/skills/modify-sprint/SKILL.md` — added deprecation notice
+- `lib/bmad-extension/skills/sprint-status-view/SKILL.md` — added deprecation notice
+- `lib/bmad-extension/workflows/add-to-sprint/workflow.md` — added deprecation notice
+- `lib/bmad-extension/workflows/modify-sprint/workflow.md` — added deprecation notice
+- `lib/bmad-extension/workflows/sprint-status-view/workflow.md` — added deprecation notice
+- `_bmad-output/implementation-artifacts/17-1-sprint-entity-model.md` — this story file (tasks, status, dev record)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — story status updated to in-progress
+
+**Deleted files:**
+- `_bmad-output/implementation-artifacts/epic-11-12-shared-guardrails.md` — renamed (git mv)
+
+## Change Log
+
+- 2026-03-30: Story 17.1 implemented — Sprint entity model with new YAML schema, directory structure, guardrails rename, deprecation notices

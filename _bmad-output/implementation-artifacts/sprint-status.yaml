@@ -214,7 +214,7 @@ development_status:
   # Dependencies: Epic 11 (bug entity). Reworks Epic 12's workflow shells.
   # Execution order: 17.1 → 17.2 → 17.3 → 17.4 → 17.5 → 17.6 → 17.7 → 17.8
   epic-17: in-progress
-  17-1-sprint-entity-model: ready-for-dev
+  17-1-sprint-entity-model: review
   17-2-flat-backlog-model: ready-for-dev
   17-3-bug-as-story-type: ready-for-dev
   17-4-backlog-to-sprint-workflow: ready-for-dev

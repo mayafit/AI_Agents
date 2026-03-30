@@ -1,16 +1,22 @@
 # Add Sprint Workflow
 
-Guided workflow to create a new sprint with capacity limits for realistic sprint planning.
+Guided workflow to create a new sprint entity with capacity limits, optional ISO dates, and structured YAML schema.
 
 <workflow>
 
-<step n="1" goal="Gather sprint number and name">
-  <action>Ask the user for the sprint number (e.g., 1, 2, 3)</action>
-  <ask>What is the sprint number? (e.g., 1)</ask>
-  <action>Store as {{sprint_number}}</action>
-  <ask>What is the sprint name? (e.g., "Sprint 1 — Foundation") — press Enter to use "Sprint {{sprint_number}}"</ask>
-  <action>If user presses Enter or leaves blank, default to "Sprint {{sprint_number}}"</action>
-  <action>Store as {{sprint_name}}</action>
+<step n="1" goal="Gather and validate sprint number">
+  <action>Ask the user for the sprint number</action>
+  <ask>What is the sprint number? (positive integer, e.g., 1, 2, 3)</ask>
+  <action>Store input as {{sprint_number_input}}</action>
+  <action>Validate {{sprint_number_input}} matches `^[1-9]\d*$` (positive integer, no leading zeros, no non-numeric characters)</action>
+  <action>Validate {{sprint_number_input}} is <= 9999</action>
+  <check if="{{sprint_number_input}} fails validation (zero, negative, non-numeric, leading zeros like '03', or > 9999)">
+    <output>❌ Invalid sprint number: "{{sprint_number_input}}". Must be a positive integer (1-9999), no leading zeros.</output>
+    <goto step="1" />
+  </check>
+  <action>Store as {{sprint_number}} (integer)</action>
+  <action>Construct {{sprint_id}} = "sprint-{{sprint_number}}"</action>
+  <action>Set {{sprint_name}} = "Sprint {{sprint_number}}"</action>
 </step>
 
 <step n="2" goal="Gather capacity as positive integer">
@@ -25,79 +31,123 @@ Guided workflow to create a new sprint with capacity limits for realistic sprint
   <action>Store as {{capacity}} (integer)</action>
 </step>
 
-<step n="3" goal="Gather optional start and end context">
-  <action>Explain: start/end context can be dates (e.g., "2026-03-18") or milestone descriptions (e.g., "Q1 Planning Complete")</action>
-  <ask>Optional — Sprint start context (date or milestone, press Enter to skip):</ask>
-  <action>Store as {{start_context}} (empty string if skipped)</action>
-  <ask>Optional — Sprint end context (date or milestone, press Enter to skip):</ask>
-  <action>Store as {{end_context}} (empty string if skipped)</action>
+<step n="3" goal="Gather optional start and end dates (ISO format)">
+  <action>Explain: start and end dates are optional ISO dates (YYYY-MM-DD format). Press Enter to skip.</action>
+  <ask>Optional — Sprint start date (YYYY-MM-DD, press Enter to skip):</ask>
+  <action>Store input as {{start_input}}</action>
+  <check if="{{start_input}} is not empty">
+    <action>Validate {{start_input}} matches regex `^\d{4}-\d{2}-\d{2}$`</action>
+    <action>Verify {{start_input}} resolves to a real calendar date (reject impossible dates like 2026-02-30, 2026-13-45, etc.)</action>
+    <check if="{{start_input}} fails date validation">
+      <output>❌ Invalid date: "{{start_input}}". Must be a valid date in YYYY-MM-DD format (e.g., 2026-04-01).</output>
+      <ask>Sprint start date (YYYY-MM-DD, press Enter to skip):</ask>
+      <action>Re-validate — repeat until valid or skipped</action>
+    </check>
+  </check>
+  <action>Store as {{start_date}} (valid ISO date string, or empty string "" if skipped)</action>
+
+  <ask>Optional — Sprint end date (YYYY-MM-DD, press Enter to skip):</ask>
+  <action>Store input as {{end_input}}</action>
+  <check if="{{end_input}} is not empty">
+    <action>Validate {{end_input}} matches regex `^\d{4}-\d{2}-\d{2}$`</action>
+    <action>Verify {{end_input}} resolves to a real calendar date</action>
+    <check if="{{end_input}} fails date validation">
+      <output>❌ Invalid date: "{{end_input}}". Must be a valid date in YYYY-MM-DD format (e.g., 2026-04-14).</output>
+      <ask>Sprint end date (YYYY-MM-DD, press Enter to skip):</ask>
+      <action>Re-validate — repeat until valid or skipped</action>
+    </check>
+  </check>
+  <action>Store as {{end_date}} (valid ISO date string, or empty string "" if skipped)</action>
+
+  <check if="both {{start_date}} and {{end_date}} are non-empty AND {{start_date}} > {{end_date}}">
+    <output>❌ Invalid date range: start date ({{start_date}}) is after end date ({{end_date}}). Start must be on or before end.</output>
+    <goto step="3" />
+  </check>
 </step>
 
 <step n="4" goal="Confirm and validate all inputs">
   <output>
 ## Sprint Summary — Please Confirm
 
-- **Sprint Number:** {{sprint_number}}
-- **Sprint Name:** {{sprint_name}}
+- **Sprint ID:** {{sprint_id}}
+- **Sprint Name:** "{{sprint_name}}"
+- **Status:** planning
 - **Capacity (max items):** {{capacity}}
-- **Start Context:** {{start_context}} *(empty if skipped)*
-- **End Context:** {{end_context}} *(empty if skipped)*
-- **Output File:** `_bmad-output/implementation-artifacts/sprint-plan-{{sprint_number}}.yaml`
+- **Start Date:** {{start_date}} *(empty if skipped)*
+- **End Date:** {{end_date}} *(empty if skipped)*
+- **Items:** [] *(empty — items assigned via /add-to-sprint)*
+- **Output File:** `_bmad-output/implementation-artifacts/sprints/{{sprint_id}}.yaml`
   </output>
   <ask>Confirm creation? [y] Yes / [n] Cancel / [e] Edit a field:</ask>
   <check if="user selects 'e'">
-    <ask>Which field to edit? (number / name / capacity / start / end)</ask>
+    <ask>Which field to edit? (number / capacity / start / end)</ask>
     <check if="field == 'number'">
-      <ask>New sprint number:</ask>
-      <action>Store as {{sprint_number}}</action>
-      <action>If sprint name was auto-defaulted to the old "Sprint {n}", update it to "Sprint {{sprint_number}}"</action>
-      <goto step="4" />
-    </check>
-    <check if="field == 'name'">
-      <ask>New sprint name (or press Enter to use "Sprint {{sprint_number}}"):</ask>
-      <action>If blank, set {{sprint_name}} = "Sprint {{sprint_number}}"; else store user input as {{sprint_name}}</action>
-      <goto step="4" />
+      <goto step="1" />
     </check>
     <check if="field == 'capacity'"><goto step="2" /></check>
     <check if="field == 'start'"><goto step="3" /></check>
     <check if="field == 'end'"><goto step="3" /></check>
+    <check if="field is not recognized">
+      <output>❌ Unrecognized field: "{{field}}". Valid options: number, capacity, start, end.</output>
+      <goto step="4" />
+    </check>
   </check>
   <check if="user selects 'n'">
     <output>❌ Sprint creation cancelled.</output>
     <action>Exit workflow</action>
   </check>
+  <check if="user input is not 'y', 'n', or 'e'">
+    <output>❌ Unrecognized option: "{{user_input}}". Please enter [y] Yes, [n] Cancel, or [e] Edit a field.</output>
+    <goto step="4" />
+  </check>
 </step>
 
-<step n="5" goal="Generate sprint artifact file">
-  <action>Determine output path: `_bmad-output/implementation-artifacts/sprint-plan-{{sprint_number}}.yaml`</action>
-  <action>Check if file already exists at output path</action>
-  <check if="file already exists">
-    <output>⚠️ A sprint plan already exists at `_bmad-output/implementation-artifacts/sprint-plan-{{sprint_number}}.yaml`.</output>
-    <ask>Overwrite existing sprint plan? [y] Yes / [n] Cancel:</ask>
+<step n="5" goal="Generate sprint entity YAML file">
+  <action>Determine output path: `_bmad-output/implementation-artifacts/sprints/{{sprint_id}}.yaml`</action>
+  <action>Ensure directory `_bmad-output/implementation-artifacts/sprints/` exists (create if needed)</action>
+
+  <!-- Overwrite protection for new path -->
+  <action>Check if file already exists at `_bmad-output/implementation-artifacts/sprints/{{sprint_id}}.yaml`</action>
+  <check if="file already exists at new path">
+    <output>⚠️ A sprint entity already exists at `_bmad-output/implementation-artifacts/sprints/{{sprint_id}}.yaml`.</output>
+    <ask>Overwrite existing sprint? [y] Yes / [n] Cancel:</ask>
     <check if="user selects 'n'">
-      <output>❌ Sprint creation cancelled to preserve existing sprint plan.</output>
+      <output>❌ Sprint creation cancelled to preserve existing sprint.</output>
       <action>Exit workflow</action>
     </check>
   </check>
+
+  <!-- Advisory check for old-format file -->
+  <action>Check if file exists at old path: `_bmad-output/implementation-artifacts/sprint-plan-{{sprint_number}}.yaml`</action>
+  <check if="old-format file exists">
+    <output>ℹ️ **Note:** An old-format sprint file exists at `_bmad-output/implementation-artifacts/sprint-plan-{{sprint_number}}.yaml`. The new sprint will be created at the new path. The old file is NOT auto-migrated — review or remove it manually if no longer needed.</output>
+  </check>
+
   <action>Get current ISO timestamp for created_date and last_modified</action>
-  <action>Write sprint artifact YAML to `_bmad-output/implementation-artifacts/sprint-plan-{{sprint_number}}.yaml` with this structure:
+  <action>Write sprint entity YAML to `_bmad-output/implementation-artifacts/sprints/{{sprint_id}}.yaml` with this structure:
 
 ```yaml
-sprint_number: {{sprint_number}}
-sprint_name: "{{sprint_name}}"
-capacity: {{capacity}}
-assigned_items: []
+id: {{sprint_id}}
+name: "{{sprint_name}}"
 status: planning
-start_context: "{{start_context}}"
-end_context: "{{end_context}}"
+capacity: {{capacity}}
+start: "{{start_date}}"
+end: "{{end_date}}"
+items: []
 created_date: "{{current_iso_timestamp}}"
 last_modified: "{{current_iso_timestamp}}"
 ```
+
+  **YAML output rules:**
+  - Always quote the `name` field to handle special characters
+  - `start` and `end` are empty string `""` if skipped
+  - `items` is always empty array `[]` at creation
+  - `status` is always `planning` at creation (never `active` or `closed`)
   </action>
   <output>
 ✅ **Sprint created successfully!**
 
-- **File:** `_bmad-output/implementation-artifacts/sprint-plan-{{sprint_number}}.yaml`
+- **File:** `_bmad-output/implementation-artifacts/sprints/{{sprint_id}}.yaml`
 - **Sprint:** {{sprint_name}}
 - **Capacity:** {{capacity}} items
 - **Status:** planning
