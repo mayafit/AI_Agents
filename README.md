@@ -60,7 +60,11 @@ The `_bmad-output/` folder is **intentionally tracked in version control** as pr
 `_bmad-output/` holds all AI-generated planning artifacts produced by BMAD agents:
 
 - **`planning-artifacts/`** — PRDs, architecture documents, UX designs
-- **`implementation-artifacts/`** — Epics, user stories, sprint status
+- **`implementation-artifacts/`** — Epics, user stories, sprint status, backlog
+  - **`sprints/`** — Sprint entity YAML files (`sprint-{id}.yaml`)
+  - **`done/`** — Archived completed stories and bugs
+  - **`backlog.yaml`** — Flat prioritized backlog (generated)
+  - **`sprint-status.yaml`** — Sprint status (derived, auto-regenerated)
 - **`methodology/`** — BMAD-METHOD training materials and onboarding presentation
 
 ### Why it is version-controlled
@@ -117,7 +121,7 @@ The file is version-controlled as part of `_bmad-output/` project knowledge. Com
 | Joseph (MIL-STD-498) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/mil498.md` |
 | Antigravity | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/antigravity.md` |
 
-## Available Skills (28)
+## Available Skills (34)
 
 | Skill ID | Domain | Description |
 | :--- | :--- | :--- |
@@ -154,6 +158,13 @@ The file is version-controlled as part of `_bmad-output/` project knowledge. Com
 | `self-signed-cert` | Security | Automated Root CA and self-signed certificate generation |
 | `docker-image-signing` | Security | Automated cryptographic signing for Docker images |
 | `docker-hardening-verification` | Security | Audits images for least-privilege and OpenShift compatibility |
+| **Sprint Management** | | |
+| `add-sprint` | Agile | Create sprint entities with capacity, ISO dates, and structured YAML schema |
+| `generate-backlog` | Agile | Generate or refresh a flat prioritized backlog from epics and bug stories |
+| `add-to-sprint` | Agile | Assign backlog items to a sprint with capacity enforcement |
+| `remove-from-sprint` | Agile | Remove items from a sprint and return to unassigned backlog |
+| `cleanup-done` | Agile | Archive done items to `done/` and remove from sprint/backlog tracking |
+| `prioritize-backlog` | Agile | Reprioritize backlog using severity, value, dependencies, and type |
 
 ## Automated Skill Discovery
 
@@ -241,6 +252,36 @@ The integration includes a suite of specialized playbooks:
 - **Infrastructure**: PV/PVC management, Load Balancer configuration, and storage setup.
 - **Security & Trust**: Vault secrets, certificate generation, and vulnerability scanning.
 - **Diagnostics**: Advanced health checks across K8s, Docker, and Podman.
+
+#### Sprint Management (v3.1+)
+
+`ma-agents` includes a complete sprint management system built on first-class YAML entities:
+
+**Data Model:**
+- **Sprint entities** at `sprints/sprint-{id}.yaml` — capacity, dates, assigned items, status lifecycle (`planning` -> `active` -> `closed`)
+- **Flat backlog** at `backlog.yaml` — prioritized list of stories and bugs, independent of epic grouping
+- **Bug lifecycle** — bugs are first-class backlog items with severity, type classification, and the same lifecycle as stories
+- **Derived sprint-status.yaml** — auto-regenerated from backlog + sprint files (no manual maintenance)
+
+**Workflows:**
+
+| Command | Description |
+|---------|-------------|
+| `/add-sprint` | Create a sprint with capacity limits and optional ISO dates |
+| `/generate-backlog` | Build or refresh the flat backlog from epics and bug files |
+| `/add-to-sprint` | Assign backlog items to a sprint (dual-write: backlog + sprint file) |
+| `/remove-from-sprint` | Return items from sprint to backlog (status preserved) |
+| `/cleanup-done` | Archive completed items to `done/`, auto-close empty sprints |
+| `/prioritize-backlog` | Reorder backlog — full, quick-adjust, or AI-suggested modes |
+| `/sprint-status-view` | View sprint capacity, items, backlog, and regenerate sprint-status.yaml |
+| `/create-bug-story` | Create a structured bug with severity, type, and automatic backlog entry |
+
+**Key Design Principles:**
+- **Dual-write consistency**: assigning/removing items updates both `backlog.yaml` and the sprint file atomically
+- **Single-active sprint**: only one sprint can be `active` at a time
+- **Done item archival**: completed work moves to `done/` subfolder, freeing sprint capacity
+- **Priority is independent of epics**: stories from different epics interleave by priority, not epic order
+- **Concurrency guards**: sprint files use `last_modified` timestamps to detect external modifications
 
 ### Install Options (Direct)
 ```bash
@@ -436,6 +477,11 @@ ma-agents/
 │   ├── bmad.js                 # BMAD-METHOD integration and injection logic
 │   ├── bmad-cache/             # Pre-bundled BMAD external modules (bmb, cis, gds, tea)
 │   ├── bmad-customizations/    # BMAD persona templates (.md) and YAML configs
+│   ├── bmad-extension/         # Extension module: sprint management, bug tracking, agent skills
+│   │   ├── skills/             # SKILL.md packages (add-sprint, generate-backlog, etc.)
+│   │   ├── workflows/          # Legacy workflow copies (redirects to SKILL.md)
+│   │   ├── module.yaml         # Extension module definition
+│   │   └── module-help.csv     # Skill registry with descriptions and output paths
 │   ├── bmad-workflows/         # Specialized BMAD playbooks (SRE, Cyber, etc.)
 │   └── mil498-templates/       # MIL-STD-498 DID library (SRS, SSS, SSDD, etc.)
 ├── scripts/
