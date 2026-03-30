@@ -101,6 +101,32 @@ The file is version-controlled as part of `_bmad-output/` project knowledge. Com
 
 ---
 
+## Machine Learning Lifecycle (Isaac Protocol)
+
+`ma-agents` features a comprehensive ML lifecycle workflow led by **Isaac**, the AI Scientist. This workflow enforces a rigorous, falsifiable hypothesis-driven research process.
+
+### 1. The 13 Stages of Research
+The lifecycle follows a strict sequence to ensure reproducibility and prevent "metric chasing" without proper framing:
+- **Research Framing** (Ideation, EDA)
+- **Technical Design** (Architecture, Detailed Design, TechSpec Contract)
+- **Implementation** (Infra, Experiment)
+- **Evaluation** (Analysis, HPO, Revision)
+
+### 2. Guardrails & Contracts
+- **uv Integration**: Enforces `uv` for dependency management and deterministic environments.
+- **TechSpec Contract**: Stage 4.5 locks your experiment parameters and success tiers *before* training starts. This prevents moving the goalposts later.
+- **Automated Tracking**: Scaffolding includes support for W&B, MLflow, and ClearML.
+
+### 3. Quick Scaffolding
+Initialize a new ML project in seconds:
+```bash
+npx ma-agents init ml <project-name> <tracking-tool>
+```
+*Valid tracking tools: `wandb`, `mlflow`, `clearml`, `none`.*
+
+---
+
+
 ## Supported Agents
 
 | Agent | Project Path | Template | Instruction File |
@@ -115,7 +141,9 @@ The file is version-controlled as part of `_bmad-output/` project knowledge. Com
 | DevOps Agent (Amit) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/devops.md` |
 | Cyber Analyst (Yael) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/cyber.md` |
 | Joseph (MIL-STD-498) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/mil498.md` |
+| Isaac (AI Scientist) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/isaac.md` |
 | Antigravity | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/antigravity.md` |
+
 
 ## Available Skills (28)
 
@@ -154,6 +182,21 @@ The file is version-controlled as part of `_bmad-output/` project knowledge. Com
 | `self-signed-cert` | Security | Automated Root CA and self-signed certificate generation |
 | `docker-image-signing` | Security | Automated cryptographic signing for Docker images |
 | `docker-hardening-verification` | Security | Audits images for least-privilege and OpenShift compatibility |
+| **Machine Learning** | | |
+| `ml-ideation` | Research | Stage 1: Frame research problem, Hypothesis, and ML-PRD |
+| `ml-eda` | Data Science | Stage 2: Exploratory Data Analysis & Baseline Classifier |
+| `ml-architecture` | Design | Stage 3: Model Architecture & Experiment Tracking Strategy |
+| `ml-detailed-design` | Tech Lead | Stage 4: Implementation Task Breakdown |
+| `ml-techspec` | Contract | Stage 4.5: Locked Parameters & Success Tiers (Contract) |
+| `ml-infra` | MLOps | Stage 5: Infrastructure Build & uv Sync |
+| `ml-experiment` | Developer | Stage 6: Training Runs & Tracker Logging |
+| `ml-analysis` | Evaluation | Stage 7: Evaluate Outcomes vs TechSpec Tiers |
+| `ml-hparam` | Tuning | Stage 7.5: Automated Hyperparameter Optimization |
+| `ml-revision` | Iterative | Stage 8: Amend Thesis & Docs based on Findings |
+| `ml-advise` | Advisory | Search past findings / failure warnings |
+| `ml-retrospective` | Meta | Capture session learnings and update context |
+| `ml-scaffold` | Setup | Initialize standard ML project structure (`init ml`) |
+
 
 ## Automated Skill Discovery
 

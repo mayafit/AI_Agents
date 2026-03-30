@@ -67,6 +67,12 @@ npx ma-agents
 # Path: (press Enter for default)
 ```
 
+### Start a Machine Learning Project
+```bash
+# Scaffold a new project with uv and W&B tracking
+npx ma-agents init ml stroke-predict wandb
+```
+
 ## Using Installed Skills
 
 After installation, use the skills in your AI agent:
