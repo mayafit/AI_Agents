@@ -1,0 +1,13 @@
+# Isaac Protocol Initial Prompt (Stroke Prediction)
+# Copy and part this to your AI assistant after running npx ma-agents init ml
+
+I want to start a new Machine Learning project for Stroke Prediction using the healthcare dataset.
+
+Project Setup:
+- Name: Stroke Prediction (Classification)
+- Source Data: data/raw/stroke.csv (Healthcare Dataset)
+- Core Question: Can clinical features (age, BMI, hypertension) predict stroke probability?
+
+Please invoke /ml-ideation (Isaac) to frame the research thesis and PRD. 
+Note: Focus on Class Imbalance (strokes are a minority class) and the high cost of false negatives.
+Once framed, we will move to /ml-eda for data analysis.
