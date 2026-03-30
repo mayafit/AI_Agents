@@ -60,16 +60,16 @@ Generate or refresh a flat `backlog.yaml` from epic stories and bug reports. Pre
 <step n="3" goal="Extract bugs">
   <action>For each file in {{bug_files}}:
     - Read the file and parse the YAML frontmatter (between `---` delimiters)
-    - Extract `title` and `severity` from frontmatter
-    - Derive {{bug_id}} as `"BUG-{title_slug}"` where title_slug uses the same kebab-case rules as stories
-    - Look up status from {{status_map}} using the bug id. If found and status is `done`, skip this bug. If found, use that status. If not found, default to `backlog`.
+    - Extract `title`, `severity`, and `status` from frontmatter
+    - Derive {{bug_id}} from the **filename**, not the title: strip the `bug-` prefix and `.md` extension, then uppercase to `"BUG-{slug}"` (e.g., `bug-login-crash.md` → `BUG-login-crash`)
+    - Use `status` from frontmatter directly (bugs track their own status). If `status` is missing, default to `backlog`. If status is `done`, skip this bug (exclude from backlog).
     - Build a backlog item:
       - id: {{bug_id}}
       - type: `bug`
       - epic: `null`
       - title: {{title}}
       - priority: `null` (assigned during merge/sort)
-      - status: {{looked_up_status or "backlog"}}
+      - status: {{frontmatter_status or "backlog"}}
       - sprint: `null`
       - severity: {{severity}}
   </action>
@@ -133,7 +133,7 @@ Generate or refresh a flat `backlog.yaml` from epic stories and bug reports. Pre
 # Schema per item:
 #   id, type, epic, title, priority, status, sprint, severity
 
-items:
+backlog:
   - id: "5-5-explicit-parameter-passing"
     type: story
     epic: 5
@@ -150,7 +150,7 @@ items:
   - `epic` is an integer for stories, `null` for bugs
   - `sprint` is a string like `"sprint-3"` if assigned, or `null`
   - `severity` is a string (`critical`, `high`, `medium`, `low`) for bugs, `null` for stories
-  - `status` is one of: `backlog`, `in-progress`, `done`, `blocked`
+  - `status` is one of: `backlog`, `ready-for-dev`, `in-progress`, `review` (done items excluded)
   - `priority` is always a positive integer (1 = highest priority)
   - Use 2-space indentation for YAML
   </action>

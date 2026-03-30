@@ -62,6 +62,7 @@ Choice:</ask>
 </step>
 
 <step n="3b" goal="Quick adjust" if="choice == 2">
+  <action>Initialize {{new_order}} as a copy of the current {{backlog_items}} list (preserving current ordering)</action>
   <ask>Select item number to move:</ask>
   <action>Store selected item as {{item_to_move}}</action>
   <ask>Move to:

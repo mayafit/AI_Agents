@@ -7,20 +7,74 @@ triggers:
   - "edit sprint"
 ---
 
-<!-- DEPRECATED: This workflow references the old sprint-plan-{n}.yaml format.
-     It will be reworked in Story 17.4. Use /add-sprint to create sprints in the new format. -->
+<!-- PARTIALLY REWORKED: Item assignment is handled by /add-to-sprint (Story 17.4).
+     Item removal is handled by /remove-from-sprint (Story 17.5).
+     Sprint activation (planning -> active) is handled below (Step 3e).
+     The legacy workflow below still references old sprint-plan-{n}.yaml paths for
+     other operations. A full rework of modify-sprint is planned for a future story. -->
 
-> **DEPRECATED:** This workflow references the old `sprint-plan-{n}.yaml` format. It will be reworked in Story 17.4. Use `/add-sprint` to create sprints in the new format.
-
-<!-- NOTE: Item removal from sprints is now handled by /remove-from-sprint (Story 17.5).
-     The "Remove item" option in this workflow's menu is superseded.
-     This workflow will be fully reworked when converted to the new sprint model. -->
+> **Note:** Item assignment and removal are now handled by `/add-to-sprint` and `/remove-from-sprint`. Use the **Activate Sprint** option below to transition a sprint from `planning` to `active`.
 
 # Modify Sprint Workflow
 
 Guided workflow to modify an existing sprint — add/remove items, change capacity, update metadata.
 
 <workflow>
+
+<step n="3e" goal="Activate a sprint (planning -> active)">
+  <action>Glob `_bmad-output/implementation-artifacts/sprints/sprint-*.yaml` to discover all sprint files</action>
+  <check if="no sprint files found">
+    <output>No sprints found. Run `/add-sprint` first.</output>
+    <action>Exit workflow</action>
+  </check>
+  <action>Read each sprint file; extract: id, name, status, capacity, items count</action>
+  <action>Display sprints table</action>
+  <output>
+## Available Sprints
+
+| # | ID | Name | Status | Items | Capacity |
+|---|---|---|---|---|---|
+{{#each sprints}}
+| {{@index+1}} | {{id}} | {{name}} | {{status}} | {{items_count}} | {{capacity}} |
+{{/each}}
+  </output>
+  <ask>Which sprint to activate? (enter number, or 'q' to cancel):</ask>
+  <check if="user enters 'q'">
+    <output>Cancelled.</output>
+    <action>Exit workflow</action>
+  </check>
+  <action>Store selected sprint as {{target_sprint}}</action>
+
+  <!-- Validate transition -->
+  <check if="target_sprint.status != 'planning'">
+    <output>Only sprints in `planning` status can be activated. Sprint "{{target_sprint.name}}" is currently `{{target_sprint.status}}`.</output>
+    <action>Exit workflow</action>
+  </check>
+
+  <!-- Check single-active constraint -->
+  <action>Check if any other sprint has status `active`</action>
+  <check if="another sprint is already active">
+    <output>Cannot activate "{{target_sprint.name}}" — sprint "{{active_sprint.name}}" ({{active_sprint.id}}) is already active. Close it first before activating another sprint.</output>
+    <action>Exit workflow</action>
+  </check>
+
+  <ask>Activate "{{target_sprint.name}}" ({{target_sprint.id}})? This will set status to `active`. [y] Yes / [n] Cancel:</ask>
+  <check if="user selects 'n'">
+    <output>Cancelled.</output>
+    <action>Exit workflow</action>
+  </check>
+
+  <action>Set target_sprint.status = "active"</action>
+  <action>Update `last_modified` to current ISO timestamp</action>
+  <action>Write updated sprint file to `_bmad-output/implementation-artifacts/sprints/{{target_sprint.id}}.yaml`</action>
+  <output>
+Sprint "{{target_sprint.name}}" is now **active**.
+
+**Next Steps:**
+- Use `/add-to-sprint` to assign backlog items
+- Use `/sprint-status-view` to see sprint progress
+  </output>
+</step>
 
 <step n="1" goal="List available sprints and select one to modify">
   <action>Glob `_bmad-output/implementation-artifacts/sprint-plan-*.yaml` to discover all sprint artifact files</action>

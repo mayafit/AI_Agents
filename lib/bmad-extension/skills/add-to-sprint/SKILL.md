@@ -147,15 +147,23 @@ Choice:</ask>
     <output>No items were assigned. No files modified.</output>
     <action>Exit workflow</action>
   </check>
+  <action>**Dual-write — both files must be updated for consistency:**</action>
   <action>Write updated `_bmad-output/implementation-artifacts/backlog.yaml`:
     - Preserve all existing fields on all items
     - Only the `sprint` field changes on assigned items (set to {{target_sprint.id}})
   </action>
+  <check if="backlog.yaml write fails">
+    <output>**Error:** Failed to write backlog.yaml. No changes persisted. Sprint file NOT modified.</output>
+    <action>Exit workflow</action>
+  </check>
   <action>Write updated `_bmad-output/implementation-artifacts/sprints/{{target_sprint.id}}.yaml`:
     - Append confirmed item IDs to the `items` array
     - Update `last_modified` to current ISO timestamp
     - Preserve all other fields unchanged
   </action>
+  <check if="sprint file write fails">
+    <output>**Warning: Inconsistent state!** backlog.yaml was updated but sprint file write failed. The `sprint` field in backlog.yaml now references {{target_sprint.id}} but the sprint file's `items` array is stale. Re-run `/add-to-sprint` or manually fix `sprints/{{target_sprint.id}}.yaml`.</output>
+  </check>
   <action>**Do NOT read or write sprint-plan-*.yaml or sprint-status.yaml**</action>
   <output>
 ## Assignment Complete

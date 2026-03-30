@@ -131,9 +131,17 @@ Choice:</ask>
     2. In `backlog.yaml`, find the matching backlog entry and set its `sprint` field to null (or remove it)
     3. Do NOT change the item's `status` field — status is preserved as-is
   </action>
+  <action>**Dual-write — both files must be updated for consistency:**</action>
   <action>Update `last_modified` in the sprint file to current ISO timestamp</action>
   <action>Write the updated sprint file: `_bmad-output/implementation-artifacts/sprints/{{target_sprint.id}}.yaml`</action>
+  <check if="sprint file write fails">
+    <output>**Error:** Failed to write sprint file. No changes persisted. Backlog NOT modified.</output>
+    <action>Exit workflow</action>
+  </check>
   <action>Write the updated `_bmad-output/implementation-artifacts/backlog.yaml`</action>
+  <check if="backlog.yaml write fails">
+    <output>**Warning: Inconsistent state!** Sprint file was updated but backlog.yaml write failed. Items have been removed from the sprint's `items` array but their `sprint` field in backlog.yaml still references {{target_sprint.id}}. Re-run `/remove-from-sprint` or manually fix backlog.yaml.</output>
+  </check>
   <output>
 ## Removal Complete
 

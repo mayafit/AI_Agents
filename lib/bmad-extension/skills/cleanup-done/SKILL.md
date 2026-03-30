@@ -85,10 +85,13 @@ Choice:</ask>
   <action>Glob `_bmad-output/implementation-artifacts/sprints/sprint-*.yaml` to find all sprint files</action>
   <action>For each sprint file:
     - Read the sprint's `items` array
-    - Remove any item IDs that are in {{items_to_archive}}
-    - If items array becomes empty AND sprint status is `active`: auto-close the sprint by setting status to `closed`
-    - Update `last_modified` to current ISO timestamp
-    - Write the updated sprint file
+    - Check if any item IDs in the array match {{items_to_archive}}
+    - If NO matches found: skip this sprint file entirely (no modification needed)
+    - If matches found:
+      - Remove the matching item IDs from the array
+      - If items array becomes empty AND sprint status is `active`: auto-close the sprint by setting status to `closed`
+      - Update `last_modified` to current ISO timestamp
+      - Write the updated sprint file
   </action>
 </step>
 
