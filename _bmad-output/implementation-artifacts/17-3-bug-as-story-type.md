@@ -1,6 +1,6 @@
 # Story 17.3: Bug as Story Type
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -29,15 +29,15 @@ So that bugs are prioritized and assigned to sprints using the same workflow as 
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Extend bug story file format with new fields (AC: #1)
-  - [ ] 1.1: Update `lib/bmad-extension/skills/create-bug-story/SKILL.md` to gather two additional optional fields:
+- [x] Task 1: Extend bug story file format with new fields (AC: #1)
+  - [x] 1.1: Update `lib/bmad-extension/skills/create-bug-story/SKILL.md` to gather two additional optional fields:
     - `version_found` (string, optional): The version/commit where the bug was found (e.g., "3.0.0", "commit abc123"). Press Enter to skip -> stored as empty string.
     - `bug_type` (enum, optional): Classification of bug. Options: `regression | functional | performance | security | ui | data | integration | other`. Press Enter to skip -> defaults to `functional`.
-  - [ ] 1.2: Add `version_found` and `bug_type` prompts as a new step between current Step 3 (expected/actual) and Step 4 (root cause):
+  - [x] 1.2: Add `version_found` and `bug_type` prompts as a new step between current Step 3 (expected/actual) and Step 4 (root cause):
     - Prompt: "What version or commit was this bug found in? (optional, press Enter to skip)"
     - Prompt: "What type of bug is this? [regression / functional / performance / security / ui / data / integration / other] (optional, defaults to functional)"
     - Validate bug_type against the enum list; reject invalid values with error and re-prompt
-  - [ ] 1.3: Update YAML frontmatter template in Step 6 to include new fields:
+  - [x] 1.3: Update YAML frontmatter template in Step 6 to include new fields:
     ```yaml
     ---
     type: bug
@@ -48,14 +48,14 @@ So that bugs are prioritized and assigned to sprints using the same workflow as 
     status: backlog
     ---
     ```
-  - [ ] 1.4: Add `status: backlog` to the YAML frontmatter — this is the initial lifecycle status for newly created bugs, enabling the backlog generator (Story 17.2) to read bug status directly from the file
-  - [ ] 1.5: Update the confirmation display in Step 5 to show the new fields
+  - [x] 1.4: Add `status: backlog` to the YAML frontmatter — this is the initial lifecycle status for newly created bugs, enabling the backlog generator (Story 17.2) to read bug status directly from the file
+  - [x] 1.5: Update the confirmation display in Step 5 to show the new fields
 
-- [ ] Task 2: Add backlog integration to create-bug-story (AC: #1, #2)
-  - [ ] 2.1: After writing the bug file in Step 6, add a new Step 7 that checks if `backlog.yaml` exists:
+- [x] Task 2: Add backlog integration to create-bug-story (AC: #1, #2)
+  - [x] 2.1: After writing the bug file in Step 6, add a new Step 7 that checks if `backlog.yaml` exists:
     - If exists: read it, append new bug entry at the end (lowest priority), re-number priorities, write back
     - If not exists: note in output that user should run `/generate-backlog` to include this bug
-  - [ ] 2.2: Bug entry format for backlog.yaml (per Story 17.2 schema):
+  - [x] 2.2: Bug entry format for backlog.yaml (per Story 17.2 schema):
     ```yaml
     - id: "BUG-{{title_slug}}"
       type: bug
@@ -66,35 +66,35 @@ So that bugs are prioritized and assigned to sprints using the same workflow as 
       sprint: null
       severity: {{severity}}
     ```
-  - [ ] 2.3: After appending to backlog, display: "Bug added to backlog at priority {{priority}}. Use `/prioritize-backlog` to adjust priority."
+  - [x] 2.3: After appending to backlog, display: "Bug added to backlog at priority {{priority}}. Use `/prioritize-backlog` to adjust priority."
 
-- [ ] Task 3: Update backlog schema for bug-specific fields (AC: #1, #2)
-  - [ ] 3.1: Update `_bmad-output/implementation-artifacts/sprint-management-guardrails.md` Backlog Model section (added by Story 17.2) to document:
+- [x] Task 3: Update backlog schema for bug-specific fields (AC: #1, #2)
+  - [x] 3.1: Update `_bmad-output/implementation-artifacts/sprint-management-guardrails.md` Backlog Model section (added by Story 17.2) to document:
     - Bug entries have `severity` field (non-null)
     - Bug entries have `epic: null` (invariant)
     - Bug entries use `BUG-{slug}` ID format (uppercase prefix)
-  - [ ] 3.2: Document the bug lifecycle: `backlog -> ready-for-dev -> in-progress -> review -> done`
-  - [ ] 3.3: Document that bug status is tracked in the bug file's YAML frontmatter `status` field (not in sprint-status.yaml)
+  - [x] 3.2: Document the bug lifecycle: `backlog -> ready-for-dev -> in-progress -> review -> done`
+  - [x] 3.3: Document that bug status is tracked in the bug file's YAML frontmatter `status` field (not in sprint-status.yaml)
 
-- [ ] Task 4: Ensure lifecycle parity with stories (AC: #3)
-  - [ ] 4.1: Verify that the dev-story workflow can process bug files (it reads the story file by path — bug files follow the same markdown structure with different frontmatter)
-  - [ ] 4.2: Add a note in SKILL.md output that done bugs are archived by Story 17.6's cleanup process to `done/BUG-{slug}.md`
-  - [ ] 4.3: Verify the create-bug-story SKILL.md slug derivation produces IDs compatible with the Item ID Format Contract from Story 17.1:
+- [x] Task 4: Ensure lifecycle parity with stories (AC: #3)
+  - [x] 4.1: Verify that the dev-story workflow can process bug files (it reads the story file by path — bug files follow the same markdown structure with different frontmatter)
+  - [x] 4.2: Add a note in SKILL.md output that done bugs are archived by Story 17.6's cleanup process to `done/BUG-{slug}.md`
+  - [x] 4.3: Verify the create-bug-story SKILL.md slug derivation produces IDs compatible with the Item ID Format Contract from Story 17.1:
     - Bug file: `bug-{slug}.md` (lowercase prefix)
     - Bug ID in backlog/sprint: `BUG-{slug}` (uppercase prefix)
     - These must use the same slug — just different prefix casing
 
-- [ ] Task 5: Update module-help.csv description (AC: #1)
-  - [ ] 5.1: Update the `create-bug-story` row in `lib/bmad-extension/module-help.csv` description to mention backlog integration:
+- [x] Task 5: Update module-help.csv description (AC: #1)
+  - [x] 5.1: Update the `create-bug-story` row in `lib/bmad-extension/module-help.csv` description to mention backlog integration:
     - Current: "Create a structured bug story from a detected defect and add to backlog."
     - Updated: "Create a structured bug story with severity and type classification, add to backlog.yaml."
 
-- [ ] Task 6: Verify (AC: #1, #2, #3)
-  - [ ] 6.1: Trace create-bug-story SKILL.md — confirm new fields are gathered, validated, and written to frontmatter
-  - [ ] 6.2: Verify bug entry in backlog.yaml follows schema (type: bug, epic: null, severity present)
-  - [ ] 6.3: Verify `version_found` and `bug_type` default handling (empty string and "functional" respectively)
-  - [ ] 6.4: Verify `status: backlog` is in frontmatter for new bugs
-  - [ ] 6.5: Verify slug derivation: `bug-{slug}.md` filename maps to `BUG-{slug}` backlog ID
+- [x] Task 6: Verify (AC: #1, #2, #3)
+  - [x] 6.1: Trace create-bug-story SKILL.md — confirm new fields are gathered, validated, and written to frontmatter
+  - [x] 6.2: Verify bug entry in backlog.yaml follows schema (type: bug, epic: null, severity present)
+  - [x] 6.3: Verify `version_found` and `bug_type` default handling (empty string and "functional" respectively)
+  - [x] 6.4: Verify `status: backlog` is in frontmatter for new bugs
+  - [x] 6.5: Verify slug derivation: `bug-{slug}.md` filename maps to `BUG-{slug}` backlog ID
 
 ## Dev Notes
 
@@ -183,14 +183,26 @@ Recent commits show Epic 15/16 patterns. Key conventions:
 - Conventional commit format: `feat(epic-17): story 17-3 bug as story type`
 - SKILL.md modifications follow the additive pattern — extend, don't rewrite
 
+## Change Log
+
+- 2026-03-30: Story implemented — extended create-bug-story with version_found, bug_type, status fields and backlog integration.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6 (1M context)
 
 ### Debug Log References
 
+None — clean implementation.
+
 ### Completion Notes List
 
+Extended create-bug-story SKILL.md with version_found, bug_type, status fields. Added backlog integration step. Updated module-help.csv description. Updated guardrails with bug lifecycle.
+
 ### File List
+
+- `lib/bmad-extension/skills/create-bug-story/SKILL.md` (modified)
+- `lib/bmad-extension/module-help.csv` (modified)
+- `sprint-management-guardrails.md` (modified)

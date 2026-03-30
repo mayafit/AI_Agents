@@ -1,6 +1,6 @@
 # Story 17.5: Sprint-to-Backlog Workflow
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -26,15 +26,15 @@ So that I can adjust sprint scope when priorities change without losing the item
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Decide implementation location (AC: #1, #2)
-  - [ ] 1.1: Evaluate whether to rework the existing `modify-sprint` skill or create a new `remove-from-sprint` skill:
+- [x] Task 1: Decide implementation location (AC: #1, #2)
+  - [x] 1.1: Evaluate whether to rework the existing `modify-sprint` skill or create a new `remove-from-sprint` skill:
     - **Option A (Recommended):** Create new `lib/bmad-extension/skills/remove-from-sprint/SKILL.md` — focused, single-purpose workflow aligned with FR129
     - **Option B:** Add remove capability to `modify-sprint` — but modify-sprint already handles add/remove/capacity/metadata and will need its own rework for the new sprint model
     - **Decision:** Use **Option A** — a dedicated skill is cleaner and avoids coupling the remove operation to the larger modify-sprint rework
-  - [ ] 1.2: If Option A, also add a deprecation/update note to `modify-sprint` SKILL.md indicating that item removal is now handled by `/remove-from-sprint`
+  - [x] 1.2: If Option A, also add a deprecation/update note to `modify-sprint` SKILL.md indicating that item removal is now handled by `/remove-from-sprint`
 
-- [ ] Task 2: Create remove-from-sprint SKILL.md (AC: #1, #2)
-  - [ ] 2.1: Create skill package at `lib/bmad-extension/skills/remove-from-sprint/SKILL.md` with YAML frontmatter:
+- [x] Task 2: Create remove-from-sprint SKILL.md (AC: #1, #2)
+  - [x] 2.1: Create skill package at `lib/bmad-extension/skills/remove-from-sprint/SKILL.md` with YAML frontmatter:
     ```yaml
     ---
     name: remove-from-sprint
@@ -45,8 +45,8 @@ So that I can adjust sprint scope when priorities change without losing the item
       - "unassign from sprint"
     ---
     ```
-  - [ ] 2.2: Create `lib/bmad-extension/skills/remove-from-sprint/bmad-skill-manifest.yaml`
-  - [ ] 2.3: Implement workflow steps:
+  - [x] 2.2: Create `lib/bmad-extension/skills/remove-from-sprint/bmad-skill-manifest.yaml`
+  - [x] 2.3: Implement workflow steps:
 
     **Step 1: Select sprint**
     - Glob `_bmad-output/implementation-artifacts/sprints/sprint-*.yaml` to find all sprint files
@@ -89,31 +89,31 @@ So that I can adjust sprint scope when priorities change without losing the item
     - Write updated backlog.yaml
     - Display summary: items removed, new sprint capacity usage
 
-- [ ] Task 3: Register in module-help.csv (AC: #1)
-  - [ ] 3.1: Add row to `lib/bmad-extension/module-help.csv`:
+- [x] Task 3: Register in module-help.csv (AC: #1)
+  - [x] 3.1: Add row to `lib/bmad-extension/module-help.csv`:
     ```
     ma-skills,4-implementation,Remove from Sprint,remove-from-sprint,,skill:remove-from-sprint,remove-from-sprint,false,bmm-sm,,"Remove items from a sprint and return to unassigned backlog.",_bmad-output/implementation-artifacts,"sprint plan",
     ```
 
-- [ ] Task 4: Update modify-sprint with cross-reference (AC: #1)
-  - [ ] 4.1: Add note at the top of `lib/bmad-extension/skills/modify-sprint/SKILL.md`:
+- [x] Task 4: Update modify-sprint with cross-reference (AC: #1)
+  - [x] 4.1: Add note at the top of `lib/bmad-extension/skills/modify-sprint/SKILL.md`:
     ```
     <!-- NOTE: Item removal from sprints is now handled by /remove-from-sprint (Story 17.5).
          The "Remove item" option in this workflow's menu is superseded.
          This workflow will be fully reworked when converted to the new sprint model. -->
     ```
 
-- [ ] Task 5: Update guardrails (AC: #2)
-  - [ ] 5.1: Add to `sprint-management-guardrails.md`: "remove-from-sprint writes to both `backlog.yaml` (clears sprint field) and `sprints/sprint-{id}.yaml` (removes from items array) — dual-write contract same as add-to-sprint"
-  - [ ] 5.2: Document invariant: removing an item from a sprint NEVER changes the item's status
+- [x] Task 5: Update guardrails (AC: #2)
+  - [x] 5.1: Add to `sprint-management-guardrails.md`: "remove-from-sprint writes to both `backlog.yaml` (clears sprint field) and `sprints/sprint-{id}.yaml` (removes from items array) — dual-write contract same as add-to-sprint"
+  - [x] 5.2: Document invariant: removing an item from a sprint NEVER changes the item's status
 
-- [ ] Task 6: Verify (AC: #1, #2)
-  - [ ] 6.1: Trace SKILL.md — confirm all paths read from `backlog.yaml` and `sprints/sprint-*.yaml`
-  - [ ] 6.2: Verify dual-write: both backlog.yaml `sprint` field cleared and sprint file `items` array updated
-  - [ ] 6.3: Verify status preservation: item status is NEVER modified by this workflow
-  - [ ] 6.4: Verify concurrency guard: checks `last_modified` before writing
-  - [ ] 6.5: Verify `last_modified` timestamp is updated on sprint file after removal
-  - [ ] 6.6: Verify backlog priority is preserved (items stay at same priority position)
+- [x] Task 6: Verify (AC: #1, #2)
+  - [x] 6.1: Trace SKILL.md — confirm all paths read from `backlog.yaml` and `sprints/sprint-*.yaml`
+  - [x] 6.2: Verify dual-write: both backlog.yaml `sprint` field cleared and sprint file `items` array updated
+  - [x] 6.3: Verify status preservation: item status is NEVER modified by this workflow
+  - [x] 6.4: Verify concurrency guard: checks `last_modified` before writing
+  - [x] 6.5: Verify `last_modified` timestamp is updated on sprint file after removal
+  - [x] 6.6: Verify backlog priority is preserved (items stay at same priority position)
 
 ## Dev Notes
 
@@ -194,14 +194,28 @@ Recent commits show Epic 15/16 patterns:
 - Conventional commit format: `feat(epic-17): story 17-5 sprint-to-backlog workflow`
 - New skill creation follows: SKILL.md + bmad-skill-manifest.yaml + module-help.csv registration
 
+## Change Log
+
+- 2026-03-30: Story implemented — created remove-from-sprint skill with dual-write contract and concurrency guard.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6 (1M context)
 
 ### Debug Log References
 
+None — clean implementation.
+
 ### Completion Notes List
 
+Created remove-from-sprint skill (SKILL.md + manifest). Registered in module-help.csv. Added cross-reference note to modify-sprint SKILL.md. Updated guardrails with status invariant.
+
 ### File List
+
+- `lib/bmad-extension/skills/remove-from-sprint/SKILL.md` (new)
+- `lib/bmad-extension/skills/remove-from-sprint/bmad-skill-manifest.yaml` (new)
+- `lib/bmad-extension/module-help.csv` (modified)
+- `lib/bmad-extension/skills/modify-sprint/SKILL.md` (modified)
+- `sprint-management-guardrails.md` (modified)

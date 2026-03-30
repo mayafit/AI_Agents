@@ -1,6 +1,6 @@
 # Story 17.2: Flat Backlog Model
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -48,8 +48,8 @@ So that sprint planning works from a single prioritized list, not epic-grouped s
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Define backlog.yaml schema (AC: #1, #2, #3, #4)
-  - [ ] 1.1: Create the authoritative backlog YAML schema documentation in `_bmad-output/implementation-artifacts/sprint-management-guardrails.md` (renamed by Story 17.1). Schema fields per item:
+- [x] Task 1: Define backlog.yaml schema (AC: #1, #2, #3, #4)
+  - [x] 1.1: Create the authoritative backlog YAML schema documentation in `_bmad-output/implementation-artifacts/sprint-management-guardrails.md` (renamed by Story 17.1). Schema fields per item:
     - `id` (string): Story IDs follow `{epic}-{story}-{slug}` format; Bug IDs follow `BUG-{slug}` format (per Story 17.1 Item ID Format Contract)
     - `type` (enum): `story` or `bug`
     - `epic` (int|null): Epic number for stories; `null` for bugs (FR64 — bugs don't belong to epics)
@@ -58,10 +58,10 @@ So that sprint planning works from a single prioritized list, not epic-grouped s
     - `status` (enum): `backlog | ready-for-dev | in-progress | review` (done items excluded per AC #4)
     - `sprint` (string|null): Sprint ID if assigned (e.g., `sprint-3`), `null` if unassigned
     - `severity` (enum|null): `critical | high | medium | low` for bugs only, `null` for stories
-  - [ ] 1.2: Add backlog schema to guardrails doc under a new "Backlog Model" section
+  - [x] 1.2: Add backlog schema to guardrails doc under a new "Backlog Model" section
 
-- [ ] Task 2: Create `generate-backlog` SKILL.md (AC: #1, #3, #4)
-  - [ ] 2.1: Create skill package at `lib/bmad-extension/skills/generate-backlog/SKILL.md` with YAML frontmatter:
+- [x] Task 2: Create `generate-backlog` SKILL.md (AC: #1, #3, #4)
+  - [x] 2.1: Create skill package at `lib/bmad-extension/skills/generate-backlog/SKILL.md` with YAML frontmatter:
     ```yaml
     ---
     name: generate-backlog
@@ -72,8 +72,8 @@ So that sprint planning works from a single prioritized list, not epic-grouped s
       - "refresh backlog"
     ---
     ```
-  - [ ] 2.2: Create `lib/bmad-extension/skills/generate-backlog/bmad-skill-manifest.yaml`
-  - [ ] 2.3: Implement the workflow steps in SKILL.md:
+  - [x] 2.2: Create `lib/bmad-extension/skills/generate-backlog/bmad-skill-manifest.yaml`
+  - [x] 2.3: Implement the workflow steps in SKILL.md:
     - **Step 1: Load sources**
       - Read `_bmad-output/planning-artifacts/epics.md` (or sharded equivalent)
       - Glob `_bmad-output/implementation-artifacts/bug-*.md` for bug story files
@@ -101,33 +101,33 @@ So that sprint planning works from a single prioritized list, not epic-grouped s
     - **Step 6: Report**
       - Display summary: total items, stories count, bugs count, new items added, items removed
 
-- [ ] Task 3: Register in module-help.csv (AC: #1)
-  - [ ] 3.1: Add row to `lib/bmad-extension/module-help.csv`:
+- [x] Task 3: Register in module-help.csv (AC: #1)
+  - [x] 3.1: Add row to `lib/bmad-extension/module-help.csv`:
     ```
     ma-skills,4-implementation,Generate Backlog,generate-backlog,,skill:generate-backlog,generate-backlog,false,bmm-sm,,"Generate or refresh flat backlog from epics and bug stories.",_bmad-output/implementation-artifacts,"backlog",
     ```
 
-- [ ] Task 4: Update sprint-planning workflow to call generate-backlog (AC: #1)
-  - [ ] 4.1: Identify the sprint-planning workflow location (`_bmad/bmm/4-implementation/bmad-sprint-planning/workflow.md`)
-  - [ ] 4.2: **Do NOT modify** the bmm workflow directly — instead, add a note in the generate-backlog SKILL.md that sprint-planning should invoke `/generate-backlog` as its first step when backlog model is available
-  - [ ] 4.3: Add guidance in the SKILL.md output that explains the relationship: "Sprint-planning workflow should run `/generate-backlog` first to ensure the backlog is current before selecting stories for sprint creation"
+- [x] Task 4: Update sprint-planning workflow to call generate-backlog (AC: #1)
+  - [x] 4.1: Identify the sprint-planning workflow location (`_bmad/bmm/4-implementation/bmad-sprint-planning/workflow.md`)
+  - [x] 4.2: **Do NOT modify** the bmm workflow directly — instead, add a note in the generate-backlog SKILL.md that sprint-planning should invoke `/generate-backlog` as its first step when backlog model is available
+  - [x] 4.3: Add guidance in the SKILL.md output that explains the relationship: "Sprint-planning workflow should run `/generate-backlog` first to ensure the backlog is current before selecting stories for sprint creation"
 
-- [ ] Task 5: Update guardrails with data authority (AC: #1, #2)
-  - [ ] 5.1: Add to `sprint-management-guardrails.md` Data Authority Rules table:
+- [x] Task 5: Update guardrails with data authority (AC: #1, #2)
+  - [x] 5.1: Add to `sprint-management-guardrails.md` Data Authority Rules table:
     | Concern | Authoritative Source | Read By |
     |---|---|---|
     | Item priority ordering | `backlog.yaml` | 17.4, 17.5, 17.7, 17.8 |
     | Sprint membership | `sprints/sprint-{id}.yaml` | 17.4, 17.5, 17.6, 17.8 |
-  - [ ] 5.2: Document that `sprint-status.yaml` is now a **derived file** — generated from backlog.yaml + sprint files (Story 17.8 will implement the derivation)
-  - [ ] 5.3: Document backlog discovery glob: `_bmad-output/implementation-artifacts/backlog.yaml` (single file, not globbed)
+  - [x] 5.2: Document that `sprint-status.yaml` is now a **derived file** — generated from backlog.yaml + sprint files (Story 17.8 will implement the derivation)
+  - [x] 5.3: Document backlog discovery glob: `_bmad-output/implementation-artifacts/backlog.yaml` (single file, not globbed)
 
-- [ ] Task 6: Verify (AC: #1, #2, #3, #4)
-  - [ ] 6.1: Trace SKILL.md logic — confirm all story extraction paths produce valid backlog entries
-  - [ ] 6.2: Verify bug entries have `epic: null` and include `severity` field
-  - [ ] 6.3: Verify done items are excluded from output
-  - [ ] 6.4: Verify priority re-numbering produces sequential integers with no gaps
-  - [ ] 6.5: Verify existing priority/sprint assignments are preserved on re-generation
-  - [ ] 6.6: Verify sprint field shows sprint ID when assigned, null when unassigned
+- [x] Task 6: Verify (AC: #1, #2, #3, #4)
+  - [x] 6.1: Trace SKILL.md logic — confirm all story extraction paths produce valid backlog entries
+  - [x] 6.2: Verify bug entries have `epic: null` and include `severity` field
+  - [x] 6.3: Verify done items are excluded from output
+  - [x] 6.4: Verify priority re-numbering produces sequential integers with no gaps
+  - [x] 6.5: Verify existing priority/sprint assignments are preserved on re-generation
+  - [x] 6.6: Verify sprint field shows sprint ID when assigned, null when unassigned
 
 ## Dev Notes
 
@@ -238,14 +238,27 @@ Recent commits show Epic 15/16 patterns. Key conventions:
 - SKILL.md + bmad-skill-manifest.yaml is the standard skill package format
 - `module-help.csv` uses `skill:{name}` to resolve to SKILL.md
 
+## Change Log
+
+- 2026-03-30: Story implemented — generate-backlog skill created with flat backlog YAML schema, registered in module-help.csv, guardrails updated with backlog model and data authority rules.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6 (1M context)
 
 ### Debug Log References
 
+None — clean implementation.
+
 ### Completion Notes List
 
+Created generate-backlog skill (SKILL.md + manifest). Registered in module-help.csv. Updated guardrails with backlog model schema.
+
 ### File List
+
+- `lib/bmad-extension/skills/generate-backlog/SKILL.md` (new)
+- `lib/bmad-extension/skills/generate-backlog/bmad-skill-manifest.yaml` (new)
+- `lib/bmad-extension/module-help.csv` (modified)
+- `sprint-management-guardrails.md` (modified)

@@ -1,3 +1,8 @@
+<!-- DEPRECATED: This workflow references the old sprint-plan-{n}.yaml format.
+     It will be reworked in Story 17.4. Use /add-sprint to create sprints in the new format. -->
+
+> **DEPRECATED:** This workflow references the old `sprint-plan-{n}.yaml` format. It will be reworked in Story 17.4. Use `/add-sprint` to create sprints in the new format.
+
 # Modify Sprint Workflow
 
 Guided workflow to modify an existing sprint — add/remove items, change capacity, update metadata.

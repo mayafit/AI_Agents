@@ -1,6 +1,6 @@
 # Story 17.7: Multi-Criteria Prioritization Workflow
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -29,8 +29,8 @@ So that sprint planning is based on business value, severity, and dependencies â
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create prioritize-backlog SKILL.md (AC: #1, #2, #3)
-  - [ ] 1.1: Create skill package at `lib/bmad-extension/skills/prioritize-backlog/SKILL.md` with YAML frontmatter:
+- [x] Task 1: Create prioritize-backlog SKILL.md (AC: #1, #2, #3)
+  - [x] 1.1: Create skill package at `lib/bmad-extension/skills/prioritize-backlog/SKILL.md` with YAML frontmatter:
     ```yaml
     ---
     name: prioritize-backlog
@@ -42,8 +42,8 @@ So that sprint planning is based on business value, severity, and dependencies â
       - "reprioritize"
     ---
     ```
-  - [ ] 1.2: Create `lib/bmad-extension/skills/prioritize-backlog/bmad-skill-manifest.yaml`
-  - [ ] 1.3: Implement workflow steps:
+  - [x] 1.2: Create `lib/bmad-extension/skills/prioritize-backlog/bmad-skill-manifest.yaml`
+  - [x] 1.3: Implement workflow steps:
 
     **Step 1: Load backlog and infer dependencies**
     - Read `_bmad-output/implementation-artifacts/backlog.yaml`
@@ -115,25 +115,25 @@ So that sprint planning is based on business value, severity, and dependencies â
       - Write updated file
     - Display: "Backlog reprioritized. {count} items reordered."
 
-- [ ] Task 2: Register in module-help.csv (AC: #1)
-  - [ ] 2.1: Add row to `lib/bmad-extension/module-help.csv`:
+- [x] Task 2: Register in module-help.csv (AC: #1)
+  - [x] 2.1: Add row to `lib/bmad-extension/module-help.csv`:
     ```
     ma-skills,4-implementation,Prioritize Backlog,prioritize-backlog,,skill:prioritize-backlog,prioritize-backlog,false,bmm-sm,,"Reprioritize backlog using multiple criteria â€” severity, value, dependencies.",_bmad-output/implementation-artifacts,"backlog",
     ```
 
-- [ ] Task 3: Update guardrails (AC: #2, #3)
-  - [ ] 3.1: Add to `sprint-management-guardrails.md`:
+- [x] Task 3: Update guardrails (AC: #2, #3)
+  - [x] 3.1: Add to `sprint-management-guardrails.md`:
     - Prioritization Rules section: criteria list, dependency validation, audit logging
     - Document that priority values are always sequential 1..N after any reordering
     - Document dependency inference: same-epic stories are sequentially dependent by default
 
-- [ ] Task 4: Verify (AC: #1, #2, #3)
-  - [ ] 4.1: Trace SKILL.md â€” confirm all three modes (full, quick, auto-suggest) produce valid orderings
-  - [ ] 4.2: Verify priority re-numbering produces sequential integers 1..N with no gaps
-  - [ ] 4.3: Verify dependency violation detection and warning display
-  - [ ] 4.4: Verify override capability (Scrum Master can override dependency warnings)
-  - [ ] 4.5: Verify audit logging (date + reason appended to backlog.yaml header)
-  - [ ] 4.6: Verify sprint-assigned items' `sprint` field is preserved during reordering
+- [x] Task 4: Verify (AC: #1, #2, #3)
+  - [x] 4.1: Trace SKILL.md â€” confirm all three modes (full, quick, auto-suggest) produce valid orderings
+  - [x] 4.2: Verify priority re-numbering produces sequential integers 1..N with no gaps
+  - [x] 4.3: Verify dependency violation detection and warning display
+  - [x] 4.4: Verify override capability (Scrum Master can override dependency warnings)
+  - [x] 4.5: Verify audit logging (date + reason appended to backlog.yaml header)
+  - [x] 4.6: Verify sprint-assigned items' `sprint` field is preserved during reordering
 
 ## Dev Notes
 
@@ -209,14 +209,27 @@ Recent commits show Epic 15/16 patterns:
 - Conventional commit format: `feat(epic-17): story 17-7 multi-criteria prioritization`
 - New skill creation follows: SKILL.md + bmad-skill-manifest.yaml + module-help.csv registration
 
+## Change Log
+
+- 2026-03-30: Story implemented â€” created prioritize-backlog skill with full/quick/auto-suggest modes, dependency inference, and audit logging.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6 (1M context)
 
 ### Debug Log References
 
+None â€” clean implementation.
+
 ### Completion Notes List
 
+Created prioritize-backlog skill (SKILL.md + manifest). Registered in module-help.csv. Updated guardrails with prioritization rules, dependency inference, audit logging.
+
 ### File List
+
+- `lib/bmad-extension/skills/prioritize-backlog/SKILL.md` (new)
+- `lib/bmad-extension/skills/prioritize-backlog/bmad-skill-manifest.yaml` (new)
+- `lib/bmad-extension/module-help.csv` (modified)
+- `sprint-management-guardrails.md` (modified)
