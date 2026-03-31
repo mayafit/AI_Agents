@@ -1,6 +1,6 @@
 # ma-agents
 
-A universal NPX tool to install AI coding agent skills. Write skills once, install them across Claude Code, Gemini, Copilot, Cline, Cursor, and Kilocode.
+A universal NPX tool to install AI coding agent skills. Write skills once, install them across Claude Code, Gemini, Copilot, Cline, Cursor, Kilocode, and Roo Code.
 
 ## Installation & Usage
 
@@ -115,6 +115,7 @@ The file is version-controlled as part of `_bmad-output/` project knowledge. Com
 | Cursor | `.cursor/skills/` | `generic` | `.cursor/cursor.md` |
 | Kilocode | `.kilocode/skills/` | `generic` | `.kilocode/kilocode.md` |
 | Cline | `.cline/skills/` | `cline` | `.cline/clinerules.md` |
+| Roo Code | `.roo/skills/` | `generic` | `.roo/rules/00-ma-agents.md` |
 | SRE Agent (Alex) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/sre.md` |
 | DevOps Agent (Amit) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/devops.md` |
 | Cyber Analyst (Yael) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/cyber.md` |

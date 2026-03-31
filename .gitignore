@@ -20,6 +20,9 @@ _bmad-custom-backup-temp/
 .cline/
 .clinerules
 .cursor/
+.roo/
+.roomodes
+.roorules
 .gemini/
 .github/
 .kilocode/
