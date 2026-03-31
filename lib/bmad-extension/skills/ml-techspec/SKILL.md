@@ -60,12 +60,21 @@ Locked At: [timestamp on approval]
 - uv lockfile: pyproject.toml + uv.lock
 ```
 
-### 3. Lock the Contract
-- Present the TechSpec to the user
+### 3. Surface Dilemmas & Commit Gate
+
+Before presenting and **before any git commit**:
+
+- Identify every contract decision where two or more reasonable options existed (metric threshold values, HPO budget, random seed choice, held-out split ratio, guardrail definitions, etc.)
+- Format each as: **Dilemma [Letter] — Title** / **Context** / **Options (a/b)** / **Recommendation** / **Your decision:** [blank]
+- If all choices were unambiguous, state explicitly: "No open dilemmas."
+- **Do NOT commit the TechSpec until the user has resolved all dilemmas and given explicit lock approval.**
+
+### 4. Lock the Contract
+- Present the TechSpec draft and all surfaced dilemmas to the user
 - State explicitly: "Once you approve this, the acceptance criteria and data contract are locked. You may tune hyperparameters but may NOT change the primary metric threshold, feature set, or validation strategy during training."
 - Ask: "Do you approve and lock this TechSpec?"
-- On approval: Set Status to LOCKED and add Locked At timestamp
+- On approval: Set Status to LOCKED, add Locked At timestamp, then commit
 
-### 4. Confirm & Advance
+### 5. Confirm & Advance
 - "TechSpec locked. Proceed to **Stage 5 — /ml-infra** to set up the environment and run a smoke test."
 - STOP and WAIT for user confirmation

@@ -34,3 +34,45 @@ This project uses **uv**. Do NOT use pip or python -m venv.
 - Data: `data/`
 - Source: `src/`
 - Scripts: `scripts/`
+
+## Artifact Review Gate — Mandatory Protocol
+
+This protocol applies to **every stage** that produces a planning or implementation artifact.
+It overrides any skill instruction that implies committing before user review.
+
+### The Gate (non-negotiable order of operations)
+
+```
+1. WRITE artifact(s) to disk
+2. SURFACE dilemmas (see format below)
+3. PRESENT summary to user
+4. WAIT for explicit approval
+5. ONLY THEN: git commit
+```
+
+**Never commit an artifact before step 4 is complete.**
+
+### Dilemma Format
+
+Any time you made a non-obvious design choice — a point where two or more reasonable options existed — that is a dilemma. Surface every dilemma before asking for approval:
+
+```
+### Dilemma [Letter] — [Short title]
+**Context**: Why this choice exists and what is at stake.
+**Options**:
+  - (a) … — pro / con
+  - (b) … — pro / con
+**Recommendation**: Option X, because …
+**Your decision**: [leave blank for user to fill]
+```
+
+If a choice was unambiguous, do not list it. If there are no dilemmas, state: "No open dilemmas — all choices were unambiguous."
+
+### Thinking Transparency
+
+Every planning artifact must contain a section documenting:
+- Assumptions made and their confidence level
+- Alternatives considered and rejected (with reasons)
+- Anything that could change if a listed assumption is wrong
+
+This section must exist in every planning document before it is committed.

@@ -34,8 +34,17 @@ Write `_bmad-output/planning-artifacts/ml-prd.md` with sections:
 - **Out of Scope** (explicit non-goals)
 - **Dependencies** (upstream data pipelines, external APIs)
 
-### 4. Confirm & Advance
+### 4. Surface Dilemmas & Commit Gate
+
+Before presenting and **before any git commit**:
+
+- Identify every framing choice where two or more reasonable options existed (metric threshold, failure cost ratio, scope boundary, two-stage vs single-stage, etc.)
+- Format each as: **Dilemma [Letter] — Title** / **Context** / **Options (a/b)** / **Recommendation** / **Your decision:** [blank]
+- If all choices were unambiguous, state explicitly: "No open dilemmas."
+- **Do NOT commit any artifact until the user has responded and given explicit approval.**
+
+### 5. Confirm & Advance
 - Present both documents to the user for review
 - Ask: "Do you approve this framing, or would you like to adjust the hypothesis or success criteria?"
-- On approval: "Stage 1 complete. When ready, proceed to **Stage 2 — /ml-eda** to analyze the raw data."
+- On approval: commit artifacts, then say "Stage 1 complete. When ready, proceed to **Stage 2 — /ml-eda** to analyze the raw data."
 - STOP and WAIT for user confirmation before advancing

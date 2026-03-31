@@ -39,9 +39,18 @@ Write `_bmad-output/planning-artifacts/eda-report.md` covering:
 - If EDA challenges any assumption, update `research-thesis.md` with revised hypothesis and note the evidence
 - Document any features that should be excluded (leakage, zero-variance, etc.)
 
-### 5. Confirm & Advance
+### 5. Surface Dilemmas & Commit Gate
+
+Before presenting and **before any git commit**:
+
+- Identify every data or preprocessing decision where two or more reasonable options existed (missing value strategy, feature exclusion, class imbalance approach, hypothesis revisions, etc.)
+- Format each as: **Dilemma [Letter] — Title** / **Context** / **Options (a/b/c)** / **Recommendation** / **Your decision:** [blank]
+- If all choices were unambiguous, state explicitly: "No open dilemmas."
+- **Do NOT commit any artifact (report, figures, updated thesis) until the user has responded and given explicit approval.**
+
+### 6. Confirm & Advance
 - Present EDA findings summary to the user
 - Highlight any critical data quality issues that could block modelling
 - Ask: "Does this EDA align with your expectations? Any features to add or exclude?"
-- On approval: "Stage 2 complete. Proceed to **Stage 3 — /ml-architecture** to design the model stack."
+- On approval: commit all artifacts, then say "Stage 2 complete. Proceed to **Stage 3 — /ml-architecture** to design the model stack."
 - STOP and WAIT for user confirmation

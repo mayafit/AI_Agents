@@ -58,8 +58,17 @@ Write `_bmad-output/implementation-artifacts/experiment-log.md` with:
 - **Training Time**: wall-clock time
 - **Model Artifact Path**: path to saved model
 
-### 7. Confirm and Advance
+### 7. Surface Dilemmas & Commit Gate
+
+Before presenting and **before any git commit**:
+
+- Identify every execution decision where two or more options existed (early stopping patience, batch size, resampling applied or not, model variant selected, etc.)
+- Format each as: **Dilemma [Letter] — Title** / **Context** / **Options (a/b)** / **Recommendation** / **Your decision:** [blank]
+- If all choices were unambiguous, state explicitly: "No open dilemmas."
+- **Do NOT commit the experiment log or model artifacts until the user has reviewed and approved.**
+
+### 8. Confirm and Advance
 - Present experiment log summary
 - State clearly: "Primary criterion ([metric] >= [threshold]): PASS / FAIL"
-- "Proceed to **Stage 7 — /ml-analysis** to evaluate results against the TechSpec contract."
+- On approval: commit artifacts, then say "Proceed to **Stage 7 — /ml-analysis** to evaluate results against the TechSpec contract."
 - STOP and WAIT for user confirmation

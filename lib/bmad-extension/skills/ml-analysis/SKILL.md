@@ -46,6 +46,15 @@ Write `_bmad-output/implementation-artifacts/analysis-report.md` with all findin
   - Ask: "Would you like to loop back to Stage 3 (architecture), Stage 4 (adjust TechSpec thresholds with justification), or Stage 6 (rerun with adjusted HPO)?"
   - Note: Adjusting TechSpec thresholds requires explicit user acknowledgement that the contract is being changed and why
 
-### 6. Confirm and Advance
+### 6. Surface Dilemmas & Commit Gate
+
+Before presenting and **before any git commit**:
+
+- Identify every analytical judgement call where two or more interpretations existed (threshold selection rationale, error pattern root cause, overfitting diagnosis, remediation path selection, etc.)
+- Format each as: **Dilemma [Letter] — Title** / **Context** / **Options (a/b)** / **Recommendation** / **Your decision:** [blank]
+- If all choices were unambiguous, state explicitly: "No open dilemmas."
+- **Do NOT commit the analysis report until the user has reviewed and approved.**
+
+### 7. Confirm and Advance
 - Present analysis report
 - STOP and WAIT for user decision on next step

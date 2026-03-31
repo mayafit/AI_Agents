@@ -39,8 +39,17 @@ Write `_bmad-output/planning-artifacts/ml-architecture.md` with:
 - **Experiment Tracking**: which metrics will be logged and to which tool
 - **Rejected Alternatives**: models considered but rejected, with reasons
 
-### 5. Confirm & Advance
+### 5. Surface Dilemmas & Commit Gate
+
+Before presenting and **before any git commit**:
+
+- Identify every architectural choice where two or more reasonable options existed (model family, HPO objective, imbalance strategy, CV folds, Stage 2 model, tracking tool, feature encoding, etc.)
+- Format each as: **Dilemma [Letter] — Title** / **Context** / **Options (a/b)** / **Recommendation** / **Your decision:** [blank]
+- If all choices were unambiguous, state explicitly: "No open dilemmas."
+- **Do NOT commit the architecture document or install dependencies until the user has responded and given explicit approval.**
+
+### 6. Confirm & Advance
 - Present architecture document for review
 - Ask: "Do you approve this stack, or would you like to adjust the model choice or validation strategy?"
-- On approval: "Stage 3 complete. Proceed to **Stage 4 — /ml-techspec** to lock the experiment contract."
+- On approval: commit artifacts, then say "Stage 3 complete. Proceed to **Stage 4 — /ml-techspec** to lock the experiment contract."
 - STOP and WAIT for user confirmation
