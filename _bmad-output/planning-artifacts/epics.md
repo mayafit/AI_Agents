@@ -2523,3 +2523,388 @@ Backlog — 12 unassigned items
 - Reworks the existing sprint-status workflow and the sprint-status-template.yaml
 - The display format should work well for both human reading and LLM parsing
 - sprint-status.yaml becomes a derived file: generated from backlog.yaml + sprint files
+
+---
+
+## Epic 18: Roo Code IDE Support (Phase 2)
+
+**Goal:** Full Roo Code integration — ma-agents skill installation, BMAD agent personas as custom modes, planning instructions as rules, and BMAD workflows as slash commands.
+**FRs covered:** FR34 (extended to include Roo Code), FR36, FR38
+**Proposed FRs:** FR128 (Roo Code custom modes from BMAD agents), FR129 (Roo Code rules from BMAD instructions), FR130 (Roo Code slash commands from BMAD workflows), FR131 (Cline-to-Roo migration)
+**Research:** `_bmad-output/planning-artifacts/domain-research-roocode-2026-03-31.md`
+**Dependency:** None (can proceed independently; upstream `bmad-method` already has `roo` in `platform-codes.yaml`)
+
+### Story 18.1: Add Roo Code Agent Entry to ma-agents
+
+As a **Chief Architect**,
+I want Roo Code registered as a supported IDE in `lib/agents.js`,
+So that ma-agents CLI can install skills into Roo Code's `.roo/skills/` directory.
+
+**Acceptance Criteria:**
+
+**Given** the `lib/agents.js` file
+**When** a developer adds Roo Code support
+**Then** a new entry is added with:
+```javascript
+{
+  id: 'roo-code',
+  name: 'Roo Code',
+  version: '1.0.0',
+  category: 'ide',
+  description: 'Roo Code AI Assistant (Enhanced Cline fork)',
+  skillsDir: '.roo/skills',
+  getProjectPath: () => path.join(process.cwd(), '.roo', 'skills'),
+  getGlobalPath: () => { /* VS Code globalStorage: Code/User/globalStorage/rooveterinaryinc.roo-cline/skills */ },
+  fileExtension: '.md',
+  template: 'generic',
+  instructionFiles: ['.roo/rules/00-ma-agents.md'],
+  injectionStrategy: { position: 'top', skipPatterns: ['---'] }
+}
+```
+
+**Given** `ma-agents install --agent roo-code` is run
+**When** a skill is selected
+**Then** the skill is installed to `.roo/skills/{skill-id}/SKILL.md`
+**And** a `MANIFEST.yaml` is generated in `.roo/skills/`
+
+**Given** `ma-agents list --agent roo-code` is run
+**When** the agent is targeted
+**Then** skills and their status are displayed correctly
+
+**Technical notes:**
+- The `instructionFiles` points to `.roo/rules/00-ma-agents.md` (not a top-level instruction file) because Roo Code loads rules from the `.roo/rules/` directory, not a single instruction file
+- The `00-` prefix ensures the ma-agents planning instruction loads first (alphabetical order)
+- Unlike Cline, Roo Code does NOT use `.clinerules` as primary — it uses `.roo/rules/`
+- Global path should use `RooCode` (matching VS Code extension storage conventions)
+
+### Story 18.2: Create BMAD IDE Config and Manifest Entry
+
+As a **Chief Architect**,
+I want Roo Code recognized in the BMAD configuration system,
+So that the BMAD installer includes Roo Code in IDE setup and customization flows.
+
+**Acceptance Criteria:**
+
+**Given** the BMAD configuration directory `_bmad/_config/ides/`
+**When** Roo Code is added
+**Then** a file `roo-code.yaml` is created:
+```yaml
+ide: roo-code
+configured_date: 2026-03-31
+last_updated: 2026-03-31
+configuration:
+  _noConfigNeeded: true
+```
+
+**Given** the BMAD manifest at `_bmad/_config/manifest.yaml`
+**When** Roo Code is added
+**Then** `roo-code` appears in the `ides` list:
+```yaml
+ides:
+  - claude-code
+  - gemini
+  - cline
+  - cursor
+  - antigravity
+  - roo-code
+```
+
+**Given** the agent customization directory `_bmad/_config/agents/`
+**When** Roo Code is added
+**Then** a file `roo-code.customize.yaml` is created with the standard customization template (persona, principles, menu overrides)
+
+**Technical notes:**
+- Follow the exact same pattern as existing IDE configs
+- The customize.yaml should have the same structure as `cline.customize.yaml`
+
+### Story 18.3: Update Installer to Handle Roo Code Rules Injection
+
+As a **Chief Architect**,
+I want the ma-agents installer to inject planning instructions into Roo Code's `.roo/rules/` directory,
+So that the MANIFEST-based skill loading instruction is automatically applied when Roo Code starts.
+
+**Acceptance Criteria:**
+
+**Given** `ma-agents install --agent roo-code` runs
+**When** skills are installed
+**Then** a file `.roo/rules/00-ma-agents.md` is created with:
+```markdown
+<!-- MA-AGENTS-START -->
+# AI Agent Skills - Planning Instruction
+
+You have access to a library of skills in your skills directory. Before starting any task:
+
+1. Read the skill manifest at .roo/skills/MANIFEST.yaml
+2. Based on the task description, select which skills are relevant
+3. Read only the selected skill files
+4. Then proceed with the task
+
+Always load skills marked with always_load: true.
+Do not load skills that are not relevant to the current task.
+<!-- MA-AGENTS-END -->
+```
+
+**Given** the file `.roo/rules/00-ma-agents.md` already exists with MA-AGENTS markers
+**When** the installer runs again
+**Then** the content between markers is updated in place (idempotent)
+
+**Given** `ma-agents uninstall --agent roo-code` runs
+**When** skills are removed
+**Then** the `00-ma-agents.md` file is removed from `.roo/rules/`
+
+**Technical notes:**
+- The `updateAgentInstructions()` function in `installer.js` already handles marker-based injection — this story extends it to support directory-based instruction files (Roo Code puts rules in a directory, not a single file)
+- The `00-` prefix ensures this loads before any user rules (alphabetical order)
+- Must handle the case where `.roo/rules/` directory doesn't exist yet (create it)
+
+### Story 18.4: Generate .roomodes with BMAD Agent Personas
+
+As a **Chief Architect**,
+I want the BMAD installer to generate a `.roomodes` file with BMAD agent personas as Roo Code custom modes,
+So that users can switch between BMAD roles (PM, Analyst, Architect, Dev, QA, SM) directly from the Roo Code mode selector.
+
+**Acceptance Criteria:**
+
+**Given** the BMAD installer runs `bmad install --ide roo`
+**When** agent artifacts are processed
+**Then** a `.roomodes` file is generated in YAML format with BMAD agents as custom modes:
+```yaml
+customModes:
+  - slug: bmad-analyst
+    name: "Analyst (Mary)"
+    description: "Strategic business analysis, market research, requirements elicitation"
+    roleDefinition: |
+      You are Mary, a Senior Business Analyst with deep expertise in market research,
+      competitive analysis, and requirements elicitation...
+    whenToUse: |
+      Use this mode when conducting market research, creating product briefs,
+      competitive analysis, or domain research.
+    customInstructions: |
+      Load and follow the BMAD agent activation protocol from
+      {project-root}/_bmad/bmm/agents/analyst.md
+    groups:
+      - read
+      - mcp
+  - slug: bmad-pm
+    name: "PM (Patricia)"
+    ...
+```
+
+**Given** BMAD agent personas include tool restrictions
+**When** the mode is generated
+**Then** each mode's `groups` field reflects appropriate tool permissions:
+- Analyst/PM/SM: `[read, mcp]` (no edit, no command)
+- Architect: `[read, edit, mcp]` (can edit architecture docs)
+- Dev: `[read, edit, command, mcp]` (full access)
+- QA: `[read, edit, command, mcp]` (full access for test writing)
+
+**Given** a `.roomodes` file already exists with user-defined modes
+**When** the installer runs
+**Then** BMAD modes (slug starting with `bmad-`) are replaced/updated
+**And** user-defined modes are preserved untouched
+
+**Technical notes:**
+- This requires a new function in the Roo Code IDE handler (or config-driven installer extension)
+- BMAD agent slugs use `bmad-` prefix for safe identification and cleanup
+- The `roleDefinition` should be extracted from the agent's `<persona>` section
+- The `customInstructions` should reference the full agent file path for runtime loading
+- Read agent data from `_bmad/bmm/agents/*.md` at install time
+- `.roomodes` supports both YAML and JSON — prefer YAML for readability
+
+### Story 18.5: Deploy BMAD Workflows as Roo Code Slash Commands
+
+As a **Chief Architect**,
+I want BMAD workflows deployed as Roo Code slash commands in `.roo/commands/`,
+So that users can trigger BMAD workflows (create-prd, sprint-planning, code-review, etc.) directly from the chat input.
+
+**Acceptance Criteria:**
+
+**Given** the BMAD installer runs for Roo Code
+**When** workflow artifacts are processed
+**Then** markdown files are created in `.roo/commands/` for each BMAD workflow:
+```markdown
+---
+description: Create a PRD from scratch through guided collaborative workflow
+mode: bmad-pm
+---
+You must fully embody the PM agent persona and follow all activation instructions.
+
+<agent-activation CRITICAL="TRUE">
+1. LOAD the FULL agent file from {project-root}/_bmad/bmm/agents/pm.md
+2. READ its entire contents
+3. FOLLOW every step in the <activation> section precisely
+4. Execute the Create PRD menu item
+</agent-activation>
+```
+
+**Given** a workflow has a natural target mode (e.g., create-prd → PM, create-architecture → Architect)
+**When** the slash command is generated
+**Then** the frontmatter `mode` field maps to the corresponding `bmad-*` custom mode (from Story 18.4)
+
+**Given** slash commands are generated
+**When** they are listed
+**Then** all BMAD workflows appear as `/bmad-*` commands in Roo Code's command palette:
+- `/bmad-create-prd`
+- `/bmad-create-architecture`
+- `/bmad-sprint-planning`
+- `/bmad-code-review`
+- `/bmad-create-story`
+- `/bmad-dev-story`
+- etc.
+
+**Given** BMAD agent launchers exist
+**When** slash commands are generated
+**Then** each BMAD agent also gets a launcher slash command:
+- `/bmad-analyst` → activates Analyst agent
+- `/bmad-pm` → activates PM agent
+- etc.
+
+**Technical notes:**
+- Slash command filenames become the command name (auto-slugified)
+- Use `bmad-` prefix for all commands for clean namespacing
+- The `mode` field triggers automatic mode switching when the command is run
+- This leverages the same agent artifact data used by other IDEs (`.claude/commands/`, `.cursor/commands/`, etc.)
+- The config-driven installer's `cleanup()` already handles `legacy_targets: [.roo/commands]` for removing old artifacts
+
+### Story 18.6: Mode-Specific Rules for BMAD Agents
+
+As a **Chief Architect**,
+I want mode-specific BMAD rules deployed to `.roo/rules-{bmad-modeSlug}/` directories,
+So that each BMAD agent mode receives its specific planning instructions and behavioral guidelines.
+
+**Acceptance Criteria:**
+
+**Given** the BMAD installer generates custom modes (Story 18.4)
+**When** mode-specific rules are deployed
+**Then** directories are created for each BMAD mode:
+```
+.roo/
+├── rules/
+│   └── 00-ma-agents.md          (from Story 18.3)
+├── rules-bmad-analyst/
+│   └── 01-analyst-instructions.md
+├── rules-bmad-pm/
+│   └── 01-pm-instructions.md
+├── rules-bmad-architect/
+│   └── 01-architect-instructions.md
+├── rules-bmad-dev/
+│   └── 01-dev-instructions.md
+├── rules-bmad-qa/
+│   └── 01-qa-instructions.md
+└── rules-bmad-sm/
+    └── 01-sm-instructions.md
+```
+
+**Given** a BMAD mode is activated in Roo Code
+**When** the mode loads
+**Then** both the general rules (`.roo/rules/`) AND the mode-specific rules (`.roo/rules-bmad-{slug}/`) are loaded into the system prompt
+
+**Given** mode-specific rules already exist
+**When** the installer re-runs
+**Then** BMAD-generated rule files are updated in place
+**And** user-added rule files in the same directory are preserved
+
+**Technical notes:**
+- Mode-specific rules complement the `customInstructions` in `.roomodes` — they provide additional context without bloating the mode definition
+- Each rule file should contain the BMAD planning instruction specific to that agent's role
+- Use `01-` prefix for BMAD rules to allow users to add `00-` or `02-` for their own rules
+- Files should be prefixed with BMAD markers for clean identification and update
+
+### Story 18.7: Cline-to-Roo Code Migration Path
+
+As a **Developer**,
+I want an automated migration from Cline to Roo Code configuration,
+So that my existing BMAD/Cline setup transfers seamlessly when I switch to Roo Code.
+
+**Acceptance Criteria:**
+
+**Given** a project has Cline configuration (`.cline/skills/`, `.clinerules/`)
+**When** the user runs `ma-agents migrate cline-to-roo`
+**Then** skills from `.cline/skills/` are copied to `.roo/skills/`
+**And** `.clinerules` content is converted to `.roo/rules/` files
+**And** MANIFEST.yaml is regenerated for `.roo/skills/`
+**And** a summary of migrated items is displayed
+
+**Given** a project has both Cline and Roo Code configurations
+**When** migration is attempted
+**Then** the CLI warns about existing Roo Code config
+**And** prompts the user to confirm overwrite or skip
+
+**Given** the migration completes
+**When** the user opens Roo Code
+**Then** all previously-installed BMAD skills are available
+**And** planning instructions are loaded from `.roo/rules/`
+
+**Technical notes:**
+- Roo Code natively supports `.clinerules` fallback, but migrating explicitly to `.roo/` is cleaner
+- Migration should update the ma-agents manifest (`.ma-agents.json`) to replace `cline` with `roo-code` in the agents list
+- The `bmad-method` installer's cleanup for Cline already removes `.clinerules/workflows` — migration should run before cleanup
+
+### Story 18.8: End-to-End Validation and Test Coverage
+
+As a **QA Engineer**,
+I want comprehensive test coverage for the Roo Code integration,
+So that all Roo Code integration points are validated and regression-protected.
+
+**Acceptance Criteria:**
+
+**Given** the Roo Code agent is registered in `agents.js`
+**When** unit tests run
+**Then** tests verify:
+- `getAgent('roo-code')` returns the correct agent object
+- `getProjectPath()` returns `.roo/skills` path
+- `getGlobalPath()` returns OS-specific paths
+- `fileExtension` is `.md`
+- `template` is `generic`
+- `instructionFiles` contains `.roo/rules/00-ma-agents.md`
+
+**Given** the installer targets Roo Code
+**When** integration tests run
+**Then** tests verify:
+- Skills are installed to `.roo/skills/{id}/SKILL.md`
+- `MANIFEST.yaml` is generated in `.roo/skills/`
+- Planning instructions are written to `.roo/rules/00-ma-agents.md`
+- Idempotent re-runs update markers without duplicating content
+- Uninstall removes skill directories and the ma-agents rule file
+
+**Given** the `.roomodes` generation runs
+**When** integration tests execute
+**Then** tests verify:
+- `.roomodes` is valid YAML
+- Each BMAD mode has required fields: `slug`, `name`, `roleDefinition`
+- BMAD mode slugs start with `bmad-`
+- User modes are preserved during regeneration
+- Tool group permissions match agent role expectations
+
+**Given** slash commands are generated
+**When** integration tests execute
+**Then** tests verify:
+- Files exist in `.roo/commands/` with correct naming
+- Each file has valid YAML frontmatter
+- The `mode` field references a valid BMAD mode slug
+- Agent activation instructions reference valid agent file paths
+
+**Technical notes:**
+- Follow the existing test patterns in the project
+- Tests should cover both install and uninstall flows
+- Mock the file system for unit tests, use temp directories for integration tests
+
+---
+
+### Epic 18 — Cross-Epic Notes
+
+**Relationship to Cline (Epic N/A):**
+Roo Code is a fork of Cline. The existing Cline support (`id: 'cline'` in agents.js) should be preserved — they are separate IDEs. Story 18.7 provides an explicit migration path.
+
+**Relationship to bmad-method upstream:**
+The `bmad-method` npm package already has `roo` in `platform-codes.yaml` and can generate skills to `.roo/skills/`. Stories 18.4-18.6 extend this with Roo-specific features (modes, rules, commands) that go beyond the standard skill format.
+
+**Development Execution Order:**
+1. Story 18.1 (agents.js) — no dependencies
+2. Story 18.2 (BMAD config) — no dependencies
+3. Story 18.3 (installer rules injection) — depends on 18.1
+4. Story 18.4 (.roomodes generation) — depends on 18.2
+5. Story 18.5 (slash commands) — depends on 18.4
+6. Story 18.6 (mode-specific rules) — depends on 18.4
+7. Story 18.7 (Cline migration) — depends on 18.1, 18.3
+8. Story 18.8 (validation/tests) — depends on all above
