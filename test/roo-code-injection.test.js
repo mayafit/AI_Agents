@@ -139,6 +139,27 @@ async function cleanup() {
     assert.ok(content.includes('Always use TypeScript'), 'should preserve user content');
   });
 
+  await asyncTest('file can be cleanly removed (uninstall scenario)', async () => {
+    const projectRoot = path.join(tmpDir, 'project-uninstall');
+    await fs.ensureDir(projectRoot);
+
+    const agent = {
+      ...rooCode,
+      getProjectPath: () => path.join(projectRoot, '.roo', 'skills'),
+      instructionFiles: ['.roo/rules/00-ma-agents.md'],
+      injectionStrategy: { position: 'top', skipPatterns: ['---'] }
+    };
+
+    // Install first
+    await updateAgentInstructions(agent, projectRoot);
+    const filePath = path.join(projectRoot, '.roo', 'rules', '00-ma-agents.md');
+    assert.ok(await fs.pathExists(filePath), 'file should exist after install');
+
+    // Simulate uninstall by removing the file
+    await fs.remove(filePath);
+    assert.ok(!(await fs.pathExists(filePath)), 'file should be removed after uninstall');
+  });
+
   await cleanup();
 
   // Print summary

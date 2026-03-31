@@ -91,6 +91,11 @@ test('description is a non-empty string', () => {
   assert.ok(rooCode.description.length > 0, 'description should not be empty');
 });
 
+test('description mentions Cline fork lineage', () => {
+  assert.ok(rooCode.description.includes('Cline'),
+    `description should mention Cline fork lineage, got: ${rooCode.description}`);
+});
+
 test('template is "generic"', () => {
   assert.strictEqual(rooCode.template, 'generic');
 });

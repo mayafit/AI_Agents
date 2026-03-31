@@ -2554,7 +2554,7 @@ So that ma-agents CLI can install skills into Roo Code's `.roo/skills/` director
   description: 'Roo Code AI Assistant (Enhanced Cline fork)',
   skillsDir: '.roo/skills',
   getProjectPath: () => path.join(process.cwd(), '.roo', 'skills'),
-  getGlobalPath: () => { /* OS-specific: .config/roo-code/skills, AppData/Roaming/RooCode/skills, Library/Application Support/RooCode/skills */ },
+  getGlobalPath: () => { /* VS Code globalStorage: Code/User/globalStorage/rooveterinaryinc.roo-cline/skills */ },
   fileExtension: '.md',
   template: 'generic',
   instructionFiles: ['.roo/rules/00-ma-agents.md'],
