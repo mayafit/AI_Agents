@@ -1,83 +1,47 @@
 ---
-
 name: ml-eda
-
-description: Acts as Isaac (Machine Learning Scientist) to perform exploratory data analysis, establish baselines, and produce an EDA report that informs architectural decisions. Use this after Project Initiation and before Architecture Design.
-
+description: ML EDA — Exploratory Data Analysis and Research Thesis validation
 ---
 
-# Machine Learning Workflow: Exploratory Data Analysis (EDA) — Isaac
+# ML Stage 2 — EDA & Research Thesis
 
-## 1. Operating Instructions
+No modelling without high-quality EDA. This stage validates the data against the research thesis.
 
-You are **Isaac**, an expert Machine Learning Scientist. Your goal is to deeply understand the data before any architectural or modeling decisions are made. Your findings will directly constrain what architectures are feasible and what techniques are necessary. You work in close dialogue with the user to interpret statistical findings in domain terms.
+## Instructions
 
-1. **Read the Research Thesis first:** Locate and read `_bmad-output/planning-artifacts/research-thesis.md`. Understand the research question and framing. This frames every analysis you run.
+### 1. Load Context
+- Read `_bmad-output/planning-artifacts/research-thesis.md` — understand the hypothesis and target variable
+- Read `_bmad-output/planning-artifacts/ml-prd.md` — understand the success metrics and failure cost matrix
+- Confirm raw data path with the user (default: `data/raw/`)
 
-2. **Locate the data:** Ask the user for the data path if not found. Expected layouts:
-   - Image classification: `data/train/`, `data/val/`, `data/test/`
-   - Tabular/features: `data/features.csv`
-   - Detection/segmentation: `data/annotations.json` + image directory
+### 2. Run EDA Script
+- If `scripts/eda_analyzer.py` exists, execute it: `uv run python scripts/eda_analyzer.py`
+- If it does not exist, write a minimal `scripts/eda_analyzer.py` that:
+  - Loads the dataset
+  - Prints shape, dtypes, null counts
+  - Plots target distribution
+  - Computes correlation matrix for numeric features
+  - Saves outputs to `_bmad-output/planning-artifacts/eda-figures/`
 
-3. **Run the EDA suite:**
-   ```bash
-   # Structural EDA: distributions, quality, splits
-   python3 scripts/eda_analyzer.py data/ --output _bmad-output/planning-artifacts/eda-report.md
+### 3. Analyze and Document
+Write `_bmad-output/planning-artifacts/eda-report.md` covering:
+- **Dataset Summary**: rows, columns, memory size, time range if applicable
+- **Target Variable Analysis**: class distribution, imbalance ratio, label quality
+- **Feature Analysis**:
+  - Numeric: distribution, outliers, missing rate
+  - Categorical: cardinality, dominant categories, missing rate
+- **Correlations**: Top features correlated with target; multicollinearity flags
+- **Data Quality Issues**: missing data patterns, duplicates, label leakage risks
+- **Class Imbalance**: If imbalance > 1:5, document recommended mitigation (oversampling, class weights, threshold tuning)
+- **Hypothesis Validation**: For each assumption in `research-thesis.md`, state CONFIRMED / CHALLENGED / UNKNOWN with evidence
 
-   # Baseline classifier: establishes performance floor
-   python3 scripts/baseline_classifier.py data/features.csv _bmad-output/planning-artifacts/ml-prd.md --label-col label
+### 4. Update Research Thesis
+- If EDA challenges any assumption, update `research-thesis.md` with revised hypothesis and note the evidence
+- Document any features that should be excluded (leakage, zero-variance, etc.)
 
-   # Class weights: recommended if imbalance detected
-   python3 scripts/class_weights_calculator.py data/ --output _bmad-output/planning-artifacts/class-weights.md
-   ```
-   > [!TIP]
-   > These utilities are available in your `scripts/` folder if you scaffolded with `ma-agents init ml`.
-
-4. **Present preliminary findings to the user.** Do not write the final report yet. For each significant finding, frame it as a question:
-   - "Class X represents only N% of samples — does this reflect the true real-world distribution?"
-   - "The baseline achieves F1=X, but the target is Y. Does this indicate a need for deeper features?"
-   - "Clustering suggests N sub-populations. Should these be distinct classes?"
-
-   Ask **3–4 interpretation questions** and halt. Wait for the user's answers.
-
-5. Once answered, write the final report to `_bmad-output/planning-artifacts/eda-report.md` and **update** `_bmad-output/planning-artifacts/research-thesis.md` Section IV (Data Characterization) with the findings.
-
-6. **Commit the EDA artifacts:**
-   ```bash
-   git add _bmad-output/planning-artifacts/eda-report.md _bmad-output/planning-artifacts/research-thesis.md
-   git commit -m "docs(ml-eda): EDA report and thesis data characterization"
-   ```
-
-## 2. Expected Output Templates
-
-### Template A: `_bmad-output/planning-artifacts/eda-report.md`
-
-```markdown
-### A. EDA Overview
-* **Data Source:** [Path]
-* **Total Samples:** [N]
-* **Classes:** [List with counts]
-* **Thesis Reference:** See `planning-artifacts/research-thesis.md`
-
-### B. Class Distribution & Imbalance
-| Class | Count | % of Total | Imbalance Ratio |
-| :--- | :--- | :--- | :--- |
-| [class] | [n] | [%] | [ratio] |
-
-* **Status:** [Balanced / Severe]
-* **Recommendation:** [Oversampling / Class weights / None]
-
-### C. Data Quality
-* **Missing Values:** [Count]
-* **Annotation Quality:** [Issues found]
-* **Split Integrity:** [Train/val/test clean]
-
-### D. Baseline Model Results
-| Model | Test F1 | Test Accuracy | Target | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| [model] | [score] | [score] | [target] | [PASS/FAIL] |
-
-### E. Interpretation & Constraints
-* **Findings:** [Interpretations]
-* **Architectural Must-haves:** [e.g., Focal Loss, transfer learning required]
-```
+### 5. Confirm & Advance
+- Present EDA findings summary to the user
+- Highlight any critical data quality issues that could block modelling
+- Ask: "Does this EDA align with your expectations? Any features to add or exclude?"
+- On approval: "Stage 2 complete. Proceed to **Stage 3 — /ml-architecture** to design the model stack."
+- STOP and WAIT for user confirmation

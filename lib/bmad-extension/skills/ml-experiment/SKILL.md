@@ -1,67 +1,65 @@
 ---
-
 name: ml-experiment
-
-description: Acts as Isaac (Machine Learning Scientist / AI Developer) to execute training runs against a locked TECHSPEC and log metrics to W&B/MLflow/ClearML.
-
+description: ML Experiment - Execute training, hyperparameter optimization, and log all runs to the tracking tool
 ---
 
-# Machine Learning Workflow: Experiment Execution — Isaac
+# ML Stage 6 - Experiment Execution
 
-## 1. Operating Instructions
+Execute the training pipeline as specified in the locked TechSpec. Log everything. Touch nothing outside the HPO space.
 
-You are **Isaac**, an expert Machine Learning Scientist. Your job is to execute the training experiment defined in the TECHSPEC, log everything to the experiment tracker, and capture the run URL for downstream analysis.
+## Instructions
 
-**Prerequisite:** `_bmad-output/implementation-artifacts/ml-infra-log.md` must show smoke test PASS.
+### 1. Load Context
+- Read `_bmad-output/planning-artifacts/ml-techspec.md` — MUST be LOCKED. If not, STOP.
+- Read `_bmad-output/planning-artifacts/ml-architecture.md`
+- Note the fixed random seed, feature set, and validation strategy — do not deviate
 
-1. **Run the advisor first:** `/ml-advise` — surface validated parameters and failure warnings.
+### 2. Write Training Script
+If `scripts/train.py` does not exist, generate it following the TechSpec exactly:
+- Load data from TechSpec data contract paths
+- Apply preprocessing pipeline (from ml-architecture)
+- Create train/val split using TechSpec validation strategy and fixed seed
+- Instantiate tracking run (wandb.init / mlflow.start_run / local log)
+- Log all TechSpec fixed params as run config
+- Run baseline model first — log its metrics
+- Run candidate model with fixed hyperparameters — log metrics
+- If HPO is specified: run HPO trials, log each trial
+- Select best model; log final metrics against ALL TechSpec acceptance criteria
+- Save model artifact to `_bmad-output/implementation-artifacts/models/`
+- Log pass/fail for each acceptance criterion explicitly
 
-2. **Read the TECHSPEC:** Locate `_bmad-output/planning-artifacts/techspecs/ml-techspec-exp-[id].md`.
-   - What is the exact parameter search space?
-   - What is the compute budget?
-   - Is this a **baseline run** or a **tuned run**?
+Use `assets/` templates if they exist (e.g. `assets/train_template.py`).
 
-3. **Configure the experiment run** using the project's tracking tool (W&B/MLflow/ClearML).
-   - Ensure the run name includes the experiment ID.
-   - Tag the run with the hypothesis ID from the research thesis.
+### 3. Execute Baseline
+Run baseline first — always:
 
-4. **Execute training.** Log each run's metric + tracking URL to the Experiment Log.
-   - Use `uv run python src/train.py --config configs/exp-001.yaml` (or equivalent).
-   - > [!TIP]
-     > Use the templates in `assets/` (e.g., `template_lightning_module.py`) to quickly scaffold your training code.
+    uv run python scripts/train.py --mode baseline
 
-5. **Stay within the compute budget.** If the budget is exhausted, stop.
+Log baseline metrics. The candidate model must beat this.
 
-6. Present a summary of completed runs with links to the tracking tool before writing the log. Halt and wait for user review.
+### 4. Execute Candidate Model
 
-7. Append results to `_bmad-output/implementation-artifacts/ml-experiments-log.md`.
-   Next stage: `/ml-analysis`.
+    uv run python scripts/train.py --mode candidate
 
-8. **Run `/ml-retrospective`** at the end of the session.
+### 5. Execute HPO (if specified in TechSpec)
+Run hyperparameter optimization within the HPO space defined in TechSpec:
 
-## 2. Expected Output Template
+    uv run python scripts/train.py --mode hpo
 
-### Template A: `_bmad-output/implementation-artifacts/ml-experiments-log.md`
+Log all trials. Select best params by primary metric on validation set only.
 
-```markdown
-### Experiment: EXP-[ID]
-* **Run Type:** [Baseline / Tuned]
-* **TechSpec:** `planning-artifacts/techspecs/ml-techspec-exp-[id].md`
-* **Tracking Tool:** [W&B / MLflow / ClearML]
-* **Project URL:** [link]
+### 6. Write Experiment Log
+Write `_bmad-output/implementation-artifacts/experiment-log.md` with:
+- **Run IDs**: Tracking tool run IDs or local log paths
+- **Baseline Results**: metrics for each acceptance criterion
+- **Best Model Results**: metrics for each acceptance criterion
+- **Best Hyperparameters**: final selected values
+- **Acceptance Criteria Status**: PASS / FAIL for each criterion from TechSpec
+- **Training Time**: wall-clock time
+- **Model Artifact Path**: path to saved model
 
-### Run Summary
-| Run Name | Key Params | val/loss | val/f1 | Status | Run URL |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| EXP-001_run_a | lr=1e-4 | 0.23 | 0.87 | DONE | [link] |
-
-* **Best Run:** [run name + URL]
-* **Budget Used:** [X / Y GPU-hours]
-
-### Failed Attempts ❌
-| Run / Config | Symptom | Root Cause | Lesson |
-| :--- | :--- | :--- | :--- |
-| lr=1e-3 | Loss diverged | LR too high | Use LR ≤ 3e-4 |
-
-* **Status:** [Complete — ready for analysis]
-```
+### 7. Confirm and Advance
+- Present experiment log summary
+- State clearly: "Primary criterion ([metric] >= [threshold]): PASS / FAIL"
+- "Proceed to **Stage 7 — /ml-analysis** to evaluate results against the TechSpec contract."
+- STOP and WAIT for user confirmation

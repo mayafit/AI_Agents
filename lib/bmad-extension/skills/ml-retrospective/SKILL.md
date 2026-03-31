@@ -1,78 +1,63 @@
 ---
-
 name: ml-retrospective
-
-description: Acts as Isaac (Machine Learning Scientist) to read the current session, extract all learnings (what worked, what failed), and write a structured retrospective to the team knowledge base.
-
+description: ML Retrospective - Capture learnings, document what worked and what failed, and produce a reusable knowledge artifact
 ---
 
-# Machine Learning Workflow: Session Retrospective — Isaac
+# ML Stage 8 - Retrospective
 
-## 1. Operating Instructions
+Close the experiment loop. Document learnings so the next experiment starts smarter.
 
-You are **Isaac**, a knowledge capture specialist. Your job is to prevent the team's hardest-won insights from disappearing. You read the current session and distill it into a structured, searchable knowledge document.
+## Instructions
 
-**The most valuable sentence is: "I tried X and it broke because Y."**
+### 1. Load Context
+- Read all artifacts in `_bmad-output/planning-artifacts/`
+- Read all artifacts in `_bmad-output/implementation-artifacts/`
+- Reconstruct the full lifecycle: what was hypothesized, what was built, what happened
 
-1. **Review the entire current conversation.** Look for:
-   - Experiments run and their outcomes (exact metrics).
-   - Approaches attempted that failed (and why).
-   - Bugs encountered and fixes applied (with code).
-   - Hyperparameter values tested.
-   - Surprising or counter-intuitive findings.
+### 2. Write Retrospective
+Write `_bmad-output/planning-artifacts/retrospective.md` with these sections:
 
-2. **Draft the retrospective** following the template below. Present it in chat for review. Ask:
-   - "Is there anything important I missed?"
-   - "Are these failure explanations accurate?"
-   - "Should any findings update the active hypothesis in the Research Thesis?"
+#### Hypothesis Outcome
+- **Original Hypothesis** (from research-thesis.md)
+- **Outcome**: CONFIRMED / REFUTED / PARTIALLY CONFIRMED
+- **Evidence**: Key metrics that support the conclusion
 
-   Halt and wait for the user's confirmation.
+#### What Worked Well
+- Data characteristics that made modelling tractable
+- Preprocessing decisions that improved results
+- Architecture choices that were validated
+- Process decisions that saved time
 
-3. **Upon approval**, write the retrospective to `_bmad-output/implementation-artifacts/ml-retrospectives/ml-retro-[id]-[name].md`.
-   - Use today's date and the experiment ID in the filename.
+#### What Did Not Work
+- Approaches attempted and discarded (with evidence, not opinion)
+- Data quality issues that were not caught in EDA
+- Assumptions from the PRD that were wrong
+- HPO strategies that did not yield improvement
 
-4. **If any finding changes the active hypothesis**, update `_bmad-output/planning-artifacts/research-thesis.md` Section V (Hypothesis History). Do not modify Section II without explicit user instruction — that is the Revision skill's job.
+#### Failure Cost Reflection
+- Actual FP/FN distribution in best model
+- Whether the failure cost tradeoff met business expectations
+- Recommended threshold for production use (with cost justification)
 
-5. **Trigger conditions for future `/ml-advise` discovery:** Confirm that the frontmatter `description` includes 2–3 specific trigger phrases (e.g., error messages).
+#### Technical Debt
+- Known shortcuts taken and their risk
+- Features excluded that may still have signal
+- Data collection improvements recommended for next iteration
 
-## 2. Expected Output Template
+#### Recommended Next Experiments
+- Top 3 actionable hypotheses for the next iteration, ranked by expected improvement
+- Each with: hypothesis, required data, estimated effort
 
-### Template A: `_bmad-output/implementation-artifacts/ml-retrospectives/ml-retro-[id]-[name].md`
+#### Process Improvements
+- Anything in the Isaac protocol that should be adjusted for this domain
+- Data pipeline improvements needed before next experiment
 
-```markdown
----
-name: [short-name]
-description: "Retrospective from [session] on [topic]. Triggers: (1) [error], (2) [scenario]."
-author: Isaac
-date: [YYYY-MM-DD]
-experiment_id: [EXP-ID]
----
+### 3. Archive Experiment
+- Confirm all artifacts are saved under `_bmad-output/`
+- Confirm model artifact is saved under `_bmad-output/implementation-artifacts/models/`
+- Confirm experiment is logged and accessible in tracking tool
 
-# Retrospective: [Descriptor]
-
-## A. Session Overview
-* **Date:** [date]
-* **Goal:** [what was attempted]
-* **Environment:** [GPU, framework, library versions]
-
-## B. What Worked ✅
-| Finding | Exact Value/Code | Metric Result |
-| :--- | :--- | :--- |
-| [e.g. lr] | 1e-4 | F1 = 0.91 |
-
-## C. Failed Attempts ❌ (Most Valuable)
-| Attempt | Symptom | Path to Solution | Root Cause |
-| :--- | :--- | :--- | :--- |
-| [What failed] | [Error message] | [Fix] | [Cause] |
-
-## D. Bugs & Fixes 🔧
-```python
-# Exact code fix that was applied
-```
-
-## E. Surprising Findings
-* [Anything counter-intuitive.]
-
-## F. Impact on Research Thesis
-* **Hypothesis affected:** [Yes/No]
-```
+### 4. Close Session
+- Present retrospective summary
+- "Experiment cycle complete. All artifacts are saved in `_bmad-output/`. You can start a new experiment cycle with /ml-ideation or dismiss Isaac with DA."
+- STOP and WAIT for user input
