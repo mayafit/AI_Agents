@@ -27,7 +27,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "bmad-method": "6.2.1",
+    "bmad-method": "6.2.2",
     "prompts": "^2.4.2",
     "chalk": "^4.1.2",
     "fs-extra": "^11.1.1"

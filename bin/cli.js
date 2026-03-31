@@ -13,6 +13,46 @@ const PKG = require('../package.json');
 const NAME = PKG.name;
 const VERSION = PKG.version;
 
+/**
+ * Set up logging to tee all stdout/stderr output to a file.
+ * Returns a cleanup function to close the file descriptor.
+ *
+ * @param {string} logFilePath - Path to the log file
+ * @returns {Function} cleanup function
+ */
+function setupLogging(logFilePath) {
+  const logFd = fs.openSync(logFilePath, 'w');
+  const header = `[${new Date().toISOString()}] ${NAME} v${VERSION} — log started\n`;
+  fs.writeSync(logFd, header);
+
+  const origStdoutWrite = process.stdout.write.bind(process.stdout);
+  const origStderrWrite = process.stderr.write.bind(process.stderr);
+
+  process.stdout.write = function (chunk, encoding, callback) {
+    const str = typeof chunk === 'string' ? chunk : chunk.toString();
+    try { fs.writeSync(logFd, str); } catch { /* ignore write errors */ }
+    return origStdoutWrite(chunk, encoding, callback);
+  };
+
+  process.stderr.write = function (chunk, encoding, callback) {
+    const str = typeof chunk === 'string' ? chunk : chunk.toString();
+    try { fs.writeSync(logFd, str); } catch { /* ignore write errors */ }
+    return origStderrWrite(chunk, encoding, callback);
+  };
+
+  // Store log fd globally so bmad.js can use pipe mode
+  process.env.MA_AGENTS_LOG_ACTIVE = '1';
+
+  return function cleanup() {
+    process.stdout.write = origStdoutWrite;
+    process.stderr.write = origStderrWrite;
+    const footer = `\n[${new Date().toISOString()}] log ended\n`;
+    try { fs.writeSync(logFd, footer); } catch { /* ignore */ }
+    try { fs.closeSync(logFd); } catch { /* ignore */ }
+    delete process.env.MA_AGENTS_LOG_ACTIVE;
+  };
+}
+
 function showHelp() {
   console.log(`
 ${chalk.bold.cyan(NAME)} ${chalk.gray(`v${VERSION}`)}
@@ -40,6 +80,7 @@ ${chalk.bold('Install options:')}
   ${chalk.cyan('--force')}           Skip upgrade prompts, always overwrite
   ${chalk.cyan('--yes')}             Skip all prompts, use defaults (for CI/CD)
   ${chalk.cyan('--agent <name>')}    Target a specific agent (skip agent selection)
+  ${chalk.cyan('--log')}              Log all console output to install_<datetime>.log
 
 ${chalk.bold('Examples:')}
   npx ${NAME} install
@@ -1164,6 +1205,18 @@ async function interactiveMode() {
 
 async function main() {
   const args = process.argv.slice(2);
+
+  // Handle --log flag globally (before command routing)
+  let cleanupLog = null;
+  const logIdx = args.indexOf('--log');
+  if (logIdx !== -1) {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').replace('Z', '');
+    const logFile = `install_${ts}.log`;
+    cleanupLog = setupLogging(logFile);
+    console.log(chalk.gray(`  Logging to ${logFile}`));
+    args.splice(logIdx, 1);
+  }
+
   const command = args[0];
 
   switch (command) {
@@ -1223,6 +1276,8 @@ async function main() {
       await interactiveMode();
       break;
   }
+
+  if (cleanupLog) cleanupLog();
 }
 
 if (require.main === module) {
