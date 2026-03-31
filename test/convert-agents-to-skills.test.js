@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Tests for Story 15-3: Convert 4 Custom Agents to BMAD 6.2.0 Skill Folders
+ * Tests for Story 15-3: Convert 5 Custom Agents to BMAD 6.2.0 Skill Folders
  *
  * Verifies:
  * - Each agent has SKILL.md and bmad-skill-manifest.yaml
@@ -74,6 +74,16 @@ const AGENTS = [
     oldPaths: ['bmm/workflows/mil498/', '_bmad/bmm/workflows/mil498/'],
     chatTopic: 'MIL-STD-498',
     menuItemCount: 10 // MH, CH, GS, GD, GP, GO, SS, GT, SD, DA
+  },
+  {
+    folder: 'bmad-ma-agent-ml',
+    name: 'bmad-ma-agent-ml',
+    displayName: 'Demerzel',
+    title: 'ML Scientist',
+    skillNames: ['ml-ideation', 'ml-eda', 'ml-architecture', 'ml-detailed-design', 'ml-techspec', 'ml-infra', 'ml-experiment', 'ml-analysis', 'ml-hparam', 'ml-revision', 'ml-advise', 'ml-retrospective'],
+    oldPaths: ['bmm/workflows/ml/', '_bmad/bmm/workflows/ml/'],
+    chatTopic: 'Machine Learning',
+    menuItemCount: 15 // MH, CH, MLI, MLE, MLA, MLD, MLS, MLNF, MLX, MLAN, MLH, MLR, MLAD, MLRT, DA
   }
 ];
 

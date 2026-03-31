@@ -120,9 +120,10 @@ The file is version-controlled as part of `_bmad-output/` project knowledge. Com
 | DevOps Agent (Amit) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/devops.md` |
 | Cyber Analyst (Yael) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/cyber.md` |
 | Joseph (MIL-STD-498) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/mil498.md` |
+| Demerzel (ML Scientist) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/demerzel.md` |
 | Antigravity | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/antigravity.md` |
 
-## Available Skills (34)
+## Available Skills (46)
 
 | Skill ID | Domain | Description |
 | :--- | :--- | :--- |
@@ -159,6 +160,19 @@ The file is version-controlled as part of `_bmad-output/` project knowledge. Com
 | `self-signed-cert` | Security | Automated Root CA and self-signed certificate generation |
 | `docker-image-signing` | Security | Automated cryptographic signing for Docker images |
 | `docker-hardening-verification` | Security | Audits images for least-privilege and OpenShift compatibility |
+| **Machine Learning** | | |
+| `ml-ideation` | Research | Frame ML research problem, define requirements, produce Research Thesis and PRD |
+| `ml-eda` | Data Science | Exploratory Data Analysis, establish baselines, produce EDA report |
+| `ml-architecture` | Design | Model architecture, stack, and experiment tracking strategy |
+| `ml-detailed-design` | Tech Lead | Implementation task breakdown (INF-* and EXP-* namespaces) |
+| `ml-techspec` | Contract | Lock experiment parameters and performance tiers before training |
+| `ml-infra` | MLOps | Build ML infrastructure, manage dependencies, run smoke tests |
+| `ml-experiment` | Developer | Execute training experiments against locked TechSpec, log metrics |
+| `ml-analysis` | Evaluation | Evaluate experiment outcomes against TechSpec success tiers |
+| `ml-hparam` | Tuning | Automated hyperparameter optimization (Optuna, W&B Sweeps, Ray Tune) |
+| `ml-revision` | Iterative | Amend hypothesis and requirements based on experiment findings |
+| `ml-advise` | Advisory | Search past experiments, surface findings and failure warnings |
+| `ml-retrospective` | Meta | Capture session learnings and update project context |
 | **Sprint Management** | | |
 | `add-sprint` | Agile | Create sprint entities with capacity, ISO dates, and structured YAML schema |
 | `generate-backlog` | Agile | Generate or refresh a flat prioritized backlog from epics and bug stories |
@@ -246,6 +260,10 @@ npx ma-agents install --yes    # fully offline BMAD install — no network neede
    - **Focus**: Technical standards compliance and military document generation.
    - **Capabilities**: Document Data Descriptions (DIDs), requirements traceability, and complex specification writing.
    - **Workflows**: SRS, SSS, and SSDD generation with strict structural validation.
+5. **Demerzel (ML Scientist)**:
+   - **Focus**: Hypothesis-driven machine learning lifecycle with scientific rigor.
+   - **Capabilities**: EDA, architecture design, locked TechSpec contracts, experiment execution, failure-cost analysis.
+   - **Workflows**: 12-stage ML lifecycle from ideation through retrospective, with mandatory review gates.
 
 #### Operational Workflows
 The integration includes a suite of specialized playbooks:
