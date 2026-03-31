@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Tests for Story 15.1: Bump bmad-method to 6.2.1 and Update Cache
+ * Tests for Story 15.1: Bump bmad-method to 6.2.2 and Update Cache
  *
  * Task 1: Verify package.json dependency updated
  * Task 2: Verify build:bmad-cache compatibility
@@ -31,22 +31,22 @@ function test(name, fn) {
 
 const projectRoot = path.resolve(__dirname, '..');
 
-console.log('\nStory 15.1: Bump bmad-method to 6.2.1 and Update Cache\n');
+console.log('\nStory 15.1: Bump bmad-method to 6.2.2 and Update Cache\n');
 
 // ---- Task 1: package.json dependency ----
 
 console.log('Task 1: package.json dependency');
 
-test('package.json pins bmad-method at 6.2.1', () => {
+test('package.json pins bmad-method at 6.2.2', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
-  assert.strictEqual(pkg.dependencies['bmad-method'], '6.2.1');
+  assert.strictEqual(pkg.dependencies['bmad-method'], '6.2.2');
 });
 
-test('installed bmad-method is version 6.2.1', () => {
+test('installed bmad-method is version 6.2.2', () => {
   const bmadPkg = JSON.parse(
     fs.readFileSync(path.join(projectRoot, 'node_modules', 'bmad-method', 'package.json'), 'utf8')
   );
-  assert.strictEqual(bmadPkg.version, '6.2.1');
+  assert.strictEqual(bmadPkg.version, '6.2.2');
 });
 
 test('require.resolve finds bmad-npx-wrapper.js', () => {
@@ -59,13 +59,13 @@ test('require.resolve finds bmad-npx-wrapper.js', () => {
 
 console.log('\nTask 2: build:bmad-cache compatibility');
 
-test('external-official-modules.yaml exists in 6.2.1', () => {
+test('external-official-modules.yaml exists in 6.2.2', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const yamlPath = path.join(bmadDir, 'tools', 'cli', 'external-official-modules.yaml');
   assert.ok(fs.existsSync(yamlPath), `YAML not found at ${yamlPath}`);
 });
 
-test('YAML parser extracts 5 modules from 6.2.1', () => {
+test('YAML parser extracts 5 modules from 6.2.2', () => {
   // Import the parser from build-bmad-cache.js by reading and evaluating it
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const yamlPath = path.join(bmadDir, 'tools', 'cli', 'external-official-modules.yaml');
@@ -133,10 +133,10 @@ test('cache-manifest.json exists and lists 5 modules', () => {
   assert.deepStrictEqual(moduleCodes.sort(), ['bmb', 'cis', 'gds', 'tea', 'wds']);
 });
 
-test('cache-manifest.json records bmadMethodVersion as 6.2.1', () => {
+test('cache-manifest.json records bmadMethodVersion as 6.2.2', () => {
   const manifestPath = path.join(projectRoot, 'lib', 'bmad-cache', 'cache-manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  assert.strictEqual(manifest.bmadMethodVersion, '6.2.1');
+  assert.strictEqual(manifest.bmadMethodVersion, '6.2.2');
 });
 
 test('each cached module has a commit SHA in manifest', () => {
@@ -171,7 +171,7 @@ console.log('\nTask 3: bmad.js CLI compatibility');
 
 const bmad = require('../lib/bmad');
 
-test('getBmadCommand resolves bmad-npx-wrapper.js from 6.2.1', () => {
+test('getBmadCommand resolves bmad-npx-wrapper.js from 6.2.2', () => {
   const result = bmad.buildBmadArgs({
     projectRoot: '/test',
     modules: ['bmm'],
@@ -192,82 +192,82 @@ test('buildBmadArgs generates valid --action update flag', () => {
   assert.ok(result.includes('--action update'), `Expected --action update in: ${result}`);
 });
 
-test('6.2.1 CLI accepts --directory flag', () => {
+test('6.2.2 CLI accepts --directory flag', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const installCmd = path.join(bmadDir, 'tools', 'cli', 'commands', 'install.js');
   const content = fs.readFileSync(installCmd, 'utf8');
-  assert.ok(content.includes('--directory'), '6.2.1 install.js missing --directory flag');
+  assert.ok(content.includes('--directory'), '6.2.2 install.js missing --directory flag');
 });
 
-test('6.2.1 CLI accepts --modules flag', () => {
+test('6.2.2 CLI accepts --modules flag', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const installCmd = path.join(bmadDir, 'tools', 'cli', 'commands', 'install.js');
   const content = fs.readFileSync(installCmd, 'utf8');
-  assert.ok(content.includes('--modules'), '6.2.1 install.js missing --modules flag');
+  assert.ok(content.includes('--modules'), '6.2.2 install.js missing --modules flag');
 });
 
-test('6.2.1 CLI accepts --tools flag', () => {
+test('6.2.2 CLI accepts --tools flag', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const installCmd = path.join(bmadDir, 'tools', 'cli', 'commands', 'install.js');
   const content = fs.readFileSync(installCmd, 'utf8');
-  assert.ok(content.includes('--tools'), '6.2.1 install.js missing --tools flag');
+  assert.ok(content.includes('--tools'), '6.2.2 install.js missing --tools flag');
 });
 
-test('6.2.1 CLI accepts --custom-content flag', () => {
+test('6.2.2 CLI accepts --custom-content flag', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const installCmd = path.join(bmadDir, 'tools', 'cli', 'commands', 'install.js');
   const content = fs.readFileSync(installCmd, 'utf8');
-  assert.ok(content.includes('--custom-content'), '6.2.1 install.js missing --custom-content flag');
+  assert.ok(content.includes('--custom-content'), '6.2.2 install.js missing --custom-content flag');
 });
 
-test('6.2.1 CLI accepts --action flag', () => {
+test('6.2.2 CLI accepts --action flag', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const installCmd = path.join(bmadDir, 'tools', 'cli', 'commands', 'install.js');
   const content = fs.readFileSync(installCmd, 'utf8');
-  assert.ok(content.includes('--action'), '6.2.1 install.js missing --action flag');
+  assert.ok(content.includes('--action'), '6.2.2 install.js missing --action flag');
 });
 
-test('6.2.1 CLI accepts --yes flag', () => {
+test('6.2.2 CLI accepts --yes flag', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const installCmd = path.join(bmadDir, 'tools', 'cli', 'commands', 'install.js');
   const content = fs.readFileSync(installCmd, 'utf8');
-  assert.ok(content.includes('--yes'), '6.2.1 install.js missing --yes flag');
+  assert.ok(content.includes('--yes'), '6.2.2 install.js missing --yes flag');
 });
 
-test('6.2.1 CLI accepts --user-name flag', () => {
+test('6.2.2 CLI accepts --user-name flag', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const installCmd = path.join(bmadDir, 'tools', 'cli', 'commands', 'install.js');
   const content = fs.readFileSync(installCmd, 'utf8');
-  assert.ok(content.includes('--user-name'), '6.2.1 install.js missing --user-name flag');
+  assert.ok(content.includes('--user-name'), '6.2.2 install.js missing --user-name flag');
 });
 
-test('6.2.1 CLI accepts --communication-language flag', () => {
+test('6.2.2 CLI accepts --communication-language flag', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const installCmd = path.join(bmadDir, 'tools', 'cli', 'commands', 'install.js');
   const content = fs.readFileSync(installCmd, 'utf8');
-  assert.ok(content.includes('--communication-language'), '6.2.1 install.js missing --communication-language flag');
+  assert.ok(content.includes('--communication-language'), '6.2.2 install.js missing --communication-language flag');
 });
 
-test('6.2.1 CLI accepts --document-output-language flag', () => {
+test('6.2.2 CLI accepts --document-output-language flag', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const installCmd = path.join(bmadDir, 'tools', 'cli', 'commands', 'install.js');
   const content = fs.readFileSync(installCmd, 'utf8');
-  assert.ok(content.includes('--document-output-language'), '6.2.1 install.js missing --document-output-language flag');
+  assert.ok(content.includes('--document-output-language'), '6.2.2 install.js missing --document-output-language flag');
 });
 
-test('6.2.1 CLI accepts --output-folder flag', () => {
+test('6.2.2 CLI accepts --output-folder flag', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const installCmd = path.join(bmadDir, 'tools', 'cli', 'commands', 'install.js');
   const content = fs.readFileSync(installCmd, 'utf8');
-  assert.ok(content.includes('--output-folder'), '6.2.1 install.js missing --output-folder flag');
+  assert.ok(content.includes('--output-folder'), '6.2.2 install.js missing --output-folder flag');
 });
 
-test('module.yaml custom-content format is accepted by 6.2.1', () => {
+test('module.yaml custom-content format is accepted by 6.2.2', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const handlerPath = path.join(bmadDir, 'tools', 'cli', 'installers', 'lib', 'custom', 'handler.js');
   const content = fs.readFileSync(handlerPath, 'utf8');
-  // 6.2.1 still looks for module.yaml files
-  assert.ok(content.includes('module.yaml'), '6.2.1 handler.js no longer references module.yaml');
+  // 6.2.2 still looks for module.yaml files
+  assert.ok(content.includes('module.yaml'), '6.2.2 handler.js no longer references module.yaml');
 });
 
 // ---- Task 4: prePopulateBmadCache compatibility ----

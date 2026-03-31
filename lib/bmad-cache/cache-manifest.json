@@ -1,6 +1,6 @@
 {
   "generated": "2026-03-28T12:59:06.172Z",
-  "bmadMethodVersion": "6.2.1",
+  "bmadMethodVersion": "6.2.2",
   "modules": {
     "bmb": {
       "url": "https://github.com/bmad-code-org/bmad-builder",

@@ -218,7 +218,7 @@ test('buildBmadArgs quotes path with spaces in --directory', () => {
   assert.ok(result.includes('--directory "D:\\My Projects\\test project"'), `Expected quoted path in: ${result}`);
 });
 
-test('buildBmadArgs includes --custom-content when extension exists', () => {
+test('buildBmadArgs includes --custom-content on fresh install when extension exists', () => {
   const fs = require('fs');
   const extensionPath = path.join(__dirname, '..', 'lib', 'bmad-extension');
   // This test requires lib/bmad-extension/ to exist (it does in this repo)
@@ -232,6 +232,16 @@ test('buildBmadArgs includes --custom-content when extension exists', () => {
   });
   assert.ok(result.includes('--custom-content'), `Expected --custom-content in: ${result}`);
   assert.ok(result.includes(`"${extensionPath}"`), `Expected quoted extension path in: ${result}`);
+});
+
+test('buildBmadArgs omits --custom-content on update to avoid stale cache conflict', () => {
+  const result = bmad.buildBmadArgs({
+    projectRoot: '/test',
+    modules: ['bmm'],
+    tools: [],
+    action: 'update',
+  });
+  assert.ok(!result.includes('--custom-content'), `Expected NO --custom-content on update, got: ${result}`);
 });
 
 test('buildBmadArgs includes all params in correct combined command', () => {
@@ -268,14 +278,11 @@ test('buildBmadArgs starts with node and bmad-npx-wrapper path', () => {
   assert.ok(result.includes('bmad-npx-wrapper.js'), `Expected bmad-npx-wrapper.js in: ${result}`);
 });
 
-// ---- M4: Negative test for --custom-content omission ----
+// ---- M4: --custom-content conditional tests ----
 
 console.log('\nCode review fixes: edge cases');
 
-test('buildBmadArgs omits --custom-content when extension dir missing (simulated via __dirname)', () => {
-  // We can't remove the real dir, but we verify the conditional logic by checking
-  // that the function correctly includes it when present (tested above).
-  // This test validates the conditional branch exists by checking the output format.
+test('buildBmadArgs includes exactly one --custom-content on fresh install', () => {
   const result = bmad.buildBmadArgs({
     projectRoot: '/test',
     modules: ['bmm'],
