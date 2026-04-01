@@ -234,14 +234,14 @@ test('buildBmadArgs includes --custom-content on fresh install when extension ex
   assert.ok(result.includes(`"${extensionPath}"`), `Expected quoted extension path in: ${result}`);
 });
 
-test('buildBmadArgs omits --custom-content on update to avoid stale cache conflict', () => {
+test('buildBmadArgs includes --custom-content on update for bmad-method 6.2.2 compatibility', () => {
   const result = bmad.buildBmadArgs({
     projectRoot: '/test',
     modules: ['bmm'],
     tools: [],
     action: 'update',
   });
-  assert.ok(!result.includes('--custom-content'), `Expected NO --custom-content on update, got: ${result}`);
+  assert.ok(result.includes('--custom-content'), `Expected --custom-content on update for 6.2.2 compat, got: ${result}`);
 });
 
 test('buildBmadArgs includes all params in correct combined command', () => {
