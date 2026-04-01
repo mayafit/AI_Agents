@@ -105,10 +105,12 @@ The file is version-controlled as part of `_bmad-output/` project knowledge. Com
 
 ---
 
-## Supported Agents
+## Supported Coding Tools
 
-| Agent | Project Path | Template | Instruction File |
-|-------|-------------|----------|------------------|
+Skills can be installed into any of these AI coding agents:
+
+| Tool | Project Path | Template | Instruction File |
+|------|-------------|----------|------------------|
 | Claude Code | `.claude/skills/` | `claude-code` | `.claude/CLAUDE.md` |
 | Google Gemini | `.gemini/skills/` | `generic` | `.gemini/gemini.md` |
 | GitHub Copilot | `.github/copilot/skills/` | `generic` | `.github/copilot/copilot.md` |
@@ -116,14 +118,26 @@ The file is version-controlled as part of `_bmad-output/` project knowledge. Com
 | Kilocode | `.kilocode/skills/` | `generic` | `.kilocode/kilocode.md` |
 | Cline | `.cline/skills/` | `cline` | `.cline/clinerules.md` |
 | Roo Code | `.roo/skills/` | `generic` | `.roo/rules/00-ma-agents.md` |
-| SRE Agent (Alex) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/sre.md` |
-| DevOps Agent (Amit) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/devops.md` |
-| Cyber Analyst (Yael) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/cyber.md` |
-| Joseph (MIL-STD-498) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/mil498.md` |
-| Demerzel (ML Scientist) | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/demerzel.md` |
 | Antigravity | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/antigravity.md` |
+| OpenCode | `.opencode/skills/` | `generic` | `opencode.json` |
 
-## Available Skills (46)
+## Specialized BMAD Agents
+
+These domain-expert agents are installed alongside BMAD-METHOD and provide guided workflows through their agent menus:
+
+| Agent | Persona | Skills Path | Instruction File |
+|-------|---------|-------------|------------------|
+| SRE Agent | Alex | `_bmad/skills/sre/` | `_bmad/bmm/agents/sre.md` |
+| DevOps Agent | Amit | `_bmad/skills/devops/` | `_bmad/bmm/agents/devops.md` |
+| Cyber Analyst | Yael | `_bmad/skills/cyber/` | `_bmad/bmm/agents/cyber.md` |
+| MIL-STD-498 Expert | Joseph | `_bmad/skills/mil498/` | `_bmad/bmm/agents/mil498.md` |
+| ML Scientist | Demerzel | `_bmad/skills/demerzel/` | `_bmad/bmm/agents/demerzel.md` |
+
+## Available Skills
+
+### General-Purpose Skills (34)
+
+These skills are installed into your coding tool of choice and provide reusable best-practice guidance:
 
 | Skill ID | Domain | Description |
 | :--- | :--- | :--- |
@@ -160,26 +174,33 @@ The file is version-controlled as part of `_bmad-output/` project knowledge. Com
 | `self-signed-cert` | Security | Automated Root CA and self-signed certificate generation |
 | `docker-image-signing` | Security | Automated cryptographic signing for Docker images |
 | `docker-hardening-verification` | Security | Audits images for least-privilege and OpenShift compatibility |
-| **Machine Learning** | | |
-| `ml-ideation` | Research | Frame ML research problem, define requirements, produce Research Thesis and PRD |
-| `ml-eda` | Data Science | Exploratory Data Analysis, establish baselines, produce EDA report |
-| `ml-architecture` | Design | Model architecture, stack, and experiment tracking strategy |
-| `ml-detailed-design` | Tech Lead | Implementation task breakdown (INF-* and EXP-* namespaces) |
-| `ml-techspec` | Contract | Lock experiment parameters and performance tiers before training |
-| `ml-infra` | MLOps | Build ML infrastructure, manage dependencies, run smoke tests |
-| `ml-experiment` | Developer | Execute training experiments against locked TechSpec, log metrics |
-| `ml-analysis` | Evaluation | Evaluate experiment outcomes against TechSpec success tiers |
-| `ml-hparam` | Tuning | Automated hyperparameter optimization (Optuna, W&B Sweeps, Ray Tune) |
-| `ml-revision` | Iterative | Amend hypothesis and requirements based on experiment findings |
-| `ml-advise` | Advisory | Search past experiments, surface findings and failure warnings |
-| `ml-retrospective` | Meta | Capture session learnings and update project context |
+
+### Agent Workflows (18)
+
+These workflows are installed as part of the BMAD agent system and are invoked through the agent's menu (not installed individually):
+
+| Workflow | Agent | Description |
+| :--- | :--- | :--- |
+| **Machine Learning (Demerzel)** | | |
+| `ml-ideation` | ML Scientist | Frame ML research problem, produce Research Thesis and PRD |
+| `ml-eda` | ML Scientist | Exploratory Data Analysis, establish baselines, produce EDA report |
+| `ml-architecture` | ML Scientist | Model architecture, stack, and experiment tracking strategy |
+| `ml-detailed-design` | ML Scientist | Implementation task breakdown (INF-* and EXP-* namespaces) |
+| `ml-techspec` | ML Scientist | Lock experiment parameters and performance tiers before training |
+| `ml-infra` | ML Scientist | Build ML infrastructure, manage dependencies, run smoke tests |
+| `ml-experiment` | ML Scientist | Execute training experiments against locked TechSpec, log metrics |
+| `ml-analysis` | ML Scientist | Evaluate experiment outcomes against TechSpec success tiers |
+| `ml-hparam` | ML Scientist | Automated hyperparameter optimization (Optuna, W&B Sweeps, Ray Tune) |
+| `ml-revision` | ML Scientist | Amend hypothesis and requirements based on experiment findings |
+| `ml-advise` | ML Scientist | Search past experiments, surface findings and failure warnings |
+| `ml-retrospective` | ML Scientist | Capture session learnings and update project context |
 | **Sprint Management** | | |
-| `add-sprint` | Agile | Create sprint entities with capacity, ISO dates, and structured YAML schema |
-| `generate-backlog` | Agile | Generate or refresh a flat prioritized backlog from epics and bug stories |
-| `add-to-sprint` | Agile | Assign backlog items to a sprint with capacity enforcement |
-| `remove-from-sprint` | Agile | Remove items from a sprint and return to unassigned backlog |
-| `cleanup-done` | Agile | Archive done items to `done/` and remove from sprint/backlog tracking |
-| `prioritize-backlog` | Agile | Reprioritize backlog using severity, value, dependencies, and type |
+| `add-sprint` | Scrum Master | Create sprint entities with capacity, ISO dates, and structured YAML schema |
+| `generate-backlog` | Scrum Master | Generate or refresh a flat prioritized backlog from epics and bug stories |
+| `add-to-sprint` | Scrum Master | Assign backlog items to a sprint with capacity enforcement |
+| `remove-from-sprint` | Scrum Master | Remove items from a sprint and return to unassigned backlog |
+| `cleanup-done` | Scrum Master | Archive done items to `done/` and remove from sprint/backlog tracking |
+| `prioritize-backlog` | Scrum Master | Reprioritize backlog using severity, value, dependencies, and type |
 
 ## Automated Skill Discovery
 
@@ -205,6 +226,7 @@ npx ma-agents                              # Launch interactive wizard
 npx ma-agents install                      # Interactive install wizard
 npx ma-agents install --yes                # Non-interactive, use defaults (CI/CD)
 npx ma-agents install --yes --agent <id>   # Non-interactive, target one agent
+npx ma-agents install --log                # Log all output to install_<datetime>.log
 npx ma-agents status                       # Show installed skills and paths
 npx ma-agents list                         # List all available skills
 npx ma-agents agents                       # List supported agents
@@ -221,7 +243,7 @@ Running `ma-agents` on a project where skills are already installed triggers the
    - Updates BMAD-METHOD personas and workflows to the latest versions if detected.
 
 ### BMAD-METHOD Integration
-`ma-agents` features first-class integration with [BMAD-METHOD](https://docs.bmad-method.org/) to provide advanced orchestration and specialized personas.
+`ma-agents` bundles [BMAD-METHOD](https://docs.bmad-method.org/) **v6.2.2** to provide advanced orchestration and specialized personas.
 
 #### Core Features
 - **Auto-Detection**: Recognizes existing BMAD installations and prompts for silent updates.
@@ -332,6 +354,7 @@ npx ma-agents install code-review claude-code --force
 | `--force` | Skip upgrade prompts, always overwrite existing installations. |
 | `--global` | Install to global/user-level paths instead of project-level. |
 | `--path <dir>` | Custom installation directory. |
+| `--log` | Log all console output to `install_<datetime>.log` in the current directory. |
 
 ## Requirements
 

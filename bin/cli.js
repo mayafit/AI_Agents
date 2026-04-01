@@ -871,11 +871,11 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
       if (yesFlag) {
         console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
         const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id));
-        const success = await bmad.installBmad(['bmm', 'bmb'], bmadTools);
+        const success = await bmad.installBmad(['bmm'], bmadTools);
         if (success) {
           console.log(chalk.green(' BMAD-METHOD installed successfully!'));
           console.log(chalk.cyan(' Applying ma-agents customizations...'));
-          await bmad.applyCustomizations(process.cwd(), ['bmm', 'bmb'], bmadTools, selectedAgentIds);
+          await bmad.applyCustomizations(process.cwd(), ['bmm'], bmadTools, selectedAgentIds);
         }
       } else {
         const { installBmad } = await prompts({
@@ -888,11 +888,11 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
         if (installBmad) {
           console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
           const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id));
-          const success = await bmad.installBmad(['bmm', 'bmb'], bmadTools);
+          const success = await bmad.installBmad(['bmm'], bmadTools);
           if (success) {
             console.log(chalk.green(' BMAD-METHOD installed successfully!'));
             console.log(chalk.cyan(' Applying ma-agents customizations...'));
-            await bmad.applyCustomizations(process.cwd(), ['bmm', 'bmb'], bmadTools, selectedAgentIds);
+            await bmad.applyCustomizations(process.cwd(), ['bmm'], bmadTools, selectedAgentIds);
           }
         }
       }
@@ -900,11 +900,11 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
       if (yesFlag) {
         console.log(chalk.cyan('\n Updating BMAD-METHOD...'));
         const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id));
-        const success = await bmad.updateBmad(['bmm', 'bmb'], bmadTools);
+        const success = await bmad.updateBmad(['bmm'], bmadTools);
         if (success) {
           console.log(chalk.green(' BMAD-METHOD updated successfully!'));
           console.log(chalk.cyan(' Re-applying ma-agents customizations...'));
-          await bmad.applyCustomizations(process.cwd(), ['bmm', 'bmb'], bmadTools, selectedAgentIds);
+          await bmad.applyCustomizations(process.cwd(), ['bmm'], bmadTools, selectedAgentIds);
         }
       } else {
         const { updateBmad } = await prompts({
@@ -917,11 +917,11 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
         if (updateBmad) {
           console.log(chalk.cyan('\n Updating BMAD-METHOD...'));
           const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id));
-          const success = await bmad.updateBmad(['bmm', 'bmb'], bmadTools);
+          const success = await bmad.updateBmad(['bmm'], bmadTools);
           if (success) {
             console.log(chalk.green(' BMAD-METHOD updated successfully!'));
             console.log(chalk.cyan(' Re-applying ma-agents customizations...'));
-            await bmad.applyCustomizations(process.cwd(), ['bmm', 'bmb'], bmadTools, selectedAgentIds);
+            await bmad.applyCustomizations(process.cwd(), ['bmm'], bmadTools, selectedAgentIds);
           }
         }
       }
