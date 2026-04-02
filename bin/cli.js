@@ -651,13 +651,13 @@ async function collectRepoLayout(flags, existingLayout = null) {
 
 // --- Install wizard ---
 
-async function installWizard(preselectedSkill, preselectedAgents, customPath, forceFlag, yesFlag = false) {
+async function installWizard(preselectedSkill, preselectedAgents, customPath, forceFlag, yesFlag = false, cliScope) {
   const skills = listSkills();
   const agents = listAgents();
 
   let selectedSkillIds = preselectedSkill ? [preselectedSkill] : [];
   let selectedAgentIds = preselectedAgents || [];
-  let installScope = 'project';
+  let installScope = cliScope || 'project';
   let installPath = customPath || '';
 
   const existingStatus = getStatus([], '', 'project');
@@ -827,8 +827,8 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
   const existingLayout = isUpdate ? readExistingLayout() : null;
   const repoLayout = await collectRepoLayout({ yes: yesFlag }, existingLayout);
 
-  // Step 3: Scope (Skip if update, yesFlag, or path already set)
-  if (!isUpdate && !installPath && !yesFlag) {
+  // Step 3: Scope (Skip if update, yesFlag, CLI --global flag, or path already set)
+  if (!isUpdate && !installPath && !yesFlag && !cliScope) {
     const { pathChoice } = await prompts({
       type: 'select',
       name: 'pathChoice',
@@ -850,6 +850,20 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
         initial: './skills'
       });
       installPath = customDir || '';
+    }
+  }
+
+  // Step 3.4: Filter out BMAD agents for global scope (they require project-level install)
+  if (installScope === 'global') {
+    const bmadAgentIds = selectedAgentIds.filter(id => {
+      const agent = agents.find(a => a.id === id);
+      return agent && agent.category === 'bmad';
+    });
+    if (bmadAgentIds.length > 0) {
+      console.log(chalk.yellow(`\n  Warning: BMAD agents require project-level installation and will be skipped for global scope:`));
+      console.log(chalk.yellow(`    ${bmadAgentIds.join(', ')}`));
+      console.log(chalk.gray(`  Run again without --global to install BMAD agents into the current project.`));
+      selectedAgentIds = selectedAgentIds.filter(id => !bmadAgentIds.includes(id));
     }
   }
 
@@ -1052,13 +1066,13 @@ async function handleInstall(args) {
 
   // No skill → launch wizard (Task 3.3, 3.4)
   if (!skillId) {
-    await installWizard(null, preselectedAgents, customPath, forceFlag, yesFlag);
+    await installWizard(null, preselectedAgents, customPath, forceFlag, yesFlag, scope);
     return;
   }
 
   // Skill but no agents (and no agentFlag) → wizard with skill preselected
   if (!agentFlag && agentIds.length === 0) {
-    await installWizard(skillId, null, customPath, forceFlag, yesFlag);
+    await installWizard(skillId, null, customPath, forceFlag, yesFlag, scope);
     return;
   }
 
