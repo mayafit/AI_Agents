@@ -2,8 +2,10 @@
 stepsCompleted: [1, 2, 3, 4, 'phase2-step-01', 'phase2-step-02', 'phase2-step-03', 'phase2-step-04']
 workflowStatus: 'complete'
 completedDate: '2026-03-08'
-lastEdited: '2026-03-26'
+lastEdited: '2026-04-03'
 phase2EditHistory:
+  - date: '2026-04-03'
+    changes: 'Major rework of Epic 17: Sprint Management Model Rework. Replaced 3-file model (backlog.yaml, sprints/sprint-N.yaml, sprint-status.yaml) with unified single sprint-status.yaml approach. Stories rewritten: 17.9 (unified schema), 17.10 (generate-backlog rework), 17.11 (add-to-sprint movement semantics), 17.12 (remove-from-sprint movement semantics), 17.13 (sprint-status-view single-source read), 17.14 (cleanup-done single-source), 17.15 (bmad-sprint-planning bootstrap), 17.16 (add-sprint section-based), 17.17 (modify-sprint section-based), 17.18 (bmad-dev-story cross-section update), 17.19 (story-status-lookup cross-section search), 17.20 (bmad-sprint-status structured sections), 17.21 (close-sprint new skill), 17.22 (Jira adapter pattern), 17.23 (migration/deprecation of old files). Added FR133-FR140. Updated FR Coverage Map. Updated Epic 17 description in Epic List. Updated Development Execution Order.'
   - date: '2026-03-26'
     changes: 'Added Stories 5.5 (explicit parameter passing) and 5.6 (space-in-path fix) to Epic 5. Added Epic 15: BMAD 6.2.1 Agent Architecture Migration (8 stories: version bump, module restructure, 4 agent conversions, 11 MIL-498 workflow conversions, 23 SRE/DevOps/Cyber conversions, built-in agent separation, migration detection, validation). Added Epic 16: Multi-Repository Project Layout (4 stories: wizard, config+cross-ref, project-context section, validation). Updated FR coverage map with FR87-FR127. Updated development execution order with Phase A/B/C priority grouping. Updated cross-epic bmad.js coordination for 4 epics.'
   - date: '2026-03-20'
@@ -154,6 +156,18 @@ This document provides the complete epic and story breakdown for agents, decompo
 - FR121: Dashboard (Phase 3) resolves from `{sprint_management_path}`
 - FR122: Multi-repo mode creates `project-layout.yaml` cross-reference file
 
+### Functional Requirements (Phase 2 — added 2026-04-03)
+
+#### Unified Sprint-Status Management (FR133-FR140)
+- FR133: Sprint management uses a single unified `sprint-status.yaml` with three sections: `epics` (reference), `backlog` (unassigned items), and `sprints` (sprint definitions with assigned items)
+- FR134: Stories and bugs MOVE between the `backlog` and `sprints` sections — an item exists in exactly one location at any time
+- FR135: Each item carries its own `status` field, updated in-place within the section where it resides
+- FR136: Items reaching `done` status are removed from `sprint-status.yaml` and archived to `done/` folder
+- FR137: A close-sprint workflow transitions a sprint from `active` to `closed`, archiving all done items and returning incomplete items to backlog
+- FR138: When `tracking_system` is configured as `jira`, sprint management skills read/write from Jira API using the same data model (adapter pattern)
+- FR139: The unified schema replaces the previous three-file model (`backlog.yaml`, `sprints/sprint-N.yaml`, `sprint-status.yaml`) — deprecated files are migrated or removed
+- FR140: All 12 sprint-related skills are reworked to operate against the single unified file
+
 ### NonFunctional Requirements
 
 - NFR1: Skills must not transmit project data externally — all content is static instruction delivery, not data collection
@@ -271,6 +285,19 @@ This document provides the complete epic and story breakdown for agents, decompo
 | FR130 | Epic 17 | Done items removed from sprint status file |
 | FR131 | Epic 17 | Done story files moved to done/ subfolder |
 | FR132 | Epic 17 | Sprints as first-class YAML entities |
+| FR133 | Epic 17 | Unified sprint-status.yaml with three sections |
+| FR134 | Epic 17 | Movement semantics — items move between backlog and sprint sections |
+| FR135 | Epic 17 | In-place status updates on each item |
+| FR136 | Epic 17 | Done items removed from file, archived to done/ |
+| FR137 | Epic 17 | Close-sprint workflow for sprint lifecycle closure |
+| FR138 | Epic 17 / Epic 14 | Jira adapter pattern (tracking_system switch) |
+| FR139 | Epic 17 | Migration/removal of deprecated 3-file model |
+| FR140 | Epic 17 | All 12 sprint skills reworked for unified file |
+| FR141 | Epic 17 | Remove items from sprint back to backlog (remove-from-sprint skill) |
+| FR142 | Epic 18 | Roo Code custom modes from BMAD agents |
+| FR143 | Epic 18 | Roo Code rules from BMAD instructions |
+| FR144 | Epic 18 | Roo Code slash commands from BMAD workflows |
+| FR145 | Epic 18 | Cline-to-Roo Code migration |
 
 ## Epic List
 
@@ -336,7 +363,7 @@ Agents detect defects in already-delivered code and generate structured bug repo
 **NFRs addressed:** NFR19 (menu + slash command invocation)
 **Dependency:** Uses extension module from Epic 8 for workflow deployment
 
-### Epic 12: Realistic Sprint Management (Phase 2)
+### Epic 12: Realistic Sprint Management (Phase 2) **[SUPERSEDED by Epic 17]**
 Project managers work with flat backlogs containing stories and bugs, capacity-based sprints, and multi-criteria prioritization.
 **FRs covered:** FR65, FR66, FR67, FR68, FR69, FR70, FR71
 **NFRs addressed:** NFR19 (menu + slash command invocation)
@@ -349,11 +376,12 @@ At project-level installation, ma-agents generates `_bmad-output/project-context
 **Dependency:** Uses extension module from Epic 8 for workflow deployment
 
 ### Epic 17: Sprint Management Model Rework (Phase 2)
-Sprint management is rebuilt with a proper data model: sprints as first-class entities, flat backlog with bugs as a story type, multi-criteria prioritization, bidirectional item movement (backlog ↔ sprint), and automatic done-item cleanup.
-**FRs covered:** FR65, FR66, FR67, FR128, FR129, FR130, FR131, FR132 (plus rework of FR68-FR71 workflows to work with new model)
+Sprint management is redesigned around a **single unified `sprint-status.yaml`** file with three sections: `epics` (reference), `backlog` (unassigned items), and `sprints` (sprint definitions with assigned items). Stories and bugs MOVE between sections using movement semantics. Each item carries its own status, updated in-place. Done items are removed from the file and archived. A new close-sprint skill handles sprint lifecycle closure. A Jira adapter pattern enables the same data model to read/write from Jira API when `tracking_system` is configured as `jira`. All 12 sprint-related skills are reworked for the unified file, and the deprecated 3-file model is migrated/removed.
+**FRs covered:** FR65, FR66, FR67, FR128, FR129, FR130, FR131, FR132, FR133, FR134, FR135, FR136, FR137, FR138, FR139, FR140 (plus rework of FR68-FR71 workflows to work with new model)
 **NFRs addressed:** NFR19 (menu + slash command invocation)
-**Dependencies:** Epic 11 (bug entity structure). Reworks Epic 12's workflow shells to use the new model.
-**Note:** Epic 12 delivered workflow files but not the underlying sprint data model. This epic builds the model and rewires the workflows.
+**Dependencies:** Epic 11 (bug entity structure). Reworks Epic 12's workflow shells to use the new model. Epic 14 (Jira adapter architecture — Story 14.3 must be approved before Story 17.22 implementation).
+**Note:** Epic 12 delivered workflow files but not the underlying sprint data model. This epic builds the unified model, rewires all workflows, and provides the Jira adapter pattern.
+**Skills affected:** Heavy rework (6): generate-backlog, add-to-sprint, remove-from-sprint, sprint-status-view, cleanup-done, bmad-sprint-planning. Moderate rework (3): add-sprint, modify-sprint, bmad-dev-story. Light rework (3): story-status-lookup, bmad-sprint-status, prioritize-backlog. New skill (1): close-sprint.
 
 ### Epic 15: BMAD 6.2.1 Agent Architecture Migration (Phase 2)
 ma-agents upgrades from bmad-method 6.0.4 to 6.2.1, restructures the extension module to follow BMAD 6.2.0 module conventions (agents as skill folders, workflows as skill folders, module.yaml with code field), and provides an installer-driven migration path for existing installations.
@@ -386,10 +414,10 @@ Stories in Epics 6, 8, and 15 that touch `bmad.js` must build on Epic 5's vendor
 2. **Epic 15** (BMAD 6.2.1 Migration) — version bump, module restructure, agent/workflow conversion → **release**
 
 **Phase C — Remaining Features:**
-3. **Epic 17** (Sprint Management Model Rework) — reworks Epic 12, depends on Epic 11
+3. **Epic 17** (Sprint Management Model Rework) — unified sprint-status.yaml, reworks Epic 12 workflows, depends on Epic 11. Stories 17.9-17.24 can proceed independently (except 17.22). Story 17.22 (Jira adapter) blocked on Epic 14 Story 14.3 architecture approval.
 4. **Epic 16** (Multi-Repo Layout) — depends on Epic 15 module restructure
 5. **Epics 4, 7** (VS Integration, Test Suite) — on hold, can resume in parallel
-6. **Epic 14** (External Tooling) — Phase 3, depends on Epics 12, 13
+6. **Epic 14** (External Tooling) — Phase 3, depends on Epics 12, 13. Story 14.3 architecture is prerequisite for Epic 17 Story 17.22 (Jira adapter).
 
 ---
 
@@ -1359,7 +1387,9 @@ So that defects in delivered code are caught during review and routed to the bug
 
 ---
 
-## Epic 12: Realistic Sprint Management (Phase 2)
+## Epic 12: Realistic Sprint Management (Phase 2) **[SUPERSEDED by Epic 17]**
+
+> **DEPRECATION NOTICE:** Epic 12 delivered workflow shell files but NOT the underlying sprint data model. Epic 17 (Sprint Management Model Rework) builds the unified `sprint-status.yaml` model and rewires all workflows. All FR65-FR71 functionality is now delivered through Epic 17's reworked stories. Epic 12 stories below are retained for historical context only — do not implement them.
 
 **Goal:** Project managers work with flat backlogs containing stories and bugs, capacity-based sprints, and multi-criteria prioritization.
 **FRs covered:** FR65, FR66, FR67, FR68, FR69, FR70, FR71
@@ -2261,63 +2291,37 @@ So that I can change paths without re-running the full installer.
 
 ## Epic 17: Sprint Management Model Rework (Phase 2)
 
-Sprint management is rebuilt with a proper data model: sprints as first-class entities, flat backlog with bugs as a story type, multi-criteria prioritization, bidirectional item movement (backlog ↔ sprint), and automatic done-item cleanup. Epic 12 delivered workflow shells — this epic builds the underlying model and rewires everything.
+Sprint management is redesigned around a **single unified `sprint-status.yaml`** file that replaces the previous three-file model (`backlog.yaml`, `sprints/sprint-N.yaml`, `sprint-status.yaml`). The unified file has three sections: `epics` (reference data from epics.md), `backlog` (unassigned items in priority order), and `sprints` (sprint definitions with their assigned items inline). Stories and bugs MOVE between the `backlog` and `sprints` sections — an item exists in exactly one location at any time. Each item carries its own `status` field, updated in-place. Done items are removed from the file and archived to `done/`. A new close-sprint skill handles sprint lifecycle closure. When `tracking_system` is `jira`, the same data model reads/writes from Jira API via an adapter pattern. All 12 sprint-related skills are reworked to operate against this single file. Epic 12 delivered workflow shells — this epic rebuilds the underlying model and rewires everything.
 
-### Story 17.1: Sprint Entity Model
+**Execution order:** 17.9 (schema) → 17.15 (bootstrap) → 17.10 (generate-backlog) → 17.16 (add-sprint) → 17.11 (add-to-sprint) → 17.12 (remove-from-sprint) → 17.13 (sprint-status-view) → 17.14 (cleanup-done) → 17.17 (modify-sprint) → 17.18 (bmad-dev-story) → 17.19 (story-status-lookup) → 17.20 (bmad-sprint-status) → 17.24 (prioritize-backlog rework) → 17.21 (close-sprint) → 17.22 (Jira adapter) → 17.23 (migration)
+
+### Story 17.9: Unified sprint-status.yaml Schema
 
 As a **Scrum Master**,
-I want sprints defined as first-class YAML entities with capacity, assigned items, and status,
-So that sprint planning is based on real sprint definitions, not just a flat status list.
+I want all sprint management data consolidated into a single `sprint-status.yaml` file with three structured sections,
+So that there is one source of truth for epics, backlog, and sprints — eliminating data duplication across multiple files.
 
 **Acceptance Criteria:**
 
-**Given** the Scrum Master creates a sprint
-**When** the sprint is persisted
-**Then** a YAML file is created at `{implementation_artifacts}/sprints/sprint-{id}.yaml` containing:
+**Given** the unified schema is defined
+**When** `sprint-status.yaml` is created or updated
+**Then** it contains exactly three top-level sections:
 ```yaml
-id: sprint-3
-name: "Sprint 3"
-status: planning  # planning | active | closed
-capacity: 6       # max items (stories + bugs)
-start: "2026-04-01"
-end: "2026-04-14"
-items: []          # assigned story/bug IDs
-```
+epics:
+  epic-5:
+    status: in-progress
+    retrospective: null
+  epic-17:
+    status: planning
+    retrospective: null
 
-**Given** a sprint has items assigned
-**When** the sprint file is read
-**Then** `items` contains an ordered list of story/bug IDs (e.g., `["5-5-explicit-parameter-passing", "5-6-fix-space-in-path-bug", "BUG-path-spaces"]`)
-**And** the count of items never exceeds `capacity`
-
-**Given** a sprint transitions from `planning` to `active`
-**When** the sprint is activated
-**Then** only one sprint can be `active` at a time
-**And** the previous active sprint (if any) must be `closed` first
-
-**Technical notes:**
-- Sprint files live in `{implementation_artifacts}/sprints/` directory
-- Sprint ID format: `sprint-{number}` (kebab-case)
-- Rework the existing add-sprint workflow (Story 12.1) to write this YAML format instead of the old format
-
-### Story 17.2: Flat Backlog Model
-
-As a **Scrum Master**,
-I want a flat backlog file listing all stories and bugs in priority order, independent of their parent epic,
-So that sprint planning works from a single prioritized list, not epic-grouped sections.
-
-**Acceptance Criteria:**
-
-**Given** the backlog is generated from the epics document
-**When** the backlog file is created at `{implementation_artifacts}/backlog.yaml`
-**Then** it contains ALL stories and bugs as a flat ordered list:
-```yaml
 backlog:
-  - id: "5-5-explicit-parameter-passing"
+  - id: "15-2-restructure-extension-module"
     type: story
-    epic: 5
-    title: "Explicit Parameter Passing"
+    epic: 15
+    title: "Restructure Extension Module"
     priority: 1
-    status: backlog
+    status: ready-for-dev
   - id: "BUG-path-spaces"
     type: bug
     epic: null
@@ -2325,204 +2329,577 @@ backlog:
     priority: 2
     status: backlog
     severity: high
+
+sprints:
+  - id: sprint-3
+    name: "Sprint 3"
+    status: active        # planning | active | closed
+    capacity: 6           # max items (stories + bugs)
+    start: "2026-04-01"
+    end: "2026-04-14"
+    items:
+      - id: "5-5-explicit-parameter-passing"
+        type: story
+        epic: 5
+        title: "Explicit Parameter Passing"
+        status: in-progress
+      - id: "5-6-fix-space-in-path-bug"
+        type: story
+        epic: 5
+        title: "Fix Space-in-Path Bug"
+        status: review
 ```
 
-**Given** a story is assigned to a sprint
-**When** the backlog is viewed
-**Then** the item shows `sprint: sprint-3` indicating its assignment
-**And** it is still visible in the backlog (with sprint annotation) for reference
+**Given** an item is in the `backlog` section
+**When** it is assigned to a sprint
+**Then** it is REMOVED from `backlog` and ADDED to the target sprint's `items` array (FR134 — movement semantics)
+**And** the item exists in exactly one location at any time
 
-**Given** stories exist across multiple epics
-**When** the backlog is ordered
-**Then** ordering is by the `priority` field, not by epic number
-**And** items from different epics can be interleaved based on priority
+**Given** an item's status changes (e.g., `ready-for-dev` to `in-progress`)
+**When** the status is updated
+**Then** the `status` field is updated in-place on the item, wherever it currently resides (FR135)
 
-**Technical notes:**
-- The backlog is the single source of truth for item priority
-- Sprint-status.yaml continues to exist but is now derived from backlog + sprint files
-- The `sprint-planning` workflow should regenerate the backlog from epics when run
-- Items with status `done` are NOT included in the backlog (they're in the done archive)
+**Given** an item reaches `done` status
+**When** cleanup runs
+**Then** the item is REMOVED from `sprint-status.yaml` entirely (FR136)
+**And** archived to the `done/` folder
 
-### Story 17.3: Bug as Story Type
-
-As a **Test Engineer**,
-I want bugs to appear in the backlog alongside stories as a distinct type,
-So that bugs are prioritized and assigned to sprints using the same workflow as stories.
-
-**Acceptance Criteria:**
-
-**Given** a bug is created via the bug-story workflow (Epic 11, FR61)
-**When** the bug story file is created
-**Then** it is added to the backlog with `type: bug`
-**And** it includes bug-specific fields: `severity` (critical/high/medium/low), `version_found`, `bug_type`
-
-**Given** bugs and stories coexist in the backlog
-**When** the backlog is displayed or used for sprint planning
-**Then** bugs are visually distinguished (type field) but sorted by the same priority field as stories
-**And** a critical bug can be prioritized above any story
-
-**Given** a bug follows the same lifecycle as a story
-**When** the bug progresses through statuses
-**Then** it uses the same flow: `backlog → ready-for-dev → in-progress → review → done`
-**And** done bugs are archived the same way as done stories (FR130, FR131)
+**Given** a sprint transitions from `planning` to `active`
+**When** the sprint is activated
+**Then** only one sprint can have `status: active` at a time
+**And** the previous active sprint must be closed first
 
 **Technical notes:**
-- Bug story files follow the naming convention: `BUG-{kebab-case-title}.md`
-- Bug entries in backlog.yaml have `type: bug` and `epic: null` (bugs don't belong to epics per FR64)
-- The bug-story workflow (Epic 11) may need updating to write to the backlog file
+- File location: `{sprint_management_path}/sprint-status.yaml` (resolves via config, defaults to `_bmad-output/implementation-artifacts/sprint-status.yaml`)
+- The `epics` section is a MAP keyed by epic ID (e.g., `epic-5:`), with `status` and optional `retrospective` — derived data like title, story_count, done_count are computed from `backlog`/`sprints` sections at display time
+- The `epics` section is reference data — regenerated from `epics.md` by the sprint-planning skill
+- The `backlog` section contains ONLY items not assigned to any sprint
+- The `sprints` section contains sprint definitions with their assigned items inline (no separate sprint files)
+- Item schema: `id`, `type` (story|bug), `epic` (number|null), `title`, `status`, `priority` (in backlog only), plus optional `severity` for bugs
+- Sprint schema: `id`, `name`, `status`, `capacity`, `start`, `end`, `items` array
+- This replaces the old 3-file model: `backlog.yaml` (removed), `sprints/sprint-N.yaml` (removed), `sprint-status.yaml` (repurposed with new schema)
 
-### Story 17.4: Backlog-to-Sprint Workflow
+### Story 17.10: Rework generate-backlog Skill (Heavy Rework)
 
 As a **Scrum Master**,
-I want a workflow to move items from the backlog into a sprint,
-So that I can populate sprints by selecting prioritized items across epics.
+I want the `generate-backlog` skill to populate the `backlog` section of the unified `sprint-status.yaml`,
+So that all unassigned stories and bugs are maintained in a single file rather than a separate `backlog.yaml`.
 
 **Acceptance Criteria:**
 
-**Given** the backlog contains unassigned items (no `sprint` field)
-**When** the Scrum Master invokes the assign-to-sprint workflow
-**Then** it displays the active or planning sprint and its current capacity usage
-**And** shows the top N unassigned backlog items in priority order
+**Given** the `generate-backlog` skill is invoked
+**When** it parses the epics document
+**Then** it writes all unassigned stories and bugs to the `backlog` section of `sprint-status.yaml` in priority order
+**And** it updates the `epics` section with current epic metadata (title, status, story counts)
+**And** it does NOT touch the `sprints` section — sprint-assigned items are preserved
+
+**Given** items already exist in the `sprints` section of `sprint-status.yaml`
+**When** the backlog is regenerated
+**Then** items currently assigned to sprints are NOT duplicated in the `backlog` section
+**And** new stories from `epics.md` that don't exist anywhere in `sprint-status.yaml` are added to `backlog`
+
+**Given** a story exists in `backlog` but has been removed from `epics.md`
+**When** the backlog is regenerated
+**Then** the orphaned item is flagged with a warning but NOT automatically removed (human review required)
+
+**Given** bugs exist as standalone story files (FR64)
+**When** the backlog is regenerated
+**Then** bugs are included in the `backlog` section with `type: bug` and `epic: null`
+**And** bug-specific fields (`severity`, `version_found`, `bug_type`) are preserved
+
+**Technical notes:**
+- Reworks the existing `generate-backlog` skill to write to `sprint-status.yaml` `backlog` section instead of standalone `backlog.yaml`
+- Must merge with existing `sprint-status.yaml` content (preserve `sprints` section)
+- Priority ordering: bugs with `severity: critical` float to top, then by explicit `priority` field, then by epic order
+- Items with status `done` are excluded (they live in `done/` archive)
+- The old `backlog.yaml` file is no longer written (see Story 17.23 for migration)
+
+### Story 17.11: Rework add-to-sprint Skill (Heavy Rework — Movement Semantics)
+
+As a **Scrum Master**,
+I want the `add-to-sprint` skill to MOVE items from the `backlog` section to a sprint's `items` array within the same file,
+So that sprint assignment is a single-file atomic operation with movement semantics.
+
+**Acceptance Criteria:**
+
+**Given** the `backlog` section contains unassigned items
+**When** the Scrum Master invokes `add-to-sprint`
+**Then** it displays the target sprint (active or planning) and its current capacity usage (items.length / capacity)
+**And** shows the top N unassigned items from the `backlog` section in priority order
 **And** the Scrum Master selects which items to add
 
 **Given** the Scrum Master selects items for the sprint
 **When** the items are assigned
-**Then** each item's `sprint` field in backlog.yaml is set to the sprint ID
-**And** the sprint file's `items` array is updated with the new IDs
-**And** the workflow validates that capacity is not exceeded — warns if over capacity
+**Then** each selected item is REMOVED from the `backlog` array (FR134)
+**And** ADDED to the target sprint's `items` array in the `sprints` section
+**And** the item's `priority` field is dropped (priority only applies in backlog)
+**And** the item's other fields (`id`, `type`, `epic`, `title`, `status`) are preserved
 
-**Given** the workflow is invoked via menu or slash command
+**Given** assigning items would exceed sprint capacity
+**When** the assignment is attempted
+**Then** the skill warns that capacity would be exceeded
+**And** suggests removing items or increasing capacity before proceeding
+
+**Given** the skill is invoked via menu or slash command
 **When** it executes
 **Then** it works identically in both invocation modes (NFR19)
 
 **Technical notes:**
-- Reworks the existing add-to-sprint workflow (Story 12.2) to use the new backlog + sprint file model
-- Must read backlog.yaml, filter unassigned items, present to user, update both backlog.yaml and sprint file
+- Reworks the existing `add-to-sprint` skill (Story 12.2)
+- Single file read-modify-write on `sprint-status.yaml`
+- Must validate the target sprint exists and is in `planning` or `active` status
+- Atomic operation: both the removal from backlog and addition to sprint happen in one file write
 
-### Story 17.5: Sprint-to-Backlog Workflow
+### Story 17.12: Rework remove-from-sprint Skill (Heavy Rework — Movement Semantics)
 
 As a **Scrum Master**,
-I want a workflow to move items from a sprint back to the backlog,
-So that I can adjust sprint scope when priorities change without losing the item.
+I want the `remove-from-sprint` skill to MOVE items from a sprint's `items` array back to the `backlog` section,
+So that sprint scope adjustments are clean, reversible, single-file operations.
 
 **Acceptance Criteria:**
 
 **Given** a sprint has assigned items
-**When** the Scrum Master invokes the remove-from-sprint workflow
-**Then** it displays the sprint's currently assigned items
+**When** the Scrum Master invokes `remove-from-sprint`
+**Then** it displays the sprint's currently assigned items with their statuses
 **And** the Scrum Master selects which items to remove
 
 **Given** items are removed from the sprint
 **When** the removal completes
-**Then** the item's `sprint` field in backlog.yaml is cleared
-**And** the item is removed from the sprint file's `items` array
-**And** the item's status is NOT changed — it retains its current status (e.g., stays `ready-for-dev`)
-**And** the item remains in the backlog at its current priority position
+**Then** each selected item is REMOVED from the sprint's `items` array (FR134)
+**And** ADDED back to the `backlog` array with a `priority` field set to position 1 (top of backlog — Scrum Master can reprioritize later)
+**And** the item's `status` is NOT changed — it retains its current status (e.g., stays `ready-for-dev`)
+
+**Given** a sprint's capacity was full (e.g., 6/6 items)
+**When** an item is removed
+**Then** the sprint's effective capacity usage decreases (e.g., 5/6)
 
 **Technical notes:**
-- New workflow: `lib/bmad-extension/skills/remove-from-sprint/` (or update existing modify-sprint from Story 12.3)
-- This is the inverse of Story 17.4
+- Reworks the existing `remove-from-sprint` skill
+- Single file read-modify-write on `sprint-status.yaml`
+- This is the inverse of Story 17.11
+- Removed items re-enter backlog at priority 1 by default; the Scrum Master should reprioritize after bulk removals
 
-### Story 17.6: Done Item Cleanup
-
-As a **Scrum Master**,
-I want done stories and bugs automatically removed from the sprint status and their files moved to a done/ subfolder,
-So that the active sprint view stays clean and the archive is organized.
-
-**Acceptance Criteria:**
-
-**Given** a story or bug status changes to `done`
-**When** the sprint status is refreshed (via sprint-planning workflow or sprint-status workflow)
-**Then** the done item is removed from sprint-status.yaml's `development_status` section
-**And** the done item is removed from its sprint file's `items` array
-**And** the sprint file's effective capacity increases by 1 (slot freed)
-
-**Given** a story file exists at `{implementation_artifacts}/{story-id}.md`
-**When** the story reaches `done` status
-**Then** the file is moved to `{implementation_artifacts}/done/{story-id}.md`
-**And** if the `done/` subfolder doesn't exist, it is created
-
-**Given** a bug file exists at `{implementation_artifacts}/BUG-{title}.md`
-**When** the bug reaches `done` status
-**Then** the file is moved to `{implementation_artifacts}/done/BUG-{title}.md`
-
-**Given** all items in a sprint reach `done` status
-**When** the sprint is refreshed
-**Then** the sprint status changes to `closed`
-**And** the sprint file is preserved (historical record) but items array is empty
-
-**Technical notes:**
-- The `done/` subfolder already exists at `_bmad-output/implementation-artifacts/done/` — this story formalizes its use
-- The sprint-planning and sprint-status workflows should trigger cleanup as part of their execution
-- File move uses `fs.rename()` — not copy+delete
-- The sprint-status.yaml `development_status` section should only show items that are NOT done
-
-### Story 17.7: Multi-Criteria Prioritization Workflow
-
-As a **Scrum Master**,
-I want a workflow to reprioritize the backlog using multiple criteria,
-So that sprint planning is based on business value, severity, and dependencies — not just epic order.
-
-**Acceptance Criteria:**
-
-**Given** the backlog contains stories and bugs
-**When** the Scrum Master invokes the prioritize-backlog workflow
-**Then** it presents each item with its current priority and metadata (type, epic, severity for bugs, dependencies)
-**And** the Scrum Master can reorder items using criteria: severity, business value, dependencies, item type, age
-
-**Given** the Scrum Master reorders items
-**When** the new priority order is confirmed
-**Then** backlog.yaml is updated with new `priority` values (sequential integers starting from 1)
-**And** the reordering is logged with date and reason
-
-**Given** items have dependencies (e.g., Story 15.2 depends on 15.1)
-**When** the Scrum Master tries to prioritize the dependent item above its dependency
-**Then** the workflow warns about the dependency conflict
-**And** allows the Scrum Master to override or adjust
-
-**Technical notes:**
-- New workflow: `lib/bmad-extension/skills/prioritize-backlog/`
-- The workflow should support both full reprioritization and quick adjustments (move single item up/down)
-- Dependencies can be inferred from epic story ordering or explicitly stated in story files
-
-### Story 17.8: Rework Sprint Status Display
+### Story 17.13: Rework sprint-status-view Skill (Heavy Rework — Single Source Read)
 
 As a **Project Manager**,
-I want sprint status to show real sprint definitions with their assigned items and capacity usage,
-So that I can see at a glance what's in each sprint and how much capacity remains.
+I want the `sprint-status-view` skill to read all sprint data from the single `sprint-status.yaml` file,
+So that sprint status display is fast and consistent with no cross-file reconciliation needed.
 
 **Acceptance Criteria:**
 
-**Given** the sprint-status workflow is invoked
-**When** the status is displayed
-**Then** it shows:
+**Given** the `sprint-status-view` skill is invoked
+**When** it reads `sprint-status.yaml`
+**Then** it displays a formatted view from the three sections:
 ```
-Sprint 3 (active) — 4/6 items
-  ● 5-5-explicit-parameter-passing [story] — in-progress
-  ● 5-6-fix-space-in-path-bug [story] — backlog
-  ○ BUG-path-spaces [bug, high] — ready-for-dev
-  ● 15-1-bump-bmad-method [story] — backlog
+=== Epics ===
+Epic 5: Bundled BMAD Installation [in-progress] (2/6 done)
+Epic 17: Sprint Management Model Rework [planning] (0/15 done)
 
-Backlog — 12 unassigned items
-  1. 15-2-restructure-extension-module [story]
-  2. 15-3-convert-custom-agents [story]
+=== Sprint 3 (active) — 4/6 items ===
+  * 5-5-explicit-parameter-passing [story] — in-progress
+  * 5-6-fix-space-in-path-bug [story] — review
+  * BUG-path-spaces [bug, high] — ready-for-dev
+  * 15-1-bump-bmad-method [story] — backlog
+
+=== Backlog — 12 items ===
+  1. 15-2-restructure-extension-module [story] — ready-for-dev
+  2. 15-3-convert-custom-agents [story] — backlog
   ...
 ```
 
-**Given** done items have been cleaned up (Story 17.6)
-**When** the sprint status is viewed
-**Then** done items do NOT appear in the sprint or backlog sections
-**And** a summary line shows: "X items completed this sprint"
+**Given** no `sprint-status.yaml` file exists
+**When** the skill is invoked
+**Then** it reports: "No sprint-status.yaml found. Run sprint planning to initialize."
 
-**Given** the sprint-status.yaml file is generated
-**When** it is written
-**Then** it only contains non-done items in `development_status`
-**And** sprint metadata is included in the header comments
+**Given** the file contains multiple sprints (one active, others closed or planning)
+**When** the status is displayed
+**Then** the active sprint is shown first, followed by planning sprints, then a summary of closed sprints
 
 **Technical notes:**
-- Reworks the existing sprint-status workflow and the sprint-status-template.yaml
+- Reworks the existing `sprint-status-view` skill
+- Single file read — no cross-file reconciliation needed (previously had to merge backlog.yaml + sprint files + sprint-status.yaml)
 - The display format should work well for both human reading and LLM parsing
-- sprint-status.yaml becomes a derived file: generated from backlog.yaml + sprint files
+- Does NOT write to the file — read-only operation
+
+### Story 17.14: Rework cleanup-done Skill (Heavy Rework — Single Source)
+
+As a **Scrum Master**,
+I want the `cleanup-done` skill to scan the unified `sprint-status.yaml` for done items, remove them from the file, and archive their story files,
+So that the active sprint view stays clean and done work is preserved in the archive.
+
+**Acceptance Criteria:**
+
+**Given** items with `status: done` exist in the `sprints` section of `sprint-status.yaml`
+**When** the `cleanup-done` skill is invoked
+**Then** each done item is REMOVED from its sprint's `items` array (FR136)
+**And** the corresponding story/bug file is moved to `{implementation_artifacts}/done/` (FR131)
+**And** if the `done/` subfolder doesn't exist, it is created
+
+**Given** items with `status: done` exist in the `backlog` section (edge case — done but never sprint-assigned)
+**When** the `cleanup-done` skill is invoked
+**Then** those items are also REMOVED from the `backlog` array and their files archived
+
+**Given** a story file exists at `{implementation_artifacts}/{story-id}.md`
+**When** the story reaches `done` status and cleanup runs
+**Then** the file is moved to `{implementation_artifacts}/done/{story-id}.md`
+
+**Given** a bug file exists at `{implementation_artifacts}/BUG-{title}.md`
+**When** the bug reaches `done` status and cleanup runs
+**Then** the file is moved to `{implementation_artifacts}/done/BUG-{title}.md`
+
+**Given** all items in a sprint reach `done` status and are cleaned up
+**When** the sprint has zero remaining items
+**Then** the sprint's `items` array is empty but the sprint definition is preserved (historical record)
+**And** the skill suggests closing the sprint (see Story 17.21)
+
+**Technical notes:**
+- Reworks the existing `cleanup-done` skill
+- Single file read-modify-write on `sprint-status.yaml`
+- File move uses `fs.rename()` — not copy+delete
+- The `done/` subfolder already exists at `_bmad-output/implementation-artifacts/done/` — this story formalizes its use
+- Cleanup can be triggered explicitly or as part of sprint-status-view and sprint-planning workflows
+
+### Story 17.15: Rework bmad-sprint-planning Skill (Heavy Rework — Bootstrap Unified File)
+
+As a **Scrum Master**,
+I want the `bmad-sprint-planning` skill to bootstrap or update the unified `sprint-status.yaml` from the epics document,
+So that sprint planning always starts from a complete, consistent single file.
+
+**Acceptance Criteria:**
+
+**Given** no `sprint-status.yaml` exists (first-time setup)
+**When** the Scrum Master invokes `bmad-sprint-planning`
+**Then** it creates `sprint-status.yaml` with:
+  - `epics` section populated from `epics.md` (all epics with title, status, story counts)
+  - `backlog` section populated with all non-done stories and bugs in priority order
+  - `sprints` section initialized as an empty array `[]`
+
+**Given** `sprint-status.yaml` already exists
+**When** the Scrum Master invokes `bmad-sprint-planning`
+**Then** the `epics` section is refreshed from `epics.md` (new epics added, counts updated)
+**And** new stories from `epics.md` that don't exist in `backlog` or any `sprints` section are added to `backlog`
+**And** existing items in `backlog` and `sprints` sections are NOT modified (preserves status, priority, sprint assignments)
+**And** done items are NOT reintroduced (they stay in the `done/` archive)
+
+**Given** the sprint-planning workflow includes cleanup
+**When** it detects items with `status: done` still in the file
+**Then** it runs the cleanup-done logic (Story 17.14) as part of the planning workflow
+
+**Technical notes:**
+- Reworks the existing `bmad-sprint-planning` skill
+- This is the primary bootstrap entry point for the unified file
+- Must handle the merge carefully: new items go to backlog, existing items stay where they are
+- The `epics` section is always fully regenerated (it's reference data, not user-managed)
+- Should be run at the start of each sprint planning session
+
+### Story 17.16: Rework add-sprint Skill (Moderate Rework — Section-Based)
+
+As a **Scrum Master**,
+I want the `add-sprint` skill to create a new sprint entry in the `sprints` section of `sprint-status.yaml`,
+So that new sprints are defined within the unified file rather than as separate files.
+
+**Acceptance Criteria:**
+
+**Given** the Scrum Master invokes `add-sprint`
+**When** the sprint details are provided (name, capacity, optional ISO start/end dates)
+**Then** a new sprint entry is appended to the `sprints` array in `sprint-status.yaml`:
+```yaml
+sprints:
+  - id: sprint-4
+    name: "Sprint 4"
+    status: planning
+    capacity: 6
+    start: "2026-04-15"
+    end: "2026-04-28"
+    items: []
+```
+**And** the sprint ID is auto-incremented from the highest existing sprint ID
+
+**Given** a sprint with `status: planning` already exists
+**When** a new sprint is created
+**Then** the new sprint is also created with `status: planning` (multiple planning sprints are allowed)
+**And** only one sprint can be `active` at a time
+
+**Given** `sprint-status.yaml` does not exist
+**When** `add-sprint` is invoked
+**Then** the skill reports: "No sprint-status.yaml found. Run sprint planning first to initialize the file."
+
+**Technical notes:**
+- Reworks the existing `add-sprint` skill (Story 12.1)
+- Writes to the `sprints` section of `sprint-status.yaml` instead of creating a separate `sprints/sprint-N.yaml` file
+- Sprint ID format: `sprint-{number}` (kebab-case, auto-incremented)
+- Capacity is defined by number of items (stories + bugs) per FR66
+
+### Story 17.17: Rework modify-sprint Skill (Moderate Rework — Section-Based)
+
+As a **Scrum Master**,
+I want the `modify-sprint` skill to update sprint metadata within the `sprints` section of `sprint-status.yaml`,
+So that sprint adjustments (capacity, dates, name, status) are made in the unified file.
+
+**Acceptance Criteria:**
+
+**Given** the Scrum Master invokes `modify-sprint` with a target sprint ID
+**When** the sprint exists in the `sprints` section
+**Then** the skill allows modification of: `name`, `capacity`, `start`, `end`, `status`
+**And** the updated sprint is written back to `sprint-status.yaml`
+
+**Given** the Scrum Master changes a sprint's `status` to `active`
+**When** another sprint is already `active`
+**Then** the skill warns that only one sprint can be active
+**And** requires the existing active sprint to be closed first (or offers to close it)
+
+**Given** the Scrum Master reduces capacity below the current item count
+**When** the modification is attempted
+**Then** the skill warns: "Sprint has N items but new capacity is M (M < N). Remove items first."
+**And** does NOT apply the capacity change until items are removed
+
+**Technical notes:**
+- Reworks the existing `modify-sprint` skill (Story 12.3)
+- Modifies the sprint entry in-place within the `sprints` array of `sprint-status.yaml`
+- Status transitions: `planning` -> `active` -> `closed`. No backward transitions except via the Scrum Master explicitly overriding.
+
+### Story 17.18: Rework bmad-dev-story Skill (Moderate Rework — Cross-Section Status Update)
+
+As a **Developer**,
+I want the `bmad-dev-story` skill to update story status in-place within `sprint-status.yaml` regardless of which section the story resides in,
+So that development progress is reflected in the unified file without manual status updates.
+
+**Acceptance Criteria:**
+
+**Given** a developer starts working on a story via `bmad-dev-story`
+**When** the story transitions from `ready-for-dev` to `in-progress`
+**Then** the skill finds the item in `sprint-status.yaml` (searching both `backlog` and all `sprints[].items`)
+**And** updates the item's `status` field in-place (FR135)
+
+**Given** a developer completes a story
+**When** the story transitions to `review` or `done`
+**Then** the status is updated in-place in whichever section the item currently resides
+**And** if the status becomes `done`, the cleanup-done logic can be triggered (or deferred to explicit cleanup)
+
+**Given** the story ID is not found in `sprint-status.yaml`
+**When** the skill attempts to update status
+**Then** it reports: "Story {id} not found in sprint-status.yaml. It may have been archived to done/ or not yet added to the backlog."
+
+**Technical notes:**
+- Reworks the existing `bmad-dev-story` skill
+- Must search across both `backlog` and all `sprints[].items` sections to find the item by `id`
+- Write is a targeted update — only the `status` field changes, all other fields preserved
+- Cross-section search is needed because a developer may work on a story whether or not it's sprint-assigned
+
+### Story 17.19: Rework story-status-lookup Skill (Light Rework — Cross-Section Search)
+
+As a **Developer**,
+I want the `story-status-lookup` skill to search the unified `sprint-status.yaml` for any story's current status,
+So that code can be classified as delivered or work-in-progress from a single data source.
+
+**Acceptance Criteria:**
+
+**Given** the `story-status-lookup` skill is invoked with a story ID
+**When** the story exists in the `backlog` section of `sprint-status.yaml`
+**Then** it returns the item's status and notes it is "in backlog (unassigned)"
+
+**Given** the story exists in a sprint's `items` array
+**When** the lookup completes
+**Then** it returns the item's status and notes which sprint it is assigned to (e.g., "in sprint-3")
+
+**Given** the story is not found in `sprint-status.yaml`
+**When** the lookup checks the `done/` archive folder
+**Then** it reports: "Story {id} is archived (done)" if the file exists in `done/`
+**Or** reports: "Story {id} not found in sprint-status.yaml or done/ archive"
+
+**Technical notes:**
+- Reworks the existing `story-status-lookup` skill
+- Single file search across `backlog` + all `sprints[].items` sections
+- Fallback: check `done/` folder for archived stories
+- The `always_load: true` flag in MANIFEST.yaml remains — this skill is loaded every session
+- The Jira extension point reserved in this skill is activated by Story 17.22
+
+### Story 17.20: Rework bmad-sprint-status Skill (Light Rework — Structured Sections)
+
+As a **Project Manager**,
+I want the `bmad-sprint-status` skill to produce a concise risk-focused summary from the structured sections of `sprint-status.yaml`,
+So that sprint health and risks are surfaced quickly from the single source of truth.
+
+**Acceptance Criteria:**
+
+**Given** the `bmad-sprint-status` skill is invoked
+**When** it reads the `sprints` section of `sprint-status.yaml`
+**Then** it identifies the active sprint and calculates:
+  - Items by status: how many `in-progress`, `review`, `ready-for-dev`, `backlog`
+  - Capacity usage: items.length / capacity
+  - Blocked items: items with `status: blocked` (if any)
+
+**Given** the active sprint has items with concerning statuses
+**When** the summary is generated
+**Then** it flags risks:
+  - "3 of 6 items still in `backlog` status — not yet started"
+  - "Sprint at 100% capacity with 2 items in `ready-for-dev`"
+  - "No items in `review` or `done` — sprint may be at risk"
+
+**Given** the `epics` section contains epic-level data
+**When** the summary is generated
+**Then** it includes epic progress: "Epic 5: 2/6 done, Epic 17: 0/15 done"
+
+**Technical notes:**
+- Reworks the existing `bmad-sprint-status` skill
+- Reads from the structured sections of `sprint-status.yaml` — no cross-file joins needed
+- Output is optimized for LLM context (concise, structured) and human readability
+- This is the quick-summary variant; `sprint-status-view` (Story 17.13) is the detailed view
+
+### Story 17.21: New close-sprint Skill
+
+As a **Scrum Master**,
+I want a `close-sprint` skill that transitions a sprint from `active` to `closed`, archives all done items, and returns incomplete items to the backlog,
+So that sprint closure is a clean, well-defined workflow.
+
+**Acceptance Criteria:**
+
+**Given** the Scrum Master invokes `close-sprint`
+**When** an active sprint exists
+**Then** the skill displays the sprint summary: total items, done count, incomplete count
+
+**Given** the sprint has items with `status: done`
+**When** the sprint is closed
+**Then** all done items are REMOVED from the sprint's `items` array
+**And** their story/bug files are moved to `{implementation_artifacts}/done/` (same as cleanup-done)
+
+**Given** the sprint has incomplete items (status != `done`)
+**When** the sprint is closed
+**Then** the skill presents three options for handling incomplete items (FR137):
+  (a) **Move all to the next sprint** — all incomplete items are MOVED from the current sprint's `items` array to the next sprint's `items` array (the next sprint must exist in `planning` status; if no next sprint exists, the skill prompts to create one or falls back to option b)
+  (b) **Return all to backlog** — all incomplete items are MOVED from the sprint's `items` array back to the `backlog` section (FR134 — movement semantics), each receiving a `priority` value placing it at the top of the backlog (to be reprioritized)
+  (c) **Decide per item** — the skill iterates through each incomplete item and asks whether to move it to the next sprint or return it to the backlog
+**And** regardless of option chosen, each item's status is preserved (e.g., `in-progress` items stay `in-progress`)
+
+**Given** all items have been archived or returned to backlog
+**When** the sprint is fully processed
+**Then** the sprint's `status` is set to `closed`
+**And** the sprint's `items` array is empty `[]`
+**And** the sprint definition is preserved in the `sprints` section (historical record)
+**And** a summary is displayed: "Sprint N closed. X items archived, Y items returned to backlog."
+
+**Given** no active sprint exists
+**When** `close-sprint` is invoked
+**Then** it reports: "No active sprint found. Nothing to close."
+
+**Technical notes:**
+- NEW skill: `lib/bmad-extension/skills/close-sprint/`
+- Combines done-item archival (Story 17.14 logic) with incomplete-item return to backlog (Story 17.12 inverse)
+- Single file read-modify-write on `sprint-status.yaml` plus file moves for archived stories
+- After close-sprint, the Scrum Master typically runs `add-sprint` to create the next sprint
+
+### Story 17.22: Jira Adapter Pattern (tracking_system Switch)
+
+As a **Project Manager**,
+I want sprint management skills to read/write from Jira when `tracking_system` is configured as `jira`,
+So that teams using Jira for project tracking can use the same BMAD sprint skills with their Jira instance.
+
+**Acceptance Criteria:**
+
+**Given** `project-context.md` (or root directives) contains `tracking_system: file-system` (default)
+**When** any sprint management skill is invoked
+**Then** it reads/writes `sprint-status.yaml` on the local file system (current behavior)
+
+**Given** `project-context.md` contains `tracking_system: jira` with Jira connection config
+**When** any sprint management skill is invoked
+**Then** it reads/writes from the Jira API using the same data model (epics, backlog items, sprint items)
+**And** the Jira adapter maps: Jira Sprint -> `sprints[]` entries, Jira Backlog -> `backlog[]` entries, Jira Epic -> `epics[]` entries
+**And** Jira status fields are mapped to the same status vocabulary: `backlog`, `ready-for-dev`, `in-progress`, `review`, `done`
+
+**Given** the Jira adapter is active
+**When** an item is moved from backlog to sprint (Story 17.11 logic)
+**Then** the adapter calls the Jira REST API to move the issue to the target sprint
+**And** the local `sprint-status.yaml` is NOT written (Jira is the source of truth)
+
+**Given** the Jira connection fails (network error, auth failure, rate limit)
+**When** the skill detects the failure
+**Then** it reports the error clearly and suggests checking credentials/connectivity
+**And** does NOT fall back to file-system silently (explicit fail, no silent data divergence)
+
+**Given** the adapter pattern is implemented
+**When** a new backend is added in the future (e.g., Linear, Azure DevOps)
+**Then** only a new adapter module is needed — no changes to skill logic
+
+**Technical notes:**
+- Blocked on Epic 14 Story 14.3 (External Tooling Abstraction Layer architecture) — the adapter interface contract must be designed first
+- The adapter pattern uses a `resolveBackend(config)` function that returns either a `FilesystemBackend` or `JiraBackend` object implementing the same interface
+- Interface methods: `readSprintStatus()`, `writeSprintStatus(data)`, `moveItem(itemId, fromSection, toSection)`, `updateItemStatus(itemId, newStatus)`, `archiveItem(itemId)`
+- Credentials: environment variables (`JIRA_BASE_URL`, `JIRA_API_TOKEN`, `JIRA_USER_EMAIL`) as proposed by Epic 14 research
+- All 12 sprint skills call through the backend interface — they never read/write files directly
+- FR138 scope: same data model, different storage backend. Skills do NOT expose Jira-specific UI or fields.
+
+### Story 17.23: Migration and Deprecation of Old Files
+
+As a **DevOps Engineer**,
+I want the old three-file sprint model (`backlog.yaml`, `sprints/sprint-N.yaml`, `sprint-status.yaml` with old schema) automatically migrated to the unified `sprint-status.yaml`,
+So that existing projects transition cleanly without data loss.
+
+**Acceptance Criteria:**
+
+**Given** a project has the old `backlog.yaml` file
+**When** `bmad-sprint-planning` is run (Story 17.15) and `sprint-status.yaml` does not yet exist (or has the old schema)
+**Then** the migration reads `backlog.yaml` and imports all items into the `backlog` section of the new unified `sprint-status.yaml`
+**And** priority ordering from the old file is preserved
+
+**Given** a project has old `sprints/sprint-N.yaml` files
+**When** the migration runs
+**Then** each sprint file is imported as an entry in the `sprints` section of `sprint-status.yaml`
+**And** items referenced in old sprint files are matched to backlog items and moved to the sprint's `items` array
+
+**Given** the old `sprint-status.yaml` exists with the old schema (flat `development_status` list)
+**When** the migration detects the old format
+**Then** it extracts item statuses from the old file and applies them to the corresponding items in the new schema
+**And** the old file is backed up to `sprint-status.yaml.bak` before overwriting with the new schema
+
+**Given** the migration completes successfully
+**When** the new `sprint-status.yaml` is verified
+**Then** the old files are removed:
+  - `backlog.yaml` is deleted
+  - `sprints/` directory is deleted (if empty after migration)
+  - `sprint-status.yaml.bak` is preserved for 1 sprint cycle (manual deletion)
+
+**Given** the migration encounters conflicts (e.g., item in old backlog with different status than old sprint-status)
+**When** the conflict is detected
+**Then** the migration logs the conflict and uses the most recent status (from sprint-status.yaml or sprint file, whichever was modified last)
+**And** a migration report is generated listing all conflicts and resolutions
+
+**Technical notes:**
+- Migration runs as part of `bmad-sprint-planning` (Story 17.15) — not a separate skill
+- Old schema detection: if `sprint-status.yaml` has a `development_status` top-level key (old) vs `epics`/`backlog`/`sprints` keys (new)
+- The migration is idempotent — running it twice produces the same result
+- After one successful migration, subsequent `bmad-sprint-planning` runs skip migration logic (new schema detected)
+
+### Story 17.24: Rework `prioritize-backlog` Skill for Unified File
+
+As a **Scrum Master**,
+I want the `prioritize-backlog` skill to read and write the `backlog` section of the unified `sprint-status.yaml`,
+So that backlog reprioritization works against the single source of truth instead of the deprecated standalone `backlog.yaml` file.
+
+**Acceptance Criteria:**
+
+**Given** the `prioritize-backlog` skill is invoked
+**When** the unified `sprint-status.yaml` exists
+**Then** it reads items from the `backlog` section only (items already assigned to a sprint keep their priority and are NOT reprioritized)
+
+**Given** the Scrum Master reorders or adjusts priority values
+**When** the reprioritization is applied
+**Then** the skill writes updated `priority` values back to the `backlog` section of `sprint-status.yaml`
+**And** all other sections (`epics`, `sprints`) are preserved unchanged
+
+**Given** items exist in both `backlog` and `sprints` sections
+**When** the skill displays items for prioritization
+**Then** only `backlog` items are shown — sprint-assigned items are excluded from the prioritization view
+
+**Given** the old `backlog.yaml` file exists but `sprint-status.yaml` also exists
+**When** the skill is invoked
+**Then** it operates on `sprint-status.yaml` only (the old file is ignored; see Story 17.23 for migration)
+
+**Technical notes:**
+- Reworks the existing `prioritize-backlog` skill to read/write `sprint-status.yaml` `backlog` section instead of standalone `backlog.yaml`
+- Rework level: Light — the core prioritization logic (multi-criteria sorting, severity, business value, dependencies, type, age) remains unchanged; only the file I/O layer changes
+- Single file read-modify-write on `sprint-status.yaml`
+- Depends on Story 17.9 (unified schema definition)
+- FRs: FR133 (unified file), FR134 (movement semantics — prioritization respects section boundaries)
 
 ---
 
@@ -2530,7 +2907,7 @@ Backlog — 12 unassigned items
 
 **Goal:** Full Roo Code integration — ma-agents skill installation, BMAD agent personas as custom modes, planning instructions as rules, and BMAD workflows as slash commands.
 **FRs covered:** FR34 (extended to include Roo Code), FR36, FR38
-**Proposed FRs:** FR128 (Roo Code custom modes from BMAD agents), FR129 (Roo Code rules from BMAD instructions), FR130 (Roo Code slash commands from BMAD workflows), FR131 (Cline-to-Roo migration)
+**Proposed FRs:** FR142 (Roo Code custom modes from BMAD agents), FR143 (Roo Code rules from BMAD instructions), FR144 (Roo Code slash commands from BMAD workflows), FR145 (Cline-to-Roo migration)
 **Research:** `_bmad-output/planning-artifacts/domain-research-roocode-2026-03-31.md`
 **Dependency:** None (can proceed independently; upstream `bmad-method` already has `roo` in `platform-codes.yaml`)
 

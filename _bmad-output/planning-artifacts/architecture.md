@@ -5,6 +5,8 @@ phase2CompletedAt: '2026-03-11'
 phase2cStepsCompleted: ['step-02-context', 'step-04-decisions', 'step-06-structure', 'step-07-validation', 'step-08-complete']
 phase2cCompletedAt: '2026-03-26'
 phase2bEditHistory:
+  - date: '2026-04-03'
+    changes: 'Added P2-11: Unified Sprint-Status File Architecture — single sprint-status.yaml replaces 3-file model (backlog.yaml + sprints/sprint-N.yaml + sprint-status.yaml). Movement semantics, atomic operations, close-sprint lifecycle, done archival, Jira adapter pattern. Updated P2-5 to include close-sprint and remove-from-sprint workflows (6 extension workflows, up from 4). Updated extension module structure trees, skill counts (44, up from 42), project structure, FR coverage tables, and validation sections. Added prioritize-backlog to skill integration map (13 skills). Fixed FR count to 141. Fixed sprint-status.yaml canonical path to implementation-artifacts/. Marked P2-3 as superseded by P2-9.'
   - date: '2026-03-26'
     changes: 'Revised P2-6: Explicit CLI parameter passing replaces silent install (FR123-FR127). Added P2-9: BMAD 6.2.0 Migration — agents as skill folders, 34 workflows as SKILL.md packages, module.yaml with code field, --custom-content deployment, .customize.yaml for 8 built-in agents only. Added P2-10: Multi-repo project layout — config-driven path resolution, project-layout.yaml cross-reference. Verified architecture against CIS module source and BMAD 6.2.0 customize docs. Updated project structure tree, implementation sequence, cross-component dependencies. Moved F8 Dashboard to Phase 3. Added wds to bmad-cache, bumped bmad-method pin to 6.2.0.'
   - date: '2026-03-19'
@@ -33,7 +35,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 ### Requirements Overview
 
 **Functional Requirements:**
-76 FRs across 14 capability areas (Phase 1: 50 FRs across 8 areas + Phase 2: 26 FRs across 6 areas, minus FR77-FR78 deleted). The architecture must support: (1) a content transformation pipeline that translates skills into agent-native formats, (2) a BMAD lifecycle management subsystem, (3) MIL-STD-498 document generation workflows delivered via BMAD, (4) manifest-based version tracking across multi-agent installs, and (5) skill authoring and governance capabilities.
+141 FRs across 14 capability areas (Phase 1: 50 FRs across 8 areas + Phase 2: 91 FRs across 6 areas, minus FR77-FR78 deleted). The architecture must support: (1) a content transformation pipeline that translates skills into agent-native formats, (2) a BMAD lifecycle management subsystem, (3) MIL-STD-498 document generation workflows delivered via BMAD, (4) manifest-based version tracking across multi-agent installs, (5) skill authoring and governance capabilities, and (6) unified sprint-status management with movement semantics and tracking-system adapter pattern.
 
 **Non-Functional Requirements:**
 21 NFRs across 6 categories driving architectural decisions (original 15 + Phase 2 NFR16-NFR21):
@@ -86,7 +88,7 @@ Skill enforcement touches multiple architectural boundaries:
 - 2 new injection strategies (TOP placement, JSON merge)
 - 1 new shipped artifact type (BMAD extension module)
 - 1 new agent (OpenCode) in registry
-- 4 new BMAD extension workflows (bug story, add sprint, modify sprint, add items to sprint)
+- 6 new BMAD extension workflows (bug story, add sprint, modify sprint, add items to sprint, remove from sprint, close sprint)
 - 1 new skill (`auto-bug-detection`)
 - 4 updated `.customize.yaml` files (SRE, DevOps, Cyber, MIL-498) with skill-loading `critical_actions`
 - 1 new bundled dependency (bmad-method v6.0.4)
@@ -283,7 +285,7 @@ The agent registry in `agents.js` gains an `injectionStrategy` property per agen
 
 **Affects:** `agents.js` (new agent entry), `installer.js` (JSON injection path alongside markdown injection)
 
-#### Decision P2-3: BMAD Extension Module Structure (FR52, NFR16-NFR17)
+#### Decision P2-3: BMAD Extension Module Structure (FR52, NFR16-NFR17) **[SUPERSEDED by P2-9]**
 
 **Decision:** Consolidated extension module in `lib/bmad-extension/`
 
@@ -346,17 +348,19 @@ critical_actions:
 
 #### Decision P2-5: Pre-built Extension Workflows (FR61, FR68-FR70)
 
-**Decision:** Author workflows directly in `lib/bmad-extension/workflows/` as static content
+**Decision:** Author workflows directly in `lib/bmad-extension/skills/` as static content
 
-4 workflows shipped as pre-built BMAD workflow files:
+6 workflows shipped as pre-built BMAD skill files:
 1. `create-bug-story` — generates a structured bug story from a bug report (FR61)
-2. `add-sprint` — creates a new sprint with capacity and iteration ID (FR68)
-3. `add-to-sprint` — assigns stories/bugs from backlog to a sprint (FR69)
-4. `modify-sprint` — reorder, swap items, adjust capacity (FR70)
+2. `add-sprint` — creates a new sprint entry in the unified `sprint-status.yaml` with capacity and iteration ID (FR68)
+3. `add-to-sprint` — moves items from `backlog:` section to a sprint's `items:` in unified `sprint-status.yaml` (FR69)
+4. `modify-sprint` — updates sprint metadata, reorder items, adjust capacity in unified `sprint-status.yaml` (FR70)
+5. `close-sprint` — sprint close lifecycle: archive done items, handle canceled items, disposition remaining items (new — see P2-11)
+6. `remove-from-sprint` — moves items from a sprint's `items:` back to `backlog:` section in unified `sprint-status.yaml`
 
-Workflows are registered in `module-help.csv` for phase discovery. They function identically whether invoked via BMAD agent menu or direct slash command (NFR19).
+All sprint management workflows operate on the unified `sprint-status.yaml` file (see P2-11 for data architecture). Workflows are registered in `module-help.csv` for phase discovery. They function identically whether invoked via BMAD agent menu or direct slash command (NFR19).
 
-**Affects:** `lib/bmad-extension/workflows/` (4 workflow directories), `lib/bmad-extension/module-help.csv`
+**Affects:** `lib/bmad-extension/skills/` (6 workflow directories), `lib/bmad-extension/module-help.csv`
 
 #### Decision P2-6: Bundled BMAD Installation with Explicit Parameter Passing (FR74-FR76, FR123-FR127, NFR20-NFR21)
 
@@ -677,12 +681,18 @@ lib/bmad-extension/
     ├── create-bug-story/                    — bug story from report (FR61)
     │   ├── SKILL.md
     │   └── bmad-skill-manifest.yaml
-    ├── add-sprint/                          — new sprint with capacity (FR68)
-    ├── modify-sprint/                       — change/modify sprint (FR70)
-    └── add-to-sprint/                       — assign items to sprint (FR69)
+    ├── add-sprint/                          — new sprint entry in unified sprint-status.yaml (FR68)
+    ├── modify-sprint/                       — update sprint metadata/items in unified file (FR70)
+    ├── add-to-sprint/                       — move items from backlog to sprint in unified file (FR69)
+    ├── close-sprint/                        — sprint close lifecycle: archive done, disposition remaining (P2-11)
+    │   ├── SKILL.md
+    │   └── bmad-skill-manifest.yaml
+    └── remove-from-sprint/                  — move items from sprint back to backlog
+        ├── SKILL.md
+        └── bmad-skill-manifest.yaml
 ```
 
-**Total skills in module:** 4 agents + 11 MIL-498 + 9 SRE + 6 DevOps + 8 Cyber + 4 extension workflows = **42 skills**
+**Total skills in module:** 4 agents + 11 MIL-498 + 9 SRE + 6 DevOps + 8 Cyber + 6 extension workflows = **44 skills**
 
 **`bmad-skill-manifest.yaml` patterns:**
 
@@ -877,7 +887,7 @@ BMAD workflows resolve artifact paths by reading config at runtime. The resoluti
 2. If value is `"."` → current repo (default, backward compatible)
 3. If value is an absolute path → use that path
 4. All planning artifact output goes to `{knowledgebase_path}/_bmad-output/planning-artifacts/`
-5. All sprint artifact output goes to `{sprint_management_path}/_bmad-output/sprints/`
+5. Sprint tracking lives at `{sprint_management_path}/_bmad-output/implementation-artifacts/sprint-status.yaml` (unified file per P2-11)
 
 **Implementation note:** The actual path resolution happens inside BMAD workflows, not in ma-agents code. ma-agents' job is to (1) collect the paths during installation, (2) store them in config, and (3) stamp them into `project-context.md`. BMAD workflows use the config values. This means no changes to `installer.js`, `agents.js`, or `bmad.js` beyond the wizard collection and config write.
 
@@ -899,7 +909,156 @@ In `--yes` mode, both concerns default to "current repository" — no repo layou
 
 **Affects:** `cli.js` (new wizard section), `_bmad/core/config.yaml` (new fields), `_bmad-output/project-layout.yaml` (new file), `lib/templates/project-context.template.md` (new section), BMAD workflows (path resolution from config — not ma-agents code changes)
 
-#### Phase 2 Decision Impact Analysis (Updated 2026-03-26)
+#### Decision P2-11: Unified Sprint-Status File Architecture (2026-04-03)
+
+**Decision:** Consolidate sprint/backlog management into a single `sprint-status.yaml` file with structured sections, movement semantics, and a tracking-system adapter pattern
+
+**Problem:** The previous sprint management design used 3 separate files: `backlog.yaml` (flat prioritized story list), `sprints/sprint-N.yaml` (individual sprint entity files), and `sprint-status.yaml` (status tracking). Multiple files create consistency issues — dual-writes fail, status diverges across files, and users encounter contradictory data. Skills that read or write sprint data must cross-reference multiple sources, increasing complexity and error surface.
+
+**Architecture — Unified File Schema:**
+
+All sprint and backlog data lives in a single `sprint-status.yaml`:
+
+```yaml
+generated: "2026-04-03T12:00:00Z"
+last_updated: "2026-04-03T12:00:00Z"
+project: ProjectName
+project_key: KEY
+tracking_system: file-system    # or "jira" — see adapter pattern below
+story_location: _bmad-output/implementation-artifacts
+
+epics:
+  epic-1:
+    status: in-progress          # backlog → in-progress → done
+    retrospective: optional      # link to retrospective artifact
+
+backlog:
+  - id: "3-1-story-name"
+    type: story                  # story | bug
+    epic: 3
+    title: "Story Title"
+    priority: 1
+    status: backlog              # backlog → ready-for-dev → in-progress → review → done
+    severity: null               # only for bugs: critical | high | medium | low
+
+sprints:
+  sprint-1:
+    name: "Foundation Sprint"
+    status: active               # planning → active → closed
+    capacity: 21
+    start: "2026-04-03"
+    end: "2026-04-14"
+    items:
+      - id: "1-2-story-name"
+        type: story
+        epic: 1
+        title: "Story Title"
+        status: in-progress
+        severity: null
+```
+
+**Core Design Principles:**
+
+1. **Single file, atomic operations** — all reads and writes target one file, eliminating dual-write consistency bugs. Skills use read-modify-write with YAML validation before write.
+
+2. **Movement semantics** — an item exists in exactly ONE section at any time: either `backlog:` or a specific sprint's `items:` list. Moving an item means removing it from the source section and appending it to the target section in a single atomic write. No item duplication, no cross-reference reconciliation.
+
+3. **Status progression on items:**
+   - `backlog` → `ready-for-dev` → `in-progress` → `review` → `done` (plus `on-hold` and `cancelled` — see schema spec)
+   - Items in `backlog:` section typically have status `backlog`, but may have other statuses (e.g., `ready-for-dev` awaiting sprint assignment)
+   - Items in a sprint's `items:` may have any status from `ready-for-dev` through `done`
+   - Only items with status `ready-for-dev` may be added to a sprint via `add-to-sprint`
+
+4. **Epic status in structured section:**
+   - `backlog` → `in-progress` → `done`
+   - Epic status is derived from constituent story progress but stored explicitly for fast lookup
+   - Each epic key holds a map with `status` and optional `retrospective` link
+
+5. **Sprint lifecycle states:**
+   - `planning` → `active` → `closed`
+   - Only one sprint may be `active` at a time
+   - `planning` sprints can receive items via `add-to-sprint`
+   - `closed` sprints are immutable — no item changes allowed
+
+**Close-Sprint Lifecycle Workflow:**
+
+The `close-sprint` skill implements a structured sprint closure:
+
+1. **Done items → archive:** Items with status `done` are removed from the sprint's `items:` list. Their corresponding story files are moved from `{story_location}/` to `{story_location}/done/`.
+
+2. **Canceled items → archive separately:** Items explicitly marked as canceled are removed and their story files moved to `{story_location}/done/` with a canceled notation.
+
+3. **Remaining items → user decides:** For each item still in-progress, review, or ready-for-dev, the user is prompted:
+   - Move to next sprint (if one exists in `planning` state)
+   - Return to backlog (resets status to `backlog`, item moves to `backlog:` section)
+   - Decide per-item (interactive item-by-item disposition)
+
+4. **Sprint status → closed:** After all items are dispositioned, the sprint's `status` is set to `closed`. The sprint entry remains in the file as historical record (no deletion).
+
+5. **Timestamps updated:** `last_updated` is refreshed. Sprint `end` date is set to actual close date if different from planned.
+
+**Done Archival Pattern:**
+
+When items are archived (removed from `sprint-status.yaml`):
+- The item is deleted from the sprint's `items:` list
+- The corresponding story file at `{story_location}/{id}.md` is moved to `{story_location}/done/{id}.md`
+- No trace of the item remains in `sprint-status.yaml` — the `done/` folder is the archive
+- This keeps the active file lean and focused on current work
+
+**Jira Adapter Pattern:**
+
+The `tracking_system` field switches between backends:
+
+```yaml
+tracking_system: file-system    # default — all operations read/write sprint-status.yaml
+tracking_system: jira           # future — operations proxy to Jira API
+```
+
+- **`file-system` backend (current):** All 13 affected skills read/write `sprint-status.yaml` directly. The file is the single source of truth.
+- **`jira` backend (future):** Skills detect `tracking_system: jira` and delegate to a Jira adapter module. The adapter translates unified data model operations (move item, update status, close sprint) into Jira API calls. The `sprint-status.yaml` schema is the canonical data contract — Jira responses are mapped into the same structure.
+- **Same data model:** Both backends expose identical data shapes. Skills never branch on backend type for business logic — only the I/O layer differs.
+
+**Skill Integration Map (13 skills affected):**
+
+| Skill | Rework Level | Operation | Section(s) Touched |
+|-------|-------------|-----------|-------------------|
+| `generate-backlog` | Heavy | Writes items to `backlog:` section from epics | `backlog:`, `epics:` |
+| `add-to-sprint` | Heavy | Moves item from `backlog:` to sprint `items:` | `backlog:`, `sprints:` |
+| `remove-from-sprint` | Heavy | Moves item from sprint `items:` back to `backlog:` | `sprints:`, `backlog:` |
+| `sprint-status-view` | Heavy | Reads single file, renders progress | All sections (read-only) |
+| `cleanup-done` | Heavy | Scans for done items, archives, removes from file | `sprints:`, file system |
+| `bmad-sprint-planning` | Heavy | Bootstraps unified file from epics data | Creates entire file |
+| `add-sprint` | Moderate | Adds sprint entry to `sprints:` section | `sprints:` |
+| `modify-sprint` | Moderate | Updates sprint entry in-place (metadata, items) | `sprints:` |
+| `bmad-dev-story` | Moderate | Finds item across sections, updates status field | `backlog:` or `sprints:` |
+| `story-status-lookup` | Light | Searches `backlog:` + all sprint `items:` for item | All sections (read-only) |
+| `bmad-sprint-status` | Light | Reads structured sections for summary | All sections (read-only) |
+| `prioritize-backlog` | Light | Reads/writes `backlog:` section to reorder items by priority criteria | `backlog:` |
+| `close-sprint` | New | Full sprint close lifecycle (see above) | `sprints:`, `backlog:`, file system |
+
+**Note on skill ownership:** Of the 13 affected skills, 6 are extension module skills delivered via `lib/bmad-extension/skills/` (add-sprint, add-to-sprint, remove-from-sprint, modify-sprint, close-sprint, cleanup-done) and 7 are existing BMAD/ma-agents skills being reworked (generate-backlog, sprint-status-view, bmad-sprint-planning, bmad-dev-story, story-status-lookup, bmad-sprint-status, prioritize-backlog).
+
+**File Location Resolution:**
+
+In single-repo mode, `sprint-status.yaml` lives at:
+```
+{sprint_management_path}/_bmad-output/implementation-artifacts/sprint-status.yaml
+```
+
+In multi-repo mode (P2-10), `sprint_management_path` from `_bmad/core/config.yaml` resolves to the sprint management repository. The file path is always `_bmad-output/implementation-artifacts/sprint-status.yaml` relative to that root.
+
+**Migration from 3-file model:**
+
+If a project has existing `backlog.yaml`, `sprints/sprint-N.yaml`, or the old `sprint-status.yaml`:
+1. `bmad-sprint-planning` detects the legacy files and offers to migrate
+2. Items from `backlog.yaml` are loaded into the `backlog:` section
+3. Sprint entities from `sprints/sprint-N.yaml` are loaded into `sprints:` with their items
+4. Status data from old `sprint-status.yaml` is used to set item statuses
+5. Legacy files are renamed with `.legacy` suffix (not deleted — user can verify and remove)
+
+**Affects:** All 13 skills listed in the integration map above, `sprint-status.yaml` (new unified file), `{story_location}/done/` (archive directory)
+
+#### Phase 2 Decision Impact Analysis (Updated 2026-04-03)
 
 **Implementation Sequence:**
 1. Agent registry extension (`agents.js`) — add OpenCode + `injectionStrategy` to all agents
@@ -916,12 +1075,17 @@ In `--yes` mode, both concerns default to "current repository" — no repo layou
 12. Project context auto-generation (`installer.js`, `lib/templates/project-context.template.md`)
 13. Multi-repo layout wizard (`cli.js`) — collect knowledgebase/sprint paths, write config + project-layout.yaml (P2-10)
 14. Migration detection (`bmad.js`) — detect 6.0.4, back up, upgrade, merge customizations (P2-9)
+15. Unified sprint-status file architecture — consolidate 3-file model into single `sprint-status.yaml`, update 13 skills (P2-11)
+16. Close-sprint workflow skill — sprint close lifecycle with done archival and item disposition (P2-11)
 
 **New Cross-Component Dependencies:**
 - `injectionStrategy` in `agents.js` drives `installer.js` injection behavior
 - `bmad.js` deploys `lib/bmad-extension/` via `--custom-content` — all extension content moves together
 - `bmad.js` separately deploys `.customize.yaml` for 8 built-in agents AFTER `--custom-content`
 - `critical_actions` in agent SKILL.md and `.customize.yaml` reference `skills/MANIFEST.yaml` — depends on skill installation completing first
+- All sprint management skills read/write the unified `sprint-status.yaml` — single file eliminates cross-file consistency concerns
+- `close-sprint` skill depends on `story_location` field in `sprint-status.yaml` to resolve archive paths
+- `sprint-status.yaml` location depends on `sprint_management_path` from P2-10 multi-repo config
 - Multi-repo config in `_bmad/core/config.yaml` is read by BMAD workflows at runtime — ma-agents writes it, BMAD workflows consume it
 - `project-layout.yaml` in code repo enables agents to discover cross-repo paths without re-running installation
 
@@ -1185,9 +1349,11 @@ ma-agents/
 │   │       ├── devops-configure-infrastructure/ ... devops-sign-docker-image/ — (6 DevOps playbooks)
 │   │       ├── cyber-vulnerability-scan/ ... cyber-verify-image-signature/ — (8 Cyber playbooks)
 │   │       ├── create-bug-story/            — bug story from report (FR61)
-│   │       ├── add-sprint/                  — new sprint with capacity (FR68)
-│   │       ├── modify-sprint/               — change/modify sprint (FR70)
-│   │       └── add-to-sprint/               — assign items to sprint (FR69)
+│   │       ├── add-sprint/                  — new sprint entry in unified sprint-status.yaml (FR68)
+│   │       ├── modify-sprint/               — update sprint metadata/items in unified file (FR70)
+│   │       ├── add-to-sprint/               — move items from backlog to sprint in unified file (FR69)
+│   │       ├── close-sprint/               — sprint close lifecycle: archive done, disposition remaining (P2-11)
+│   │       └── remove-from-sprint/         — move items from sprint back to backlog
 │   └── bmad-customize/             — .customize.yaml for built-in BMM agents (deployed to _bmad/_config/agents/)
 │       ├── bmm-pm.customize.yaml            — critical_actions only
 │       ├── bmm-architect.customize.yaml
@@ -1219,7 +1385,9 @@ ma-agents/
 │
 ├── _bmad-output/                   — BMAD workflow outputs (version-controlled as project knowledge, NOT git-ignored per F3)
 │   ├── planning-artifacts/         — PRD, architecture, epics
-│   └── implementation-artifacts/   — stories, specs
+│   ├── implementation-artifacts/   — stories, specs
+│   │   ├── done/                   — archived done/canceled story files (P2-11 close-sprint)
+│   │   └── sprint-status.yaml      — unified sprint/backlog tracking (P2-11 — single source of truth)
 │
 ├── docs/                           — generated project documentation
 │   ├── index.md                    — documentation master index
@@ -1268,8 +1436,8 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 | Skill Enforcement (FR51-55) | `installer.js` + `agents.js` + `bmad.js` | `lib/bmad-extension/agents/` |
 | OpenCode Support (FR56-58) | `agents.js` + `installer.js` | `.opencode/`, `opencode.json` |
 | Project Knowledge (FR59-60) | `installer.js` | `.gitignore` modification |
-| Bug Management (FR61-65) | BMAD extension workflows + skill | `lib/bmad-extension/workflows/`, `skills/auto-bug-detection/` |
-| Sprint Management (FR66-71) | BMAD extension workflows | `lib/bmad-extension/workflows/` |
+| Bug Management (FR61-65) | BMAD extension workflows + skill | `lib/bmad-extension/skills/`, `skills/auto-bug-detection/` |
+| Sprint Management (FR66-71) | BMAD extension workflows + unified `sprint-status.yaml` (P2-11) | `lib/bmad-extension/skills/`, `_bmad-output/implementation-artifacts/sprint-status.yaml` |
 | Bundled BMAD (FR74-FR76) | `bmad.js` + `lib/bmad-cache/` + `package.json` | `lib/bmad-cache/`, `bmad.js` |
 
 ### Integration Points
@@ -1297,6 +1465,8 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 - P2-6 rev (explicit params) + P2-9 (module restructure) work together: `--custom-content` deploys the restructured module, explicit params ensure correct tool/module selection
 - P2-9 (agents as skills) + P2-4 (critical_actions) — clean separation: custom agents embed critical_actions in SKILL.md, built-in agents get critical_actions via `.customize.yaml`
 - P2-10 (multi-repo) integrates cleanly: config values written at install time, consumed by BMAD workflows at runtime
+- P2-11 (unified sprint-status) + P2-10 (multi-repo) — `sprint_management_path` resolves file location, unified file eliminates cross-repo dual-write risk
+- P2-11 (unified sprint-status) + P2-5 (extension workflows) — all 6 sprint workflows target the same single file, movement semantics enforce item uniqueness
 - bmad-method v6.2.0 pin aligns with skill-based module structure in P2-9
 
 **Note:** P2-3 (Extension Module Structure, 2026-03-11) is now HISTORICAL — superseded by P2-9 which restructures the extension module to follow BMAD 6.2.0 conventions. P2-4 (critical_actions) references updated: custom agents' critical_actions now live in SKILL.md (not `.customize.yaml`); built-in agent customizations now live in `lib/bmad-customize/` (not `lib/bmad-extension/agents/`).
@@ -1332,7 +1502,7 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 | OpenCode Support (FR56-57) | P2-2: JSON injection + new agent registry entry | COVERED |
 | Project Knowledge (FR58-59) | Gitignore pattern: remove `_bmad-output` from `.gitignore` | COVERED |
 | Bug Management (FR60-64) | P2-5: extension workflow skill + `auto-bug-detection` skill | COVERED |
-| Sprint Management (FR65-71) | P2-5: extension workflow skills (add/modify/add-to sprint) | COVERED |
+| Sprint Management (FR65-71) | P2-5 + P2-11: 6 extension workflow skills (add/modify/add-to/remove-from/close sprint) operating on unified `sprint-status.yaml` | COVERED |
 | Agent Activity Dashboard (FR87-93) | Deferred to Phase 3 | N/A |
 | Agent Conversion (FR94-97) | P2-9: agent skill folders with SKILL.md + bmad-skill-manifest.yaml | COVERED |
 | MIL-498 Workflow Conversion (FR98-100) | P2-9: Complex Workflow skills with prompts/ step files | COVERED |
@@ -1367,10 +1537,11 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 ### Implementation Readiness Validation
 
 **Decision Completeness:** HIGH
-- 10 Phase 2 decisions documented (P2-1 through P2-10, with P2-3 superseded by P2-9)
+- 11 Phase 2 decisions documented (P2-1 through P2-11, with P2-3 superseded by P2-9)
 - P2-6 rev includes code example with full parameter mapping table
 - P2-9 includes verified module structure from CIS, manifest examples, migration detection code
 - P2-10 includes wizard flow, config storage format, cross-reference file schema
+- P2-11 includes unified YAML schema, movement semantics, close-sprint lifecycle, Jira adapter pattern, 13-skill integration map
 
 **Pattern Completeness:** HIGH
 - CIS module pattern verified against actual source code — not assumed
@@ -1379,13 +1550,14 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 - `--custom-content` validation rules documented (requires module.yaml with code field)
 
 **Structure Completeness:** HIGH
-- Full directory tree updated with 42-skill extension module layout
+- Full directory tree updated with 44-skill extension module layout (42 + close-sprint + remove-from-sprint)
 - `lib/bmad-customize/` separated from `lib/bmad-extension/`
 - Module boundary table still accurate — `bmad.js` handles both extension and customize deployment
+- `_bmad-output/` structure updated with `sprint-status.yaml` and `done/` archive directory
 
 ### Gap Analysis Results
 
-**No Critical Gaps.** All 125 FRs and 37 NFRs have architectural support (excluding Phase 3 deferred items).
+**No Critical Gaps.** All 141 FRs and 37 NFRs have architectural support (excluding Phase 3 deferred items). P2-11 closes the sprint data consistency gap identified during skill development.
 
 **Important Gaps:**
 - Testing framework not yet decided — blocks regression testing
@@ -1400,7 +1572,7 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 ### Architecture Completeness Checklist
 
 **Requirements Analysis**
-- [x] Project context thoroughly analyzed (125 FRs, 37 NFRs)
+- [x] Project context thoroughly analyzed (141 FRs, 37 NFRs)
 - [x] Scale and complexity assessed
 - [x] Technical constraints identified
 - [x] Cross-cutting concerns mapped (enforcement, multi-repo path resolution, 6.2.0 migration)
@@ -1420,7 +1592,7 @@ User Input → cli.js → installer.js → agents.js (path lookup) → file syst
 - [x] Anti-patterns explicitly listed (both Phase 1 and Phase 2)
 
 **Project Structure**
-- [x] Complete directory structure defined (42-skill extension module)
+- [x] Complete directory structure defined (44-skill extension module)
 - [x] Component boundaries established (extension module vs customize files)
 - [x] Integration points mapped (--custom-content, config.yaml, project-layout.yaml)
 - [x] Requirements to structure mapping complete (all FR groups mapped)
