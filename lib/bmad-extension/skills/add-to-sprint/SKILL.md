@@ -1,6 +1,6 @@
 ---
 name: add-to-sprint
-description: Guided workflow to assign backlog items to a sprint from the flat prioritized backlog
+description: Guided workflow to assign backlog items to a sprint using multi-criteria prioritization
 type: skill
 triggers:
   - "add to sprint"
@@ -9,178 +9,204 @@ triggers:
 
 # Add-to-Sprint Workflow
 
-Guided workflow to assign unassigned backlog items to a sprint from the flat prioritized backlog.
+Guided workflow to assign backlog items (stories + bugs) to a sprint using multi-criteria prioritization.
 
 <workflow>
 
-<step n="1" goal="Load backlog and identify unassigned items">
-  <action>Read `_bmad-output/implementation-artifacts/backlog.yaml`</action>
-  <action>Parse the `backlog` array. Filter items where `sprint` is `null` (unassigned).</action>
-  <action>Sort filtered items by `priority` ascending (lowest number = highest priority).</action>
-  <action>Store as {{unassigned_items}} list.</action>
-  <check if="no unassigned items remain">
-    <output>All backlog items are already assigned to sprints. Nothing to assign.</output>
-    <action>Exit workflow</action>
+<step n="1a" goal="Discover user story backlog items from sprint-status.yaml">
+  <action>Read `_bmad-output/implementation-artifacts/sprint-status.yaml` — authoritative source for user story execution status</action>
+  <action>Parse the development_status section. For each entry:
+    - Skip epic keys (keys matching `epic-*`)
+    - Skip retrospective keys (keys ending with `-retrospective`)
+    - Collect story keys and their current status (backlog, ready-for-dev, in-progress, review, done)
+  </action>
+  <action>Store as {{user_stories}} — list of objects with: key, status</action>
+  <action>Infer story title from key (e.g., `12-1-add-sprint-workflow` → "Add Sprint Workflow")</action>
+</step>
+
+<step n="1b" goal="Discover bug story backlog items">
+  <action>Glob `_bmad-output/implementation-artifacts/bug-*.md` to discover all bug story files</action>
+  <check if="no bug files found">
+    <action>Set {{bug_stories}} = [] (empty list)</action>
+  </check>
+  <check if="bug files found">
+    <action>For each bug file, parse YAML frontmatter to extract: `type`, `severity`, `title`</action>
+    <action>Store as {{bug_stories}} — list of objects with: file, type (bug), severity, title</action>
   </check>
 </step>
 
-<step n="2" goal="Load sprints and select target">
-  <action>Glob `_bmad-output/implementation-artifacts/sprints/sprint-*.yaml` to discover all sprint files</action>
+<step n="1c" goal="Filter out items already assigned to any sprint">
+  <action>Glob `_bmad-output/implementation-artifacts/sprint-plan-*.yaml` to discover all existing sprint artifact files</action>
+  <action>For each sprint file found, read its assigned_items list</action>
+  <action>Build {{all_assigned_items}} = flat set of every item identifier (story keys and bug basenames) across ALL sprint plans</action>
+  <action>Filter {{user_stories}}: remove any story whose key is present in {{all_assigned_items}}</action>
+  <action>Filter {{bug_stories}}: remove any bug whose file basename is present in {{all_assigned_items}}</action>
+  <action>Items already assigned to any sprint will NOT appear in the backlog — this prevents duplicate assignment</action>
   <check if="no sprint files found">
-    <output>No sprints exist. Run `/add-sprint` first to create a sprint before assigning items.</output>
-    <action>Exit workflow</action>
+    <action>Set {{all_assigned_items}} = [] — no filtering needed when no sprints exist yet</action>
   </check>
-  <action>Read each sprint file; extract: id, name, status, capacity, items (array length = assigned count)</action>
-  <action>Sort sprints by status: `active` first, then `planning`, then `closed`</action>
-  <action>Display sprints table (closed sprints shown but marked as not selectable):</action>
-  <output>
-## Available Sprints
+</step>
 
-| # | ID | Name | Status | Capacity | Assigned | Remaining |
-|---|---|---|---|---|---|---|
-{{#each sprints}}
-| {{@index+1}} | {{id}} | {{name}} | {{status}} | {{capacity}} | {{assigned_count}} | {{remaining}} |
+<step n="2" goal="Present flat backlog combining stories and bugs">
+  <action>Combine {{user_stories}} and {{bug_stories}} into a flat backlog list</action>
+  <action>Stories and bugs are peers — no epic grouping (FR65)</action>
+  <output>
+## 📋 Backlog Items
+
+| # | ID / File | Title | Type | Status/Severity |
+|---|---|---|---|---|
+{{#each backlog_items}}
+| {{@index+1}} | {{id}} | {{title}} | {{type}} | {{status_or_severity}} |
 {{/each}}
 
-*Closed sprints are shown for reference but cannot be selected.*
+*Total: {{story_count}} stories, {{bug_count}} bugs*
   </output>
-  <check if="exactly one active sprint exists">
-    <output>Auto-selecting active sprint: {{active_sprint.name}} ({{active_sprint.id}})</output>
-    <ask>Proceed with this sprint? [y] Yes / [n] Choose a different sprint:</ask>
-    <check if="user selects 'y'">
-      <action>Set {{target_sprint}} = the active sprint</action>
-    </check>
-    <check if="user selects 'n'">
-      <ask>Select target sprint by number (active or planning only):</ask>
-      <action>Validate selection is not a closed sprint</action>
-      <action>Store as {{target_sprint}}</action>
-    </check>
-  </check>
-  <check if="no active sprint exists OR multiple active/planning sprints">
-    <ask>Select target sprint by number (active or planning only):</ask>
-    <action>Validate selection is not a closed sprint</action>
-    <check if="user selected a closed sprint">
-      <output>Closed sprints cannot receive new items. Select an active or planning sprint.</output>
-      <goto step="2" />
-    </check>
-    <action>Store as {{target_sprint}}</action>
-  </check>
 </step>
 
-<step n="3" goal="Display sprint capacity and unassigned backlog items">
-  <action>Calculate: {{assigned_count}} = length of {{target_sprint.items}}</action>
+<step n="3" goal="List available sprints and select target sprint">
+  <action>Glob `_bmad-output/implementation-artifacts/sprint-plan-*.yaml` to discover all sprint artifact files</action>
+  <check if="no sprint files found">
+    <output>❌ No sprint plans found. Run `/add-sprint` first to create a sprint before assigning items.</output>
+    <action>Exit workflow</action>
+  </check>
+  <action>For each sprint file found, read and extract: sprint_number, sprint_name, capacity, assigned_items count, status</action>
+  <output>
+## 🏃 Available Sprints
+
+| # | Sprint | Status | Capacity | Assigned | Remaining |
+|---|---|---|---|---|---|
+{{#each sprints}}
+| {{@index+1}} | {{sprint_name}} | {{status}} | {{capacity}} | {{assigned_count}} | {{remaining}} |
+{{/each}}
+  </output>
+  <ask>Select target sprint (enter number):</ask>
+  <action>Store selected sprint data as {{target_sprint}}</action>
+</step>
+
+<step n="4" goal="Display current sprint capacity usage">
+  <action>Calculate: {{assigned_count}} = length of {{target_sprint.assigned_items}}</action>
   <action>Calculate: {{remaining_capacity}} = {{target_sprint.capacity}} - {{assigned_count}}</action>
   <output>
-## Sprint Capacity: {{target_sprint.name}} ({{target_sprint.id}})
+## Sprint Capacity: {{target_sprint.sprint_name}}
 
-[{{capacity_bar}}] {{assigned_count}}/{{target_sprint.capacity}} items ({{remaining_capacity}} remaining)
+- **Capacity:** {{target_sprint.capacity}} items
+- **Assigned:** {{assigned_count}} items
+- **Remaining:** {{remaining_capacity}} slots
 
 {{#if remaining_capacity <= 0}}
-Warning: This sprint is at or over capacity. Adding items will exceed the limit.
+⚠️ This sprint is **at or over capacity**. Adding items will exceed the limit.
 {{/if}}
   </output>
+</step>
 
-  <action>Take the top 20 items from {{unassigned_items}} (or all if fewer than 20)</action>
+<step n="5" goal="Select candidate items for this sprint">
+  <ask>Which backlog items do you want to consider for this sprint? Enter item numbers (comma-separated), or "all" to evaluate the full backlog:</ask>
+  <check if="user enters 'all'">
+    <action>Set {{candidate_items}} = all items in {{backlog_items}} (the full filtered backlog list from step 2)</action>
+  </check>
+  <check if="user enters item numbers">
+    <action>Resolve the entered numbers against the backlog table from step 2 and set {{candidate_items}} = those specific items</action>
+  </check>
+</step>
+
+<step n="6" goal="Multi-criteria prioritization guidance">
+  <action>For each item in {{candidate_items}}, evaluate and score across criteria:
+    - **Business value:** High (H) / Medium (M) / Low (L) — impact on users or project goals
+    - **Dependency status:** Blocked (blocked by another item) / Blocking (blocks other items) / Independent
+    - **Severity** (bugs only): Critical / High / Medium / Low — N/A for stories
+    - **Effort estimation:** Small (S ≤ 1 day) / Medium (M 2–3 days) / Large (L 4+ days)
+  </action>
+  <action>Generate a ranked ordering recommendation, factoring in:
+    1. Blocking dependencies first (items that unlock others)
+    2. High business value + low/medium effort (quick wins)
+    3. Critical/High bugs ahead of Medium/Low bugs
+    4. Avoid blocked items unless capacity allows waiting
+  </action>
   <output>
-## Unassigned Backlog Items
+## 🎯 Prioritization Analysis
 
-| # | ID | Title | Type | Priority | Severity |
-|---|---|---|---|---|---|
-{{#each displayed_items}}
-| {{@index+1}} | {{id}} | {{title}} | {{type}} | {{priority}} | {{severity_or_na}} |
+| Rank | ID / File | Title | Type | Business Value | Dependencies | Severity | Effort | Rationale |
+|---|---|---|---|---|---|---|---|---|
+{{#each ranked_items}}
+| {{rank}} | {{id}} | {{title}} | {{type}} | {{business_value}} | {{dependency_status}} | {{severity}} | {{effort}} | {{rationale}} |
 {{/each}}
 
-*Showing {{displayed_count}} of {{total_unassigned}} unassigned items.*
+**Recommended selection** (up to {{remaining_capacity}} items to stay within capacity): {{recommended_selection}}
   </output>
 </step>
 
-<step n="4" goal="Prompt for item selection">
-  <ask>Select items to add (comma-separated numbers, 'all' for all shown, or 'q' to cancel):</ask>
-  <check if="user enters 'q'">
-    <output>Assignment cancelled -- no changes made.</output>
+<step n="7" goal="User confirms or adjusts ranking">
+  <ask>Review the ranking above. Options:
+- [c] Confirm recommended selection as-is
+- [m] Modify selection (specify item numbers to include)
+- [r] Re-rank items (provide new priority order)
+- [x] Cancel without assigning
+
+Choice:</ask>
+  <check if="user selects 'x'">
+    <output>❌ Assignment cancelled — no changes made.</output>
     <action>Exit workflow</action>
   </check>
-  <check if="user enters 'all'">
-    <action>Set {{selected_items}} = all displayed items from step 3</action>
+  <check if="user selects 'm'">
+    <ask>Enter item numbers to assign (comma-separated):</ask>
+    <action>Update {{confirmed_items}} with user selection</action>
   </check>
-  <check if="user enters comma-separated numbers">
-    <action>Parse and validate each number is within the displayed list range</action>
-    <check if="any number is invalid or out of range">
-      <output>Invalid selection: {{invalid_numbers}}. Enter numbers from the list above.</output>
-      <goto step="4" />
-    </check>
-    <action>Set {{selected_items}} = the items corresponding to the entered numbers</action>
+  <check if="user selects 'r'">
+    <ask>Enter item numbers in your preferred priority order (comma-separated). Only items you include will be assigned — items not listed will be excluded from this session and remain in the unassigned backlog:</ask>
+    <action>Set {{confirmed_items}} = only the items matching the user-provided numbers, in the order provided. Items from {{candidate_items}} NOT mentioned are excluded from assignment in this session (they remain available in the backlog for future sprints).</action>
   </check>
+  <check if="user selects 'c'">
+    <action>Set {{confirmed_items}} = recommended selection</action>
+  </check>
+  <action>Store confirmed ranking in {{confirmed_ranking}} for auditability (included in workflow output)</action>
 </step>
 
-<step n="5" goal="Capacity check and assignment">
-  <action>For each item in {{selected_items}}, in order:</action>
-  <action>Re-calculate current assigned count (accounts for items already added in this session)</action>
-  <check if="adding this item would exceed capacity">
-    <output>Capacity Warning: Adding "{{item.title}}" ({{item.id}}) would bring assigned items to {{new_count}}/{{target_sprint.capacity}} -- exceeding sprint capacity by {{overage}}.</output>
+<step n="8" goal="Assign selected items to sprint with capacity enforcement">
+  <action>For each item in {{confirmed_items}}, in confirmed ranking order:</action>
+  <action>Re-calculate current assigned count (in case multiple items are being added)</action>
+  <check if="assigning this item would exceed capacity">
+    <output>⚠️ **Capacity Warning:** Adding "{{item.title}}" would bring assigned items to {{new_count}}/{{target_sprint.capacity}} — exceeding sprint capacity by {{overage}}.</output>
     <ask>Options:
 - [a] Add anyway (over-capacity acknowledged)
 - [s] Skip this item
-- [q] Quit (stop assigning, keep items already assigned this session)
+- [m] Modify sprint capacity first via `/modify-sprint`
 
 Choice:</ask>
     <check if="user selects 's'">
-      <action>Skip this item -- do not add to sprint. Continue to next item.</action>
+      <action>Skip this item — do not add to sprint. Continue to next item in the {{confirmed_items}} loop.</action>
     </check>
-    <check if="user selects 'q'">
-      <action>Stop processing remaining items. Proceed to step 6 with items confirmed so far.</action>
-    </check>
-    <check if="user selects 'a'">
-      <action>Proceed with adding this item despite over-capacity.</action>
+    <check if="user selects 'm'">
+      <output>💡 Run `/modify-sprint` to increase capacity for {{target_sprint.sprint_name}}, then re-run `/add-to-sprint`.</output>
+      <action>Exit workflow</action>
     </check>
   </check>
-  <action>For each confirmed item:
-    - Add item ID to {{target_sprint}}.items array
-    - Set item's `sprint` field in backlog.yaml to {{target_sprint.id}}
-    - Update {{target_sprint}}.last_modified to current ISO timestamp
-  </action>
-  <action>Store all confirmed items as {{assigned_items}} for the summary.</action>
+  <action>Add item identifier to {{target_sprint.assigned_items}} list in the sprint-plan-{{target_sprint.sprint_number}}.yaml artifact</action>
+  <action>Item identifier format: story key for user stories (e.g., `12-1-add-sprint-workflow`), file basename for bugs (e.g., `bug-login-crash`)</action>
 </step>
 
-<step n="6" goal="Persist changes and display summary">
-  <check if="no items were confirmed for assignment">
-    <output>No items were assigned. No files modified.</output>
-    <action>Exit workflow</action>
-  </check>
-  <action>**Dual-write — both files must be updated for consistency:**</action>
-  <action>Write updated `_bmad-output/implementation-artifacts/backlog.yaml`:
-    - Preserve all existing fields on all items
-    - Only the `sprint` field changes on assigned items (set to {{target_sprint.id}})
-  </action>
-  <check if="backlog.yaml write fails">
-    <output>**Error:** Failed to write backlog.yaml. No changes persisted. Sprint file NOT modified.</output>
-    <action>Exit workflow</action>
-  </check>
-  <action>Write updated `_bmad-output/implementation-artifacts/sprints/{{target_sprint.id}}.yaml`:
-    - Append confirmed item IDs to the `items` array
+<step n="9" goal="Persist changes and display confirmed ranking for auditability">
+  <action>Update `_bmad-output/implementation-artifacts/sprint-plan-{{target_sprint.sprint_number}}.yaml`:
+    - Update `assigned_items` list with all newly assigned item identifiers
     - Update `last_modified` to current ISO timestamp
-    - Preserve all other fields unchanged
   </action>
-  <check if="sprint file write fails">
-    <output>**Warning: Inconsistent state!** backlog.yaml was updated but sprint file write failed. The `sprint` field in backlog.yaml now references {{target_sprint.id}} but the sprint file's `items` array is stale. Re-run `/add-to-sprint` or manually fix `sprints/{{target_sprint.id}}.yaml`.</output>
-  </check>
-  <action>**Do NOT read or write sprint-plan-*.yaml or sprint-status.yaml**</action>
+  <action>**Do NOT modify sprint-status.yaml** — sprint membership is exclusively tracked in sprint-plan-{n}.yaml</action>
   <output>
-## Assignment Complete
+## ✅ Assignment Complete
 
-**Sprint:** {{target_sprint.name}} ({{target_sprint.id}})
-**Items assigned this session:** {{assigned_count_this_session}}
+**Sprint:** {{target_sprint.sprint_name}}
+**Items assigned this session:** {{assigned_this_session}}
 
-| # | ID | Title | Type | Priority |
-|---|---|---|---|---|
-{{#each assigned_items}}
-| {{@index+1}} | {{id}} | {{title}} | {{type}} | {{priority}} |
+### Confirmed Ranking (Audit Record)
+
+| Rank | ID | Title | Type | Business Value | Dependencies | Severity | Effort |
+|---|---|---|---|---|---|---|---|
+{{#each confirmed_ranking}}
+| {{rank}} | {{id}} | {{title}} | {{type}} | {{business_value}} | {{dependency_status}} | {{severity}} | {{effort}} |
 {{/each}}
 
-**Capacity Usage:** {{new_assigned_total}}/{{target_sprint.capacity}} items ({{new_remaining}} remaining)
+**Updated Capacity:** {{new_assigned_count}}/{{target_sprint.capacity}} items used ({{new_remaining}} remaining)
 
 **Next Steps:**
-- Use `/add-to-sprint` again to assign more items
 - Use `/modify-sprint` to adjust capacity or remove items
 - Use `/sprint-status-view` to view the full sprint with all assigned items
   </output>
