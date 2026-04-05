@@ -7,6 +7,7 @@ const fs = require('fs');
 const { execFileSync } = require('child_process');
 const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout } = require('../lib/installer');
 const bmad = require('../lib/bmad');
+const { getBmadPlatformCode } = require('../lib/agents');
 const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
 
 const PKG = require('../package.json');
@@ -884,7 +885,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     if (!bmadInstalled) {
       if (yesFlag) {
         console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
-        const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id));
+        const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id)).map(id => getBmadPlatformCode(id));
         const success = await bmad.installBmad(['bmm'], bmadTools);
         if (success) {
           console.log(chalk.green(' BMAD-METHOD installed successfully!'));
@@ -901,7 +902,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
         if (installBmad) {
           console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
-          const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id));
+          const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id)).map(id => getBmadPlatformCode(id));
           const success = await bmad.installBmad(['bmm'], bmadTools);
           if (success) {
             console.log(chalk.green(' BMAD-METHOD installed successfully!'));
@@ -913,7 +914,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     } else {
       if (yesFlag) {
         console.log(chalk.cyan('\n Updating BMAD-METHOD...'));
-        const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id));
+        const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id)).map(id => getBmadPlatformCode(id));
         const success = await bmad.updateBmad(['bmm'], bmadTools);
         if (success) {
           console.log(chalk.green(' BMAD-METHOD updated successfully!'));
@@ -930,7 +931,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
         if (updateBmad) {
           console.log(chalk.cyan('\n Updating BMAD-METHOD...'));
-          const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id));
+          const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id)).map(id => getBmadPlatformCode(id));
           const success = await bmad.updateBmad(['bmm'], bmadTools);
           if (success) {
             console.log(chalk.green(' BMAD-METHOD updated successfully!'));
