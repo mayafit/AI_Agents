@@ -1,5 +1,5 @@
 # generated: 2026-03-15
-# updated: 2026-04-03 — Cleanup: all done epics/stories removed, story files archived to done/.
+# updated: 2026-04-04 — Epic 17 code rolled back; all Phase 2 stories (17.10-17.24) rewritten and reset to ready-for-dev.
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system
@@ -16,7 +16,7 @@
 # Old Epic 17 stories (17.1-17.8) archived; replaced by 17.9-17.24.
 
 generated: 2026-03-15
-last_updated: 2026-04-03T12:00:00Z
+last_updated: 2026-04-04
 project: agents
 project_key: NOKEY
 tracking_system: file-system
@@ -74,7 +74,7 @@ development_status:
   # Epic 14: External Tooling Integration
   # Dependencies: Epic 12, Epic 10, Epic 13 | Analyst + Architect required
   # Stories 14.4, 14.5 blocked on Story 14.3 architecture approval
-  epic-14: backlog
+        epic-14: backlog
   14-1-research-sprint-management-integration: backlog
   14-2-research-knowledge-management-integration: backlog
   14-3-architecture-external-tooling-abstraction: backlog
