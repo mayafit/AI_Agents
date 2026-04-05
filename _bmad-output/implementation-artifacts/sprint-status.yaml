@@ -36,13 +36,13 @@ development_status:
   # Execution order: 17.9 → 17.15 → 17.10 → 17.16 → 17.11 → 17.12 → 17.13 → 17.14 → 17.17 → 17.18 → 17.19 → 17.20 → 17.24 → 17.21 → 17.22 → 17.23
   epic-17: in-progress
   17-9-unified-sprint-status-schema: done
-  17-10-rework-generate-backlog: review
+  17-10-rework-generate-backlog: ready-for-dev
   17-11-rework-add-to-sprint: ready-for-dev
   17-12-rework-remove-from-sprint: ready-for-dev
   17-13-rework-sprint-status-view: ready-for-dev
   17-14-rework-cleanup-done: ready-for-dev
-  17-15-rework-bmad-sprint-planning: ready-for-dev
-  17-16-rework-add-sprint: review
+  17-15-rework-bmad-sprint-planning: review
+  17-16-rework-add-sprint: ready-for-dev
   17-17-rework-modify-sprint: ready-for-dev
   17-18-rework-bmad-dev-story: ready-for-dev
   17-19-rework-story-status-lookup: ready-for-dev

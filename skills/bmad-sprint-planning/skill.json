@@ -1,0 +1,7 @@
+{
+  "name": "bmad-sprint-planning",
+  "version": "1.0.0",
+  "description": "Bootstrap or update the unified sprint-status.yaml from epics. Creates the file with three sections (epics, backlog, sprints) on first run; refreshes epics and adds new items on subsequent runs.",
+  "category": "workflow",
+  "tags": ["sprint-planning", "sprint-management", "epics", "bootstrap"]
+}
