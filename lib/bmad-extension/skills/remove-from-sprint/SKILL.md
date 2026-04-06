@@ -129,6 +129,17 @@ The following items will be moved back to the backlog:
 
 <step n="5" goal="Execute reverse movement — atomic write">
   <action>Load current {{sprint_file}} state (re-read if needed to get latest data)</action>
+
+  <action>**Pre-write: single-location invariant check.** Build {{current_backlog_ids}} = set of all item IDs currently in {{sprint_file}}.backlog. For each item in {{items_to_remove}}: check if its ID exists in {{current_backlog_ids}}. If ANY match is found:
+    <output>**Error:** Data integrity violation — item {{item.id}} already exists in the backlog. Aborting to prevent duplicate. The sprint-status.yaml file may be corrupted. No changes have been written.</output>
+    <action>Exit workflow without writing</action>
+  </action>
+
+  <action>**Pre-write: required field validation.** For each item in {{items_to_remove}}: verify it has all 6 required backlog fields present (the key must exist; epic and severity may be null by schema): id, type, epic, title, status, severity. (priority will be assigned by this skill.) If ANY item is missing a required field:
+    <output>**Error:** Item {{item.id}} is missing required field '{{missing_field}}'. Cannot safely return this item to the backlog. No changes have been written. Please inspect sprint-status.yaml manually.</output>
+    <action>Exit workflow without writing</action>
+  </action>
+
   <action>Determine {{current_max_priority}}:
     - If {{sprint_file.backlog}} is empty, set {{current_max_priority}} = 0
     - Otherwise, set {{current_max_priority}} = max(item.priority for item in sprint_file.backlog)
