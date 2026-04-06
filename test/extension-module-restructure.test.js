@@ -144,7 +144,7 @@ const expectedAgentSkills = [
 
 const expectedMil498Skills = [
   'mil498-sss', 'mil498-ssdd', 'mil498-ocd', 'mil498-sdp',
-  'mil498-srs', 'mil498-sdd', 'mil498-std',
+  'mil498-srs', 'mil498-sdd', 'mil498-std', 'mil498-requirement-quality',
 ];
 
 const expectedSreSkills = [
@@ -165,9 +165,10 @@ const expectedCyberSkills = [
 ];
 
 const expectedExtensionSkills = [
-  'create-bug-story', 'add-sprint', 'modify-sprint',
+  'create-bug-story', 'bmad-dev-story', 'add-sprint', 'modify-sprint',
   'add-to-sprint', 'project-context-expansion', 'sprint-status-view',
   'cleanup-done', 'generate-backlog', 'prioritize-backlog', 'remove-from-sprint',
+  'bmad-sprint-planning', 'bmad-sprint-status', 'close-sprint',
 ];
 
 const expectedMlSkills = [
@@ -186,11 +187,11 @@ const allExpectedSkills = [
   ...expectedMlSkills,
 ];
 
-test('skills/ has exactly 53 subdirectories', () => {
+test('skills/ has exactly 58 subdirectories', () => {
   const entries = fs.readdirSync(skillsDir).filter(e =>
     fs.statSync(path.join(skillsDir, e)).isDirectory()
   );
-  assert.strictEqual(entries.length, 53, `Expected 53 skill dirs, found ${entries.length}`);
+  assert.strictEqual(entries.length, 58, `Expected 58 skill dirs, found ${entries.length}`);
 });
 
 test('all 5 agent skill directories exist', () => {
@@ -200,7 +201,7 @@ test('all 5 agent skill directories exist', () => {
   }
 });
 
-test('all 7 MIL-498 skill directories exist', () => {
+test('all 8 MIL-498 skill directories exist', () => {
   for (const skill of expectedMil498Skills) {
     const p = path.join(skillsDir, skill);
     assert.ok(fs.existsSync(p), `Missing MIL-498 skill dir: ${skill}`);
@@ -235,7 +236,7 @@ test('all 12 ML skill directories exist', () => {
   }
 });
 
-test('all 10 extension workflow skill directories exist', () => {
+test('all 14 extension workflow skill directories exist', () => {
   for (const skill of expectedExtensionSkills) {
     const p = path.join(skillsDir, skill);
     assert.ok(fs.existsSync(p), `Missing extension skill dir: ${skill}`);
@@ -275,8 +276,8 @@ test('module-help.csv has correct header columns', () => {
   }
 });
 
-test('module-help.csv has 53 skill entries (excluding header)', () => {
-  assert.strictEqual(csvData.rows.length, 53, `Expected 53 rows, found ${csvData.rows.length}`);
+test('module-help.csv has 58 skill entries (excluding header)', () => {
+  assert.strictEqual(csvData.rows.length, 58, `Expected 58 rows, found ${csvData.rows.length}`);
 });
 
 test('all CSV entries use module code ma-skills', () => {
@@ -286,7 +287,7 @@ test('all CSV entries use module code ma-skills', () => {
   }
 });
 
-test('CSV has entries for all 4 agent skills', () => {
+test('CSV has entries for all 5 agent skills', () => {
   const codeIdx = csvData.headers.indexOf('code');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedAgentSkills) {
@@ -294,7 +295,7 @@ test('CSV has entries for all 4 agent skills', () => {
   }
 });
 
-test('CSV has entries for all 7 MIL-498 skills', () => {
+test('CSV has entries for all 8 MIL-498 skills', () => {
   const codeIdx = csvData.headers.indexOf('code');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedMil498Skills) {
@@ -326,7 +327,7 @@ test('CSV has entries for all 7 Cyber skills', () => {
   }
 });
 
-test('CSV has entries for all 10 extension workflow skills', () => {
+test('CSV has entries for all 14 extension workflow skills', () => {
   const codeIdx = csvData.headers.indexOf('code');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedExtensionSkills) {

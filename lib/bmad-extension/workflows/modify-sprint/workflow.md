@@ -2,7 +2,7 @@
 
 Guided workflow to modify an existing sprint's metadata (name, capacity, dates, status) within the `sprints` section of `sprint-status.yaml`.
 
-> **Scope:** This workflow modifies sprint **metadata only** — name, capacity, start date, end date, and status.
+> **Scope:** This skill modifies sprint **metadata only** — name, capacity, start date, end date, and status.
 > To assign items to a sprint, use `/add-to-sprint`. To remove items, use `/remove-from-sprint`.
 
 <workflow>
