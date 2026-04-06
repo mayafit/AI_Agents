@@ -1,6 +1,6 @@
 # Story 17.22: Jira Adapter Pattern (tracking_system Switch) -- Design Specification
 
-Status: ready-for-dev
+Status: review
 
 ## Agent Discussion: Scope Reframing
 
@@ -55,21 +55,21 @@ So that every skill reworked in Stories 17.10-17.21 and 17.24 includes the corre
 
 ### Task 1: Define backend detection logic (AC: 1)
 
-- [ ] 1.1 Document the `tracking_system` field location: top-level metadata in `sprint-status.yaml` (Section 1.1 of sprint-status-schema.md).
-- [ ] 1.2 Document the detection algorithm: read the file, extract `tracking_system` value, branch on value.
-- [ ] 1.3 Define the three valid branches: `file-system` (proceed with local YAML), `jira` (delegate to adapter or surface "not implemented"), unrecognized value (error with message).
-- [ ] 1.4 Document the default behavior: if `tracking_system` is absent or empty, treat as `file-system`.
-- [ ] 1.5 Document the detection timing: the check occurs at the START of every skill workflow, before any read/write operations.
+- [x] 1.1 Document the `tracking_system` field location: top-level metadata in `sprint-status.yaml` (Section 1.1 of sprint-status-schema.md).
+- [x] 1.2 Document the detection algorithm: read the file, extract `tracking_system` value, branch on value.
+- [x] 1.3 Define the three valid branches: `file-system` (proceed with local YAML), `jira` (delegate to adapter or surface "not implemented"), unrecognized value (error with message).
+- [x] 1.4 Document the default behavior: if `tracking_system` is absent or empty, treat as `file-system`.
+- [x] 1.5 Document the detection timing: the check occurs at the START of every skill workflow, before any read/write operations.
 
 ### Task 2: Define the adapter interface contract (AC: 2)
 
-- [ ] 2.1 Enumerate read operations:
+- [x] 2.1 Enumerate read operations:
   - `readFullState()` -- read entire sprint-status.yaml equivalent; returns the full data model (metadata + epics + backlog + sprints)
   - `findItem(id)` -- search backlog and all sprint items for an item by ID; returns item + location (backlog or sprint-N)
   - `readSprint(sprintId)` -- read a single sprint entity with its items
   - `readBacklog()` -- read the backlog array
   - `readEpics()` -- read the epics map
-- [ ] 2.2 Enumerate write operations:
+- [x] 2.2 Enumerate write operations:
   - `writeFullState(data)` -- write the complete data model (used by bootstrap/regeneration skills)
   - `updateItemStatus(id, newStatus)` -- in-place status update on an item wherever it resides
   - `moveItemToSprint(id, targetSprintId)` -- atomic move from backlog to sprint (drops priority, validates status)
@@ -77,19 +77,19 @@ So that every skill reworked in Stories 17.10-17.21 and 17.24 includes the corre
   - `addItems(section, items)` -- add new items to backlog or sprint
   - `removeItems(section, itemIds)` -- remove items from backlog or sprint
   - `updateBacklogPriorities(orderedIds)` -- reorder backlog and renumber priorities
-- [ ] 2.3 Enumerate lifecycle operations:
+- [x] 2.3 Enumerate lifecycle operations:
   - `createSprint(sprintData)` -- add a new sprint entry
   - `activateSprint(sprintId)` -- transition sprint from planning to active (enforcing single-active constraint)
   - `closeSprint(sprintId)` -- transition sprint from active to closed
   - `archiveItems(itemIds, archivePath)` -- remove items from file and move story files to done/
   - `updateEpics(epicsData)` -- refresh the epics section
-- [ ] 2.4 Map each operation to the skills that invoke it (cross-reference table with all 13 skills).
-- [ ] 2.5 Document that all operations consume and produce data conforming to the sprint-status.yaml schema (Story 17.9 Sections 1-4) -- the schema IS the data contract for all backends.
-- [ ] 2.6 Document that operations enforce the schema invariants (single-location, in-place status update, single-active-sprint) regardless of backend.
+- [x] 2.4 Map each operation to the skills that invoke it (cross-reference table with all 13 skills).
+- [x] 2.5 Document that all operations consume and produce data conforming to the sprint-status.yaml schema (Story 17.9 Sections 1-4) -- the schema IS the data contract for all backends.
+- [x] 2.6 Document that operations enforce the schema invariants (single-location, in-place status update, single-active-sprint) regardless of backend.
 
 ### Task 3: Create the skill instruction template (AC: 3)
 
-- [ ] 3.1 Write the exact markdown instruction block for backend detection that skills embed at the start of their workflow. The template should be:
+- [x] 3.1 Write the exact markdown instruction block for backend detection that skills embed at the start of their workflow. The template should be:
   ```markdown
   ## Backend Detection
 
@@ -102,57 +102,57 @@ So that every skill reworked in Stories 17.10-17.21 and 17.24 includes the corre
   4. If `tracking_system` is any other value: **STOP** -- output:
      > "Unsupported tracking system: `{value}`. Supported values are `file-system` and `jira` (future)."
   ```
-- [ ] 3.2 Document that this template must appear in every sprint management skill's SKILL.md, in both the IDE skill version and the BMAD extension version (where applicable).
-- [ ] 3.3 Document that the template is placed BEFORE the skill's main workflow steps -- it is a gateway check, not an afterthought.
-- [ ] 3.4 Document that when the Jira adapter is eventually implemented (Epic 14), the `jira` branch will be replaced with actual Jira adapter instructions instead of the "not implemented" message.
+- [x] 3.2 Document that this template must appear in every sprint management skill's SKILL.md, in both the IDE skill version and the BMAD extension version (where applicable).
+- [x] 3.3 Document that the template is placed BEFORE the skill's main workflow steps -- it is a gateway check, not an afterthought.
+- [x] 3.4 Document that when the Jira adapter is eventually implemented (Epic 14), the `jira` branch will be replaced with actual Jira adapter instructions instead of the "not implemented" message.
 
 ### Task 4: Create the skill-to-operation mapping table (AC: 4)
 
-- [ ] 4.1 For each of the 13 skills, document:
+- [x] 4.1 For each of the 13 skills, document:
   - Story number (17.10-17.21, 17.24)
   - Skill name
   - Pipeline: IDE-only or dual-pipeline (IDE + BMAD extension)
   - Operation categories used (from Task 2 enumeration)
   - Read/write classification (read-only, write, or mixed)
-- [ ] 4.2 Verify the mapping is consistent with the Skill Integration Map in sprint-status-schema.md (Section 7).
-- [ ] 4.3 Identify which operations are read-only (and thus simpler to adapt) vs which involve writes (and require careful Jira API mapping).
+- [x] 4.2 Verify the mapping is consistent with the Skill Integration Map in sprint-status-schema.md (Section 7).
+- [x] 4.3 Identify which operations are read-only (and thus simpler to adapt) vs which involve writes (and require careful Jira API mapping).
 
 ### Task 5: Document Jira adapter requirements for Epic 14 (AC: 5)
 
-- [ ] 5.1 Document that the Jira adapter must implement every operation category from Task 2 (or document which operations are N/A for Jira and why).
-- [ ] 5.2 Document the Jira data model mapping:
+- [x] 5.1 Document that the Jira adapter must implement every operation category from Task 2 (or document which operations are N/A for Jira and why).
+- [x] 5.2 Document the Jira data model mapping:
   - Jira Sprint --> `sprints[]` entry (with `items` populated from sprint backlog query)
   - Jira Board Backlog --> `backlog[]` entries
   - Jira Epic --> `epics[]` entry
   - Jira Issue Status --> canonical status vocabulary (`backlog`, `ready-for-dev`, `in-progress`, `review`, `done`, `on-hold`, `cancelled`)
-- [ ] 5.3 Document that status mapping must be configurable (Jira workflow statuses vary by project).
-- [ ] 5.4 Document error handling requirements:
+- [x] 5.3 Document that status mapping must be configurable (Jira workflow statuses vary by project).
+- [x] 5.4 Document error handling requirements:
   - Network errors: report error with connection details, do NOT fall back to file-system
   - Authentication failures (401/403): report credential issue, suggest checking config
   - Rate limits (429): report rate limit, include retry-after if available
   - Never fall back to file-system silently -- explicit fail with clear error message
-- [ ] 5.5 Document credential configuration: deferred to Epic 14 research (Story 14.1) and architecture (Story 14.3). The adapter pattern spec does not prescribe credential storage -- it only requires that the adapter have access to credentials and that missing credentials cause a clear error at detection time.
-- [ ] 5.6 Document extensibility: the adapter pattern must support future backends (Linear, Azure DevOps) by adding a new adapter implementation without changing any skill SKILL.md files. The `tracking_system` field gains a new valid value; the backend detection template gains a new branch.
-- [ ] 5.7 Document that when `tracking_system: jira` is active, `sprint-status.yaml` is NOT the source of truth -- Jira is. The local file may exist as a read-only cache but is never written to by skills.
+- [x] 5.5 Document credential configuration: deferred to Epic 14 research (Story 14.1) and architecture (Story 14.3). The adapter pattern spec does not prescribe credential storage -- it only requires that the adapter have access to credentials and that missing credentials cause a clear error at detection time.
+- [x] 5.6 Document extensibility: the adapter pattern must support future backends (Linear, Azure DevOps) by adding a new adapter implementation without changing any skill SKILL.md files. The `tracking_system` field gains a new valid value; the backend detection template gains a new branch.
+- [x] 5.7 Document that when `tracking_system: jira` is active, `sprint-status.yaml` is NOT the source of truth -- Jira is. The local file may exist as a read-only cache but is never written to by skills.
 
 ### Task 6: Document deployment pipeline integration (AC: 6)
 
-- [ ] 6.1 Document that the adapter pattern does NOT create a shared module, library, or importable file. Skills are markdown instruction documents. The "adapter" is a pattern embedded in each skill's instructions, not a code artifact.
-- [ ] 6.2 Document how the pattern integrates with Pipeline 1 (IDE skills):
+- [x] 6.1 Document that the adapter pattern does NOT create a shared module, library, or importable file. Skills are markdown instruction documents. The "adapter" is a pattern embedded in each skill's instructions, not a code artifact.
+- [x] 6.2 Document how the pattern integrates with Pipeline 1 (IDE skills):
   - Each skill at `skills/<name>/SKILL.md` includes the backend detection template from Task 3
   - The installer deploys these to all IDE agent directories unchanged
   - No changes to `lib/installer.js` -- the adapter pattern is in the skill content, not the deployment mechanism
-- [ ] 6.3 Document how the pattern integrates with Pipeline 2 (BMAD extension skills):
+- [x] 6.3 Document how the pattern integrates with Pipeline 2 (BMAD extension skills):
   - Each BMAD extension skill at `lib/bmad-extension/skills/<name>/SKILL.md` includes the same backend detection template
   - The BMAD deployer copies these to `_bmad/extensions/ma-agents-skills/` unchanged
   - No changes to `lib/bmad.js` -- same principle
-- [ ] 6.4 Document that IDE-only skills (e.g., `story-status-lookup` per Story 17.19) include the detection template in their single SKILL.md; dual-pipeline skills include it in both copies.
-- [ ] 6.5 Document that `sprint-status.yaml` path resolution (`_bmad-output/implementation-artifacts/sprint-status.yaml` relative to project root, or via `sprint_management_path` config in multi-repo mode) is unchanged -- the adapter pattern does not affect file location logic.
+- [x] 6.4 Document that IDE-only skills (e.g., `story-status-lookup` per Story 17.19) include the detection template in their single SKILL.md; dual-pipeline skills include it in both copies.
+- [x] 6.5 Document that `sprint-status.yaml` path resolution (`_bmad-output/implementation-artifacts/sprint-status.yaml` relative to project root, or via `sprint_management_path` config in multi-repo mode) is unchanged -- the adapter pattern does not affect file location logic.
 
 ### Task 7: Write the reference document (AC: 7)
 
-- [ ] 7.1 Create `_bmad-output/planning-artifacts/adapter-pattern-spec.md` as the canonical adapter pattern specification.
-- [ ] 7.2 Structure the document with numbered sections similar to `sprint-status-schema.md`:
+- [x] 7.1 Create `_bmad-output/planning-artifacts/adapter-pattern-spec.md` as the canonical adapter pattern specification.
+- [x] 7.2 Structure the document with numbered sections similar to `sprint-status-schema.md`:
   - Section 1: Overview and Purpose
   - Section 2: Backend Detection Logic
   - Section 3: Adapter Interface Contract (operation categories)
@@ -161,8 +161,8 @@ So that every skill reworked in Stories 17.10-17.21 and 17.24 includes the corre
   - Section 6: Jira Adapter Requirements (for Epic 14)
   - Section 7: Deployment Pipeline Integration
   - Section 8: Future Backend Extensibility
-- [ ] 7.3 Include cross-references to sprint-status-schema.md, architecture P2-11, PRD FR138-FR140, and Epic 14 stories.
-- [ ] 7.4 Review the document against all acceptance criteria before marking complete.
+- [x] 7.3 Include cross-references to sprint-status-schema.md, architecture P2-11, PRD FR138-FR140, and Epic 14 stories.
+- [x] 7.4 Review the document against all acceptance criteria before marking complete.
 
 ## Dev Notes
 
@@ -277,3 +277,49 @@ The adapter pattern spec standardizes this approach so all skills use the same d
 - IDE skill source: `skills/<name>/skill.json` + `skills/<name>/SKILL.md`
 - BMAD extension source: `lib/bmad-extension/skills/<name>/SKILL.md` + `bmad-skill-manifest.yaml`
 - Install locations (never edit): `.claude/skills/`, `.cursor/skills/`, etc.
+
+## Dev Agent Record
+
+**Agent:** Claude Sonnet 4.6
+**Date:** 2026-04-06
+**Branch:** feature/story-17-22-jira-adapter-pattern
+**Worktree:** `.worktrees/story-17-22-jira-adapter-pattern`
+
+### Implementation Summary
+
+This story delivered a canonical adapter pattern specification document (`adapter-pattern-spec.md`) as a companion to the Story 17.9 schema specification. The deliverable formalizes the backend detection pattern that all 13 sprint management skills must embed, and defines the interface contract that Epic 14 must implement to add Jira support.
+
+**Key design decisions:**
+- The adapter is a markdown instruction pattern embedded in each skill's SKILL.md, not a shared code module (skills have no runtime)
+- The `tracking_system` field is read from `sprint-status.yaml` (not `project-context.md`) — consistent with the unified schema approach from Story 17.9
+- The `jira` branch is a clear halt-with-message stub, not a partial implementation (FR139)
+- No changes to existing skill files in this story — 17.10-17.21 and 17.24 each embed the template themselves
+- No changes to deployment pipeline code (lib/installer.js, lib/bmad.js)
+
+### Tasks Completed
+
+All 7 tasks / 28 subtasks completed:
+- Task 1: Backend detection logic (field location, algorithm, branches, default, timing)
+- Task 2: Adapter interface contract (5 read ops, 7 write ops, 5 lifecycle ops, skill mapping, invariants)
+- Task 3: Skill instruction template (exact markdown block, placement rules, both pipelines, evolution path)
+- Task 4: Skill-to-operation mapping table (all 13 skills with story#, pipeline, ops, read/write class)
+- Task 5: Jira adapter requirements (operation coverage, data mapping, status mapping, error handling, credentials, extensibility, source-of-truth)
+- Task 6: Deployment pipeline integration (no shared module, Pipeline 1 IDE, Pipeline 2 BMAD, IDE-only vs dual-pipeline, path resolution)
+- Task 7: Reference document created at `_bmad-output/planning-artifacts/adapter-pattern-spec.md`
+
+## File List
+
+### Created
+- `_bmad-output/planning-artifacts/adapter-pattern-spec.md` — canonical adapter pattern specification (primary deliverable)
+
+### Modified
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — updated `last_updated` and set `17-22-jira-adapter-pattern: review`
+- `_bmad-output/implementation-artifacts/17-22-jira-adapter-pattern.md` — marked all tasks complete, status set to `review`, added Dev Agent Record, File List, Change Log
+
+## Change Log
+
+| Date | Change | Author |
+|---|---|---|
+| 2026-04-06 | Created `adapter-pattern-spec.md` with all 8 sections covering detection logic, adapter interface, skill template, skill mapping, Jira requirements, pipeline integration, and extensibility | Claude Sonnet 4.6 |
+| 2026-04-06 | Updated sprint-status.yaml: `17-22-jira-adapter-pattern` → `review` | Claude Sonnet 4.6 |
+| 2026-04-06 | Updated story file: all 28 tasks marked complete, status → `review` | Claude Sonnet 4.6 |
