@@ -175,6 +175,17 @@ Choice:</ask>
 
 <step n="8" goal="Atomic write — persist all movements to sprint-status.yaml">
   <action>If {{items_to_move}} is empty (all items were skipped or cancelled), exit without writing.</action>
+
+  <action>**Pre-write: single-location invariant check.** Build {{all_sprint_item_ids}} = flat set of all item IDs across ALL sprints in {{sprint_status}}.sprints (every sprint, every status). For each item in {{items_to_move}}: check if its ID exists in {{all_sprint_item_ids}}. If ANY match is found:
+    <output>**Error:** Data integrity violation — item {{item.id}} already exists in a sprint. Aborting to prevent duplicate. The sprint-status.yaml file may be corrupted. No changes have been written.</output>
+    <action>Exit workflow without writing</action>
+  </action>
+
+  <action>**Pre-write: backlog re-validation.** Build {{current_backlog_ids}} = set of all item IDs currently in {{sprint_status}}.backlog. For each item in {{items_to_move}}: check if its ID exists in {{current_backlog_ids}}. If ANY item is missing:
+    <output>**Error:** Item {{item.id}} was selected for sprint assignment but is no longer in the backlog. The file may have been modified externally. No changes have been written. Please re-run `/add-to-sprint` to start fresh.</output>
+    <action>Exit workflow without writing</action>
+  </action>
+
   <action>Perform ALL of the following in a single atomic write to `sprint-status.yaml`:</action>
   <action>1. For each item in {{items_to_move}}:
     - Build the sprint item object: copy `id`, `type`, `epic`, `title`, `status`, `severity` from the backlog item — DROP the `priority` field (sprint items do not have priority)
