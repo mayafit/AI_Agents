@@ -1,202 +1,200 @@
 ---
 name: sprint-status-view
-description: Display sprint progress with assigned items, type distinction, and remaining capacity
+description: Display formatted sprint progress, backlog, and epic status from the unified sprint-status.yaml
 type: skill
 triggers:
   - "sprint status view"
   - "view sprint status"
+  - "/sprint-status-view"
 ---
 
-# Sprint Status View Workflow
+# Sprint Status View
 
-Extension workflow that displays sprint progress with assigned items (stories + bugs), type distinction, and remaining capacity.
+Display a formatted, read-only dashboard of all sprint, backlog, and epic data from the unified `sprint-status.yaml` file.
 
-> **Architecture mandate:** This workflow is a NEW extension at `lib/bmad-extension/workflows/sprint-status-view/`. It does NOT modify any files under `_bmad/bmm/workflows/`.
+> **READ-ONLY SKILL:** This skill NEVER writes to `sprint-status.yaml` or any other file. It is purely a display/reporting skill.
 
-<workflow>
-
-<step n="1" goal="Discover all sprint artifact files">
-  <action>Glob `_bmad-output/implementation-artifacts/sprint-plan-*.yaml` to discover all sprint artifact files</action>
-  <check if="no sprint files found">
-    <output>
-ℹ️ **No Sprints Found**
-
-No sprint plan files exist yet (`sprint-plan-*.yaml`).
-
-**To get started:**
-- Run `/add-sprint` to create your first sprint
-- Run `/add-to-sprint` to assign backlog items to it
-    </output>
-    <action>Exit workflow</action>
-  </check>
-  <action>For each sprint file found, read the full YAML content and store as {{sprint_plans}} list</action>
-  <action>Sort {{sprint_plans}} by sprint_number ascending</action>
-</step>
-
-<step n="2" goal="Load sprint-status.yaml for user story execution statuses">
-  <action>Read `_bmad-output/implementation-artifacts/sprint-status.yaml`</action>
-  <check if="file not found">
-    <output>⚠️ `sprint-status.yaml` not found. User story execution statuses will not be available. Run `/sprint-planning` to initialize.</output>
-    <action>Set {{story_status_map}} = {} (empty — will show data integrity warnings per missing item)</action>
-  </check>
-  <check if="file found">
-    <action>Parse development_status section into {{story_status_map}} — key: story key, value: status</action>
-    <action>Exclude epic-* keys and *-retrospective keys from the map</action>
-  </check>
-</step>
-
-<step n="3" goal="Discover bug stories for type/severity data">
-  <action>Glob `_bmad-output/implementation-artifacts/bug-*.md` to discover all bug story files</action>
-  <check if="no bug files found">
-    <action>Set {{bug_metadata_map}} = {} (empty)</action>
-  </check>
-  <check if="bug files found">
-    <action>For each bug file, parse YAML frontmatter to extract: type, severity, title</action>
-    <action>Build {{bug_metadata_map}} — key: file basename (e.g., `bug-login-crash`), value: {severity, title}</action>
-  </check>
-</step>
-
-<step n="4" goal="Display sprint status for each sprint">
-  <action>For each sprint in {{sprint_plans}} (in order):</action>
-  <action>Calculate: {{assigned_count}} = length(sprint.assigned_items)</action>
-  <action>Calculate: {{remaining_capacity}} = sprint.capacity - {{assigned_count}}</action>
-
-  <action>For each item identifier in sprint.assigned_items, resolve item details:
-
-    **If item is a story (key matches regex `^\d+-\d+-.+`):**
-    - Look up status in {{story_status_map}}[item_key]
-    - If NOT found in {{story_status_map}}:
-      → Record as DATA INTEGRITY WARNING: "Item {item_key} has no status entry in sprint-status.yaml — run /sprint-planning to initialize status tracking for this item."
-      → Display item with marker: ⚠️ [status unknown]
-    - If found: display with current status label
-
-    **If item is a bug (key matches regex `^bug-.+`):**
-    - Look up in {{bug_metadata_map}}[item_key]
-    - If NOT found: display with title as item_key, severity as "unknown"
-    - If found: display with title and severity from frontmatter
-    - Bug execution status: use `status` from bug file frontmatter if present; otherwise "not-started"
-
-    **If item matches neither pattern:** display as type "Unknown" with raw identifier as title
-  </action>
-
-  <output>
 ---
 
-## 🏃 {{sprint.sprint_name}} (Sprint {{sprint.sprint_number}})
+## Step 1 — Load sprint-status.yaml
 
-**Status:** {{sprint.status}} | **Capacity:** {{sprint.capacity}} items | **Assigned:** {{assigned_count}} | **Remaining:** {{remaining_capacity}}
-{{#if sprint.start_context}}**Start:** {{sprint.start_context}}{{/if}} {{#if sprint.end_context}}| **End:** {{sprint.end_context}}{{/if}}
+Resolve the path to `sprint-status.yaml` using the BMAD config:
+- Check `_bmad/bmm/config.yaml` for `sprint_management_path` (if configured for multi-repo mode)
+- Default path: `_bmad-output/implementation-artifacts/sprint-status.yaml`
 
-{{#if over_capacity}}
-⚠️ **Over capacity by {{overage}} item(s)**
-{{/if}}
+Read the file. If it does not exist:
+- Output: "No sprint-status.yaml found. Run `/bmad-sprint-planning` to initialize."
+- Exit without error.
 
-### Assigned Items
+Parse all sections from the file:
+- **Metadata:** `project`, `last_updated` (plus `generated`, `project_key`, `tracking_system`, `story_location` if present)
+- **`epics`** — map of epic entries (keys: `epic-N`)
+- **`backlog`** — array of unassigned item objects
+- **`sprints`** — map of sprint entries (keys: `sprint-N`)
 
-| Item | Title | Type | Status / Severity |
-|---|---|---|---|
-{{#each resolved_items}}
-{{#if is_story}}
-| {{item_key}} | {{title}} | 📋 Story | {{status}} |
-{{/if}}
-{{#if is_bug}}
-| {{item_key}} | {{title}} | 🐛 Bug | Severity: {{severity}} / {{bug_status}} |
-{{/if}}
-{{/each}}
+If the file exists but uses the old flat `development_status` schema (no `epics`/`backlog`/`sprints` sections), output:
+"sprint-status.yaml uses the pre-Epic-17 schema. Run `/bmad-sprint-planning` to migrate to the unified schema."
+Then exit.
 
-{{#if data_integrity_warnings}}
-**⚠️ Data Integrity Warnings:**
-{{#each data_integrity_warnings}}
-- {{this}}
-{{/each}}
-{{/if}}
-
-{{#if assigned_items_empty}}
-*(No items assigned to this sprint)*
-{{/if}}
-  </output>
-</step>
-
-<step n="5" goal="Display unassigned backlog summary">
-  <action>Collect all item keys from {{story_status_map}} that are NOT in any sprint's assigned_items list — these are unassigned user stories</action>
-  <action>Collect all bug basenames from {{bug_metadata_map}} that are NOT in any sprint's assigned_items list — these are unassigned bugs</action>
-  <action>Count unassigned stories by status: {{unassigned_by_status}}</action>
-  <output>
 ---
 
-## 📦 Unassigned Backlog
+## Step 2 — Classify Sprints
 
-### 📋 Unassigned Stories
+Partition the `sprints` map into three groups:
+- **active** — entries where `status: active`
+- **planning** — entries where `status: planning`
+- **closed** — entries where `status: closed`
 
-| Status | Count |
-|---|---|
-| backlog | {{count_backlog}} |
-| ready-for-dev | {{count_ready}} |
-| in-progress | {{count_in_progress}} |
-| review | {{count_review}} |
-| done | {{count_done}} |
+Sort each group by sprint key (`sprint-N`) ascending by numeric value of N.
 
-*Total unassigned stories: {{total_unassigned}}*
+---
 
-### 🐛 Unassigned Bugs
+## Step 3 — Render Header
 
-{{#if unassigned_bugs}}
-| ID / File | Title | Severity |
-|---|---|---|
-{{#each unassigned_bugs}}
-| {{id}} | {{title}} | {{severity}} |
-{{/each}}
-{{else}}
-*(No unassigned bugs)*
-{{/if}}
+Output:
 
-**Tip:** Use `/add-to-sprint` to assign unassigned items to a sprint.
-  </output>
-</step>
+```
+# Sprint Status — {project}
+*Last updated: {last_updated}*
 
-<step n="6" goal="Offer next actions">
-  <ask>Options:
-1. Show full unassigned backlog item list (IDs + titles + statuses)
-2. Add items to a sprint — run `/add-to-sprint`
-3. Modify a sprint — run `/modify-sprint`
+---
+```
+
+---
+
+## Step 4 — Render Active Sprints
+
+If there are active sprints, output a `## Active Sprints` section header.
+
+For each active sprint (sorted by key ascending):
+
+1. Sprint header:
+   ```
+   ### {sprint.name}
+   **Status:** active | **Capacity:** {items.length} / {capacity} | **Start:** {start or "—"} | **End:** {end or "—"}
+   ```
+   If `items.length > capacity`, append inline: `⚠️ over capacity by {items.length - capacity} item(s)`
+
+2. Items table (if items array is non-empty):
+   ```
+   | Item | Title | Type | Status | Severity |
+   |------|-------|------|--------|----------|
+   | {id} | {title} | Story | {status} | — |
+   | {id} | {title} | Bug   | {status} | {severity} |
+   ```
+   - Type column: use "Story" for `type: story`, "Bug" for `type: bug`
+   - Severity column: show severity value for bugs, "—" for stories
+
+3. If items array is empty, output: `*(No items assigned to this sprint)*`
+
+---
+
+## Step 5 — Render Planning Sprints
+
+If there are planning sprints, output a `## Planning Sprints` section header.
+
+For each planning sprint (sorted by key ascending), use the same format as Step 4 with `status: planning`.
+
+---
+
+## Step 6 — Render Closed Sprint Summaries
+
+If there are closed sprints, output a `## Closed Sprints` section header followed by a summary table:
+
+```
+| Sprint | Items | Start | End |
+|--------|-------|-------|-----|
+| {sprint.name} | {items.length} items (archived) | {start or "—"} | {end or "—"} |
+```
+
+Do NOT list individual items within closed sprints (collapsed view by default).
+
+---
+
+## Step 7 — Render Backlog
+
+Count total backlog items: `{backlog.length}`.
+
+Output a `## Backlog — {backlog.length} items` section header.
+
+If backlog is empty, output: `*(No items in backlog)*`
+
+Otherwise, output a table in array order (position = priority):
+
+```
+| # | Item | Title | Type | Status | Severity |
+|---|------|-------|------|--------|----------|
+| 1 | {id} | {title} | Story | {status} | — |
+| 2 | {id} | {title} | Bug   | {status} | {severity} |
+```
+
+- `#` column: 1-based position in the array (= priority rank)
+- Severity column: show severity for bugs, "—" for stories
+
+---
+
+## Step 8 — Render Epics Overview
+
+Output a `## Epics` section header.
+
+If the `epics` map is empty, output: `*(No epics defined)*`
+
+Otherwise, for each epic in the map (sorted by key ascending by numeric value of N):
+
+1. Count items referencing this epic across all sections:
+   - Scan `backlog` items where `epic == N` (N = epic number, e.g., `17` for `epic-17`)
+   - Scan all `sprints[*].items` where `epic == N`
+   - Tally counts by status
+
+2. Output a table row:
+   ```
+   | Epic | Status | Retrospective | Items (active) |
+   |------|--------|---------------|----------------|
+   | epic-4 | on-hold | optional | {count} total ({status breakdown}) |
+   ```
+   - Status breakdown: list non-zero status counts, e.g., "2 in-progress, 1 ready-for-dev"
+   - If no items reference the epic, show "0 total"
+   - `retrospective` field: show value or "—" if null
+
+---
+
+## Step 9 — Render Alerts (Conditional)
+
+Scan for alert conditions:
+
+1. **Over-capacity sprints:** Any sprint where `items.length > capacity`
+   - Alert: `Over capacity: {sprint.name} is over capacity by {items.length - capacity} item(s) ({items.length} / {capacity})`
+
+2. **Stale in-progress items:** Items with `status: in-progress` in **active** sprints where the sprint's `start` date is more than 14 days before today
+   - Alert: `Stale in-progress: {item.id} has been in-progress for {N} days ({sprint.name} started {start})`
+
+3. **Empty active sprints:** Active sprints with zero items
+   - Alert: `Empty active sprint: {sprint.name} is active but has no items assigned`
+
+If NO alert conditions exist, omit this section entirely (do not output "No alerts" or any placeholder).
+
+If alerts exist, output a `## Alerts` section header followed by a bulleted list.
+
+---
+
+## Step 10 — Offer Next Actions
+
+After displaying all sections, present the following options:
+
+```
+Options:
+1. Expand a closed sprint to see its items
+2. Assign backlog items to a sprint — run `/add-to-sprint`
+3. Change sprint settings — run `/modify-sprint`
 4. Create a new sprint — run `/add-sprint`
 5. Exit
+```
 
-Choice:</ask>
-  <check if="choice == 1">
-    <action>For each unassigned story key in {{story_status_map}} not assigned to any sprint, display: key, inferred title, status</action>
-    <action>For each unassigned bug in {{bug_metadata_map}} not assigned to any sprint, display: id, title, severity</action>
-    <output>
-### Full Unassigned Backlog
+**If user selects option 1 (expand closed sprint):**
+- Ask which closed sprint to expand (by name or sprint key)
+- Display the full items table for that sprint (same format as Step 4 items table)
+- Return to the options menu
 
-**Stories:**
-| Key | Title | Status |
-|---|---|---|
-{{#each unassigned_story_items}}
-| {{key}} | {{title}} | {{status}} |
-{{/each}}
+**If user selects options 2–4:** Output the indicated run instruction and exit.
 
-**Bugs:**
-| ID | Title | Severity |
-|---|---|---|
-{{#each unassigned_bugs}}
-| {{id}} | {{title}} | {{severity}} |
-{{/each}}
-    </output>
-    <goto step="6" />
-  </check>
-  <check if="choice == 2">
-    <output>▶️ Run `/add-to-sprint` to assign backlog items to a sprint.</output>
-  </check>
-  <check if="choice == 3">
-    <output>▶️ Run `/modify-sprint` to add/remove items or change sprint settings.</output>
-  </check>
-  <check if="choice == 4">
-    <output>▶️ Run `/add-sprint` to create a new sprint.</output>
-  </check>
-  <check if="choice == 5">
-    <action>Exit workflow</action>
-  </check>
-</step>
-
-</workflow>
+**If user selects option 5:** Exit.

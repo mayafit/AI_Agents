@@ -1,6 +1,6 @@
 # Story 17.13: Rework sprint-status-view Skill (Heavy Rework — Single Source Read)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -72,7 +72,7 @@ So that sprint status display is fast and consistent with no cross-file reconcil
 
 ### Task 1: Create the IDE skill source files (AC: 1, 10)
 
-- [ ] 1.1 Create `skills/sprint-status-view/skill.json` with metadata:
+- [x] 1.1 Create `skills/sprint-status-view/skill.json` with metadata:
   ```json
   {
     "name": "sprint-status-view",
@@ -84,20 +84,20 @@ So that sprint status display is fast and consistent with no cross-file reconcil
   ```
   Note: `always_load` is intentionally omitted (defaults to false) — this skill is invoked on demand, not loaded for every task.
 
-- [ ] 1.2 Create `skills/sprint-status-view/SKILL.md` with the complete skill workflow (see Task 4 for content specification). This is the canonical skill content that the installer deploys to all IDE agents.
+- [x] 1.2 Create `skills/sprint-status-view/SKILL.md` with the complete skill workflow (see Task 4 for content specification). This is the canonical skill content that the installer deploys to all IDE agents.
 
 ### Task 2: Update the BMAD extension skill source files (AC: 1, 10)
 
-- [ ] 2.1 Modify `lib/bmad-extension/skills/sprint-status-view/SKILL.md` — rewrite the existing pre-Epic-17 BMAD extension SKILL.md to implement the new unified-schema workflow (see Task 3 for content). The BMAD extension version is authored for the BMAD Scrum Master agent (`bmm-sm`) context and may have BMAD-specific phrasing (e.g., referencing `_bmad/bmm/config.yaml` for path resolution). The core display logic MUST be functionally identical to the IDE version.
+- [x] 2.1 Modify `lib/bmad-extension/skills/sprint-status-view/SKILL.md` — rewrite the existing pre-Epic-17 BMAD extension SKILL.md to implement the new unified-schema workflow (see Task 3 for content). The BMAD extension version is authored for the BMAD Scrum Master agent (`bmm-sm`) context and may have BMAD-specific phrasing (e.g., referencing `_bmad/bmm/config.yaml` for path resolution). The core display logic MUST be functionally identical to the IDE version.
 
-- [ ] 2.2 Verify `lib/bmad-extension/skills/sprint-status-view/bmad-skill-manifest.yaml` is correct (already exists, no changes expected):
+- [x] 2.2 Verify `lib/bmad-extension/skills/sprint-status-view/bmad-skill-manifest.yaml` is correct (already exists, no changes expected):
   ```yaml
   type: skill
   name: sprint-status-view
   module: ma-skills
   ```
 
-- [ ] 2.3 Verify the registration row in `lib/bmad-extension/module-help.csv` — the existing row reads:
+- [x] 2.3 Verify the registration row in `lib/bmad-extension/module-help.csv` — the existing row reads:
   ```csv
   ma-skills,4-implementation,Sprint Status View,sprint-status-view,,skill:sprint-status-view,sprint-status-view,false,bmm-sm,,"View sprint progress with assigned items and remaining capacity.",_bmad-output/implementation-artifacts,"status display",
   ```
@@ -107,31 +107,31 @@ So that sprint status display is fast and consistent with no cross-file reconcil
 
 Rewrite `lib/bmad-extension/workflows/sprint-status-view/workflow.md` to replace the old multi-file reconciliation logic with unified-schema reading. The workflow MUST implement the following steps:
 
-- [ ] 3.1 **Step 1 — Load sprint-status.yaml:** Read `_bmad-output/implementation-artifacts/sprint-status.yaml`. If the file does not exist, output the missing-file message (AC 8) and exit. Parse all three data sections (`epics`, `backlog`, `sprints`) and top-level metadata.
+- [x] 3.1 **Step 1 — Load sprint-status.yaml:** Read `_bmad-output/implementation-artifacts/sprint-status.yaml`. If the file does not exist, output the missing-file message (AC 8) and exit. Parse all three data sections (`epics`, `backlog`, `sprints`) and top-level metadata.
 
-- [ ] 3.2 **Step 2 — Classify sprints by status:** Partition the `sprints` map into three groups: active (`status: active`), planning (`status: planning`), closed (`status: closed`). Sort each group by sprint key (`sprint-N`) ascending.
+- [x] 3.2 **Step 2 — Classify sprints by status:** Partition the `sprints` map into three groups: active (`status: active`), planning (`status: planning`), closed (`status: closed`). Sort each group by sprint key (`sprint-N`) ascending.
 
-- [ ] 3.3 **Step 3 — Display active sprint(s):** For each active sprint, display:
+- [x] 3.3 **Step 3 — Display active sprint(s):** For each active sprint, display:
   - Sprint header: name, status, capacity bar showing `items.length / capacity`
   - Date range: start and end dates (if populated; show "—" if empty string)
   - Items table with columns: Item ID, Title, Type (story/bug icon), Status, Severity (for bugs; "—" for stories)
   - Over-capacity warning inline if `items.length > capacity`
 
-- [ ] 3.4 **Step 4 — Display planning sprint(s):** For each planning sprint, display the same format as active sprints. If a planning sprint has zero items, show "*(No items assigned to this sprint)*" instead of the items table.
+- [x] 3.4 **Step 4 — Display planning sprint(s):** For each planning sprint, display the same format as active sprints. If a planning sprint has zero items, show "*(No items assigned to this sprint)*" instead of the items table.
 
-- [ ] 3.5 **Step 5 — Display closed sprint summaries:** For each closed sprint, display a one-line collapsed summary: name, item count, start/end dates. Do NOT list individual items by default.
+- [x] 3.5 **Step 5 — Display closed sprint summaries:** For each closed sprint, display a one-line collapsed summary: name, item count, start/end dates. Do NOT list individual items by default.
 
-- [ ] 3.6 **Step 6 — Display backlog:** Display all items from the `backlog` array in array order (priority order). Use a table with columns: Priority (#), Item ID, Title, Type, Status, Severity. Show total item count.
+- [x] 3.6 **Step 6 — Display backlog:** Display all items from the `backlog` array in array order (priority order). Use a table with columns: Priority (#), Item ID, Title, Type, Status, Severity. Show total item count.
 
-- [ ] 3.7 **Step 7 — Display epics overview:** For each epic in the `epics` map, display: epic ID, status, retrospective state. Derive item counts by scanning the `backlog` and all `sprints[*].items` for items whose `epic` field matches the epic number. Show a summary per epic (e.g., "3 in-progress, 2 backlog").
+- [x] 3.7 **Step 7 — Display epics overview:** For each epic in the `epics` map, display: epic ID, status, retrospective state. Derive item counts by scanning the `backlog` and all `sprints[*].items` for items whose `epic` field matches the epic number. Show a summary per epic (e.g., "3 in-progress, 2 backlog").
 
-- [ ] 3.8 **Step 8 — Display alerts/warnings (conditional):** Scan for alert conditions:
+- [x] 3.8 **Step 8 — Display alerts/warnings (conditional):** Scan for alert conditions:
   - **Over-capacity:** Any sprint where `items.length > capacity` (include sprint name and overage)
   - **Stale items:** Items with `status: in-progress` in active sprints where `start` date is more than 14 days before today
   - **Empty active sprints:** Active sprint with zero items
   If no alerts exist, skip this section entirely (do not output "No alerts").
 
-- [ ] 3.9 **Step 9 — Offer next actions:** Present interactive options:
+- [x] 3.9 **Step 9 — Offer next actions:** Present interactive options:
   1. Expand a closed sprint to see its items
   2. Run `/add-to-sprint` to assign backlog items
   3. Run `/modify-sprint` to change sprint settings
@@ -140,7 +140,7 @@ Rewrite `lib/bmad-extension/workflows/sprint-status-view/workflow.md` to replace
 
 ### Task 4: Implement the IDE skill SKILL.md content (AC: 1, 2, 3, 4, 5, 6, 7, 8, 9)
 
-- [ ] 4.1 Write `skills/sprint-status-view/SKILL.md` implementing the same display logic as the workflow (Task 3), but authored as a standalone skill instruction (not wrapped in `<workflow>` XML tags). The content should:
+- [x] 4.1 Write `skills/sprint-status-view/SKILL.md` implementing the same display logic as the workflow (Task 3), but authored as a standalone skill instruction (not wrapped in `<workflow>` XML tags). The content should:
   - Load and parse `sprint-status.yaml` (single file read)
   - Render the same sections in the same order: active sprints, planning sprints, closed sprint summaries, backlog, epics, alerts
   - Use the same display format (Markdown tables, section headers, capacity bars)
@@ -148,22 +148,22 @@ Rewrite `lib/bmad-extension/workflows/sprint-status-view/workflow.md` to replace
   - Omit the interactive "next actions" menu (IDE skills are typically invoked and displayed, not interactive multi-step)
   - Include a note that this is a READ-ONLY skill — no writes to any file
 
-- [ ] 4.2 Ensure the SKILL.md does not include any hardcoded frontmatter — the installer will strip existing frontmatter and inject fresh frontmatter from `skill.json`.
+- [x] 4.2 Ensure the SKILL.md does not include any hardcoded frontmatter — the installer will strip existing frontmatter and inject fresh frontmatter from `skill.json`.
 
 ### Task 5: Remove old multi-file reconciliation logic (AC: 1)
 
-- [ ] 5.1 Confirm neither the IDE SKILL.md nor the BMAD extension SKILL.md contains any instruction to read `sprint-plan-*.yaml` files, `backlog.yaml`, or `bug-*.md` files for status data.
-- [ ] 5.2 Confirm the only data source is `sprint-status.yaml`.
-- [ ] 5.3 Confirm neither file writes to `sprint-status.yaml` or any other file (read-only invariant).
-- [ ] 5.4 If the rewritten BMAD extension SKILL.md or workflow.md still contains references to the old multi-file approach (globbing `sprint-plan-*.yaml`, parsing `development_status` map, scanning `bug-*.md` frontmatter), remove them entirely and replace with the unified-schema single-file read.
+- [x] 5.1 Confirm neither the IDE SKILL.md nor the BMAD extension SKILL.md contains any instruction to read `sprint-plan-*.yaml` files, `backlog.yaml`, or `bug-*.md` files for status data.
+- [x] 5.2 Confirm the only data source is `sprint-status.yaml`.
+- [x] 5.3 Confirm neither file writes to `sprint-status.yaml` or any other file (read-only invariant).
+- [x] 5.4 If the rewritten BMAD extension SKILL.md or workflow.md still contains references to the old multi-file approach (globbing `sprint-plan-*.yaml`, parsing `development_status` map, scanning `bug-*.md` frontmatter), remove them entirely and replace with the unified-schema single-file read.
 
 ### Task 6: Deployment verification (AC: 10)
 
-- [ ] 6.1 Run `npx ma-agents` (or `node lib/cli.js`) to trigger the installer.
-- [ ] 6.2 Verify the IDE skill appears in the installed MANIFEST.yaml for at least one agent (e.g., check `.claude/skills/MANIFEST.yaml` includes `sprint-status-view`).
-- [ ] 6.3 Diff the installed IDE copy (e.g., `.claude/skills/sprint-status-view/SKILL.md`) against the source (`skills/sprint-status-view/SKILL.md`) — the content should match after accounting for frontmatter injection by the installer.
-- [ ] 6.4 Verify the BMAD extension copy exists at `_bmad/extensions/ma-agents-skills/skills/sprint-status-view/SKILL.md` after a BMAD install.
-- [ ] 6.5 Verify `sprint-status-view` appears in the BMAD module help output.
+- [x] 6.1 Run `npx ma-agents` (or `node lib/cli.js`) to trigger the installer.
+- [x] 6.2 Verify the IDE skill appears in the installed MANIFEST.yaml for at least one agent (e.g., check `.claude/skills/MANIFEST.yaml` includes `sprint-status-view`).
+- [x] 6.3 Diff the installed IDE copy (e.g., `.claude/skills/sprint-status-view/SKILL.md`) against the source (`skills/sprint-status-view/SKILL.md`) — the content should match after accounting for frontmatter injection by the installer.
+- [x] 6.4 Verify the BMAD extension copy exists at `_bmad/extensions/ma-agents-skills/skills/sprint-status-view/SKILL.md` after a BMAD install.
+- [x] 6.5 Verify `sprint-status-view` appears in the BMAD module help output (confirmed present in module-help.csv).
 
 ## Dev Notes
 
@@ -326,3 +326,58 @@ The output should follow this structure (example with realistic data):
 
 - Architecture Decision P2-11 in `_bmad-output/planning-artifacts/architecture.md`
 - Skill Integration Map entry: `sprint-status-view | 17.13 | Reads all sections, renders progress | All (read-only) | Heavy`
+
+---
+
+## Dev Agent Record
+
+**Agent:** Claude Sonnet 4.6 (claude-sonnet-4-6)
+**Date:** 2026-04-06
+**Branch:** feature/story-17-13-sprint-status-view
+**Worktree:** .worktrees/story-17-13-sprint-status-view/
+
+### Implementation Notes
+
+- Created new IDE skill pipeline entry: `skills/sprint-status-view/skill.json` + `SKILL.md`
+- Rewrote BMAD extension SKILL.md from old `development_status`/`sprint-plan-*.yaml`/`bug-*.md` multi-file approach to new unified `sprint-status.yaml` three-section schema (`epics`, `backlog`, `sprints`)
+- Rewrote BMAD workflow from 6-step multi-file reconciliation to 10-step unified-schema read with interactive next-actions menu
+- Updated module-help.csv description for sprint-status-view
+- Verified deployment: installer runs clean, IDE skill deployed to `.claude/skills/sprint-status-view/SKILL.md`, BMAD extension deployed to `_bmad/extensions/ma-agents-skills/skills/sprint-status-view/`
+- The `triggers` attribute in BMAD extension SKILL.md frontmatter is intentional and consistent with all other 33 BMAD extension skills in this project
+
+### Code Review Findings and Fixes
+
+1. **Finding:** IDE SKILL.md had hardcoded date "(2026-04-06)" in stale-items alert description
+   **Fix:** Replaced with "today's date" (relative language)
+
+2. **Finding:** IDE SKILL.md epics table instruction was ambiguous about per-row rendering
+   **Fix:** Clarified the table format block to show a parameterized row template with explicit variable names
+
+3. **Finding:** IDE diagnostic warning on `triggers` attribute in BMAD SKILL.md frontmatter
+   **Resolution:** Confirmed false positive — `triggers` is used in 33 existing BMAD extension skills project-wide. No change needed.
+
+## File List
+
+### Created (New Files)
+
+- `skills/sprint-status-view/skill.json` — IDE skill metadata (new IDE pipeline entry)
+- `skills/sprint-status-view/SKILL.md` — IDE skill instruction content (new)
+
+### Modified (Existing Files)
+
+- `lib/bmad-extension/skills/sprint-status-view/SKILL.md` — Rewrote from old multi-file schema to unified schema
+- `lib/bmad-extension/workflows/sprint-status-view/workflow.md` — Rewrote from old multi-file reconciliation to unified-schema read
+- `lib/bmad-extension/module-help.csv` — Updated sprint-status-view description
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — Set `17-13-rework-sprint-status-view: review`
+- `_bmad-output/implementation-artifacts/17-13-rework-sprint-status-view.md` — Updated status, tasks, dev record
+
+### Deployed (Installer-Managed, Not Committed)
+
+- `.claude/skills/sprint-status-view/SKILL.md` — Installed IDE copy
+- `_bmad/extensions/ma-agents-skills/skills/sprint-status-view/SKILL.md` — Installed BMAD extension copy
+
+## Change Log
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-04-06 | Initial implementation: created IDE skill files, rewrote BMAD extension SKILL.md and workflow.md for unified schema, updated module-help.csv | Claude Sonnet 4.6 |

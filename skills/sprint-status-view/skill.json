@@ -1,0 +1,7 @@
+{
+  "name": "sprint-status-view",
+  "version": "1.0.0",
+  "description": "Display formatted sprint progress, backlog, and epic status from the unified sprint-status.yaml",
+  "category": "workflow",
+  "tags": ["sprint-status", "sprint-management", "dashboard", "read-only"]
+}
