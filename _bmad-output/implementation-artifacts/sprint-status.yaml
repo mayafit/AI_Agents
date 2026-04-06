@@ -1,83 +1,239 @@
-# generated: 2026-03-15
-# updated: 2026-04-04 — Epic 17 code rolled back; all Phase 2 stories (17.10-17.24) rewritten and reset to ready-for-dev.
-# project: agents
-# project_key: NOKEY
-# tracking_system: file-system
-# story_location: _bmad-output/implementation-artifacts
+# Unified sprint-status.yaml — single source of truth for sprint and backlog state
+# Schema version: 1.0 (Story 17.9)
+# Migrated by: scripts/migrate-sprint-status.js
 
-# STATUS DEFINITIONS:
-# ==================
-# Epic Status:   backlog → in-progress → done
-# Story Status:  backlog → ready-for-dev → in-progress → review → done
-# Retrospective: optional → done
-#
-# Done epics archived (2026-04-03): 1, 2, 3, 6, 8, 9, 10, 11, 12, 13, 15, 16
-# Done stories for Epic 5 (5.1-5.4) also archived; 5.5-5.6 remain (in review).
-# Old Epic 17 stories (17.1-17.8) archived; replaced by 17.9-17.24.
-
-generated: 2026-03-15
-last_updated: 2026-04-04
+generated: "2026-03-15"
+last_updated: "2026-04-06T08:00:00Z"
 project: agents
 project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 
-development_status:
-  # ─── IN PROGRESS ──────────────────────────────────────────────────────────────
+# ── Epics ────────────────────────────────────────────────────────────────────
+epics:
+  epic-4:
+    status: on-hold
+    retrospective: optional
+  epic-5:
+    status: in-progress
+    retrospective: optional
+  epic-7:
+    status: on-hold
+    retrospective: optional
+  epic-14:
+    status: backlog
+    retrospective: optional
+  epic-17:
+    status: in-progress
+    retrospective: optional
 
-  # Epic 5: Bundled BMAD Installation — stories 5.1-5.4 done (archived), 5.5-5.6 in review
-  epic-5: in-progress
-  5-5-explicit-parameter-passing: review
-  5-6-fix-space-in-path-bug: review
-  epic-5-retrospective: optional
+# ── Backlog ──────────────────────────────────────────────────────────────────
+# Ordered by priority (position 0 = highest priority)
+backlog:
+  - id: "14-1-research-sprint-management-integration"
+    type: story
+    epic: 14
+    title: "Research Sprint Management Integration"
+    priority: 1
+    status: backlog
+    severity: null
+  - id: "14-2-research-knowledge-management-integration"
+    type: story
+    epic: 14
+    title: "Research Knowledge Management Integration"
+    priority: 2
+    status: backlog
+    severity: null
+  - id: "14-3-architecture-external-tooling-abstraction"
+    type: story
+    epic: 14
+    title: "Architecture External Tooling Abstraction"
+    priority: 3
+    status: backlog
+    severity: null
+  - id: "14-4-implement-jira-backend"
+    type: story
+    epic: 14
+    title: "Implement Jira Backend"
+    priority: 4
+    status: backlog
+    severity: null
+  - id: "14-5-implement-confluence-backend"
+    type: story
+    epic: 14
+    title: "Implement Confluence Backend"
+    priority: 5
+    status: backlog
+    severity: null
+  - id: "17-10-rework-generate-backlog"
+    type: story
+    epic: 17
+    title: "Rework Generate Backlog"
+    priority: 6
+    status: ready-for-dev
+    severity: null
+  - id: "17-11-rework-add-to-sprint"
+    type: story
+    epic: 17
+    title: "Rework Add To Sprint"
+    priority: 7
+    status: ready-for-dev
+    severity: null
+  - id: "17-12-rework-remove-from-sprint"
+    type: story
+    epic: 17
+    title: "Rework Remove From Sprint"
+    priority: 8
+    status: ready-for-dev
+    severity: null
+  - id: "17-13-rework-sprint-status-view"
+    type: story
+    epic: 17
+    title: "Rework Sprint Status View"
+    priority: 9
+    status: ready-for-dev
+    severity: null
+  - id: "17-14-rework-cleanup-done"
+    type: story
+    epic: 17
+    title: "Rework Cleanup Done"
+    priority: 10
+    status: ready-for-dev
+    severity: null
+  - id: "17-15-rework-bmad-sprint-planning"
+    type: story
+    epic: 17
+    title: "Rework Bmad Sprint Planning"
+    priority: 11
+    status: ready-for-dev
+    severity: null
+  - id: "17-16-rework-add-sprint"
+    type: story
+    epic: 17
+    title: "Rework Add Sprint"
+    priority: 12
+    status: ready-for-dev
+    severity: null
+  - id: "17-17-rework-modify-sprint"
+    type: story
+    epic: 17
+    title: "Rework Modify Sprint"
+    priority: 13
+    status: ready-for-dev
+    severity: null
+  - id: "17-18-rework-bmad-dev-story"
+    type: story
+    epic: 17
+    title: "Rework Bmad Dev Story"
+    priority: 14
+    status: ready-for-dev
+    severity: null
+  - id: "17-19-rework-story-status-lookup"
+    type: story
+    epic: 17
+    title: "Rework Story Status Lookup"
+    priority: 15
+    status: ready-for-dev
+    severity: null
+  - id: "17-20-rework-bmad-sprint-status"
+    type: story
+    epic: 17
+    title: "Rework Bmad Sprint Status"
+    priority: 16
+    status: ready-for-dev
+    severity: null
+  - id: "17-21-new-close-sprint"
+    type: story
+    epic: 17
+    title: "New Close Sprint"
+    priority: 17
+    status: ready-for-dev
+    severity: null
+  - id: "17-22-jira-adapter-pattern"
+    type: story
+    epic: 17
+    title: "Jira Adapter Pattern"
+    priority: 18
+    status: ready-for-dev
+    severity: null
+  - id: "17-23-migration-deprecation-old-files"
+    type: story
+    epic: 17
+    title: "Migration Deprecation Old Files"
+    priority: 19
+    status: review
+    severity: null
+  - id: "17-24-rework-prioritize-backlog"
+    type: story
+    epic: 17
+    title: "Rework Prioritize Backlog"
+    priority: 20
+    status: ready-for-dev
+    severity: null
+  - id: "17-9-unified-sprint-status-schema"
+    type: story
+    epic: 17
+    title: "Unified Sprint Status Schema"
+    priority: 21
+    status: done
+    severity: null
+  - id: "4-1-vs-agent-registry-entry"
+    type: story
+    epic: 4
+    title: "Vs Agent Registry Entry"
+    priority: 22
+    status: on-hold
+    severity: null
+  - id: "4-2-vs-skill-template-format"
+    type: story
+    epic: 4
+    title: "Vs Skill Template Format"
+    priority: 23
+    status: on-hold
+    severity: null
+  - id: "5-5-explicit-parameter-passing"
+    type: story
+    epic: 5
+    title: "Explicit Parameter Passing"
+    priority: 24
+    status: review
+    severity: null
+  - id: "5-6-fix-space-in-path-bug"
+    type: story
+    epic: 5
+    title: "Fix Space In Path Bug"
+    priority: 25
+    status: review
+    severity: null
+  - id: "7-1-test-infrastructure-setup"
+    type: story
+    epic: 7
+    title: "Test Infrastructure Setup"
+    priority: 26
+    status: on-hold
+    severity: null
+  - id: "7-2-installer-pipeline-tests"
+    type: story
+    epic: 7
+    title: "Installer Pipeline Tests"
+    priority: 27
+    status: on-hold
+    severity: null
+  - id: "7-3-bmad-pipeline-tests"
+    type: story
+    epic: 7
+    title: "Bmad Pipeline Tests"
+    priority: 28
+    status: on-hold
+    severity: null
+  - id: "7-4-cli-command-routing-tests"
+    type: story
+    epic: 7
+    title: "Cli Command Routing Tests"
+    priority: 29
+    status: on-hold
+    severity: null
 
-  # Epic 17: Sprint Management Model Rework — Unified sprint-status.yaml
-  # Redesigned 2026-04-03: 16 new stories (17.9-17.24) replacing old 17.1-17.8.
-  # Execution order: 17.9 → 17.15 → 17.10 → 17.16 → 17.11 → 17.12 → 17.13 → 17.14 → 17.17 → 17.18 → 17.19 → 17.20 → 17.24 → 17.21 → 17.22 → 17.23
-  epic-17: in-progress
-  17-9-unified-sprint-status-schema: done
-  17-10-rework-generate-backlog: ready-for-dev
-  17-11-rework-add-to-sprint: ready-for-dev
-  17-12-rework-remove-from-sprint: ready-for-dev
-  17-13-rework-sprint-status-view: ready-for-dev
-  17-14-rework-cleanup-done: ready-for-dev
-  17-15-rework-bmad-sprint-planning: ready-for-dev
-  17-16-rework-add-sprint: ready-for-dev
-  17-17-rework-modify-sprint: ready-for-dev
-  17-18-rework-bmad-dev-story: ready-for-dev
-  17-19-rework-story-status-lookup: ready-for-dev
-  17-20-rework-bmad-sprint-status: ready-for-dev
-  17-21-new-close-sprint: review
-  17-22-jira-adapter-pattern: ready-for-dev
-  17-23-migration-deprecation-old-files: ready-for-dev
-  17-24-rework-prioritize-backlog: review
-  epic-17-retrospective: optional
-
-  # ─── ON HOLD ──────────────────────────────────────────────────────────────────
-
-  # Epic 4: Visual Studio Agent Integration — ON HOLD (2026-03-20)
-  epic-4: on-hold
-  4-1-vs-agent-registry-entry: on-hold
-  4-2-vs-skill-template-format: on-hold
-  epic-4-retrospective: optional
-
-  # Epic 7: Test Suite Foundation — ON HOLD (2026-03-19)
-  epic-7: on-hold
-  7-1-test-infrastructure-setup: on-hold
-  7-2-installer-pipeline-tests: on-hold
-  7-3-bmad-pipeline-tests: on-hold
-  7-4-cli-command-routing-tests: on-hold
-  epic-7-retrospective: optional
-
-  # ─── BACKLOG ──────────────────────────────────────────────────────────────────
-
-  # Epic 14: External Tooling Integration
-  # Dependencies: Epic 12, Epic 10, Epic 13 | Analyst + Architect required
-  # Stories 14.4, 14.5 blocked on Story 14.3 architecture approval
-        epic-14: backlog
-  14-1-research-sprint-management-integration: backlog
-  14-2-research-knowledge-management-integration: backlog
-  14-3-architecture-external-tooling-abstraction: backlog
-  14-4-implement-jira-backend: backlog
-  14-5-implement-confluence-backend: backlog
-  epic-14-retrospective: optional
+# ── Sprints ──────────────────────────────────────────────────────────────────
+sprints:
+  {}

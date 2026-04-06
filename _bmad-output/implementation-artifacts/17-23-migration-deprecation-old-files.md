@@ -1,6 +1,6 @@
 # Story 17.23: Migration & Deprecation of Old File Formats
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -86,13 +86,13 @@ This is the LAST functional story in Epic 17's execution order. By the time this
 
 This is the VERIFICATION task. It confirms that all preceding stories (17.10-17.22, 17.24) have successfully eliminated old-format references. If any old references remain, they must be fixed before the migration story can be marked done.
 
-- [ ] 1.1 Scan all BMAD extension skill source files (`lib/bmad-extension/skills/*/SKILL.md`, `lib/bmad-extension/skills/*/workflow.md`) for references to `backlog.yaml`, `sprint-plan-*.yaml`, `sprints/sprint-`, and `development_status`. List all findings.
-- [ ] 1.2 Scan all IDE skill source files (`skills/*/SKILL.md`) for the same patterns. List all findings.
-- [ ] 1.3 For each finding, determine if it is:
+- [x] 1.1 Scan all BMAD extension skill source files (`lib/bmad-extension/skills/*/SKILL.md`, `lib/bmad-extension/skills/*/workflow.md`) for references to `backlog.yaml`, `sprint-plan-*.yaml`, `sprints/sprint-`, and `development_status`. List all findings.
+- [x] 1.2 Scan all IDE skill source files (`skills/*/SKILL.md`) for the same patterns. List all findings.
+- [x] 1.3 For each finding, determine if it is:
   - (a) A stale reference from a pre-rework version that needs to be fixed NOW as part of this story
   - (b) A legitimate reference (e.g., migration documentation, comments explaining what was replaced)
-- [ ] 1.4 Fix all stale references found in 1.3(a). For each fix, update the skill source to use the unified `sprint-status.yaml` three-section schema.
-- [ ] 1.5 Document the audit results: which skills were clean, which needed fixes, and what was changed.
+- [x] 1.4 Fix all stale references found in 1.3(a). For each fix, update the skill source to use the unified `sprint-status.yaml` three-section schema.
+- [x] 1.5 Document the audit results: which skills were clean, which needed fixes, and what was changed.
 
 **Known pre-existing old-format references (as of story creation):**
 - `skills/story-status-lookup/SKILL.md` -- references `development_status` (rework: Story 17.19)
@@ -107,51 +107,51 @@ These should all be resolved by their respective rework stories BEFORE this stor
 
 Create `scripts/migrate-sprint-status.js` -- a one-time Node.js script that automates the data migration. This is NOT a deployed skill; it runs via `node scripts/migrate-sprint-status.js` from the project root.
 
-- [ ] 2.1 Implement old-schema detection:
+- [x] 2.1 Implement old-schema detection:
   - Read `sprint-status.yaml` and check for `development_status` top-level key (old schema) vs `epics`/`backlog`/`sprints` keys (new schema)
   - Check for existence of `backlog.yaml` in the implementation artifacts directory
   - Check for existence of `sprints/` directory with `sprint-*.yaml` files
   - Check for existence of `sprint-plan-*.yaml` files in the implementation artifacts directory
   - If new schema already detected AND no legacy files exist, print "No migration needed" and exit
 
-- [ ] 2.2 Implement backup step:
+- [x] 2.2 Implement backup step:
   - If old-schema `sprint-status.yaml` exists, copy it to `sprint-status.yaml.old`
   - Log the backup creation with timestamp
 
-- [ ] 2.3 Implement epic extraction from old `development_status`:
+- [x] 2.3 Implement epic extraction from old `development_status`:
   - Keys matching `epic-N` pattern -> extract to `epics` map with `status` field
   - Keys matching `epic-N-retrospective` pattern -> fold into corresponding epic's `retrospective` field
   - Keys matching neither pattern -> these are story/bug statuses (handled in 2.5)
 
-- [ ] 2.4 Implement backlog import from `backlog.yaml` (if file exists):
+- [x] 2.4 Implement backlog import from `backlog.yaml` (if file exists):
   - Parse the old `backlog.yaml` format
   - Map each item to the unified item schema: `id`, `type` (story/bug), `epic` (integer or null), `title`, `priority`, `status`, `severity`
   - Preserve priority ordering from the old file
 
-- [ ] 2.5 Implement sprint import from old sprint files (if they exist):
+- [x] 2.5 Implement sprint import from old sprint files (if they exist):
   - Glob for `sprints/sprint-*.yaml` and `sprint-plan-*.yaml`
   - For each sprint file, extract: sprint number/ID, name, status, capacity, start/end dates, assigned items
   - Map each sprint to the unified sprint schema in the `sprints` map
   - Items referenced in sprint files are placed in the sprint's `items` array (with `priority` field dropped per schema)
   - Items from `backlog.yaml` that are also in a sprint are placed in the sprint, NOT in backlog (single-location invariant)
 
-- [ ] 2.6 Implement status application from old `development_status`:
+- [x] 2.6 Implement status application from old `development_status`:
   - For each story/bug key in the old `development_status` map, find the corresponding item (in backlog or any sprint)
   - Apply the status from `development_status` (this is the authoritative status source)
   - If the item was not found in backlog or any sprint import, log a warning (orphaned status entry)
 
-- [ ] 2.7 Implement conflict detection and resolution:
+- [x] 2.7 Implement conflict detection and resolution:
   - If an item appears in multiple old files with different statuses, log the conflict
   - Resolution rule: `development_status` value wins (it is the live status tracker)
   - Generate a conflict report section in the migration output
 
-- [ ] 2.8 Implement metadata assembly:
+- [x] 2.8 Implement metadata assembly:
   - Preserve `generated` from old file (or set to now if missing)
   - Set `last_updated` to current ISO-8601 timestamp
   - Preserve `project`, `project_key`, `tracking_system`, `story_location` from old file
   - Default `tracking_system` to `file-system` if missing
 
-- [ ] 2.9 Write the unified `sprint-status.yaml`:
+- [x] 2.9 Write the unified `sprint-status.yaml`:
   - Assemble complete file with metadata + `epics` + `backlog` + `sprints` sections
   - Validate output against Story 17.9 schema rules:
     - Every item has required fields (`id`, `type`, `epic`, `title`, `status`, `severity`)
@@ -160,18 +160,18 @@ Create `scripts/migrate-sprint-status.js` -- a one-time Node.js script that auto
     - `epics` is a map, `backlog` is an array, `sprints` is a map
   - Write atomically (write to temp file, then rename)
 
-- [ ] 2.10 Implement file relocation:
+- [x] 2.10 Implement file relocation:
   - Create `deprecated/` subfolder under implementation artifacts (if it does not exist)
   - Move `backlog.yaml` -> `deprecated/backlog.yaml`
   - Move `sprints/` directory -> `deprecated/sprints/`
   - Move `sprint-plan-*.yaml` files -> `deprecated/sprint-plan-*.yaml`
   - Log each file moved
 
-- [ ] 2.11 Implement idempotency:
+- [x] 2.11 Implement idempotency:
   - If the new schema is already present AND no legacy files exist, exit cleanly
   - If legacy files exist but the new schema is already present, only relocate the legacy files (do not re-migrate)
 
-- [ ] 2.12 Generate migration report:
+- [x] 2.12 Generate migration report:
   - List all items migrated with their source file and destination section
   - List all epics extracted with their statuses
   - List all sprints imported with their item counts
@@ -183,24 +183,24 @@ Create `scripts/migrate-sprint-status.js` -- a one-time Node.js script that auto
 
 Create `scripts/MIGRATION-GUIDE.md` -- a step-by-step document for running the migration.
 
-- [ ] 3.1 Write pre-migration checklist:
+- [x] 3.1 Write pre-migration checklist:
   - Ensure all 13 reworked skills have been deployed (Stories 17.10-17.22, 17.24 all in `done` status)
   - Commit or stash any uncommitted changes to sprint management files
   - Verify Node.js is available (`node --version`)
 
-- [ ] 3.2 Write migration steps:
+- [x] 3.2 Write migration steps:
   - Step 1: Run `node scripts/migrate-sprint-status.js` from the project root
   - Step 2: Review the migration report output
   - Step 3: Run `bmad-sprint-planning` (Story 17.15) to validate the new file parses correctly
   - Step 4: Run `sprint-status-view` (Story 17.13) to visually verify the migrated data
   - Step 5: Commit the new `sprint-status.yaml` and the `deprecated/` folder
 
-- [ ] 3.3 Write rollback procedure:
+- [x] 3.3 Write rollback procedure:
   - Copy `sprint-status.yaml.old` back to `sprint-status.yaml`
   - Move files from `deprecated/` back to their original locations
   - The original data is never destroyed
 
-- [ ] 3.4 Write post-migration verification:
+- [x] 3.4 Write post-migration verification:
   - Confirm `sprint-status.yaml` has `epics`, `backlog`, `sprints` top-level keys
   - Confirm no `development_status` key exists
   - Confirm `backlog.yaml` no longer exists in the active directory
@@ -208,7 +208,7 @@ Create `scripts/MIGRATION-GUIDE.md` -- a step-by-step document for running the m
   - Confirm `sprint-plan-*.yaml` files no longer exist in the active directory
   - Run each sprint management skill once to verify it operates on the new format
 
-- [ ] 3.5 Write cleanup instructions:
+- [x] 3.5 Write cleanup instructions:
   - After successful verification over 1 sprint cycle, the `deprecated/` folder and `sprint-status.yaml.old` can be safely deleted
   - Optionally add `deprecated/` to `.gitignore`
 
@@ -216,18 +216,18 @@ Create `scripts/MIGRATION-GUIDE.md` -- a step-by-step document for running the m
 
 The ma-agents project itself currently uses the old flat `development_status` format. This task migrates the project's own data.
 
-- [ ] 4.1 Assess current state: the ma-agents `sprint-status.yaml` at `_bmad-output/implementation-artifacts/sprint-status.yaml` uses the old `development_status` format. However, `backlog.yaml` and `sprints/` directory no longer exist (confirmed during story creation).
-- [ ] 4.2 Run the migration script against the ma-agents project itself.
-- [ ] 4.3 Verify the migrated `sprint-status.yaml` contains all epics, stories, and statuses from the old file.
-- [ ] 4.4 Since no `backlog.yaml` or `sprints/` exist for this project, the migration for ma-agents only converts the flat `development_status` into the three-section schema. Items not currently tracked in a sprint go to `backlog`; items in flight stay in their current status.
+- [x] 4.1 Assess current state: the ma-agents `sprint-status.yaml` at `_bmad-output/implementation-artifacts/sprint-status.yaml` uses the old `development_status` format. However, `backlog.yaml` and `sprints/` directory no longer exist (confirmed during story creation).
+- [x] 4.2 Run the migration script against the ma-agents project itself.
+- [x] 4.3 Verify the migrated `sprint-status.yaml` contains all epics, stories, and statuses from the old file.
+- [x] 4.4 Since no `backlog.yaml` or `sprints/` exist for this project, the migration for ma-agents only converts the flat `development_status` into the three-section schema. Items not currently tracked in a sprint go to `backlog`; items in flight stay in their current status.
 
 ### Task 5: Verify the migration script against the Story 17.9 schema (AC: 1, 2, 3)
 
-- [ ] 5.1 Load the canonical schema specification from `_bmad-output/planning-artifacts/sprint-status-schema.md`.
-- [ ] 5.2 Validate the migration output against all 10 schema validation rules from Section 10 of the schema spec.
-- [ ] 5.3 Verify the single-location invariant: no item ID appears in both `backlog` and any sprint's `items`.
-- [ ] 5.4 Verify that `backlog` items have `priority` and sprint `items` do NOT have `priority`.
-- [ ] 5.5 Verify that `epics` entries have `status` and `retrospective` fields.
+- [x] 5.1 Load the canonical schema specification from `_bmad-output/planning-artifacts/sprint-status-schema.md`.
+- [x] 5.2 Validate the migration output against all 10 schema validation rules from Section 10 of the schema spec.
+- [x] 5.3 Verify the single-location invariant: no item ID appears in both `backlog` and any sprint's `items`.
+- [x] 5.4 Verify that `backlog` items have `priority` and sprint `items` do NOT have `priority`.
+- [x] 5.5 Verify that `epics` entries have `status` and `retrospective` fields.
 
 ## Dev Notes
 
@@ -401,3 +401,57 @@ As of story creation (2026-04-04):
 - Schema spec: `_bmad-output/planning-artifacts/sprint-status-schema.md` (READ -- validation reference)
 - Epics source: `_bmad-output/planning-artifacts/epics.md` (READ -- item metadata source)
 - Skill source audit targets: `skills/*/SKILL.md`, `lib/bmad-extension/skills/*/SKILL.md`, `lib/bmad-extension/skills/*/workflow.md`
+
+## Dev Agent Record
+
+### Implementation Summary
+
+**Agent:** Claude Sonnet 4.6
+**Date:** 2026-04-06
+**Branch:** `feature/story-17-23-migration-deprecation`
+
+#### Task 1 Audit Results
+
+Scanned all skill source files for old-format references. Findings:
+
+| File | Finding | Classification |
+|------|---------|---------------|
+| `skills/story-status-lookup/SKILL.md` | References `development_status` for status lookup | (a) Stale — fixed |
+| `lib/bmad-extension/skills/add-sprint/SKILL.md` | References `sprint-plan-*.yaml` as output | (a) Stale — fixed |
+| `lib/bmad-extension/skills/add-to-sprint/SKILL.md` | References `development_status` and `sprint-plan-*.yaml` | (a) Stale — fixed |
+| `lib/bmad-extension/skills/sprint-status-view/SKILL.md` | References `sprint-plan-*.yaml` and `development_status` | (a) Stale — fixed |
+| `lib/bmad-extension/skills/modify-sprint/SKILL.md` | References `sprint-plan-*.yaml` | (a) Stale — fixed |
+
+All five stale skills were completely rewritten to use the unified three-section `sprint-status.yaml` schema. No remaining old-format references were found in other skill files.
+
+#### Migration Execution Results
+
+- Ran `node scripts/migrate-sprint-status.js` on the ma-agents project
+- Old file backed up to `sprint-status.yaml.old`
+- 5 epics extracted: epic-4 (on-hold), epic-5 (in-progress), epic-7 (on-hold), epic-14 (backlog), epic-17 (in-progress)
+- 29 items placed in backlog (all items came from `development_status` only — no `backlog.yaml` or sprint files existed)
+- No conflicts detected
+- Validation passed — three-section schema confirmed
+- Migration report written to `deprecated/migration-report.md`
+
+## File List
+
+### New Files
+- `scripts/migrate-sprint-status.js` — One-time migration helper script (Node.js)
+- `scripts/MIGRATION-GUIDE.md` — Step-by-step migration guide for project maintainers
+- `_bmad-output/implementation-artifacts/deprecated/migration-report.md` — Migration run report
+- `_bmad-output/implementation-artifacts/sprint-status.yaml.old` — Backup of pre-migration file
+
+### Modified Files
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — Migrated to unified three-section schema
+- `skills/story-status-lookup/SKILL.md` — Updated Step 2 to search all three sections instead of `development_status`
+- `lib/bmad-extension/skills/add-sprint/SKILL.md` — Rewritten to add sprint entry to `sprint-status.yaml` sprints section
+- `lib/bmad-extension/skills/add-to-sprint/SKILL.md` — Rewritten to use unified schema (backlog array → sprint items)
+- `lib/bmad-extension/skills/sprint-status-view/SKILL.md` — Rewritten to read from unified three-section schema
+- `lib/bmad-extension/skills/modify-sprint/SKILL.md` — Rewritten to read/write unified sprint-status.yaml
+
+## Change Log
+
+| Date | Version | Change |
+|------|---------|--------|
+| 2026-04-06 | 1.0 | Initial implementation: Task 1 audit + fixes, Task 2 migration script, Task 3 migration guide, Task 4 ma-agents migration, Task 5 validation |
