@@ -1,249 +1,301 @@
 # Modify Sprint Workflow
 
-Guided workflow to modify an existing sprint — add/remove items, change capacity, update metadata.
+Guided workflow to modify an existing sprint's metadata (name, capacity, dates, status) within the `sprints` section of `sprint-status.yaml`.
+
+> **Scope:** This workflow modifies sprint **metadata only** — name, capacity, start date, end date, and status.
+> To assign items to a sprint, use `/add-to-sprint`. To remove items, use `/remove-from-sprint`.
 
 <workflow>
 
-<step n="1" goal="List available sprints and select one to modify">
-  <action>Glob `_bmad-output/implementation-artifacts/sprint-plan-*.yaml` to discover all sprint artifact files</action>
-  <check if="no sprint files found">
-    <output>❌ No sprint plans found. Run `/add-sprint` first to create a sprint.</output>
+<step n="0" goal="Load configuration and validate file existence">
+  <action>Resolve the path to `sprint-status.yaml` using `_bmad/bmm/config.yaml` if available; default path is `_bmad-output/implementation-artifacts/sprint-status.yaml`</action>
+  <check if="file does not exist">
+    <output>❌ No sprint-status.yaml found. Run sprint planning first to initialize the file.</output>
     <action>Exit workflow</action>
   </check>
-  <action>For each sprint file found, read and extract: sprint_number, sprint_name, capacity, assigned_items, status, last_modified</action>
+  <action>Read and parse the full file, retaining all three sections: `epics`, `backlog`, and `sprints`</action>
+  <action>Store file contents as {{file_content}} for use in the final atomic write</action>
+</step>
+
+<step n="1" goal="Identify available sprints and select one to modify">
+  <action>Parse the `sprints` section from the loaded file</action>
+  <check if="sprints section is empty ({})">
+    <output>❌ No sprints found. Run `/add-sprint` first to create a sprint.</output>
+    <action>Exit workflow</action>
+  </check>
+  <action>Build sprint list with: sprint ID (map key), name, status, capacity, item count (length of items array), start, end</action>
   <output>
 ## 🏃 Available Sprints
 
-| # | Sprint | Status | Capacity | Assigned | Remaining | Last Modified |
-|---|---|---|---|---|---|---|
+| # | Sprint ID | Name | Status | Capacity | Items | Start | End |
+|---|---|---|---|---|---|---|---|
 {{#each sprints}}
-| {{@index+1}} | {{sprint_name}} (Sprint {{sprint_number}}) | {{status}} | {{capacity}} | {{assigned_count}} | {{remaining}} | {{last_modified}} |
+| {{@index+1}} | {{sprint_id}} | {{name}} | {{status}} | {{capacity}} | {{item_count}}/{{capacity}} | {{start_or_not_set}} | {{end_or_not_set}} |
 {{/each}}
+
+Note: closed sprints are immutable and cannot be modified.
   </output>
   <ask>Select sprint to modify (enter number):</ask>
-  <action>Store selected sprint as {{target_sprint}}</action>
-  <action>Store {{session_last_modified}} = {{target_sprint.last_modified}} for later concurrency guard check</action>
-</step>
-
-<step n="2" goal="Display current sprint state">
-  <action>Initialize {{working_assigned_items}} = copy of {{target_sprint.assigned_items}} — this working list accumulates all add/remove changes made during this session before the final save</action>
-  <action>Calculate remaining capacity: {{remaining}} = {{target_sprint.capacity}} - length({{working_assigned_items}})</action>
-  <output>
-## Sprint: {{target_sprint.sprint_name}} (Sprint {{target_sprint.sprint_number}})
-
-- **Status:** {{target_sprint.status}}
-- **Capacity:** {{target_sprint.capacity}} items
-- **Assigned Items:** {{assigned_count}} / {{target_sprint.capacity}} ({{remaining}} remaining)
-- **Start Context:** {{target_sprint.start_context}}
-- **End Context:** {{target_sprint.end_context}}
-- **Last Modified:** {{target_sprint.last_modified}}
-
-### Assigned Items
-{{#if assigned_items_empty}}
-*(No items assigned yet)*
-{{else}}
-{{#each target_sprint.assigned_items}}
-- {{this}}
-{{/each}}
-{{/if}}
-  </output>
-</step>
-
-<step n="3" goal="Present modification menu">
-  <ask>What would you like to modify?
-
-1. **Add item** — assign a new backlog item to this sprint
-2. **Remove item** — remove an assigned item from this sprint
-3. **Change capacity** — update the sprint's maximum item capacity
-4. **Update metadata** — change sprint name, start/end context, or status
-5. **Done** — save all changes and exit
-
-Choice:</ask>
-  <check if="choice == 5 or 'done'">
-    <goto step="5" />
+  <action>Store selected sprint as {{target_sprint}} and its map key as {{sprint_id}}</action>
+  <check if="{{target_sprint.status}} == 'closed'">
+    <output>⚠️ Sprint '{{target_sprint.name}}' ({{sprint_id}}) is closed. Closed sprints are immutable (schema constraint 6.7). Only archival operations are permitted.</output>
+    <action>Exit workflow</action>
   </check>
 </step>
 
-<step n="3a" goal="Add item" if="choice == 1">
-  <action>Read `_bmad-output/implementation-artifacts/sprint-status.yaml` to get all user story keys and statuses</action>
-  <action>Glob `_bmad-output/implementation-artifacts/bug-*.md` for bug stories; parse YAML frontmatter for type, severity, title</action>
-  <action>Read ALL `_bmad-output/implementation-artifacts/sprint-plan-*.yaml` files to build {{all_assigned_items}} — flat set of every item identifier assigned to any sprint (including the current sprint's {{working_assigned_items}})</action>
-  <action>Filter user stories: exclude items whose key is in {{all_assigned_items}} (already assigned to any sprint)</action>
-  <action>Filter bug stories: exclude items whose file basename is in {{all_assigned_items}} (already assigned to any sprint)</action>
-  <action>Build {{unassigned_items}} from the filtered stories and bugs, with: id, title, type (Story/Bug), status</action>
+<step n="2" goal="Display current sprint state">
+  <action>Calculate {{item_count}} = length of {{target_sprint.items}} array</action>
+  <action>Calculate {{remaining}} = {{target_sprint.capacity}} - {{item_count}}</action>
   <output>
-## Unassigned Backlog Items
+## Sprint: {{target_sprint.name}} ({{sprint_id}})
 
-| # | ID / File | Title | Type | Status |
-|---|---|---|---|---|
-{{#each unassigned_items}}
-| {{@index+1}} | {{id}} | {{title}} | {{type}} | {{status}} |
+- **Status:** {{target_sprint.status}}
+- **Capacity:** {{target_sprint.capacity}} items ({{item_count}} assigned, {{remaining}} remaining)
+- **Start:** {{target_sprint.start || "not set"}}
+- **End:** {{target_sprint.end || "not set"}}
+- **Items:** {{item_count}} assigned (use /add-to-sprint or /remove-from-sprint to manage items)
+
+### Assigned Items (read-only)
+{{#if items_empty}}
+*(No items assigned yet)*
+{{else}}
+| ID | Title | Type | Status |
+|---|---|---|---|
+{{#each target_sprint.items}}
+| {{id}} | {{title}} | {{type}} | {{status}} |
 {{/each}}
+{{/if}}
   </output>
-  <ask>Select item to add (enter number):</ask>
-  <action>Store selected item as {{item_to_add}}</action>
-  <action>Calculate: {{new_assigned_count}} = current assigned count + 1</action>
-  <check if="{{new_assigned_count}} > {{target_sprint.capacity}}">
-    <output>⚠️ **Capacity Warning:** Adding "{{item_to_add.title}}" would bring assigned items to {{new_assigned_count}}/{{target_sprint.capacity}} — exceeding capacity by {{overage}}.</output>
+  <action>Initialize {{working_changes}} = empty map to accumulate changes made during this session</action>
+  <action>Initialize working state aliases: {{current_name}} = {{target_sprint.name}}, {{current_capacity}} = {{target_sprint.capacity}}, {{current_start}} = {{target_sprint.start}}, {{current_end}} = {{target_sprint.end}}, {{current_status}} = {{target_sprint.status}}. These aliases are updated in-place as changes are made so Step 3's menu always shows the latest values.</action>
+  <action>Store {{original_name}} = {{target_sprint.name}} (preserved as the display name in the confirmation summary)</action>
+</step>
+
+<step n="3" goal="Present modification menu">
+  <output>
+## What would you like to modify?
+
+1. **Sprint name** (current: "{{current_name}}")
+2. **Capacity** (current: {{current_capacity}})
+3. **Start date** (current: {{current_start || "not set"}})
+4. **End date** (current: {{current_end || "not set"}})
+5. **Status** (current: {{current_status}})
+6. **Done** -- save all changes and exit
+  </output>
+  <ask>Choice:</ask>
+  <check if="choice == 6 or choice == 'done'">
+    <goto step="4" />
+  </check>
+</step>
+
+<step n="3a" goal="Modify sprint name" if="choice == 1">
+  <ask>New sprint name (current: '{{current_name}}'):</ask>
+  <check if="input is empty">
+    <output>❌ Sprint name cannot be empty. Please enter a valid name.</output>
+    <goto step="3a" />
+  </check>
+  <action>Store {{new_name}} = input</action>
+  <action>Store change: name: {{current_name}} -> {{new_name}} in {{working_changes}}</action>
+  <action>Update current display value: {{current_name}} = {{new_name}}</action>
+  <output>✅ Sprint name updated: '{{old_name}}' -> '{{new_name}}'.</output>
+  <goto step="3" />
+</step>
+
+<step n="3b" goal="Modify capacity" if="choice == 2">
+  <ask>New capacity (positive integer, current: {{current_capacity}}):</ask>
+  <action>Validate input is a positive integer (greater than zero, no decimals, no non-numeric characters)</action>
+  <check if="input is NOT a positive integer">
+    <output>❌ Invalid capacity. Must be a positive integer greater than zero.</output>
+    <goto step="3b" />
+  </check>
+  <action>Store {{new_capacity}} = validated integer input</action>
+  <action>Calculate {{item_count}} = length of {{target_sprint.items}} array</action>
+  <check if="{{new_capacity}} < {{item_count}}">
+    <output>⚠️ Sprint has {{item_count}} items but new capacity would be {{new_capacity}} ({{new_capacity}} < {{item_count}}). Capacity is advisory -- items will not be removed.</output>
     <ask>Options:
-- [a] Add anyway (over-capacity acknowledged)
-- [s] Skip — do not add this item
-- [c] Change capacity first (select option 3 from menu)
+- [a] Apply anyway (capacity is advisory per schema section 4.2)
+- [s] Skip -- keep current capacity
+- [r] Remove items first (direct to /remove-from-sprint)
 
 Choice:</ask>
     <check if="choice == 's'">
       <goto step="3" />
     </check>
-    <check if="choice == 'c'">
-      <goto step="3c" />
-    </check>
-  </check>
-  <action>Add {{item_to_add}} identifier to {{working_assigned_items}} list</action>
-  <action>Calculate remaining: {{remaining}} = {{target_sprint.capacity}} - length({{working_assigned_items}})</action>
-  <output>✅ Added "{{item_to_add.title}}" to sprint. Updated capacity: {{length(working_assigned_items)}}/{{target_sprint.capacity}} items ({{remaining}} remaining)</output>
-  <goto step="3" />
-</step>
-
-<step n="3b" goal="Remove item" if="choice == 2">
-  <check if="{{working_assigned_items}} is empty">
-    <output>ℹ️ No items are currently assigned to this sprint.</output>
-    <goto step="3" />
-  </check>
-  <action>Resolve each identifier in {{working_assigned_items}} to its display name and type:
-    - For story identifiers (matching pattern `^\d+-\d+-.+`): infer title from key by converting kebab segments to title case (e.g., `12-1-add-sprint-workflow` → "Add Sprint Workflow"); type = "Story"; look up status in sprint-status.yaml if available
-    - For bug identifiers (matching pattern `^bug-.+`): look up in bug-*.md frontmatter (re-glob if not already loaded this step) for title and severity; type = "Bug"
-    - If resolution fails for any identifier, display the raw identifier as title with type "Unknown"
-  </action>
-  <output>
-## Currently Assigned Items
-
-| # | ID / File | Title | Type |
-|---|---|---|---|
-{{#each working_assigned_items}}
-| {{@index+1}} | {{id}} | {{title}} | {{type}} |
-{{/each}}
-  </output>
-  <ask>Select item to remove (enter number):</ask>
-  <action>Remove selected item from {{working_assigned_items}} list</action>
-  <action>Calculate remaining: {{remaining}} = {{target_sprint.capacity}} - length({{working_assigned_items}})</action>
-  <output>✅ Removed item from sprint. Updated capacity: {{length(working_assigned_items)}}/{{target_sprint.capacity}} items ({{remaining}} remaining)</output>
-  <goto step="3" />
-</step>
-
-<step n="3c" goal="Change capacity" if="choice == 3">
-  <ask>Enter new capacity (positive integer — current: {{target_sprint.capacity}}):</ask>
-  <action>Validate input is a positive integer (greater than zero)</action>
-  <check if="input is NOT a positive integer">
-    <output>❌ Invalid capacity. Must be a positive integer greater than zero.</output>
-    <goto step="3c" />
-  </check>
-  <action>Store {{new_capacity}} = validated integer input</action>
-  <action>Calculate: {{new_remaining}} = {{new_capacity}} - length({{working_assigned_items}})</action>
-  <output>✅ Capacity updated: {{target_sprint.capacity}} → {{new_capacity}} ({{new_remaining}} slots remaining with current {{length(working_assigned_items)}} assigned items)</output>
-  <action>Update {{target_sprint.capacity}} = {{new_capacity}} in working state</action>
-  <goto step="3" />
-</step>
-
-<step n="3d" goal="Update metadata" if="choice == 4">
-  <ask>Which metadata to update?
-1. Sprint name (current: "{{target_sprint.sprint_name}}")
-2. Start context (current: "{{target_sprint.start_context}}")
-3. End context (current: "{{target_sprint.end_context}}")
-4. Status (current: {{target_sprint.status}} — options: planning / active / completed)
-5. Back to menu
-
-Choice:</ask>
-  <check if="choice == 1">
-    <ask>New sprint name:</ask>
-    <action>Update {{target_sprint.sprint_name}} in working state</action>
-    <output>✅ Sprint name updated.</output>
-  </check>
-  <check if="choice == 2">
-    <ask>New start context (date or milestone):</ask>
-    <action>Update {{target_sprint.start_context}} in working state</action>
-    <output>✅ Start context updated.</output>
-  </check>
-  <check if="choice == 3">
-    <ask>New end context (date or milestone):</ask>
-    <action>Update {{target_sprint.end_context}} in working state</action>
-    <output>✅ End context updated.</output>
-  </check>
-  <check if="choice == 4">
-    <ask>New status (planning / active / completed):</ask>
-    <action>Validate input is one of: planning, active, completed</action>
-    <check if="invalid status">
-      <output>❌ Invalid status. Choose: planning, active, or completed.</output>
-    </check>
-    <action>Update {{target_sprint.status}} in working state</action>
-    <output>✅ Sprint status updated.</output>
-  </check>
-  <check if="choice == 5">
-    <goto step="3" />
-  </check>
-  <goto step="3" />
-</step>
-
-<step n="4" goal="Concurrency guard — re-read before writing">
-  <action>Re-read the sprint artifact file: `_bmad-output/implementation-artifacts/sprint-plan-{{target_sprint.sprint_number}}.yaml`</action>
-  <action>Extract the current `last_modified` timestamp from the file</action>
-  <check if="current file last_modified != {{session_last_modified}}">
-    <output>
-⚠️ **Conflict Detected:** The sprint artifact was modified externally since this session started.
-
-**Session started with:** `last_modified: {{session_last_modified}}`
-**Current file has:** `last_modified: {{current_file_last_modified}}`
-
-**Current sprint state (re-read from file):**
-    </output>
-    <action>Display the full current state of the sprint artifact (re-read content)</action>
-    <ask>The file has changed. Review the current state above and confirm how to proceed:
-- [o] Overwrite with your changes from this session (your modifications will replace current file content)
-- [m] Merge — restart modifications from the current file state
-- [x] Cancel — discard all session changes
-
-Choice:</ask>
-    <check if="choice == 'x'">
-      <output>❌ Changes discarded. Sprint file not modified.</output>
+    <check if="choice == 'r'">
+      <output>Run `/remove-from-sprint` to remove items, then re-run `/modify-sprint`.</output>
       <action>Exit workflow</action>
     </check>
-    <check if="choice == 'm'">
-      <action>Reload {{target_sprint}} from current file content</action>
-      <action>Update {{session_last_modified}} to current file's last_modified</action>
-      <action>Reset {{working_assigned_items}} to current file's assigned_items</action>
-      <output>🔄 Reloaded sprint from current state. Please re-apply your modifications.</output>
-      <goto step="3" />
-    </check>
-    <!-- if 'o', proceed to write with session changes -->
+    <!-- if 'a', proceed with the change -->
   </check>
+  <action>Calculate {{new_remaining}} = {{new_capacity}} - {{item_count}}</action>
+  <action>Store change: capacity: {{current_capacity}} -> {{new_capacity}} in {{working_changes}}</action>
+  <action>Update current display value: {{current_capacity}} = {{new_capacity}}</action>
+  <output>✅ Capacity updated: {{old_capacity}} -> {{new_capacity}} ({{new_remaining}} slots remaining with {{item_count}} assigned items).</output>
+  <goto step="3" />
 </step>
 
-<step n="5" goal="Persist changes to sprint artifact">
-  <action>Invoke concurrency guard (Step 4) before writing</action>
-  <action>Get current ISO timestamp for last_modified</action>
-  <action>Write updated sprint data back to `_bmad-output/implementation-artifacts/sprint-plan-{{target_sprint.sprint_number}}.yaml`:
-    - Update `sprint_name` if changed
-    - Update `capacity` if changed
-    - Update `assigned_items` with final working list
-    - Update `status` if changed
-    - Update `start_context` if changed
-    - Update `end_context` if changed
-    - Update `last_modified` to current ISO timestamp
-    - Preserve `sprint_number`, `created_date` unchanged
-  </action>
-  <action>**Do NOT modify sprint-status.yaml** — sprint membership is exclusively in sprint-plan-{n}.yaml. sprint-status.yaml is read-only from this workflow.</action>
-  <action>Calculate final remaining capacity</action>
-  <output>
-## ✅ Sprint Updated Successfully
+<step n="3c" goal="Modify start date" if="choice == 3">
+  <ask>New start date (ISO format YYYY-MM-DD, or press Enter to clear):</ask>
+  <check if="input is empty">
+    <action>Store {{new_start}} = "" (clears the date)</action>
+  </check>
+  <check if="input is not empty">
+    <action>Validate input matches ISO date format YYYY-MM-DD (regex: ^\d{4}-\d{2}-\d{2}$) and represents a valid calendar date</action>
+    <check if="invalid format">
+      <output>❌ Invalid date format. Use YYYY-MM-DD (e.g., 2026-05-01).</output>
+      <goto step="3c" />
+    </check>
+    <action>Store {{new_start}} = input</action>
+  </check>
+  <action>Store change: start: {{current_start || "not set"}} -> {{new_start || "not set"}} in {{working_changes}}</action>
+  <action>Update current display value: {{current_start}} = {{new_start}}</action>
+  <output>✅ Start date updated: '{{old_start || "not set"}}' -> '{{new_start || "not set"}}'.</output>
+  <goto step="3" />
+</step>
 
-**Sprint:** {{target_sprint.sprint_name}} (Sprint {{target_sprint.sprint_number}})
-**File:** `_bmad-output/implementation-artifacts/sprint-plan-{{target_sprint.sprint_number}}.yaml`
-**Capacity:** {{final_capacity}} items ({{final_remaining}} remaining)
-**Assigned Items:** {{final_assigned_count}}
-**Status:** {{target_sprint.status}}
+<step n="3d" goal="Modify end date" if="choice == 4">
+  <ask>New end date (ISO format YYYY-MM-DD, or press Enter to clear):</ask>
+  <check if="input is empty">
+    <action>Store {{new_end}} = "" (clears the date)</action>
+  </check>
+  <check if="input is not empty">
+    <action>Validate input matches ISO date format YYYY-MM-DD (regex: ^\d{4}-\d{2}-\d{2}$) and represents a valid calendar date</action>
+    <check if="invalid format">
+      <output>❌ Invalid date format. Use YYYY-MM-DD (e.g., 2026-05-31).</output>
+      <goto step="3d" />
+    </check>
+    <action>Store {{new_end}} = input</action>
+  </check>
+  <action>Determine effective start: use {{current_start}} if start not changed this session, else use newly entered start</action>
+  <check if="{{new_end}} is not empty AND {{effective_start}} is not empty AND {{new_end}} < {{effective_start}}">
+    <output>⚠️ Warning: End date ({{new_end}}) is before start date ({{effective_start}}). This may be intentional.</output>
+  </check>
+  <action>Store change: end: {{current_end || "not set"}} -> {{new_end || "not set"}} in {{working_changes}}</action>
+  <action>Update current display value: {{current_end}} = {{new_end}}</action>
+  <output>✅ End date updated: '{{old_end || "not set"}}' -> '{{new_end || "not set"}}'.</output>
+  <goto step="3" />
+</step>
+
+<step n="3e" goal="Modify status" if="choice == 5">
+  <action>Determine valid transitions based on {{current_status}}:
+    - If `planning`: valid next state is `active` only
+    - If `active`: valid next state is `closed` only
+    - If `closed`: no transitions available (immutable)
+  </action>
+  <output>
+Current status: **{{current_status}}**
+{{#if current_status == 'planning'}}Valid transitions: planning -> active{{/if}}
+{{#if current_status == 'active'}}Valid transitions: active -> closed{{/if}}
+{{#if current_status == 'closed'}}No transitions available. Closed sprints are immutable.{{/if}}
+  </output>
+  <check if="{{current_status}} == 'closed'">
+    <output>⚠️ Sprint '{{current_name}}' is closed. Closed sprints are immutable (schema constraint 6.7). Only archival operations are permitted.</output>
+    <goto step="3" />
+  </check>
+  <ask>New status:</ask>
+  <action>Validate transition:
+    - planning -> active: allowed (proceed to single-active-sprint check)
+    - active -> closed: allowed (with warning about /close-sprint)
+    - planning -> closed: REJECTED (skip)
+    - active -> planning: REJECTED (backward)
+    - closed -> anything: REJECTED (immutable -- already handled above)
+    - same state -> same state: REJECTED (no change)
+    - any unrecognized value: REJECTED
+  </action>
+  <check if="transition is invalid (backward, skip, or unrecognized)">
+    <output>❌ Invalid status transition: {{current_status}} -> {{requested_status}}. Sprint status transitions are forward-only: planning -> active -> closed.</output>
+    <goto step="3e" />
+  </check>
+  <check if="requested_status == 'closed'">
+    <output>⚠️ To properly close a sprint with item disposition (archiving done items, returning incomplete items to backlog), use `/close-sprint` instead. This will only update the status field.</output>
+    <ask>Continue with status-only change? [y/n]</ask>
+    <check if="answer == 'n'">
+      <output>Status change cancelled. Use `/close-sprint` for full sprint close lifecycle.</output>
+      <goto step="3" />
+    </check>
+  </check>
+  <check if="requested_status == 'active'">
+    <action>Scan all other sprints in the `sprints` map for any sprint with status: active</action>
+    <check if="another active sprint found">
+      <output>⚠️ Sprint '{{other_sprint_name}}' ({{other_sprint_id}}) is already active. Only one sprint can be active at a time (schema constraint 6.4). Close it first or cancel this change.</output>
+      <ask>Options:
+- [c] Cancel status change
+- [x] Exit to run /close-sprint on {{other_sprint_id}} first
+
+Choice:</ask>
+      <check if="choice == 'c'">
+        <goto step="3" />
+      </check>
+      <check if="choice == 'x'">
+        <output>Run `/close-sprint` on {{other_sprint_id}} first, then re-run `/modify-sprint`.</output>
+        <action>Exit workflow</action>
+      </check>
+    </check>
+  </check>
+  <action>Store change: status: {{current_status}} -> {{requested_status}} in {{working_changes}}</action>
+  <action>Update current display value: {{current_status}} = {{requested_status}}</action>
+  <output>✅ Status updated: {{old_status}} -> {{requested_status}}.</output>
+  <goto step="3" />
+</step>
+
+<step n="4" goal="Confirmation -- review and confirm all changes">
+  <check if="{{working_changes}} is empty">
+    <output>ℹ️ No modifications made.</output>
+    <action>Exit workflow</action>
+  </check>
+  <output>
+## Modification Summary -- Please Confirm
+
+Sprint: {{sprint_id}} ("{{original_name}}")
+
+Changes:
+{{#each working_changes}}
+- {{field}}: {{old_value}} -> {{new_value}}
+{{/each}}
+
+All other sprint data (items, other sprints, epics, backlog) will be preserved unchanged.
+  </output>
+  <ask>Confirm changes? [y] Yes / [n] Cancel / [e] Edit more</ask>
+  <check if="choice == 'n'">
+    <output>❌ Changes discarded.</output>
+    <action>Exit workflow</action>
+  </check>
+  <check if="choice == 'e'">
+    <goto step="3" />
+  </check>
+  <!-- if 'y', proceed to Step 5 -->
+</step>
+
+<step n="5" goal="Persist changes to sprint-status.yaml">
+  <action>Re-read `sprint-status.yaml` (using the resolved path from Step 0) to get the latest file state before writing</action>
+  <action>Locate the target sprint entry at `sprints.{{sprint_id}}` in the re-read file</action>
+  <action>Apply all confirmed changes to the target sprint entry:
+    - If name was changed: update `name` field
+    - If capacity was changed: update `capacity` field
+    - If start was changed: update `start` field
+    - If end was changed: update `end` field
+    - If status was changed: update `status` field
+  </action>
+  <action>Preserve the sprint's `items` array exactly as-is (no modifications)</action>
+  <action>Preserve all other sprint entries in the `sprints` map exactly as-is</action>
+  <action>Preserve the `epics` section exactly as-is</action>
+  <action>Preserve the `backlog` section exactly as-is</action>
+  <action>Preserve the `generated` field exactly as-is (never change)</action>
+  <action>Set `last_updated` to the current ISO-8601 timestamp</action>
+  <action>Write the complete updated file in a single atomic write to `sprint-status.yaml`</action>
+  <output>
+## ✅ Sprint Modified Successfully!
+
+**Sprint:** {{sprint_name}} ({{sprint_id}})
+{{#each working_changes}}
+- **{{field}}:** {{new_value}}
+{{/each}}
 
 **Next Steps:**
-- Use `/add-to-sprint` to assign more backlog items
-- Use `/sprint-status-view` to view full sprint progress
+- Use `/add-to-sprint` to assign backlog items to this sprint
+- Use `/remove-from-sprint` to remove items from this sprint
+- Use `/sprint-status-view` to view sprint progress
+- Use `/close-sprint` to close this sprint when complete
   </output>
 </step>
 

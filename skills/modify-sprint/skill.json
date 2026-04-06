@@ -1,0 +1,7 @@
+{
+  "name": "modify-sprint",
+  "version": "1.0.0",
+  "description": "Guided workflow to modify an existing sprint's metadata (name, capacity, dates, status) within the sprints section of sprint-status.yaml",
+  "category": "workflow",
+  "tags": ["sprint-management", "modify-sprint", "capacity", "metadata"]
+}
