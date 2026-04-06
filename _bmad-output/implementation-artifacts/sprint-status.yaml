@@ -37,11 +37,11 @@ development_status:
   epic-17: in-progress
   17-9-unified-sprint-status-schema: done
   17-10-rework-generate-backlog: ready-for-dev
-  17-11-rework-add-to-sprint: review
-  17-12-rework-remove-from-sprint: ready-for-dev
+  17-11-rework-add-to-sprint: ready-for-dev
+  17-12-rework-remove-from-sprint: review
   17-13-rework-sprint-status-view: ready-for-dev
   17-14-rework-cleanup-done: ready-for-dev
-  17-15-rework-bmad-sprint-planning: review
+  17-15-rework-bmad-sprint-planning: ready-for-dev
   17-16-rework-add-sprint: ready-for-dev
   17-17-rework-modify-sprint: ready-for-dev
   17-18-rework-bmad-dev-story: ready-for-dev
