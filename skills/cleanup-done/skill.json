@@ -1,0 +1,7 @@
+{
+  "name": "cleanup-done",
+  "version": "1.0.0",
+  "description": "Archive done and cancelled items — remove from sprint-status.yaml and move story/bug files to done/ subfolder",
+  "category": "workflow",
+  "tags": ["sprint-management", "archival", "cleanup", "done"]
+}
