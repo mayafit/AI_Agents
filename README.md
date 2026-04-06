@@ -61,10 +61,8 @@ The `_bmad-output/` folder is **intentionally tracked in version control** as pr
 
 - **`planning-artifacts/`** — PRDs, architecture documents, UX designs
 - **`implementation-artifacts/`** — Epics, user stories, sprint status, backlog
-  - **`sprints/`** — Sprint entity YAML files (`sprint-{id}.yaml`)
-  - **`done/`** — Archived completed stories and bugs
-  - **`backlog.yaml`** — Flat prioritized backlog (generated)
-  - **`sprint-status.yaml`** — Sprint status (derived, auto-regenerated)
+  - **`sprint-status.yaml`** — Unified single source of truth for all sprint and backlog state (epics map, backlog array, sprints map)
+  - **`done/`** — Archived completed and cancelled stories and bugs
 - **`methodology/`** — BMAD-METHOD training materials and onboarding presentation
 
 ### Why it is version-controlled
@@ -175,7 +173,7 @@ These skills are installed into your coding tool of choice and provide reusable 
 | `docker-image-signing` | Security | Automated cryptographic signing for Docker images |
 | `docker-hardening-verification` | Security | Audits images for least-privilege and OpenShift compatibility |
 
-### Agent Workflows (18)
+### Agent Workflows (24)
 
 These workflows are installed as part of the BMAD agent system and are invoked through the agent's menu (not installed individually):
 
@@ -194,13 +192,20 @@ These workflows are installed as part of the BMAD agent system and are invoked t
 | `ml-revision` | ML Scientist | Amend hypothesis and requirements based on experiment findings |
 | `ml-advise` | ML Scientist | Search past experiments, surface findings and failure warnings |
 | `ml-retrospective` | ML Scientist | Capture session learnings and update project context |
+| **MIL-STD-498 (Joseph)** | | |
+| `mil498-requirement-quality` | MIL-STD-498 Expert | Evaluate requirements against 14 quality criteria — produces per-requirement audit table, Missing Elements report, and Overall Quality Score |
 | **Sprint Management** | | |
-| `add-sprint` | Scrum Master | Create sprint entities with capacity, ISO dates, and structured YAML schema |
-| `generate-backlog` | Scrum Master | Generate or refresh a flat prioritized backlog from epics and bug stories |
-| `add-to-sprint` | Scrum Master | Assign backlog items to a sprint with capacity enforcement |
-| `remove-from-sprint` | Scrum Master | Remove items from a sprint and return to unassigned backlog |
-| `cleanup-done` | Scrum Master | Archive done items to `done/` and remove from sprint/backlog tracking |
-| `prioritize-backlog` | Scrum Master | Reprioritize backlog using severity, value, dependencies, and type |
+| `bmad-sprint-planning` | Scrum Master | Bootstrap or refresh the unified `sprint-status.yaml` from epics and bug stories |
+| `generate-backlog` | Scrum Master | Generate or refresh the `backlog` section of `sprint-status.yaml` from epics |
+| `add-sprint` | Scrum Master | Add a new sprint entry to the `sprints` map with capacity and optional ISO dates |
+| `add-to-sprint` | Scrum Master | Move backlog items into a sprint using atomic movement semantics |
+| `remove-from-sprint` | Scrum Master | Return sprint items to the backlog with status reset and priority assignment |
+| `modify-sprint` | Scrum Master | Update sprint metadata (name, capacity, dates, status transitions) |
+| `sprint-status-view` | Scrum Master | Display formatted sprint progress, backlog, and epic status (read-only) |
+| `bmad-sprint-status` | Scrum Master | Analyze sprint health, surface risk flags, and recommend next actions |
+| `cleanup-done` | Scrum Master | Archive done/cancelled items — remove from `sprint-status.yaml` and move files to `done/` |
+| `close-sprint` | Scrum Master | Full sprint closure — archive done items, disposition incomplete items, set sprint to closed |
+| `prioritize-backlog` | Scrum Master | Reprioritize backlog using severity, business value, dependencies, type, and age |
 
 ## Automated Skill Discovery
 
@@ -282,6 +287,7 @@ npx ma-agents install --yes    # fully offline BMAD install — no network neede
    - **Focus**: Technical standards compliance and military document generation.
    - **Capabilities**: Document Data Descriptions (DIDs), requirements traceability, and complex specification writing.
    - **Workflows**: SRS, SSS, and SSDD generation with strict structural validation.
+   - **Requirements QA**: Built-in `mil498-requirement-quality` skill — evaluates every requirement against 14 quality criteria (Clarity, Single Verb, Sentence Structure, Glossary Presence, Necessity, Implementation-Independence, Unambiguity, Completeness, Feasibility, Testability, Stakeholder Alignment, Convention Conformance, Understandability, Precision). Produces a per-requirement audit table, a Missing Elements report, and an Overall Quality Score. Applies to MIL-STD-498 documents, PRDs, and Epics/Stories.
 5. **Demerzel (ML Scientist)**:
    - **Focus**: Hypothesis-driven machine learning lifecycle with scientific rigor.
    - **Capabilities**: EDA, architecture design, locked TechSpec contracts, experiment execution, failure-cost analysis.
@@ -294,35 +300,78 @@ The integration includes a suite of specialized playbooks:
 - **Security & Trust**: Vault secrets, certificate generation, and vulnerability scanning.
 - **Diagnostics**: Advanced health checks across K8s, Docker, and Podman.
 
-#### Sprint Management (v3.1+)
+#### Sprint Management (v4.0+)
 
-`ma-agents` includes a complete sprint management system built on first-class YAML entities:
+`ma-agents` includes a complete sprint management system built on a **unified `sprint-status.yaml`** — a single file that is the sole source of truth for all sprint and backlog state.
 
 **Data Model:**
-- **Sprint entities** at `sprints/sprint-{id}.yaml` — capacity, dates, assigned items, status lifecycle (`planning` -> `active` -> `closed`)
-- **Flat backlog** at `backlog.yaml` — prioritized list of stories and bugs, independent of epic grouping
-- **Bug lifecycle** — bugs are first-class backlog items with severity, type classification, and the same lifecycle as stories
-- **Derived sprint-status.yaml** — auto-regenerated from backlog + sprint files (no manual maintenance)
+
+The entire sprint state lives in one file at `_bmad-output/implementation-artifacts/sprint-status.yaml`:
+
+```yaml
+# Metadata
+generated: <ISO-8601>
+last_updated: <ISO-8601>
+project: <string>
+project_key: <string>
+tracking_system: file-system   # or "jira" (future)
+story_location: _bmad-output/implementation-artifacts
+
+# Three data sections
+epics:
+  epic-17:
+    status: in-progress        # backlog | in-progress | done | on-hold | cancelled
+    retrospective: optional
+
+backlog:                       # ordered array — position = priority
+  - id: "17-10-rework-generate-backlog"
+    type: story                # story | bug
+    epic: 17
+    title: "Rework generate-backlog Skill"
+    priority: 1                # denormalized index, kept in sync with array position
+    status: ready-for-dev
+    severity: null             # null for stories; critical|high|medium|low for bugs
+
+sprints:
+  sprint-1:
+    name: "Sprint 1"
+    status: active             # planning | active | closed
+    capacity: 8
+    start: "2026-04-01"
+    end: "2026-04-14"
+    items:
+      - id: "17-10-rework-generate-backlog"
+        type: story
+        epic: 17
+        title: "Rework generate-backlog Skill"
+        status: in-progress
+        severity: null         # no priority field — ordering is implicit in array position
+```
 
 **Workflows:**
 
 | Command | Description |
 |---------|-------------|
-| `/add-sprint` | Create a sprint with capacity limits and optional ISO dates |
-| `/generate-backlog` | Build or refresh the flat backlog from epics and bug files |
-| `/add-to-sprint` | Assign backlog items to a sprint (dual-write: backlog + sprint file) |
-| `/remove-from-sprint` | Return items from sprint to backlog (status preserved) |
-| `/cleanup-done` | Archive completed items to `done/`, auto-close empty sprints |
+| `/bmad-sprint-planning` | Bootstrap or refresh the entire `sprint-status.yaml` from epics |
+| `/generate-backlog` | Refresh the `backlog` section from epic/story definitions |
+| `/add-sprint` | Add a new sprint entry to the `sprints` map |
+| `/add-to-sprint` | Move backlog items into a sprint (atomic — removes from backlog, adds to sprint) |
+| `/remove-from-sprint` | Return sprint items to the backlog (status reset to `ready-for-dev`) |
+| `/modify-sprint` | Update sprint metadata (name, capacity, dates, status transitions) |
+| `/sprint-status-view` | Display sprint progress, backlog, and epic status (read-only) |
+| `/bmad-sprint-status` | Sprint health analysis with risk flags and recommendations |
+| `/cleanup-done` | Archive done/cancelled items — remove from YAML, move files to `done/` |
+| `/close-sprint` | Full sprint closure — archive done items, disposition incomplete items |
 | `/prioritize-backlog` | Reorder backlog — full, quick-adjust, or AI-suggested modes |
-| `/sprint-status-view` | View sprint capacity, items, backlog, and regenerate sprint-status.yaml |
-| `/create-bug-story` | Create a structured bug with severity, type, and automatic backlog entry |
 
 **Key Design Principles:**
-- **Dual-write consistency**: assigning/removing items updates both `backlog.yaml` and the sprint file atomically
-- **Single-active sprint**: only one sprint can be `active` at a time
-- **Done item archival**: completed work moves to `done/` subfolder, freeing sprint capacity
-- **Priority is independent of epics**: stories from different epics interleave by priority, not epic order
-- **Concurrency guards**: sprint files use `last_modified` timestamps to detect external modifications
+- **Single file, single truth**: all state lives in `sprint-status.yaml` — no separate backlog or sprint files
+- **Movement semantics**: items exist in exactly one location (backlog OR a sprint, never both)
+- **Forward-only transitions**: sprint status follows `planning → active → closed` with no reversals
+- **Single-active-sprint constraint**: at most one sprint can have `status: active` at any time
+- **Done item archival**: completed work is removed from the YAML entirely and files moved to `done/`
+- **Priority as denormalized index**: backlog array order is authoritative; `priority` field mirrors position
+- **Jira-ready**: `tracking_system: jira` routes all operations through a Jira adapter (Epic 14)
 
 ### Install Options (Direct)
 ```bash
