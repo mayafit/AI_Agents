@@ -1,6 +1,6 @@
 # Story 17.21: New close-sprint Skill
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -80,7 +80,7 @@ So that sprint closure is a clean, well-defined workflow available across all ID
 
 The IDE skill does NOT exist anywhere. This task creates it from scratch.
 
-- [ ] 1.1 Create `skills/close-sprint/skill.json` with metadata:
+- [x] 1.1 Create `skills/close-sprint/skill.json` with metadata:
   ```json
   {
     "name": "close-sprint",
@@ -92,22 +92,22 @@ The IDE skill does NOT exist anywhere. This task creates it from scratch.
   ```
   Note: `always_load` is intentionally omitted (defaults to false) -- this skill is invoked on demand, not loaded for every task.
 
-- [ ] 1.2 Create `skills/close-sprint/SKILL.md` with the complete skill workflow (see Task 3 for content specification). This is the canonical skill content that the installer deploys to all IDE agents.
+- [x] 1.2 Create `skills/close-sprint/SKILL.md` with the complete skill workflow (see Task 3 for content specification). This is the canonical skill content that the installer deploys to all IDE agents.
 
 ### Task 2: Create the BMAD extension skill (AC: 9, 10) -- NEW
 
 The BMAD extension skill does NOT exist anywhere (this is a brand new skill). This task creates it from scratch.
 
-- [ ] 2.1 Create `lib/bmad-extension/skills/close-sprint/SKILL.md` with the BMAD extension version of the workflow (see Task 3 for content specification). The BMAD extension version is authored for the BMAD Scrum Master agent (`bmm-sm`) context and may include BMAD-specific phrasing (e.g., referencing `_bmad/bmm/config.yaml` for path resolution). The core workflow logic MUST be functionally identical to the IDE version.
+- [x] 2.1 Create `lib/bmad-extension/skills/close-sprint/SKILL.md` with the BMAD extension version of the workflow (see Task 3 for content specification). The BMAD extension version is authored for the BMAD Scrum Master agent (`bmm-sm`) context and may include BMAD-specific phrasing (e.g., referencing `_bmad/bmm/config.yaml` for path resolution). The core workflow logic MUST be functionally identical to the IDE version.
 
-- [ ] 2.2 Create `lib/bmad-extension/skills/close-sprint/bmad-skill-manifest.yaml` with:
+- [x] 2.2 Create `lib/bmad-extension/skills/close-sprint/bmad-skill-manifest.yaml` with:
   ```yaml
   type: skill
   name: close-sprint
   module: ma-skills
   ```
 
-- [ ] 2.3 Add a NEW row to `lib/bmad-extension/module-help.csv` for `close-sprint`:
+- [x] 2.3 Add a NEW row to `lib/bmad-extension/module-help.csv` for `close-sprint`:
   ```
   ma-skills,4-implementation,Close Sprint,close-sprint,,skill:close-sprint,close-sprint,false,bmm-sm,,"Close an active sprint — archive done/cancelled items, disposition incomplete items, set sprint status to closed.",_bmad-output/implementation-artifacts,"sprint plan",
   ```
@@ -116,18 +116,18 @@ The BMAD extension skill does NOT exist anywhere (this is a brand new skill). Th
 
 The SKILL.md content (for both the IDE and BMAD extension versions) must implement the following workflow. Both versions MUST be functionally identical in their workflow logic.
 
-- [ ] 3.1 **Step 0 -- Load configuration and validate file existence:**
+- [x] 3.1 **Step 0 -- Load configuration and validate file existence:**
   - Read `sprint-status.yaml` at `_bmad-output/implementation-artifacts/sprint-status.yaml` (or resolve path from config).
   - If the file does not exist, report error: "No sprint-status.yaml found. Run sprint planning first to initialize the file." Exit (AC 7).
   - Parse the full file: metadata, `epics`, `backlog`, and `sprints` sections.
 
-- [ ] 3.2 **Step 1 -- Identify the active sprint:**
+- [x] 3.2 **Step 1 -- Identify the active sprint:**
   - Scan the `sprints` section for a sprint with `status: active`.
   - Per schema section 6.4, at most one sprint can be active.
   - If no active sprint found, report: "No active sprint found. Nothing to close." (AC 6). Exit.
   - Store the active sprint's ID and data.
 
-- [ ] 3.3 **Step 2 -- Display sprint summary:**
+- [x] 3.3 **Step 2 -- Display sprint summary:**
   - Read the active sprint's `items` array.
   - If the items array is empty, display: "Sprint {name} has no items." Skip to Step 7 (immediate close) (AC 8).
   - Categorize items by status:
@@ -149,7 +149,7 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
   - Prompt for confirmation: [c] Confirm and proceed, [x] Cancel closure.
   - On cancel, exit without changes.
 
-- [ ] 3.4 **Step 3 -- Archive done items (AC: 2):**
+- [x] 3.4 **Step 3 -- Archive done items (AC: 2):**
   - Ensure `{story_location}/done/` directory exists (create if not).
   - For each item with `status: done`:
     - Resolve the file path: `{story_location}/{id}.md`.
@@ -160,13 +160,13 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
   - Remove all done items from the sprint's `items` array.
   - Record count of archived done items.
 
-- [ ] 3.5 **Step 4 -- Archive cancelled items (AC: 3):**
+- [x] 3.5 **Step 4 -- Archive cancelled items (AC: 3):**
   - For each item with `status: cancelled`:
     - Apply the same file archival logic as done items (Step 3).
   - Remove all cancelled items from the sprint's `items` array.
   - Record count of archived cancelled items.
 
-- [ ] 3.6 **Step 5 -- Disposition incomplete items (AC: 4, 11):**
+- [x] 3.6 **Step 5 -- Disposition incomplete items (AC: 4, 11):**
   - If no incomplete items remain, skip to Step 7.
   - Display incomplete items:
     ```
@@ -208,11 +208,11 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
     - Apply the chosen action using the same logic as options (a) or (b) for that individual item.
   - Record counts per destination.
 
-- [ ] 3.7 **Step 6 -- Validate single-location invariant:**
+- [x] 3.7 **Step 6 -- Validate single-location invariant:**
   - Before writing, verify that no item ID appears in more than one location (backlog + all sprints). This is a safety check against bugs in the movement logic (schema section 6.1).
   - If a duplicate is detected, report the error and abort the write.
 
-- [ ] 3.8 **Step 7 -- Finalize sprint closure (AC: 5, 8):**
+- [x] 3.8 **Step 7 -- Finalize sprint closure (AC: 5, 8):**
   - Set the active sprint's `status` to `closed`.
   - Verify the sprint's `items` array is empty (`[]`). If items remain (should not happen after Steps 3-6), report a warning but proceed with closure.
   - Preserve the sprint definition in the `sprints` section (do not delete the sprint entry).
@@ -221,7 +221,7 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
   - Preserve all other sections unchanged (`epics`, other sprints, unmodified backlog entries).
   - Write the complete `sprint-status.yaml` in a single atomic write.
 
-- [ ] 3.9 **Step 8 -- Summary output:**
+- [x] 3.9 **Step 8 -- Summary output:**
   - Display closure summary:
     ```
     ## Sprint Closed Successfully
@@ -246,21 +246,21 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
 
 ### Task 4: Verify no legacy patterns are present (AC: 2, 4, 5)
 
-- [ ] 4.1 Confirm neither SKILL.md file contains any reference to writing standalone `sprint-plan-*.yaml` files.
-- [ ] 4.2 Confirm neither SKILL.md file contains any reference to reading/writing a standalone `backlog.yaml` file.
-- [ ] 4.3 Confirm neither SKILL.md file contains any instruction to read the `development_status` map (old schema).
-- [ ] 4.4 Confirm neither SKILL.md file references `bug-*.md` globbing for item discovery (items come from `sprint-status.yaml` -- file globbing is only for resolving `.md` file paths for archival moves).
-- [ ] 4.5 Confirm the only data file read/written is `sprint-status.yaml`.
-- [ ] 4.6 Confirm neither SKILL.md file references any hardcoded agent install paths (`.claude/skills/`, `.cursor/skills/`, etc.).
+- [x] 4.1 Confirm neither SKILL.md file contains any reference to writing standalone `sprint-plan-*.yaml` files.
+- [x] 4.2 Confirm neither SKILL.md file contains any reference to reading/writing a standalone `backlog.yaml` file.
+- [x] 4.3 Confirm neither SKILL.md file contains any instruction to read the `development_status` map (old schema).
+- [x] 4.4 Confirm neither SKILL.md file references `bug-*.md` globbing for item discovery (items come from `sprint-status.yaml` -- file globbing is only for resolving `.md` file paths for archival moves).
+- [x] 4.5 Confirm the only data file read/written is `sprint-status.yaml`.
+- [x] 4.6 Confirm neither SKILL.md file references any hardcoded agent install paths (`.claude/skills/`, `.cursor/skills/`, etc.).
 
 ### Task 5: Deployment verification (AC: 9)
 
-- [ ] 5.1 Run `npx ma-agents` (or `node lib/cli.js`) to trigger the installer.
-- [ ] 5.2 Verify the IDE skill appears in the installed MANIFEST.yaml for at least one agent (e.g., check `.claude/skills/MANIFEST.yaml` includes `close-sprint`).
-- [ ] 5.3 Diff the installed IDE copy (e.g., `.claude/skills/close-sprint/SKILL.md`) against the source (`skills/close-sprint/SKILL.md`) -- the content should match after accounting for frontmatter injection by the installer.
-- [ ] 5.4 Verify the BMAD extension copy exists at `_bmad/extensions/ma-agents-skills/skills/close-sprint/SKILL.md` after a BMAD install.
-- [ ] 5.5 Verify the BMAD extension copy matches the source at `lib/bmad-extension/skills/close-sprint/SKILL.md`.
-- [ ] 5.6 Verify `close-sprint` appears in the BMAD module help output (check `module-help.csv` row is present).
+- [x] 5.1 Run `npx ma-agents` (or `node lib/cli.js`) to trigger the installer.
+- [x] 5.2 Verify the IDE skill appears in the installed MANIFEST.yaml for at least one agent (e.g., check `.claude/skills/MANIFEST.yaml` includes `close-sprint`).
+- [x] 5.3 Diff the installed IDE copy (e.g., `.claude/skills/close-sprint/SKILL.md`) against the source (`skills/close-sprint/SKILL.md`) -- the content should match after accounting for frontmatter injection by the installer.
+- [x] 5.4 Verify the BMAD extension copy exists at `_bmad/extensions/ma-agents-skills/skills/close-sprint/SKILL.md` after a BMAD install.
+- [x] 5.5 Verify the BMAD extension copy matches the source at `lib/bmad-extension/skills/close-sprint/SKILL.md`.
+- [x] 5.6 Verify `close-sprint` appears in the BMAD module help output (check `module-help.csv` row is present).
 
 ## Dev Notes
 
@@ -410,3 +410,46 @@ FR137 mentions archiving cancelled items to `done/canceled/` subfolder. The arch
 - **Epics source:** `_bmad-output/planning-artifacts/epics.md` (Story 17.21 definition)
 - **PRD:** `_bmad-output/planning-artifacts/prd.md` (FR130, FR131, FR133, FR134, FR135, FR136, FR137)
 - **Architecture:** `_bmad-output/planning-artifacts/architecture.md` (P2-5, P2-11)
+
+---
+
+## Dev Agent Record
+
+### Agent Model Used
+claude-sonnet-4-6
+
+### Completion Notes
+- Created brand-new `close-sprint` skill in both deployment pipelines from scratch.
+- IDE skill: `skills/close-sprint/skill.json` + `skills/close-sprint/SKILL.md` implemented with full 8-step workflow.
+- BMAD extension skill: `lib/bmad-extension/skills/close-sprint/SKILL.md` + `bmad-skill-manifest.yaml` implemented with identical workflow logic (BMAD-specific path resolution in step 0).
+- `lib/bmad-extension/module-help.csv` updated with new row for `close-sprint`.
+- Deployment verified: IDE skill installs to `.claude/skills/close-sprint/SKILL.md` and appears in MANIFEST.yaml. BMAD extension deploys to `_bmad/extensions/ma-agents-skills/skills/close-sprint/`.
+- Code review found and fixed: missing counter/collection variable initializations that would cause undefined values in step 8 summary output when done/cancelled item sets were empty. Fixed by always initializing all counters (done_count, cancelled_count, etc.) to 0/[] in step 2. Also clarified empty-sprint-fast-path detection with an explicit `empty_sprint_fast_path` flag.
+
+### Debug Log
+- N/A (no debugging needed — brand new skill, no regressions)
+
+## File List
+
+### Created
+- `skills/close-sprint/skill.json` — IDE skill metadata
+- `skills/close-sprint/SKILL.md` — IDE skill workflow (canonical source for all IDE agents)
+- `lib/bmad-extension/skills/close-sprint/SKILL.md` — BMAD extension skill workflow
+- `lib/bmad-extension/skills/close-sprint/bmad-skill-manifest.yaml` — BMAD skill manifest
+
+### Modified
+- `lib/bmad-extension/module-help.csv` — Added `close-sprint` row
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — Updated 17-21 status: ready-for-dev → review
+- `_bmad-output/implementation-artifacts/17-21-new-close-sprint.md` — Story status, task checkboxes, Dev Agent Record
+
+### Installed (auto-generated by installer — do not edit directly)
+- `.claude/skills/close-sprint/SKILL.md` — Installed IDE copy (frontmatter injected)
+- `.claude/skills/MANIFEST.yaml` — Updated by installer
+- `_bmad/extensions/ma-agents-skills/skills/close-sprint/SKILL.md` — Deployed BMAD extension copy
+- `_bmad/extensions/ma-agents-skills/skills/close-sprint/bmad-skill-manifest.yaml` — Deployed BMAD manifest
+
+## Change Log
+
+| Date | Version | Author | Description |
+|------|---------|--------|-------------|
+| 2026-04-06 | 1.0.0 | claude-sonnet-4-6 | Initial implementation — brand new close-sprint skill in both IDE and BMAD extension pipelines |

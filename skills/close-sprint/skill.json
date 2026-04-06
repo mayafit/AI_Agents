@@ -1,0 +1,7 @@
+{
+  "name": "close-sprint",
+  "version": "1.0.0",
+  "description": "Close an active sprint — archive done/cancelled items, disposition incomplete items (move to next sprint or return to backlog), set sprint status to closed",
+  "category": "workflow",
+  "tags": ["sprint-management", "close-sprint", "archival", "movement-semantics"]
+}
