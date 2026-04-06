@@ -251,10 +251,13 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
       <action>Parse the full unified schema: metadata fields, epics section, backlog array, and sprints map</action>
 
       <!-- Cross-section search for the story item by id -->
-      <action>Search for item with id == {{story_key}} using this order:
-        1. Search all sprints map entries: iterate each sprint's items array, match item.id == {{story_key}}
-        2. If not found, search backlog array: iterate items, match item.id == {{story_key}}
-        Record both the item reference and its location (sprint id or "backlog")
+      <action>Search for item with id == {{story_key}} across BOTH backlog and sprints sections:
+        1. Search all sprints map entries (active sprints first, then planning; skip closed sprints entirely):
+           - Iterate each non-closed sprint's items array, match item.id == {{story_key}}
+        2. If not found in any sprint, search backlog array:
+           - Iterate items, match item.id == {{story_key}}
+        3. When item is found: update {{location_context}} = sprint id (e.g., "in sprint-3") or "in backlog (unassigned)"
+        4. If not found in either location: output error and exit workflow without writing
       </action>
 
       <check if="item found AND (current item.status == 'ready-for-dev' OR review_continuation == true)">
@@ -428,14 +431,19 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
       <action>Parse the full unified schema: metadata fields, epics section, backlog array, and sprints map</action>
 
       <!-- Cross-section search for the story item by id -->
-      <action>Search for item with id == {{story_key}} using this order:
-        1. Search all sprints map entries: iterate each sprint's items array, match item.id == {{story_key}}
-        2. If not found, search backlog array: iterate items, match item.id == {{story_key}}
-        Record both the item reference and its location (sprint id or "backlog")
+      <action>Search for item with id == {{story_key}} across BOTH backlog and sprints sections:
+        1. Search all sprints map entries (active sprints first, then planning; skip closed sprints entirely):
+           - Iterate each non-closed sprint's items array, match item.id == {{story_key}}
+        2. If not found in any sprint, search backlog array:
+           - Iterate items, match item.id == {{story_key}}
+        3. When item is found: update {{location_context}} = sprint id (e.g., "in sprint-3") or "in backlog (unassigned)"
+        4. If not found in either location: output error and exit workflow without writing
       </action>
 
       <check if="item found">
-        <action>Verify current item.status is "in-progress" (expected previous state)</action>
+        <check if="item.status is NOT 'in-progress'">
+          <output>⚠️ Warning: Story {{story_key}} has status "{{item.status}}", expected "in-progress". Updating to "review" anyway — verify this is intentional.</output>
+        </check>
         <action>Update item.status = "review" in-place (preserve all other fields: id, type, epic, title, priority if present, severity)</action>
         <action>Update last_updated metadata field to current ISO-8601 timestamp</action>
         <action>Write back the FULL file preserving ALL sections (epics, backlog, sprints) and ALL comments</action>
