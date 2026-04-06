@@ -1,0 +1,7 @@
+{
+  "name": "bmad-sprint-status",
+  "version": "1.0.0",
+  "description": "Analyze sprint health, surface risk flags, and recommend next actions from the unified sprint-status.yaml",
+  "category": "workflow",
+  "tags": ["sprint-status", "sprint-management", "health", "risks", "analysis"]
+}
