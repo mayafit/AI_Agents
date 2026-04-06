@@ -1,6 +1,6 @@
 # Story 17.18: Rework bmad-dev-story Skill (Moderate Rework -- Extension Override for Cross-Section Status Update)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -69,28 +69,28 @@ So that development progress is reflected correctly in the unified file regardle
 
 Before writing replacement files, study the three built-in files that the extension override must replace.
 
-- [ ] 1.1 Read `node_modules/bmad-method/src/bmm-skills/4-implementation/bmad-dev-story/SKILL.md` -- note: a thin entry point that delegates to `./workflow.md`
-- [ ] 1.2 Read `node_modules/bmad-method/src/bmm-skills/4-implementation/bmad-dev-story/workflow.md` -- the main implementation (~450 lines). Document:
+- [x] 1.1 Read `node_modules/bmad-method/src/bmm-skills/4-implementation/bmad-dev-story/SKILL.md` -- note: a thin entry point that delegates to `./workflow.md`
+- [x] 1.2 Read `node_modules/bmad-method/src/bmm-skills/4-implementation/bmad-dev-story/workflow.md` -- the main implementation (~450 lines). Document:
   - INITIALIZATION section: config loading from `_bmad/bmm/config.yaml`, variable resolution
   - Step 1 (`tag="sprint-status"`): story discovery via `development_status` flat map with key pattern matching
   - Step 4 (`tag="sprint-status"`): mark story `in-progress` by writing `development_status[story_key] = "in-progress"`
   - Step 9 (`tag="sprint-status"`): mark story `review` by writing `development_status[story_key] = "review"`
   - Identify all `development_status` references (at least Steps 1, 4, 9)
-- [ ] 1.3 Read `node_modules/bmad-method/src/bmm-skills/4-implementation/bmad-dev-story/checklist.md` -- the definition-of-done checklist. Document which items reference sprint status (the "Sprint Status Updated" item in the Final Status Verification section)
-- [ ] 1.4 Create a change inventory: list every section/line in `workflow.md` that reads or writes `development_status` or references the flat map format. These are the surgical change points.
+- [x] 1.3 Read `node_modules/bmad-method/src/bmm-skills/4-implementation/bmad-dev-story/checklist.md` -- the definition-of-done checklist. Document which items reference sprint status (the "Sprint Status Updated" item in the Final Status Verification section)
+- [x] 1.4 Create a change inventory: list every section/line in `workflow.md` that reads or writes `development_status` or references the flat map format. These are the surgical change points.
 
 ### Task 2: Create the BMAD extension override directory and manifest (AC: 1)
 
 The extension override MUST provide replacements for ALL three built-in files plus a manifest.
 
-- [ ] 2.1 Create `lib/bmad-extension/skills/bmad-dev-story/bmad-skill-manifest.yaml`:
+- [x] 2.1 Create `lib/bmad-extension/skills/bmad-dev-story/bmad-skill-manifest.yaml`:
   ```yaml
   type: skill
   name: bmad-dev-story
   module: ma-skills
   ```
 
-- [ ] 2.2 Create `lib/bmad-extension/skills/bmad-dev-story/SKILL.md` -- override of the built-in SKILL.md. Preserve the same delegation pattern:
+- [x] 2.2 Create `lib/bmad-extension/skills/bmad-dev-story/SKILL.md` -- override of the built-in SKILL.md. Preserve the same delegation pattern:
   ```markdown
   ---
   name: bmad-dev-story
@@ -104,16 +104,16 @@ The extension override MUST provide replacements for ALL three built-in files pl
 
 The current Step 1 discovers the next story by scanning `development_status` keys. Replace with unified schema search.
 
-- [ ] 3.1 Replace the `development_status` flat-map parsing in Step 1 with a cross-section search:
+- [x] 3.1 Replace the `development_status` flat-map parsing in Step 1 with a cross-section search:
   - Read and parse `sprint-status.yaml` fully (preserve all content for later write-back)
   - Search `sprints` map: for each sprint (prefer `active` sprints first, then `planning`; skip `closed`), iterate its `items` array looking for items with `status: ready-for-dev`
   - If not found in any sprint, search the `backlog` array for items with `status: ready-for-dev`
   - The first match (sprint items prioritized over backlog) becomes the story to develop
-- [ ] 3.2 When a story is found, extract its `id` as the `story_key` and record its location context:
+- [x] 3.2 When a story is found, extract its `id` as the `story_key` and record its location context:
   - If found in a sprint: `"in {sprint-id}"` (e.g., `"in sprint-3"`)
   - If found in backlog: `"in backlog (unassigned)"`
-- [ ] 3.3 Remove the old key-pattern matching logic (distinguishing epics from stories by key format like `number-number-name`). The unified schema uses the `type` field (`story` or `bug`) on each item explicitly -- no pattern matching needed.
-- [ ] 3.4 Update the "no ready-for-dev story found" output message to reference the unified schema:
+- [x] 3.3 Remove the old key-pattern matching logic (distinguishing epics from stories by key format like `number-number-name`). The unified schema uses the `type` field (`story` or `bug`) on each item explicitly -- no pattern matching needed.
+- [x] 3.4 Update the "no ready-for-dev story found" output message to reference the unified schema:
   ```
   No ready-for-dev stories found in sprint-status.yaml.
 
@@ -125,22 +125,22 @@ The current Step 1 discovers the next story by scanning `development_status` key
   3. Specify a particular story file to develop (provide full path)
   4. Check sprint-status.yaml to see current sprint status
   ```
-- [ ] 3.5 Preserve the explicit `story_path` branch (when user provides a path directly) -- this code path does NOT read `sprint-status.yaml` for discovery and needs no change.
-- [ ] 3.6 Preserve the non-sprint discovery fallback (when `sprint-status.yaml` does not exist) -- search implementation artifacts for story files directly. This code path needs no change.
+- [x] 3.5 Preserve the explicit `story_path` branch (when user provides a path directly) -- this code path does NOT read `sprint-status.yaml` for discovery and needs no change.
+- [x] 3.6 Preserve the non-sprint discovery fallback (when `sprint-status.yaml` does not exist) -- search implementation artifacts for story files directly. This code path needs no change.
 
 ### Task 4: Rewrite status update in workflow.md Step 4 (AC: 3)
 
 Step 4 marks the story `in-progress`. Replace the flat-map write with in-place item update.
 
-- [ ] 4.1 Replace the `development_status[story_key]` lookup with a cross-section search by item `id`:
+- [x] 4.1 Replace the `development_status[story_key]` lookup with a cross-section search by item `id`:
   - Search `backlog` array: iterate items, match `item.id == story_key`
   - Search all `sprints` map entries: iterate each sprint's `items` array, match `item.id == story_key`
-- [ ] 4.2 When the item is found, update its `status` field in-place to `"in-progress"`
-- [ ] 4.3 Preserve ALL other fields on the item (`id`, `type`, `epic`, `title`, `priority` if in backlog, `severity`)
-- [ ] 4.4 Preserve ALL other sections and items in `sprint-status.yaml` (read-modify-write pattern)
-- [ ] 4.5 Update the `last_updated` metadata field to the current ISO-8601 timestamp
-- [ ] 4.6 If the item is not found, invoke the not-found handling (see Task 6)
-- [ ] 4.7 Include location context in the status output:
+- [x] 4.2 When the item is found, update its `status` field in-place to `"in-progress"`
+- [x] 4.3 Preserve ALL other fields on the item (`id`, `type`, `epic`, `title`, `priority` if in backlog, `severity`)
+- [x] 4.4 Preserve ALL other sections and items in `sprint-status.yaml` (read-modify-write pattern)
+- [x] 4.5 Update the `last_updated` metadata field to the current ISO-8601 timestamp
+- [x] 4.6 If the item is not found, invoke the not-found handling (see Task 6)
+- [x] 4.7 Include location context in the status output:
   ```
   Starting work on story {story_key} ({location_context})
   Status updated: ready-for-dev -> in-progress
@@ -151,36 +151,36 @@ Step 4 marks the story `in-progress`. Replace the flat-map write with in-place i
 
 Step 9 marks the story `review` on completion. Apply the same in-place pattern.
 
-- [ ] 5.1 Replace the `development_status[story_key] = "review"` write with a cross-section search by item `id` (same pattern as Task 4)
-- [ ] 5.2 Update the item's `status` field in-place to `"review"`
-- [ ] 5.3 Apply the same preservation guarantees (all other fields, all other sections, `last_updated` update)
-- [ ] 5.4 If the item is not found, report a warning but do NOT block completion:
+- [x] 5.1 Replace the `development_status[story_key] = "review"` write with a cross-section search by item `id` (same pattern as Task 4)
+- [x] 5.2 Update the item's `status` field in-place to `"review"`
+- [x] 5.3 Apply the same preservation guarantees (all other fields, all other sections, `last_updated` update)
+- [x] 5.4 If the item is not found, report a warning but do NOT block completion:
   ```
   Story file updated to "review", but sprint-status.yaml update failed: {story_key} not found.
   Sprint-status.yaml may be out of sync.
   ```
-- [ ] 5.5 Include location context in the success output:
+- [x] 5.5 Include location context in the success output:
   ```
   Story status updated to "review" in sprint-status.yaml ({location_context})
   ```
 
 ### Task 6: Implement not-found handling (AC: 5)
 
-- [ ] 6.1 When the story `id` is not found in any section of `sprint-status.yaml`, check for a file at `{story_location}/done/{story_key}.md`
-- [ ] 6.2 If found in `done/`, report: "Story {id} has been archived (done). It cannot be developed again without manual re-introduction to the backlog."
-- [ ] 6.3 If not found anywhere, report: "Story {id} not found in sprint-status.yaml. It may not yet have been added to the backlog. Run sprint planning or generate-backlog first."
-- [ ] 6.4 In Step 4 (marking in-progress), this is a HALT condition -- the developer cannot proceed without status tracking.
-- [ ] 6.5 In Step 9 (marking review), this is a WARNING -- the story file itself still gets updated to "review" even if sprint-status update fails.
+- [x] 6.1 When the story `id` is not found in any section of `sprint-status.yaml`, check for a file at `{story_location}/done/{story_key}.md`
+- [x] 6.2 If found in `done/`, report: "Story {id} has been archived (done). It cannot be developed again without manual re-introduction to the backlog."
+- [x] 6.3 If not found anywhere, report: "Story {id} not found in sprint-status.yaml. It may not yet have been added to the backlog. Run sprint planning or generate-backlog first."
+- [x] 6.4 In Step 4 (marking in-progress), this is a HALT condition -- the developer cannot proceed without status tracking.
+- [x] 6.5 In Step 9 (marking review), this is a WARNING -- the story file itself still gets updated to "review" even if sprint-status update fails.
 
 ### Task 7: Update the checklist.md override (AC: 1, 6)
 
-- [ ] 7.1 Create `lib/bmad-extension/skills/bmad-dev-story/checklist.md` -- copy of the upstream checklist with one change:
+- [x] 7.1 Create `lib/bmad-extension/skills/bmad-dev-story/checklist.md` -- copy of the upstream checklist with one change:
   - In the "Final Status Verification" section, update the "Sprint Status Updated" item description from referencing the flat `development_status` map to: "Sprint status updated to 'review' in sprint-status.yaml (item found by id in backlog or sprint items)"
-- [ ] 7.2 Preserve all other checklist items unchanged -- they validate story implementation quality, not sprint-status schema format
+- [x] 7.2 Preserve all other checklist items unchanged -- they validate story implementation quality, not sprint-status schema format
 
 ### Task 8: Register the extension override in module-help.csv (AC: 1)
 
-- [ ] 8.1 Add a row to `lib/bmad-extension/module-help.csv`:
+- [x] 8.1 Add a row to `lib/bmad-extension/module-help.csv`:
   ```csv
   ma-skills,4-implementation,Dev Story,bmad-dev-story,,skill:bmad-dev-story,bmad-dev-story,false,bmm-dev,,"Execute story implementation following a context filled story spec file.",_bmad-output/implementation-artifacts,"story implementation",
   ```
@@ -188,19 +188,19 @@ Step 9 marks the story `review` on completion. Apply the same in-place pattern.
 
 ### Task 9: Remove legacy flat-map references from the workflow (AC: 3, 4, 6)
 
-- [ ] 9.1 Verify that NO references to `development_status` remain in the override `workflow.md` after Tasks 3-5
-- [ ] 9.2 Verify that NO key-pattern matching logic (distinguishing epics from stories by key format) remains -- the `type` field on items replaces this
-- [ ] 9.3 Verify that the `tag="sprint-status"` attribute on Steps 1, 4, and 9 is preserved -- other skills may reference these step tags for cross-skill awareness
-- [ ] 9.4 Verify that the sprint status summary display (in the "no ready-for-dev" output) uses the new schema sections rather than the flat map
+- [x] 9.1 Verify that NO references to `development_status` remain in the override `workflow.md` after Tasks 3-5
+- [x] 9.2 Verify that NO key-pattern matching logic (distinguishing epics from stories by key format) remains -- the `type` field on items replaces this
+- [x] 9.3 Verify that the `tag="sprint-status"` attribute on Steps 1, 4, and 9 is preserved -- other skills may reference these step tags for cross-skill awareness
+- [x] 9.4 Verify that the sprint status summary display (in the "no ready-for-dev" output) uses the new schema sections rather than the flat map
 
 ### Task 10: Deployment verification (AC: 1)
 
-- [ ] 10.1 Run `npx ma-agents` (or `node lib/cli.js`) to trigger the installer
-- [ ] 10.2 Verify the BMAD extension override exists at `_bmad/extensions/ma-agents-skills/skills/bmad-dev-story/` after deployment, containing all four files (`SKILL.md`, `workflow.md`, `checklist.md`, `bmad-skill-manifest.yaml`)
-- [ ] 10.3 Verify the override takes precedence: the deployed `workflow.md` should contain cross-section search logic (references to `backlog` array and `sprints[].items`), NOT the flat `development_status` map
-- [ ] 10.4 Verify `bmad-dev-story` appears in the BMAD module help output
-- [ ] 10.5 Verify that NO `skills/bmad-dev-story/` directory exists in the IDE skill sources (`skills/` directory) -- confirming the IDE-skill-exclusion decision
-- [ ] 10.6 Verify the built-in at `node_modules/bmad-method/src/bmm-skills/4-implementation/bmad-dev-story/` is UNTOUCHED
+- [x] 10.1 Run `npx ma-agents` (or `node lib/cli.js`) to trigger the installer
+- [x] 10.2 Verify the BMAD extension override exists at `_bmad/extensions/ma-agents-skills/skills/bmad-dev-story/` after deployment, containing all four files (`SKILL.md`, `workflow.md`, `checklist.md`, `bmad-skill-manifest.yaml`)
+- [x] 10.3 Verify the override takes precedence: the deployed `workflow.md` should contain cross-section search logic (references to `backlog` array and `sprints[].items`), NOT the flat `development_status` map
+- [x] 10.4 Verify `bmad-dev-story` appears in the BMAD module help output
+- [x] 10.5 Verify that NO `skills/bmad-dev-story/` directory exists in the IDE skill sources (`skills/` directory) -- confirming the IDE-skill-exclusion decision
+- [x] 10.6 Verify the built-in at `node_modules/bmad-method/src/bmm-skills/4-implementation/bmad-dev-story/` is UNTOUCHED
 
 ## Dev Notes
 
@@ -343,8 +343,35 @@ function updateItemStatus(sprintStatus, storyKey, newStatus):
 
 ### Agent Model Used
 
+claude-sonnet-4-6
+
 ### Debug Log References
+
+None — implementation was straightforward surgical edit to the built-in workflow.
 
 ### Completion Notes List
 
+- Read all three built-in files (`SKILL.md`, `workflow.md`, `checklist.md`) to understand the existing workflow structure
+- Identified three change points in `workflow.md`: Step 1 (discovery), Step 4 (mark in-progress), Step 9 (mark review)
+- Created BMAD extension override in `lib/bmad-extension/skills/bmad-dev-story/` with all four required files
+- Step 1 rewritten: cross-section search (active sprints → planning sprints → backlog) replaces flat `development_status` key scan; `type` field replaces key pattern matching
+- Step 4 rewritten: search by `item.id` across backlog and sprints; update status in-place; HALT on not-found (with done-archive check)
+- Step 9 rewritten: same in-place update pattern; non-blocking warning on not-found
+- `location_context` variable threaded through Steps 1→4→9 to show "in sprint-X" or "in backlog" in output
+- Checklist "Sprint Status Updated" line updated to reference unified schema language
+- `module-help.csv` row added for `bmad-dev-story` with agent `bmm-dev`
+- Verified: zero `development_status` references in override `workflow.md`; all three `tag="sprint-status"` steps preserved; no IDE skill created; built-in untouched
+
 ### File List
+
+- `lib/bmad-extension/skills/bmad-dev-story/bmad-skill-manifest.yaml` (created)
+- `lib/bmad-extension/skills/bmad-dev-story/SKILL.md` (created)
+- `lib/bmad-extension/skills/bmad-dev-story/workflow.md` (created)
+- `lib/bmad-extension/skills/bmad-dev-story/checklist.md` (created)
+- `lib/bmad-extension/module-help.csv` (modified — added bmad-dev-story row)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified — 17-18 marked in-progress then review)
+- `_bmad-output/implementation-artifacts/17-18-rework-bmad-dev-story.md` (modified — tasks checked, status updated)
+
+## Change Log
+
+- 2026-04-06: Implemented Story 17.18 — created BMAD extension override for `bmad-dev-story` skill. Replaced flat `development_status` map operations in Steps 1, 4, and 9 with cross-section item search and in-place status update on the unified `sprint-status.yaml` schema (backlog array + sprints[].items arrays).
