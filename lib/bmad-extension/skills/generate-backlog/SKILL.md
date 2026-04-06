@@ -105,11 +105,14 @@ This skill reads `epics.md` and `bug-*.md` files and writes the `backlog` and `e
   </action>
 
   <action>Assemble {{merged_items}} = all items from {{epic_stories}} (with preserved or new priority/status) + all items from {{bug_stories}} (with preserved or new priority/status) + all items from {{orphaned_items}} (with existing priority/status preserved)</action>
+
+  <action>**Backlog-sprint conflict detection:** Set {{backlog_sprint_conflicts}} = list of items that were in {{existing_backlog_map}} AND in {{sprint_item_ids}} (items found in both the backlog and a sprint — data integrity violation corrected by removing them from the backlog; sprint assignment takes precedence)</action>
 </step>
 
 <step n="6" goal="Sort and renumber backlog items by priority">
   <action>Sort {{merged_items}} by the following criteria (most important first):
     1. **Critical bugs first:** Items with type="bug" AND severity="critical" rank highest
+       - Among critical bugs: existing items ordered by their current priority (ascending); new critical bugs ordered by their position in the discovered bug file list (alphabetical by filename)
     2. **Explicit priority (preserved from existing backlog):** Items that existed in the previous backlog are ranked by their preserved priority value (lower number = higher rank)
     3. **New items by epic order:** New items (not in existing backlog) are ranked by their epic number (ascending), then by story number within the epic (ascending)
     4. **Bugs without explicit priority:** New bugs (not in existing backlog) are appended after all stories, sorted by severity (high → medium → low → null)
@@ -159,8 +162,17 @@ This skill reads `epics.md` and `bug-*.md` files and writes the `backlog` and `e
 | Existing items preserved | {{preserved_count}} |
 | Items excluded (sprint-assigned) | {{sprint_excluded_count}} |
 | Items excluded (archived in done/) | {{done_excluded_count}} |
+| Items corrected (removed from backlog — already in sprint) | {{backlog_sprint_conflicts.length}} |
 | Total backlog items | {{total_backlog_count}} |
 
+{{#if backlog_sprint_conflicts}}
+⚠️ **Data integrity corrections:**
+The following items were found in both the backlog and a sprint. They have been removed from the backlog (sprint assignment takes precedence):
+{{#each backlog_sprint_conflicts}}
+- {{id}} — {{title}}
+{{/each}}
+
+{{/if}}
 {{#if orphaned_items}}
 ### Orphaned Items (WARNING — Human Review Required)
 
