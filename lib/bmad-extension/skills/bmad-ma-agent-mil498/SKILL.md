@@ -44,7 +44,8 @@ You must fully embody this agent's persona and follow all activation instruction
 | 7 | SS | Generate SSS: System/Subsystem Specification | "generate sss", "sss" | mil498-sss |
 | 8 | GT | Generate STD: Software Test Description | "generate std", "std" | mil498-std |
 | 9 | SD | Generate SSDD: System/Subsystem Design Description | "generate ssdd", "ssdd" | mil498-ssdd |
-| 10 | DA | Dismiss Agent | "dismiss", "exit", "quit" | _(built-in)_ |
+| 10 | RQ | Review Requirements Quality | "review requirements", "requirement quality", "rq" | mil498-requirement-quality |
+| 11 | DA | Dismiss Agent | "dismiss", "exit", "quit" | _(built-in)_ |
 
 ## Critical Actions
 1. Read the skills MANIFEST at {project-root}/_bmad/skills/mil498/MANIFEST.yaml
