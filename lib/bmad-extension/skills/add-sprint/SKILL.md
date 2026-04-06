@@ -1,6 +1,6 @@
 ---
 name: add-sprint
-description: Guided workflow to create a new sprint with capacity limits for realistic sprint planning
+description: Guided workflow to create a new sprint entry in the sprints section of sprint-status.yaml with capacity limits, optional ISO dates, and auto-incremented ID
 type: skill
 triggers:
   - "add sprint"
@@ -9,112 +9,166 @@ triggers:
 
 # Add Sprint Workflow
 
-Guided workflow to create a new sprint with capacity limits for realistic sprint planning.
+Guided workflow to create a new sprint entry in the `sprints` section of `sprint-status.yaml` with capacity limits, optional ISO dates, and auto-incremented sprint ID.
 
 <workflow>
 
-<step n="1" goal="Gather sprint number and name">
-  <action>Ask the user for the sprint number (e.g., 1, 2, 3)</action>
-  <ask>What is the sprint number? (e.g., 1)</ask>
-  <action>Store as {{sprint_number}}</action>
-  <ask>What is the sprint name? (e.g., "Sprint 1 — Foundation") — press Enter to use "Sprint {{sprint_number}}"</ask>
-  <action>If user presses Enter or leaves blank, default to "Sprint {{sprint_number}}"</action>
-  <action>Store as {{sprint_name}}</action>
+<step n="0" goal="Load configuration and validate file existence">
+  <action>Resolve the path to `sprint-status.yaml`. Check `_bmad/bmm/config.yaml` for a configured `story_location` path; if not set, default to `_bmad-output/implementation-artifacts/sprint-status.yaml`</action>
+  <action>Attempt to read the file at the resolved path</action>
+  <check if="sprint-status.yaml does not exist">
+    <output>No sprint-status.yaml found. Run sprint planning first to initialize the file.</output>
+    <action>Exit workflow</action>
+  </check>
+  <action>Read and parse the full file: `epics`, `backlog`, and `sprints` sections plus all metadata fields</action>
+  <action>Store parsed content as {{file_content}}</action>
 </step>
 
-<step n="2" goal="Gather capacity as positive integer">
-  <action>Explain capacity: the maximum number of items (stories + bugs) that can be assigned to this sprint</action>
-  <ask>What is the sprint capacity? (Enter a positive integer — the maximum number of stories/bugs for this sprint)</ask>
+<step n="1" goal="Auto-increment sprint ID and derive default name">
+  <action>Extract all keys from the `sprints` map in {{file_content}}</action>
+  <action>Parse numeric suffix from each key matching pattern `sprint-N` (e.g., `sprint-1` → 1, `sprint-3` → 3)</action>
+  <check if="no sprint keys exist in sprints map">
+    <action>Set {{new_number}} = 1</action>
+    <action>Set {{default_name}} = "Sprint 1"</action>
+  </check>
+  <check if="sprint keys exist">
+    <action>Find the highest numeric suffix among all sprint keys; store as {{max_number}}</action>
+    <action>Set {{new_number}} = {{max_number}} + 1</action>
+    <action>Look up the sprint entry whose key has suffix {{max_number}}; read its `name` field</action>
+    <action>If the name matches pattern "Sprint N" or "Sprint N — description" or "Sprint N - description", set {{default_name}} = "Sprint {{new_number}}"; otherwise set {{default_name}} = "Sprint {{new_number}}" as safe fallback</action>
+  </check>
+  <action>Set {{sprint_id}} = "sprint-{{new_number}}"</action>
+  <action>Set {{sprint_name}} = {{default_name}}</action>
+  <output>
+Auto-generated Sprint ID: **{{sprint_id}}**
+Default Sprint Name: **{{sprint_name}}**
+  </output>
+  <ask>Sprint ID: {{sprint_id}} — press Enter to accept or type a different number:</ask>
+  <check if="user provides a different number">
+    <action>Set {{sprint_id}} = "sprint-{user_number}"</action>
+    <action>Check if {{sprint_id}} already exists as a key in the `sprints` map</action>
+    <check if="sprint_id already exists">
+      <output>Sprint ID {{sprint_id}} already exists in sprint-status.yaml. Please choose a different number.</output>
+      <goto step="1" sub="re-prompt for number only" />
+    </check>
+    <action>Update {{sprint_name}} default to "Sprint {user_number}"</action>
+  </check>
+  <ask>Sprint name: '{{sprint_name}}' — press Enter to accept or type a different name:</ask>
+  <check if="user provides a different name">
+    <action>Set {{sprint_name}} = user input</action>
+  </check>
+</step>
+
+<step n="2" goal="Gather capacity (required)">
+  <action>Explain: capacity is the maximum number of items (stories + bugs) that can be assigned to this sprint. This is advisory — skills will warn but not block when exceeded (per schema section 4.2).</action>
+  <ask>What is the sprint capacity? (Enter a positive integer)</ask>
   <action>Store input as {{capacity_input}}</action>
   <action>Validate {{capacity_input}} is a positive integer (greater than zero, no decimals, no non-numeric characters)</action>
   <check if="{{capacity_input}} is NOT a positive integer">
-    <output>❌ Invalid capacity: "{{capacity_input}}". Capacity must be a positive integer (e.g., 5, 10, 20). Zero and negative values are not allowed.</output>
+    <output>Invalid capacity: "{{capacity_input}}". Capacity must be a positive integer (e.g., 5, 10, 20). Zero and negative values are not allowed.</output>
     <goto step="2" />
   </check>
   <action>Store as {{capacity}} (integer)</action>
 </step>
 
-<step n="3" goal="Gather optional start and end context">
-  <action>Explain: start/end context can be dates (e.g., "2026-03-18") or milestone descriptions (e.g., "Q1 Planning Complete")</action>
-  <ask>Optional — Sprint start context (date or milestone, press Enter to skip):</ask>
-  <action>Store as {{start_context}} (empty string if skipped)</action>
-  <ask>Optional — Sprint end context (date or milestone, press Enter to skip):</ask>
-  <action>Store as {{end_context}} (empty string if skipped)</action>
+<step n="3" goal="Gather optional start and end dates">
+  <ask>Optional — Sprint start date (ISO format YYYY-MM-DD, press Enter to skip):</ask>
+  <action>Store as {{start_input}}</action>
+  <check if="start_input is not empty">
+    <action>Validate {{start_input}} matches ISO date pattern YYYY-MM-DD (4-digit year, 2-digit month 01-12, 2-digit day 01-31)</action>
+    <check if="start_input does not match ISO date pattern">
+      <output>Invalid date format: "{{start_input}}". Please use YYYY-MM-DD (e.g., 2026-04-15).</output>
+      <goto step="3" sub="re-prompt for start date only" />
+    </check>
+    <action>Store as {{start}} = {{start_input}}</action>
+  </check>
+  <check if="start_input is empty">
+    <action>Store as {{start}} = "" (empty string)</action>
+  </check>
+  <ask>Optional — Sprint end date (ISO format YYYY-MM-DD, press Enter to skip):</ask>
+  <action>Store as {{end_input}}</action>
+  <check if="end_input is not empty">
+    <action>Validate {{end_input}} matches ISO date pattern YYYY-MM-DD</action>
+    <check if="end_input does not match ISO date pattern">
+      <output>Invalid date format: "{{end_input}}". Please use YYYY-MM-DD (e.g., 2026-04-28).</output>
+      <goto step="3" sub="re-prompt for end date only" />
+    </check>
+    <check if="end_input is before start and start is not empty">
+      <output>Warning: end date {{end_input}} is before start date {{start}}. Continuing as requested.</output>
+    </check>
+    <action>Store as {{end}} = {{end_input}}</action>
+  </check>
+  <check if="end_input is empty">
+    <action>Store as {{end}} = "" (empty string)</action>
+  </check>
 </step>
 
-<step n="4" goal="Confirm and validate all inputs">
+<step n="4" goal="Confirmation">
   <output>
-## Sprint Summary — Please Confirm
+## New Sprint Summary — Please Confirm
 
-- **Sprint Number:** {{sprint_number}}
-- **Sprint Name:** {{sprint_name}}
-- **Capacity (max items):** {{capacity}}
-- **Start Context:** {{start_context}} *(empty if skipped)*
-- **End Context:** {{end_context}} *(empty if skipped)*
-- **Output File:** `_bmad-output/implementation-artifacts/sprint-plan-{{sprint_number}}.yaml`
+- Sprint ID: {{sprint_id}}
+- Sprint Name: {{sprint_name}}
+- Capacity: {{capacity}} items
+- Start Date: {{start}} *(empty if skipped)*
+- End Date: {{end}} *(empty if skipped)*
+- Status: planning
+- Items: [] *(empty — use /add-to-sprint to assign items)*
+- Target: sprint-status.yaml sprints section
   </output>
-  <ask>Confirm creation? [y] Yes / [n] Cancel / [e] Edit a field:</ask>
+  <ask>Confirm creation? [y] Yes / [n] Cancel / [e] Edit a field</ask>
   <check if="user selects 'e'">
-    <ask>Which field to edit? (number / name / capacity / start / end)</ask>
-    <check if="field == 'number'">
-      <ask>New sprint number:</ask>
-      <action>Store as {{sprint_number}}</action>
-      <action>If sprint name was auto-defaulted to the old "Sprint {n}", update it to "Sprint {{sprint_number}}"</action>
-      <goto step="4" />
-    </check>
+    <ask>Which field to edit? (id / name / capacity / start / end)</ask>
+    <check if="field == 'id'"><goto step="1" /></check>
     <check if="field == 'name'">
-      <ask>New sprint name (or press Enter to use "Sprint {{sprint_number}}"):</ask>
-      <action>If blank, set {{sprint_name}} = "Sprint {{sprint_number}}"; else store user input as {{sprint_name}}</action>
+      <ask>Sprint name (or press Enter to use "{{sprint_name}}"):</ask>
+      <check if="input is not empty"><action>Set {{sprint_name}} = user input</action></check>
       <goto step="4" />
     </check>
     <check if="field == 'capacity'"><goto step="2" /></check>
-    <check if="field == 'start'"><goto step="3" /></check>
-    <check if="field == 'end'"><goto step="3" /></check>
+    <check if="field == 'start'"><goto step="3" sub="start date only" /></check>
+    <check if="field == 'end'"><goto step="3" sub="end date only" /></check>
   </check>
   <check if="user selects 'n'">
-    <output>❌ Sprint creation cancelled.</output>
+    <output>Sprint creation cancelled.</output>
     <action>Exit workflow</action>
   </check>
 </step>
 
-<step n="5" goal="Generate sprint artifact file">
-  <action>Determine output path: `_bmad-output/implementation-artifacts/sprint-plan-{{sprint_number}}.yaml`</action>
-  <action>Check if file already exists at output path</action>
-  <check if="file already exists">
-    <output>⚠️ A sprint plan already exists at `_bmad-output/implementation-artifacts/sprint-plan-{{sprint_number}}.yaml`.</output>
-    <ask>Overwrite existing sprint plan? [y] Yes / [n] Cancel:</ask>
-    <check if="user selects 'n'">
-      <output>❌ Sprint creation cancelled to preserve existing sprint plan.</output>
-      <action>Exit workflow</action>
-    </check>
-  </check>
-  <action>Get current ISO timestamp for created_date and last_modified</action>
-  <action>Write sprint artifact YAML to `_bmad-output/implementation-artifacts/sprint-plan-{{sprint_number}}.yaml` with this structure:
-
+<step n="5" goal="Write sprint entry to sprint-status.yaml">
+  <action>Re-read the current content of `sprint-status.yaml` (resolved path from Step 0) to get the latest state</action>
+  <action>Get the current ISO-8601 timestamp for `last_updated`</action>
+  <action>Append a new entry to the `sprints` map with this structure:
 ```yaml
-sprint_number: {{sprint_number}}
-sprint_name: "{{sprint_name}}"
-capacity: {{capacity}}
-assigned_items: []
-status: planning
-start_context: "{{start_context}}"
-end_context: "{{end_context}}"
-created_date: "{{current_iso_timestamp}}"
-last_modified: "{{current_iso_timestamp}}"
+  {{sprint_id}}:
+    name: "{{sprint_name}}"
+    status: planning
+    capacity: {{capacity}}
+    start: "{{start}}"
+    end: "{{end}}"
+    items: []
 ```
   </action>
+  <action>Preserve the `epics` section unchanged</action>
+  <action>Preserve the `backlog` section unchanged</action>
+  <action>Preserve all existing entries in the `sprints` section unchanged</action>
+  <action>Update the `last_updated` metadata field to the current ISO-8601 timestamp</action>
+  <action>Preserve the `generated` field unchanged (never modify)</action>
+  <action>Write the complete updated file in a single atomic write (read-modify-write pattern)</action>
+</step>
+
+<step n="6" goal="Summary output">
   <output>
-✅ **Sprint created successfully!**
+Sprint created successfully!
 
-- **File:** `_bmad-output/implementation-artifacts/sprint-plan-{{sprint_number}}.yaml`
-- **Sprint:** {{sprint_name}}
-- **Capacity:** {{capacity}} items
-- **Status:** planning
+- Sprint: {{sprint_name}} ({{sprint_id}})
+- Capacity: {{capacity}} items
+- Status: planning
 
-**Next Steps:**
-- Use `/add-to-sprint` to assign backlog items to this sprint
-- Use `/modify-sprint` to update sprint details later
-- Use `/sprint-status-view` to view sprint progress
+Next Steps:
+- Use /add-to-sprint to assign backlog items to this sprint
+- Use /modify-sprint to update sprint details later
+- Use /sprint-status-view to view sprint progress
   </output>
 </step>
 

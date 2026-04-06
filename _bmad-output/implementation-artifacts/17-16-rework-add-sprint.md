@@ -1,6 +1,6 @@
 # Story 17.16: Rework add-sprint Skill (Moderate Rework -- Section-Based)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -64,7 +64,7 @@ So that new sprints are defined within the unified file rather than as separate 
 
 The IDE skill does NOT yet exist. This task creates it from scratch so all 8+ IDE coding agents can invoke `add-sprint` directly.
 
-- [ ] 1.1 Create `skills/add-sprint/skill.json` with metadata:
+- [x] 1.1 Create `skills/add-sprint/skill.json` with metadata:
   ```json
   {
     "name": "add-sprint",
@@ -76,22 +76,22 @@ The IDE skill does NOT yet exist. This task creates it from scratch so all 8+ ID
   ```
   Note: `always_load` is intentionally omitted (defaults to false) -- this skill is invoked on demand, not loaded for every task.
 
-- [ ] 1.2 Create `skills/add-sprint/SKILL.md` with the complete skill workflow (see Task 3 for content specification). This is the canonical skill content that the installer deploys to all IDE agents.
+- [x] 1.2 Create `skills/add-sprint/SKILL.md` with the complete skill workflow (see Task 3 for content specification). This is the canonical skill content that the installer deploys to all IDE agents.
 
 ### Task 2: Modify the BMAD extension skill (AC: 1, 6, 7) -- EXISTS, MODIFY
 
 The BMAD extension skill ALREADY EXISTS at `lib/bmad-extension/skills/add-sprint/SKILL.md`. This task modifies it in place. The `bmad-skill-manifest.yaml` does NOT need changes.
 
-- [ ] 2.1 Rewrite `lib/bmad-extension/skills/add-sprint/SKILL.md` -- replace the entire pre-Epic-17 workflow (which creates standalone `sprint-plan-N.yaml` files with `sprint_number`, `sprint_name`, `capacity`, `assigned_items`, `status`, `start_context`, `end_context`, `created_date`, `last_modified` fields) with the new unified schema workflow (see Task 3 for content specification). The BMAD extension version is authored for the BMAD Scrum Master agent (`bmm-sm`) context and may include BMAD-specific phrasing (e.g., referencing `_bmad/bmm/config.yaml` for path resolution). The core workflow logic MUST be functionally identical to the IDE version.
+- [x] 2.1 Rewrite `lib/bmad-extension/skills/add-sprint/SKILL.md` -- replace the entire pre-Epic-17 workflow (which creates standalone `sprint-plan-N.yaml` files with `sprint_number`, `sprint_name`, `capacity`, `assigned_items`, `status`, `start_context`, `end_context`, `created_date`, `last_modified` fields) with the new unified schema workflow (see Task 3 for content specification). The BMAD extension version is authored for the BMAD Scrum Master agent (`bmm-sm`) context and may include BMAD-specific phrasing (e.g., referencing `_bmad/bmm/config.yaml` for path resolution). The core workflow logic MUST be functionally identical to the IDE version.
 
-- [ ] 2.2 Verify `lib/bmad-extension/skills/add-sprint/bmad-skill-manifest.yaml` is unchanged:
+- [x] 2.2 Verify `lib/bmad-extension/skills/add-sprint/bmad-skill-manifest.yaml` is unchanged:
   ```yaml
   type: skill
   name: add-sprint
   module: ma-skills
   ```
 
-- [ ] 2.3 Update the description in `lib/bmad-extension/module-help.csv` for the `add-sprint` row. The current description ("Create a new sprint with capacity limits and optional start/end context.") should be updated to reference the unified schema:
+- [x] 2.3 Update the description in `lib/bmad-extension/module-help.csv` for the `add-sprint` row. The current description ("Create a new sprint with capacity limits and optional start/end context.") should be updated to reference the unified schema:
   ```
   "Create a new sprint entry in the sprints section of sprint-status.yaml with capacity limits, optional ISO dates, and auto-incremented ID."
   ```
@@ -100,12 +100,12 @@ The BMAD extension skill ALREADY EXISTS at `lib/bmad-extension/skills/add-sprint
 
 The SKILL.md content (for both the IDE and BMAD extension versions) must implement the following workflow. Both versions MUST be functionally identical in their workflow logic.
 
-- [ ] 3.1 **Step 0 -- Load configuration and validate file existence:**
+- [x] 3.1 **Step 0 -- Load configuration and validate file existence:**
   - Read `sprint-status.yaml` at `_bmad-output/implementation-artifacts/sprint-status.yaml` (or resolve path from config).
   - If the file does not exist, report error: "No sprint-status.yaml found. Run sprint planning first to initialize the file." Exit (AC 5).
   - Parse the full file: `epics`, `backlog`, and `sprints` sections.
 
-- [ ] 3.2 **Step 1 -- Auto-increment sprint ID and derive default name:**
+- [x] 3.2 **Step 1 -- Auto-increment sprint ID and derive default name:**
   - Parse existing sprint keys from the `sprints` section (e.g., `sprint-1`, `sprint-3`, `sprint-5`).
   - Find the highest numeric suffix among all existing sprint keys.
   - Auto-generate new ID: `sprint-{max + 1}`. If no sprints exist, default to `sprint-1`.
@@ -116,14 +116,14 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
   - Prompt: "Sprint name: '{default_name}' -- press Enter to accept or type a different name."
   - Store as `{{sprint_id}}` and `{{sprint_name}}`.
 
-- [ ] 3.3 **Step 2 -- Gather capacity (required):**
+- [x] 3.3 **Step 2 -- Gather capacity (required):**
   - Explain capacity: the maximum number of items (stories + bugs) that can be assigned to this sprint. This is advisory -- skills will warn but not block when exceeded (per schema section 4.2).
   - Prompt: "What is the sprint capacity? (Enter a positive integer)"
   - Validate input is a positive integer (> 0, no decimals, no non-numeric characters).
   - If invalid, display error and re-prompt.
   - Store as `{{capacity}}` (integer).
 
-- [ ] 3.4 **Step 3 -- Gather optional start and end dates:**
+- [x] 3.4 **Step 3 -- Gather optional start and end dates:**
   - Prompt: "Optional -- Sprint start date (ISO format YYYY-MM-DD, press Enter to skip):"
   - If provided, validate ISO date format (YYYY-MM-DD). If invalid, show error and re-prompt.
   - Store as `{{start}}` (ISO date string, or empty string `""` if skipped).
@@ -131,7 +131,7 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
   - If provided, validate ISO date format. If end is before start, warn but allow (user may have reasons).
   - Store as `{{end}}` (ISO date string, or empty string `""` if skipped).
 
-- [ ] 3.5 **Step 4 -- Confirmation:**
+- [x] 3.5 **Step 4 -- Confirmation:**
   - Display summary:
     ```
     ## New Sprint Summary -- Please Confirm
@@ -150,7 +150,7 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
   - On `n`: display "Sprint creation cancelled." and exit.
   - On `y`: proceed to Step 5.
 
-- [ ] 3.6 **Step 5 -- Write sprint entry to sprint-status.yaml (AC: 1, 2):**
+- [x] 3.6 **Step 5 -- Write sprint entry to sprint-status.yaml (AC: 1, 2):**
   - Read the current content of `sprint-status.yaml` (re-read to get latest state).
   - Append new entry to the `sprints` map:
     ```yaml
@@ -169,7 +169,7 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
   - Preserve `generated` (never change).
   - Write the complete file in a single atomic write (read-modify-write pattern).
 
-- [ ] 3.7 **Step 6 -- Summary output:**
+- [x] 3.7 **Step 6 -- Summary output:**
   - Display creation confirmation:
     ```
     Sprint created successfully!
@@ -186,25 +186,25 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
 
 ### Task 4: Update the BMAD extension workflow file (AC: 7)
 
-- [ ] 4.1 Rewrite `lib/bmad-extension/workflows/add-sprint/workflow.md` to match the new unified schema workflow. Replace all references to standalone `sprint-plan-N.yaml` file creation, `sprints/` directory, `start_context`/`end_context`, `created_date`/`last_modified`, and `assigned_items` with the new `sprint-status.yaml` unified schema operations. The workflow must align with the SKILL.md content from Task 3.
+- [x] 4.1 Rewrite `lib/bmad-extension/workflows/add-sprint/workflow.md` to match the new unified schema workflow. Replace all references to standalone `sprint-plan-N.yaml` file creation, `sprints/` directory, `start_context`/`end_context`, `created_date`/`last_modified`, and `assigned_items` with the new `sprint-status.yaml` unified schema operations. The workflow must align with the SKILL.md content from Task 3.
 
 ### Task 5: Verify the old standalone-file pattern is NOT present (AC: 1)
 
-- [ ] 5.1 Confirm neither SKILL.md file contains any instruction to create a standalone `sprint-plan-N.yaml` or `sprints/sprint-N.yaml` file.
-- [ ] 5.2 Confirm neither SKILL.md file contains any instruction to create a `sprints/` directory.
-- [ ] 5.3 Confirm neither SKILL.md file references `start_context` / `end_context` (old schema fields -- replaced by `start` / `end` ISO dates).
-- [ ] 5.4 Confirm neither SKILL.md file references `created_date` or `last_modified` as per-sprint fields (removed in unified schema -- only file-level `last_updated` exists).
-- [ ] 5.5 Confirm neither SKILL.md file references `assigned_items` (old field name -- replaced by `items` array).
-- [ ] 5.6 Confirm the only data file read/written is `sprint-status.yaml`.
+- [x] 5.1 Confirm neither SKILL.md file contains any instruction to create a standalone `sprint-plan-N.yaml` or `sprints/sprint-N.yaml` file.
+- [x] 5.2 Confirm neither SKILL.md file contains any instruction to create a `sprints/` directory.
+- [x] 5.3 Confirm neither SKILL.md file references `start_context` / `end_context` (old schema fields -- replaced by `start` / `end` ISO dates).
+- [x] 5.4 Confirm neither SKILL.md file references `created_date` or `last_modified` as per-sprint fields (removed in unified schema -- only file-level `last_updated` exists).
+- [x] 5.5 Confirm neither SKILL.md file references `assigned_items` (old field name -- replaced by `items` array).
+- [x] 5.6 Confirm the only data file read/written is `sprint-status.yaml`.
 
 ### Task 6: Deployment verification (AC: 6)
 
-- [ ] 6.1 Run `npx ma-agents` (or `node lib/cli.js`) to trigger the installer.
-- [ ] 6.2 Verify the IDE skill appears in the installed MANIFEST.yaml for at least one agent (e.g., check `.claude/skills/MANIFEST.yaml` includes `add-sprint`).
-- [ ] 6.3 Diff the installed IDE copy (e.g., `.claude/skills/add-sprint/SKILL.md`) against the source (`skills/add-sprint/SKILL.md`) -- the content should match after accounting for frontmatter injection by the installer.
-- [ ] 6.4 Verify the BMAD extension copy exists at `_bmad/extensions/ma-agents-skills/skills/add-sprint/SKILL.md` after a BMAD install.
-- [ ] 6.5 Verify the BMAD extension copy matches the source at `lib/bmad-extension/skills/add-sprint/SKILL.md`.
-- [ ] 6.6 Verify `add-sprint` appears in the BMAD module help output.
+- [x] 6.1 Run `npx ma-agents` (or `node lib/cli.js`) to trigger the installer.
+- [x] 6.2 Verify the IDE skill appears in the installed MANIFEST.yaml for at least one agent (e.g., check `.claude/skills/MANIFEST.yaml` includes `add-sprint`).
+- [x] 6.3 Diff the installed IDE copy (e.g., `.claude/skills/add-sprint/SKILL.md`) against the source (`skills/add-sprint/SKILL.md`) -- the content should match after accounting for frontmatter injection by the installer.
+- [x] 6.4 Verify the BMAD extension copy exists at `_bmad/extensions/ma-agents-skills/skills/add-sprint/SKILL.md` after a BMAD install.
+- [x] 6.5 Verify the BMAD extension copy matches the source at `lib/bmad-extension/skills/add-sprint/SKILL.md`.
+- [x] 6.6 Verify `add-sprint` appears in the BMAD module help output.
 
 ## Dev Notes
 
@@ -322,3 +322,41 @@ The ma-agents project is a **multi-agent skill installer** that deploys skills t
 - Architecture Decision P2-5 in `_bmad-output/planning-artifacts/architecture.md` -- Pre-built Extension Workflows (FR61, FR68-FR70)
 - Architecture Decision P2-11 in `_bmad-output/planning-artifacts/architecture.md` -- Unified sprint-status.yaml model
 - Schema: `_bmad-output/planning-artifacts/sprint-status-schema.md` -- canonical schema, especially sections 4.1-4.6 (sprint entity, status transitions, capacity semantics)
+
+## Dev Agent Record
+
+### Implementation Summary
+
+Implemented Story 17.16 in full. The `add-sprint` skill was reworked from its pre-Epic-17 standalone-file pattern to write sprint entries into the unified `sprint-status.yaml` `sprints` map.
+
+**Key implementation decisions:**
+- IDE skill created from scratch at `skills/add-sprint/` (was previously BMAD-only)
+- BMAD extension SKILL.md rewritten in place; frontmatter description updated
+- Workflow file at `lib/bmad-extension/workflows/add-sprint/workflow.md` rewritten to match
+- `module-help.csv` description updated for the `add-sprint` row
+- Installer successfully deployed the IDE skill to `.claude/skills/add-sprint/SKILL.md` and updated `MANIFEST.yaml`
+- All old schema references (`sprint-plan-N.yaml`, `start_context`, `end_context`, `created_date`, `last_modified`, `assigned_items`, `sprints/` directory) removed from both SKILL.md files
+- Sprint ID auto-increment logic reads from `sprints` map keys, not file globs
+- Collision detection prompts user if auto-generated ID already exists
+
+### File List
+
+**Created:**
+- `skills/add-sprint/skill.json` — IDE skill metadata
+- `skills/add-sprint/SKILL.md` — IDE skill workflow (canonical source for all IDE agents)
+
+**Modified:**
+- `lib/bmad-extension/skills/add-sprint/SKILL.md` — Rewritten for unified schema
+- `lib/bmad-extension/workflows/add-sprint/workflow.md` — Rewritten for unified schema
+- `lib/bmad-extension/module-help.csv` — Updated add-sprint description
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — Story status set to review
+
+**Deployed (by installer, not source):**
+- `.claude/skills/add-sprint/SKILL.md` — Installed copy
+- `.claude/skills/MANIFEST.yaml` — Updated with add-sprint entry
+
+### Change Log
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-04-06 | Created IDE skill source files; rewrote BMAD extension SKILL.md and workflow.md; updated module-help.csv; verified deployment | Dev Agent (Claude Sonnet 4.6) |
