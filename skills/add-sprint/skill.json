@@ -1,0 +1,7 @@
+{
+  "name": "add-sprint",
+  "version": "1.0.0",
+  "description": "Guided workflow to create a new sprint entry in the sprints section of sprint-status.yaml with capacity limits, optional ISO dates, and auto-incremented ID",
+  "category": "workflow",
+  "tags": ["sprint-management", "add-sprint", "capacity"]
+}
