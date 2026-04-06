@@ -1,0 +1,7 @@
+{
+  "name": "add-to-sprint",
+  "version": "1.0.0",
+  "description": "Guided workflow to move backlog items to a sprint in the unified sprint-status.yaml using movement semantics",
+  "category": "workflow",
+  "tags": ["sprint-management", "backlog", "movement-semantics"]
+}
