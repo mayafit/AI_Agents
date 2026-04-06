@@ -37,9 +37,20 @@ Derive the story slug from the available context, in this order of preference:
 2. The git branch name — strip prefixes (`feature/`, `fix/`, `chore/`) and normalize: lowercase, replace spaces and underscores with hyphens, remove non-alphanumeric characters except hyphens
 3. Any explicit story reference in the current task description
 
-### Step 2 — Look up the slug
+### Step 2 — Search for the slug across all sections
 
-Find the slug as a key under `development_status` in `sprint-status.yaml`.
+Read `sprint-status.yaml` and search the following sections in order. Stop at the first match.
+
+**2a. Backlog search:** Iterate the `backlog` array. For each item, check if `item.id` equals the derived slug.
+- If found: record the item's `status` field value and note location as `"in backlog (unassigned)"`.
+
+**2b. Sprint search:** Iterate the `sprints` map. For each sprint entry, iterate its `items` array. For each item, check if `item.id` equals the derived slug.
+- If found: record the item's `status` field value and note location as `"in {sprint-id}"` (e.g., `"in sprint-3"`).
+
+**2c. Done archive fallback:** If the slug was not found in any section above, check for a file at `{story_location}/done/{slug}.md`, where `story_location` is the metadata field from `sprint-status.yaml` (default: `_bmad-output/implementation-artifacts`).
+- If the file exists: classify as **Delivered** — report `"Story {id} is archived (done)"`.
+
+**2d. Not found:** If not found in backlog, sprints, or done archive, report `"Story {id} not found in sprint-status.yaml or done/ archive"` and classify as **WIP**.
 
 ### Step 3 — Map status to delivered / WIP
 
@@ -51,13 +62,17 @@ Find the slug as a key under `development_status` in `sprint-status.yaml`.
 | `ready-for-dev` | WIP | Do not flag |
 | `backlog` | WIP | Do not flag |
 | `on-hold` | WIP | Do not flag |
+| `cancelled` | WIP | Do not flag |
 
 ### Fallback rule
 
-If any of the following are true, **classify as WIP and do not flag**:
-- The story slug cannot be determined from context
-- The slug is not found in `sprint-status.yaml`
-- The status file does not exist
+Apply the first matching rule; do not continue down the list:
+
+1. Slug cannot be determined from context → **WIP**
+2. Slug not found in `sprint-status.yaml` → check `done/` archive (Step 2c)
+3. Found in `done/` archive → **Delivered**
+4. Not found anywhere → **WIP**
+5. Status file does not exist → **WIP**
 
 Never guess or assume delivered status. When in doubt, WIP.
 

@@ -1,6 +1,6 @@
 # Story 17.19: Rework story-status-lookup Skill (Light Rework -- Cross-Section Search)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -65,64 +65,64 @@ So that code can be classified as delivered or work-in-progress from a single da
 
 ### Task 1: Read and understand the current skill (AC: 1-5, 7)
 
-- [ ] 1.1 Read `skills/story-status-lookup/SKILL.md` -- the canonical source file (this is NOT the installed copy). Understand the current three-step flow:
+- [x] 1.1 Read `skills/story-status-lookup/SKILL.md` -- the canonical source file (this is NOT the installed copy). Understand the current three-step flow:
   - Step 1: Slug derivation (from filename, branch, or explicit reference)
   - Step 2: Flat `development_status` map lookup
   - Step 3: Status-to-delivered/WIP classification
-- [ ] 1.2 Read `skills/story-status-lookup/skill.json` -- confirm metadata and `always_load: true`
-- [ ] 1.3 Document the current "Backend Configuration" section logic (file-system vs Jira backend selection)
+- [x] 1.2 Read `skills/story-status-lookup/skill.json` -- confirm metadata and `always_load: true`
+- [x] 1.3 Document the current "Backend Configuration" section logic (file-system vs Jira backend selection)
 
 ### Task 2: Rewrite Step 2 -- replace flat map lookup with cross-section search (AC: 1, 2)
 
 The current Step 2 says: "Find the slug as a key under `development_status` in `sprint-status.yaml`." Replace this entire step with a cross-section search.
 
-- [ ] 2.1 Replace the instruction to look up `development_status[slug]` with a search across two sections:
+- [x] 2.1 Replace the instruction to look up `development_status[slug]` with a search across two sections:
   - **Backlog search:** Iterate the `backlog` array. For each item, check if `item.id` matches the derived slug.
   - **Sprint search:** Iterate the `sprints` map. For each sprint, iterate its `items` array. For each item, check if `item.id` matches the derived slug.
-- [ ] 2.2 When found in `backlog`, the result includes: the item's `status` field value + location context "in backlog (unassigned)"
-- [ ] 2.3 When found in a sprint's `items` array, the result includes: the item's `status` field value + location context "in {sprint-id}" (e.g., "in sprint-3")
-- [ ] 2.4 Remove ALL references to the `development_status` flat map key format
-- [ ] 2.5 The search is read-only -- the skill NEVER writes to `sprint-status.yaml`
+- [x] 2.2 When found in `backlog`, the result includes: the item's `status` field value + location context "in backlog (unassigned)"
+- [x] 2.3 When found in a sprint's `items` array, the result includes: the item's `status` field value + location context "in {sprint-id}" (e.g., "in sprint-3")
+- [x] 2.4 Remove ALL references to the `development_status` flat map key format
+- [x] 2.5 The search is read-only -- the skill NEVER writes to `sprint-status.yaml`
 
 ### Task 3: Implement done/ archive fallback (AC: 3, 4)
 
 If the slug is not found in any section of `sprint-status.yaml`, check the archive before falling back to "not found."
 
-- [ ] 3.1 Check for a file at `{story_location}/done/{slug}.md` where `story_location` is the value from the `story_location` metadata field in `sprint-status.yaml` (default: `_bmad-output/implementation-artifacts`)
-- [ ] 3.2 If the file exists in `done/`, return: "Story {id} is archived (done)" -- classify as **delivered**
-- [ ] 3.3 If not found anywhere (not in backlog, not in any sprint, not in done/), return: "Story {id} not found in sprint-status.yaml or done/ archive" -- classify as **WIP** per the existing fallback rule
+- [x] 3.1 Check for a file at `{story_location}/done/{slug}.md` where `story_location` is the value from the `story_location` metadata field in `sprint-status.yaml` (default: `_bmad-output/implementation-artifacts`)
+- [x] 3.2 If the file exists in `done/`, return: "Story {id} is archived (done)" -- classify as **delivered**
+- [x] 3.3 If not found anywhere (not in backlog, not in any sprint, not in done/), return: "Story {id} not found in sprint-status.yaml or done/ archive" -- classify as **WIP** per the existing fallback rule
 
 ### Task 4: Preserve unchanged skill sections (AC: 5, 7)
 
-- [ ] 4.1 **Step 1 (slug derivation)** -- preserve entirely unchanged. The three-method derivation (filename, branch, explicit reference) works regardless of schema format.
-- [ ] 4.2 **Step 3 (status-to-classification table)** -- preserve the delivered/WIP mapping table. Add `cancelled` status mapped to WIP if not already present (the unified schema adds this status).
-- [ ] 4.3 **Fallback rule** -- preserve the "When in doubt, WIP" rule. Update it to include the new done/ archive check as an intermediate step before the final WIP fallback:
+- [x] 4.1 **Step 1 (slug derivation)** -- preserve entirely unchanged. The three-method derivation (filename, branch, explicit reference) works regardless of schema format.
+- [x] 4.2 **Step 3 (status-to-classification table)** -- preserve the delivered/WIP mapping table. Add `cancelled` status mapped to WIP if not already present (the unified schema adds this status).
+- [x] 4.3 **Fallback rule** -- preserve the "When in doubt, WIP" rule. Update it to include the new done/ archive check as an intermediate step before the final WIP fallback:
   1. Slug not determined -> WIP
   2. Slug not found in sprint-status.yaml -> check done/ archive
   3. Found in done/ -> delivered
   4. Not found anywhere -> WIP
   5. Status file does not exist -> WIP
-- [ ] 4.4 **Backend Configuration section** -- preserve unchanged (file-system vs Jira backend selection logic)
-- [ ] 4.5 **Future: Jira Backend section** -- preserve unchanged. Story 17.22 will activate this extension point.
+- [x] 4.4 **Backend Configuration section** -- preserve unchanged (file-system vs Jira backend selection logic)
+- [x] 4.5 **Future: Jira Backend section** -- preserve unchanged. Story 17.22 will activate this extension point.
 
 ### Task 5: Update skill.json if needed (AC: 6)
 
-- [ ] 5.1 Read `skills/story-status-lookup/skill.json` and verify:
+- [x] 5.1 Read `skills/story-status-lookup/skill.json` and verify:
   - `always_load: true` is present
   - `version` should be bumped to `"2.0.0"` (the lookup mechanism is fundamentally changed)
   - `description` accurately reflects the new behavior -- update if it still references the flat map
-- [ ] 5.2 Update the `description` field to reflect unified schema search:
+- [x] 5.2 Update the `description` field to reflect unified schema search:
   ```json
   "description": "Looks up the current status of a story by searching the unified sprint-status.yaml (backlog and sprint items arrays) to classify code as delivered or work-in-progress. Supports file-system backend; Jira backend reserved for future configuration."
   ```
 
 ### Task 6: Deployment verification (AC: 6)
 
-- [ ] 6.1 Run `npx ma-agents` (or `node lib/cli.js`) to trigger the installer
-- [ ] 6.2 Verify the installed SKILL.md for at least one agent (e.g., `.claude/skills/story-status-lookup/SKILL.md`) contains the new cross-section search instructions and does NOT reference `development_status`
-- [ ] 6.3 Diff the installed copy against the source (`skills/story-status-lookup/SKILL.md`) -- content should match after accounting for frontmatter injection by the installer
-- [ ] 6.4 Verify `always_load: true` appears in the installed MANIFEST.yaml entry for `story-status-lookup`
-- [ ] 6.5 Confirm NO `lib/bmad-extension/skills/story-status-lookup/` directory exists -- per the decision to keep this IDE-only
+- [x] 6.1 Run `npx ma-agents` (or `node lib/cli.js`) to trigger the installer
+- [x] 6.2 Verify the installed SKILL.md for at least one agent (e.g., `.claude/skills/story-status-lookup/SKILL.md`) contains the new cross-section search instructions and does NOT reference `development_status`
+- [x] 6.3 Diff the installed copy against the source (`skills/story-status-lookup/SKILL.md`) -- content should match after accounting for frontmatter injection by the installer
+- [x] 6.4 Verify `always_load: true` appears in the installed MANIFEST.yaml entry for `story-status-lookup`
+- [x] 6.5 Confirm NO `lib/bmad-extension/skills/story-status-lookup/` directory exists -- per the decision to keep this IDE-only
 
 ## Dev Notes
 
@@ -251,3 +251,51 @@ This is unlike `bmad-dev-story` (Story 17.18) which requires BMAD agent context,
 
 - Architecture Decision P2-11 in `_bmad-output/planning-artifacts/architecture.md` -- Unified Sprint-Status Data Architecture
 - Skill Integration Map in architecture doc and schema doc (Section 7) -- `story-status-lookup` listed as "Light" rework, operating on all sections (read-only)
+
+---
+
+## Dev Agent Record
+
+**Agent:** Claude Sonnet 4.6 (claude-sonnet-4-6)
+**Date:** 2026-04-06
+**Branch:** feature/story-17-19-story-status-lookup
+**Worktree:** `.worktrees/story-17-19-story-status-lookup/`
+
+### Implementation Summary
+
+Reworked `skills/story-status-lookup/SKILL.md` to replace the flat `development_status` map lookup (Step 2) with a cross-section search across the unified `sprint-status.yaml` three-section schema. Updated `skill.json` to version 2.0.0. Ran the installer to deploy the updated skill to the claude-code agent directory for verification.
+
+### Code Review Findings
+
+1. **All three search locations covered** — backlog array (2a), all sprints[].items arrays (2b), and done/ archive (2c). PASS.
+2. **Location context returned** — skill reports "in backlog (unassigned)" or "in {sprint-id}" or "archived (done)". PASS.
+3. **Story not found handled** — Step 2d reports "Story {id} not found in sprint-status.yaml or done/ archive" and classifies as WIP. PASS.
+4. **Read-only** — skill contains no write instructions. PASS.
+5. **Deployment verification** — installer v2.0.0 deployed to `.claude/skills/story-status-lookup/SKILL.md`; no `development_status` reference in installed copy; `always_load: true` in MANIFEST.yaml; no BMAD extension directory. PASS.
+6. **`cancelled` status** — added to classification table mapping to WIP (was missing from original). PASS.
+7. **Fallback rule** — rewritten as ordered list with done/ archive as intermediate step before final WIP. PASS.
+8. **Jira Backend section** — preserved unchanged. PASS.
+
+No issues found requiring fixes.
+
+---
+
+## File List
+
+### Modified
+- `skills/story-status-lookup/SKILL.md` — Reworked Step 2 (flat map → cross-section search), added done/ archive fallback, updated fallback rule list, added `cancelled` to classification table
+- `skills/story-status-lookup/skill.json` — Bumped version to 2.0.0, updated description
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — Set `17-19-rework-story-status-lookup: in-progress` (updated to `review` at completion)
+- `_bmad-output/implementation-artifacts/17-19-rework-story-status-lookup.md` — Marked all tasks complete, set Status to review, added Dev Agent Record / File List / Change Log
+
+### Installed (auto-generated by installer — do not edit directly)
+- `.claude/skills/story-status-lookup/SKILL.md`
+- `.claude/skills/MANIFEST.yaml`
+
+---
+
+## Change Log
+
+| Date | Author | Change |
+|------|--------|--------|
+| 2026-04-06 | Claude Sonnet 4.6 | Initial implementation: replaced flat `development_status` lookup with cross-section search across backlog, sprints, and done/ archive; bumped skill.json to v2.0.0; added `cancelled` status to classification table; rewrote fallback rule as ordered list |
