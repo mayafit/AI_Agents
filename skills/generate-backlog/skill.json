@@ -1,0 +1,7 @@
+{
+  "name": "generate-backlog",
+  "version": "1.0.0",
+  "description": "Generate or refresh the backlog section of sprint-status.yaml from epics and bug stories, preserving existing priorities and sprint assignments",
+  "category": "workflow",
+  "tags": ["backlog", "sprint-management", "epics", "bugs"]
+}
