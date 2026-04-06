@@ -50,7 +50,7 @@ development_status:
   17-21-new-close-sprint: review
   17-22-jira-adapter-pattern: ready-for-dev
   17-23-migration-deprecation-old-files: ready-for-dev
-  17-24-rework-prioritize-backlog: ready-for-dev
+  17-24-rework-prioritize-backlog: review
   epic-17-retrospective: optional
 
   # ─── ON HOLD ──────────────────────────────────────────────────────────────────

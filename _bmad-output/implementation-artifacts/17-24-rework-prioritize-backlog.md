@@ -1,6 +1,6 @@
 # Story 17.24: Rework prioritize-backlog Skill (Light Rework -- Create from Scratch)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -77,7 +77,7 @@ So that backlog reprioritization works against the single source of truth, is av
 
 The IDE skill does NOT exist. The previous (rolled-back) Phase 1 implementation only modified an installed copy at `.claude/skills/prioritize-backlog/SKILL.md`, which was wiped on rollback. This task creates the skill from scratch in the correct source location.
 
-- [ ] 1.1 Create `skills/prioritize-backlog/skill.json` with metadata:
+- [x] 1.1 Create `skills/prioritize-backlog/skill.json` with metadata:
   ```json
   {
     "name": "prioritize-backlog",
@@ -89,22 +89,22 @@ The IDE skill does NOT exist. The previous (rolled-back) Phase 1 implementation 
   ```
   Note: `always_load` is intentionally omitted (defaults to false) -- this skill is invoked on demand, not loaded for every task.
 
-- [ ] 1.2 Create `skills/prioritize-backlog/SKILL.md` with the complete skill workflow (see Task 3 for content specification). This is the canonical skill content that the installer deploys to all IDE agents.
+- [x] 1.2 Create `skills/prioritize-backlog/SKILL.md` with the complete skill workflow (see Task 3 for content specification). This is the canonical skill content that the installer deploys to all IDE agents.
 
 ### Task 2: Create the BMAD extension skill source files (AC: 9, 10) -- NEW
 
 The BMAD extension skill does NOT exist. The previous Phase 1 implementation never created files in this pipeline. This task creates the skill from scratch.
 
-- [ ] 2.1 Create `lib/bmad-extension/skills/prioritize-backlog/SKILL.md` -- this is a SEPARATE file from the IDE skill SKILL.md. The BMAD extension version is authored for the BMAD Scrum Master agent (`bmm-sm`) context and may have BMAD-specific phrasing (e.g., referencing `_bmad/bmm/config.yaml` for path resolution). The core workflow logic MUST be functionally identical to the IDE version.
+- [x] 2.1 Create `lib/bmad-extension/skills/prioritize-backlog/SKILL.md` -- this is a SEPARATE file from the IDE skill SKILL.md. The BMAD extension version is authored for the BMAD Scrum Master agent (`bmm-sm`) context and may have BMAD-specific phrasing (e.g., referencing `_bmad/bmm/config.yaml` for path resolution). The core workflow logic MUST be functionally identical to the IDE version.
 
-- [ ] 2.2 Create `lib/bmad-extension/skills/prioritize-backlog/bmad-skill-manifest.yaml`:
+- [x] 2.2 Create `lib/bmad-extension/skills/prioritize-backlog/bmad-skill-manifest.yaml`:
   ```yaml
   type: skill
   name: prioritize-backlog
   module: ma-skills
   ```
 
-- [ ] 2.3 Register the skill in `lib/bmad-extension/module-help.csv` by adding a row:
+- [x] 2.3 Register the skill in `lib/bmad-extension/module-help.csv` by adding a row:
   ```csv
   ma-skills,4-implementation,Prioritize Backlog,prioritize-backlog,,skill:prioritize-backlog,prioritize-backlog,false,bmm-sm,,"Reprioritize backlog items using multiple criteria -- severity, business value, dependencies, type, age.",_bmad-output/implementation-artifacts,"backlog",
   ```
@@ -114,27 +114,27 @@ The BMAD extension skill does NOT exist. The previous Phase 1 implementation nev
 
 The SKILL.md content (for both the IDE and BMAD extension versions) must implement the following workflow. Both versions MUST be functionally identical in their workflow logic.
 
-- [ ] 3.1 **Step 0 -- Load configuration and validate file existence:**
+- [x] 3.1 **Step 0 -- Load configuration and validate file existence:**
   - Read `sprint-status.yaml` at `_bmad-output/implementation-artifacts/sprint-status.yaml` (or resolve path from config).
   - If the file does not exist, report error: "No sprint-status.yaml found. Run sprint planning first to initialize the file." Exit (AC 6).
   - Parse the full file: `epics`, `backlog`, and `sprints` sections.
   - If a legacy `backlog.yaml` file exists in the same directory, log a note: "Legacy backlog.yaml detected. Run migration to consolidate." Do NOT read or operate on the legacy file (AC 8).
   - If the `backlog` array is empty, report: "Backlog is empty. Nothing to prioritize." Exit (AC 7).
 
-- [ ] 3.2 **Step 1 -- Display current backlog order:**
+- [x] 3.2 **Step 1 -- Display current backlog order:**
   - Read the `backlog` array from the parsed `sprint-status.yaml`.
   - Display items in current priority order in a table with columns: Priority (#), ID, Title, Type, Epic, Severity, Status.
   - Show total count of backlog items.
   - Do NOT display items from any sprint's `items` array -- only `backlog` section items are shown (AC 1).
 
-- [ ] 3.3 **Step 2 -- Choose prioritization mode:**
+- [x] 3.3 **Step 2 -- Choose prioritization mode:**
   - Prompt the Scrum Master to select a mode:
     - **[f] Full** -- interactive: generates a suggested order, presents current vs proposed side-by-side, user approves or adjusts before write.
     - **[q] Quick** -- automated: applies default rules and reorders immediately, then shows summary of changes.
     - **[a] Auto-suggest** -- read-only: generates suggestions with per-item rationale, no file modification.
   - Store selected mode for the workflow branch.
 
-- [ ] 3.4 **Step 3 -- Multi-criteria prioritization analysis (all modes):**
+- [x] 3.4 **Step 3 -- Multi-criteria prioritization analysis (all modes):**
   - For each item in the `backlog` array, compute a composite priority score using weighted criteria (AC 5, FR67):
     1. **Severity weight (highest impact):** Items with `severity: critical` get the highest score boost. `high` > `medium` > `low`. Items with `severity: null` (stories) get no severity adjustment.
     2. **Business value weight:** Inferred from item context -- items in earlier epics or with explicit priority indicators rank higher. If the item's current `priority` value is low (was previously prioritized high), preserve that signal.
@@ -143,7 +143,7 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
     5. **Age weight (starvation prevention):** Items from lower-numbered epics or with lower item numbers within their epic get a slight boost to prevent indefinite deferral. This is the weakest signal -- it is a tiebreaker, not a dominant factor.
   - Produce a ranked list sorted by composite score (highest score = priority 1).
 
-- [ ] 3.5 **Step 3a -- Full mode workflow (AC: 2):**
+- [x] 3.5 **Step 3a -- Full mode workflow (AC: 2):**
   - Display a comparison table: current order (left) vs suggested order (right), highlighting items that would move.
   - For each item that changes position, show a brief rationale (e.g., "critical bug", "blocks 3 items", "age > 2 epics").
   - Prompt: "[a] Accept suggested order / [m] Manually adjust (enter new order) / [c] Cancel"
@@ -151,16 +151,16 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
   - On `m`: prompt the user to enter item numbers in their desired order. Validate that all items are accounted for (no duplicates, no missing). Proceed to Step 4 with the manual order.
   - On `c`: exit without changes.
 
-- [ ] 3.6 **Step 3b -- Quick mode workflow (AC: 3):**
+- [x] 3.6 **Step 3b -- Quick mode workflow (AC: 3):**
   - Apply the computed ranked order directly without prompting.
   - Proceed immediately to Step 4 with the computed order.
 
-- [ ] 3.7 **Step 3c -- Auto-suggest mode workflow (AC: 4):**
+- [x] 3.7 **Step 3c -- Auto-suggest mode workflow (AC: 4):**
   - Display the suggested new order with per-item rationale in a detailed table: New Priority, ID, Title, Rationale, Change (e.g., "+3 up", "-2 down", "unchanged").
   - Display a summary: N items would move up, M items would move down, K items unchanged.
   - Do NOT proceed to Step 4. Exit with: "Suggestions displayed. No changes written. Run again in Full or Quick mode to apply."
 
-- [ ] 3.8 **Step 4 -- Apply reordering and persist (AC: 2, 3):**
+- [x] 3.8 **Step 4 -- Apply reordering and persist (AC: 2, 3):**
   - Take the confirmed ordering (from Full or Quick mode).
   - Reorder the `backlog` array to match the new order.
   - Renumber the `priority` field on each item sequentially: position 0 gets `priority: 1`, position 1 gets `priority: 2`, etc. (schema section 3.3: `priority` is a denormalized index that MUST be kept in sync with array position).
@@ -170,7 +170,7 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
   - Preserve the `sprints` section unchanged.
   - Write the complete `sprint-status.yaml` in a single atomic write (read-modify-write pattern).
 
-- [ ] 3.9 **Step 5 -- Summary output:**
+- [x] 3.9 **Step 5 -- Summary output:**
   - Display the reprioritization summary:
     - Mode used (Full / Quick).
     - Items reordered: total count.
@@ -181,19 +181,19 @@ The SKILL.md content (for both the IDE and BMAD extension versions) must impleme
 
 ### Task 4: Verify no legacy file references (AC: 8)
 
-- [ ] 4.1 Confirm neither SKILL.md file contains any instruction to read from or write to `backlog.yaml` as a data source or write target.
-- [ ] 4.2 Confirm neither SKILL.md file contains any instruction to write a standalone `backlog.yaml` file.
-- [ ] 4.3 Confirm the only data file read/written is `sprint-status.yaml`.
-- [ ] 4.4 Confirm neither SKILL.md file references the old `development_status` map or `sprint-plan-*.yaml` files.
+- [x] 4.1 Confirm neither SKILL.md file contains any instruction to read from or write to `backlog.yaml` as a data source or write target.
+- [x] 4.2 Confirm neither SKILL.md file contains any instruction to write a standalone `backlog.yaml` file.
+- [x] 4.3 Confirm the only data file read/written is `sprint-status.yaml`.
+- [x] 4.4 Confirm neither SKILL.md file references the old `development_status` map or `sprint-plan-*.yaml` files.
 
 ### Task 5: Deployment verification (AC: 9)
 
-- [ ] 5.1 Run `npx ma-agents` (or `node lib/cli.js`) to trigger the installer.
-- [ ] 5.2 Verify the IDE skill appears in the installed MANIFEST.yaml for at least one agent (e.g., check `.claude/skills/MANIFEST.yaml` includes `prioritize-backlog`).
-- [ ] 5.3 Diff the installed IDE copy (e.g., `.claude/skills/prioritize-backlog/SKILL.md`) against the source (`skills/prioritize-backlog/SKILL.md`) -- the content should match after accounting for frontmatter injection by the installer.
-- [ ] 5.4 Verify the BMAD extension copy exists at `_bmad/extensions/ma-agents-skills/skills/prioritize-backlog/SKILL.md` after a BMAD install.
-- [ ] 5.5 Verify the BMAD extension copy matches the source at `lib/bmad-extension/skills/prioritize-backlog/SKILL.md`.
-- [ ] 5.6 Verify `prioritize-backlog` appears in the BMAD module help output.
+- [x] 5.1 Run `npx ma-agents` (or `node lib/cli.js`) to trigger the installer.
+- [x] 5.2 Verify the IDE skill appears in the installed MANIFEST.yaml for at least one agent (e.g., check `.claude/skills/MANIFEST.yaml` includes `prioritize-backlog`).
+- [x] 5.3 Diff the installed IDE copy (e.g., `.claude/skills/prioritize-backlog/SKILL.md`) against the source (`skills/prioritize-backlog/SKILL.md`) -- the content should match after accounting for frontmatter injection by the installer.
+- [x] 5.4 Verify the BMAD extension copy exists at `_bmad/extensions/ma-agents-skills/skills/prioritize-backlog/SKILL.md` after a BMAD install.
+- [x] 5.5 Verify the BMAD extension copy matches the source at `lib/bmad-extension/skills/prioritize-backlog/SKILL.md`.
+- [x] 5.6 Verify `prioritize-backlog` appears in the BMAD module help output.
 
 ## Dev Notes
 
@@ -300,3 +300,45 @@ The following criteria are used to compute a composite priority score for each b
 - Architecture Decision P2-5 in `_bmad-output/planning-artifacts/architecture.md` -- Pre-built Extension Workflows (FR61, FR68-FR70)
 - Architecture Decision P2-11 in `_bmad-output/planning-artifacts/architecture.md` -- Unified sprint-status.yaml model
 - Schema: `_bmad-output/planning-artifacts/sprint-status-schema.md` -- canonical schema, especially section 3 (backlog), section 3.3 (priority renumbering invariant), section 6.1 (single-location invariant)
+
+---
+
+## Dev Agent Record
+
+### Implementation Notes
+
+- Created skill from scratch in both deployment pipelines (IDE + BMAD extension).
+- IDE skill (`skills/prioritize-backlog/`) uses `skill.json` + `SKILL.md` pattern — no `always_load` (on-demand skill).
+- BMAD extension (`lib/bmad-extension/skills/prioritize-backlog/`) adds frontmatter triggers and BMAD config path resolution.
+- The BMAD version checks `_bmad/bmm/config.yaml` for a `sprint_status_path` override before defaulting to the standard path.
+- Both versions implement identical multi-criteria scoring (severity, business value, dependencies, type, age) and all three modes (Full, Quick, Auto-suggest).
+- Registered in `lib/bmad-extension/module-help.csv` with `bmm-sm` agent assignment.
+
+### Code Review Findings (2026-04-06)
+
+- AC 1-10: All acceptance criteria implemented.
+- No `backlog.yaml` read/write instructions — only detection + warning (AC 8). PASS.
+- No `development_status` map or `sprint-plan-*.yaml` references. PASS.
+- Priority renumbering 1..N in Step 4. PASS.
+- Epics/sprints/generated preserved unchanged on every write. PASS.
+- Three modes (Full/Quick/Auto-suggest) all implemented. PASS.
+- Cross-repo-validation test failure is pre-existing (unrelated to this story — checked on main branch). PASS.
+
+### File List
+
+**Created:**
+- `skills/prioritize-backlog/skill.json` — IDE skill metadata
+- `skills/prioritize-backlog/SKILL.md` — IDE skill workflow (canonical source)
+- `lib/bmad-extension/skills/prioritize-backlog/SKILL.md` — BMAD extension skill workflow
+- `lib/bmad-extension/skills/prioritize-backlog/bmad-skill-manifest.yaml` — BMAD skill manifest
+
+**Modified:**
+- `lib/bmad-extension/module-help.csv` — Added `prioritize-backlog` row for `bmm-sm` agent
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — Status updated to `review`
+- `_bmad-output/implementation-artifacts/17-24-rework-prioritize-backlog.md` — Story status + tasks updated
+
+### Change Log
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-04-06 | Created skill from scratch in both deployment pipelines; implemented multi-criteria prioritization with Full/Quick/Auto-suggest modes | Dev Agent |

@@ -1,0 +1,7 @@
+{
+  "name": "prioritize-backlog",
+  "version": "1.0.0",
+  "description": "Reprioritize backlog items using multiple criteria -- severity, business value, dependencies, type, age",
+  "category": "workflow",
+  "tags": ["backlog", "prioritization", "sprint-management"]
+}
