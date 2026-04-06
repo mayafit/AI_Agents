@@ -175,26 +175,3 @@ If NO alert conditions exist, omit this section entirely (do not output "No aler
 
 If alerts exist, output a `## Alerts` section header followed by a bulleted list.
 
----
-
-## Step 10 — Offer Next Actions
-
-After displaying all sections, present the following options:
-
-```
-Options:
-1. Expand a closed sprint to see its items
-2. Assign backlog items to a sprint — run `/add-to-sprint`
-3. Change sprint settings — run `/modify-sprint`
-4. Create a new sprint — run `/add-sprint`
-5. Exit
-```
-
-**If user selects option 1 (expand closed sprint):**
-- Ask which closed sprint to expand (by name or sprint key)
-- Display the full items table for that sprint (same format as Step 4 items table)
-- Return to the options menu
-
-**If user selects options 2–4:** Output the indicated run instruction and exit.
-
-**If user selects option 5:** Exit.
