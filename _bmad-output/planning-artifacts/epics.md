@@ -3662,3 +3662,174 @@ lib/
 5. Story 19.5 (open-graph skill) — depends on 19.1 (needs the generate-html logic)
 6. Story 19.6 (visualization renderer) — depends on 19.5 (renderer is invoked by open-graph skill)
 7. Story 19.7 (LLM contract validation + tests) — depends on all above
+
+---
+
+## Epic 20: Software Quality Assurance (SQA) Agent — Gad (Phase 3)
+
+**Goal:** Deliver a dedicated Software Quality Assurance agent (Gad) that provides structured quality workflows for projects managed with the ma-agents/BMAD stack. The agent presents a menu of quality-focused workflows; the initial release includes a multi-dimensional Project Audit and an IEEE/ISO/IEC 12207 lifecycle process compliance assessment.
+
+**Value:** Closes the quality verification gap in the BMAD lifecycle. Today there is no agent that looks across planning artifacts, sprint state, and process compliance together. Gad gives quality engineers and project managers a single entry point to answer "how healthy is this project, really?" and "does this project meet recognized lifecycle standards?"
+
+**PRD Coverage:** FR158–FR171, NFR42–NFR43 (Architecture Decision P3-2)
+
+**Status:** Planned
+
+**Dependencies:**
+- Epic 15 (BMAD 6.2.0 Agent Architecture Migration) must be complete — Gad's skills use the P2-9 BMAD 6.2.0 skill folder pattern
+- Epic 11 (Bug Management System) must be complete — Story 20.3 invokes `create-bug-story` for gap remediation (FR171)
+
+---
+
+### Story 20.1 — SQA Agent Skill: Gad Persona and Menu
+
+**As a** quality engineer,
+**I want** to activate the Gad SQA agent from within a BMAD session,
+**so that** I have a dedicated quality assurance persona with a structured menu of QA workflows available.
+
+**Acceptance Criteria:**
+
+1. `lib/bmad-extension/skills/bmad-ma-agent-sqa/SKILL.md` exists and fully defines the Gad agent persona: role, identity, communication style, and principles
+2. `lib/bmad-extension/skills/bmad-ma-agent-sqa/bmad-skill-manifest.yaml` exists with `type: agent`, `name: bmad-ma-agent-sqa`, `displayName: Gad`, `title: Software Quality Assurance Expert`, and `module: ma-skills`
+3. The SKILL.md activation sequence follows the standard BMAD 6.2.0 agent pattern: load config.yaml → greet user → display menu → wait for input → dispatch to skill
+4. The menu includes at minimum: Redisplay Menu Help (MH), Chat (CH), Project Audit (AU → `sqa-audit`), IEEE 12207 Compliance (IC → `sqa-ieee12207`), Dismiss Agent (DA)
+5. `lib/bmad-extension/module-help.csv` contains an entry for `bmad-ma-agent-sqa` in the `anytime` phase under module `ma-skills`
+6. `lib/bmad-extension/skills/bmad-ma-agent-sqa/.gitkeep` exists
+7. `test/extension-module-restructure.test.js` includes `bmad-ma-agent-sqa` in the expected agent skills array and passes
+
+**Technical Notes:**
+- Gad binds to the `bmm-qa` BMAD built-in agent persona — no new BMAD agent slot is created
+- Communication style: clear, precise, structured; findings always include severity levels; observations distinguished from blocking issues
+- No new BMAD agent host customization files needed — the `lib/bmad-customize/bmm-qa.customize.yaml` existing skill-enforcement hooks are sufficient
+
+---
+
+### Story 20.2 — Project Audit Workflow Skill
+
+**As a** quality engineer,
+**I want** Gad to run a structured project audit across multiple quality dimensions,
+**so that** I can identify gaps in traceability, process compliance, sprint health, and release readiness in a single structured session.
+
+**Acceptance Criteria:**
+
+1. `lib/bmad-extension/skills/sqa-audit/SKILL.md` exists and implements the full five-step audit workflow:
+   - Step 1: Scope selection — asks full vs. partial, lists all five dimensions by number, waits for user input
+   - Step 2: Data collection — reads all required artifacts, reports which were found vs. missing before proceeding
+   - Step 3: Executes only the selected dimensions (1–5 as described below)
+   - Step 4: Compiles a full audit report in the specified format
+   - Step 5: Saves the report to `{output_folder}/sqa-audit-report-{YYYY-MM-DD}.md` and confirms the path to the user
+2. Dimension 1 (Code ↔ Stories): reads done/in-progress items from sprint-status.yaml, lists each story with traceability status, flags stories with no code evidence and code with no story
+3. Dimension 2 (Stories ↔ Architecture/PRD): produces a PRD coverage table (COVERED / MISSING / PARTIAL per requirement) and an architecture compliance issue list
+4. Dimension 3 (Process Compliance): evaluates commit convention adherence, branch discipline, test file presence, and code review evidence; produces a checklist with PASS / FAIL / UNKNOWN per item
+5. Dimension 4 (Sprint Health): produces a per-sprint summary table (total, done, in-progress, not started, completion %) and flags stalled items, blockers, and backlog grooming issues
+6. Dimension 5 (Release State): produces a READY / AT RISK / NOT READY release readiness summary, lists blocking items, and records deployment status per environment as provided by the user
+7. Report format: executive summary → per-dimension findings with severity (FAIL / WARNING / PASS) → prioritized action items table → skipped dimensions with required artifacts
+8. Severity aggregation: any FAIL → overall FAIL; no FAIL but any WARNING → WARNING; all PASS or SKIPPED → PASS
+9. After saving the report, Gad asks the user if they want to drill into any finding or take action on issues (FR171 gap remediation offered for FAIL items)
+10. `lib/bmad-extension/skills/sqa-audit/bmad-skill-manifest.yaml` exists with `type: skill`, `name: sqa-audit`, `module: ma-skills`
+11. `lib/bmad-extension/module-help.csv` contains an entry for `sqa-audit` in the `4-implementation` phase under module `ma-skills`
+12. `test/extension-module-restructure.test.js` includes `sqa-audit` in `expectedSqaSkills` and passes
+
+**Technical Notes:**
+- Required artifact reads: `_bmad/bmm/config.yaml` (resolve output_folder), `prd.md`, `architecture.md`, `epics.md`, `sprint-status.yaml`; optional: `project-context.md`
+- Dimension skips gracefully when an artifact is missing — produces a SKIPPED entry in the report with the artifact path that was not found
+- Report is saved as markdown; no HTML or external rendering required
+
+---
+
+### Story 20.3 — IEEE/ISO/IEC 12207 Compliance Workflow Skill
+
+**As a** quality engineer or project manager,
+**I want** Gad to evaluate the project's compliance with IEEE/ISO/IEC 12207:2017,
+**so that** I have a structured compliance posture report with gap analysis and recommended corrective actions.
+
+**Acceptance Criteria:**
+
+1. `lib/bmad-extension/skills/sqa-ieee12207/SKILL.md` exists and implements the full five-step compliance workflow:
+   - Step 1: Scope selection — presents the four process groups, asks full vs. selected, waits for user input
+   - Step 2: Data collection — reads all required artifacts, reports found vs. missing
+   - Step 3: Evaluates all 23 process areas in selected groups with per-area ratings
+   - Step 4: Compiles the compliance matrix report in the specified format
+   - Step 5: Saves the report to `{output_folder}/sqa-ieee12207-report-{YYYY-MM-DD}.md`, confirms path, and offers to create backlog stories for P1 gaps (FR171)
+2. The four process groups and their process areas are correctly modeled in the SKILL.md:
+   - Technical Processes (11 areas: 6.4.1–6.4.11)
+   - Technical Management Processes (8 areas: 6.3.1–6.3.8)
+   - Agreement Processes (2 areas: 6.1.1–6.1.2)
+   - Organizational Enabling Processes (2 areas: 6.2.1, 6.2.7)
+3. Each evaluated process area maps to specific project artifacts as evidence sources (e.g., 6.4.2 Stakeholder Requirements → prd.md; 6.3.5 Configuration Management → git history, CHANGELOG, version files)
+4. Each area receives one of five ratings: COMPLIANT, PARTIAL, NON-COMPLIANT, NOT APPLICABLE, ORGANIZATION-SCOPE — with the rating justified by evidence found or absent
+5. Report includes: executive summary, per-group compliance matrix (clause | process area | rating | key evidence | gaps), gap analysis (critical gaps vs. partial compliance), prioritized recommended-action table (priority, action, clause, effort), compliance summary table (counts per group + overall compliance percentage)
+6. When the user confirms gap-to-story creation, Gad iterates over P1 (NON-COMPLIANT) gaps and offers to invoke `create-bug-story` for each — one story per gap
+7. All evaluation logic and process area definitions are embedded in SKILL.md — no network access required (NFR43)
+8. `lib/bmad-extension/skills/sqa-ieee12207/bmad-skill-manifest.yaml` exists with `type: skill`, `name: sqa-ieee12207`, `module: ma-skills`
+9. `lib/bmad-extension/module-help.csv` contains an entry for `sqa-ieee12207` in the `4-implementation` phase under module `ma-skills`
+10. `test/extension-module-restructure.test.js` includes `sqa-ieee12207` in `expectedSqaSkills` and passes
+
+**Technical Notes:**
+- The workflow is a compliance *posture* assessment, not a formal certification — it produces a structured report based on available project artifacts; it makes no claim of organizational-level ISO certification
+- Organizational Enabling Processes (Group 4) are assessed from project artifacts only where possible; remaining items are automatically rated ORGANIZATION-SCOPE with a note explaining what organizational evidence would be needed
+- Gap-to-story creation is optional and per-item — the user can accept or skip each P1 gap individually
+
+---
+
+### Story 20.4 — Test Suite Update for SQA Skills
+
+**As a** developer,
+**I want** the extension module restructure test to verify the SQA skills exist and are registered,
+**so that** future changes that accidentally remove or misconfigure SQA skills are caught by the automated test suite.
+
+**Acceptance Criteria:**
+
+1. `test/extension-module-restructure.test.js` includes `expectedSqaSkills = ['sqa-audit', 'sqa-ieee12207']`
+2. `bmad-ma-agent-sqa` is included in `expectedAgentSkills`
+3. All skill directory count tests are updated to reflect the 3 new directories (agent + 2 workflow skills): total skill count is previous count + 3
+4. All CSV row count tests are updated to reflect the 3 new `module-help.csv` entries: total CSV row count is previous count + 3
+5. New test `'all 2 SQA skill directories exist'` verifies both `sqa-audit` and `sqa-ieee12207` directories exist in `lib/bmad-extension/skills/`
+6. New test `'CSV has entries for all 2 SQA skills'` verifies both workflow skills are in `module-help.csv`
+7. All tests in `test/extension-module-restructure.test.js` pass with 0 failures after these changes
+
+**Technical Notes:**
+- This story has no runtime behavior — it is test-only
+- The `.gitkeep` files required in each new skill directory must be present for the existing `.gitkeep` coverage test to pass
+
+---
+
+### Epic 20 — Cross-Epic Notes
+
+**Relationship to Epic 15 (BMAD 6.2.0 Agent Architecture Migration):**
+Gad follows the SKILL.md-based agent pattern established by Epic 15. Epic 15 must be complete before Story 20.1 to ensure the agent folder structure and BMAD agent dispatch mechanism are stable.
+
+**Relationship to Epic 11 (Bug Management System):**
+Story 20.3 invokes `create-bug-story` for IEEE 12207 P1 gaps (FR171). Epic 11 must be complete — specifically Story 11.2 (BMAD extension workflow for bug story creation) — before this feature of Story 20.3 is active.
+
+**Relationship to Epic 17 (Sprint Management Model Rework):**
+Story 20.2 reads `sprint-status.yaml` for Sprint Health analysis. The unified schema established by Epic 17 (FR133–FR135) defines the file structure that the audit workflow depends on.
+
+**File outputs produced by this epic:**
+```
+lib/
+└── bmad-extension/
+    └── skills/
+        ├── bmad-ma-agent-sqa/
+        │   ├── .gitkeep
+        │   ├── SKILL.md
+        │   └── bmad-skill-manifest.yaml
+        ├── sqa-audit/
+        │   ├── .gitkeep
+        │   ├── SKILL.md
+        │   └── bmad-skill-manifest.yaml
+        └── sqa-ieee12207/
+            ├── .gitkeep
+            ├── SKILL.md
+            └── bmad-skill-manifest.yaml
+
+_bmad-output/                          (generated at runtime, not committed)
+├── sqa-audit-report-{date}.md
+└── sqa-ieee12207-report-{date}.md
+```
+
+**Development Execution Order:**
+1. Story 20.4 (test suite update) — can be written first as a failing test to drive implementation
+2. Story 20.1 (Gad agent skill) — no dependency on other Epic 20 stories; establishes the agent entry point
+3. Story 20.2 (Project Audit workflow) — no dependency on 20.1 at the code level; can develop in parallel with 20.1
+4. Story 20.3 (IEEE 12207 workflow) — no dependency on other Epic 20 stories; can develop in parallel with 20.1 and 20.2

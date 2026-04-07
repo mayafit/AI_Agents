@@ -140,6 +140,12 @@ const expectedAgentSkills = [
   'bmad-ma-agent-cyber',
   'bmad-ma-agent-mil498',
   'bmad-ma-agent-ml',
+  'bmad-ma-agent-sqa',
+];
+
+const expectedSqaSkills = [
+  'sqa-audit',
+  'sqa-ieee12207',
 ];
 
 const expectedMil498Skills = [
@@ -185,16 +191,17 @@ const allExpectedSkills = [
   ...expectedCyberSkills,
   ...expectedExtensionSkills,
   ...expectedMlSkills,
+  ...expectedSqaSkills,
 ];
 
-test('skills/ has exactly 58 subdirectories', () => {
+test('skills/ has exactly 61 subdirectories', () => {
   const entries = fs.readdirSync(skillsDir).filter(e =>
     fs.statSync(path.join(skillsDir, e)).isDirectory()
   );
-  assert.strictEqual(entries.length, 58, `Expected 58 skill dirs, found ${entries.length}`);
+  assert.strictEqual(entries.length, 61, `Expected 61 skill dirs, found ${entries.length}`);
 });
 
-test('all 5 agent skill directories exist', () => {
+test('all 6 agent skill directories exist', () => {
   for (const skill of expectedAgentSkills) {
     const p = path.join(skillsDir, skill);
     assert.ok(fs.existsSync(p), `Missing agent skill dir: ${skill}`);
@@ -243,6 +250,13 @@ test('all 14 extension workflow skill directories exist', () => {
   }
 });
 
+test('all 2 SQA skill directories exist', () => {
+  for (const skill of expectedSqaSkills) {
+    const p = path.join(skillsDir, skill);
+    assert.ok(fs.existsSync(p), `Missing SQA skill dir: ${skill}`);
+  }
+});
+
 test('every skill directory contains a .gitkeep file', () => {
   for (const skill of allExpectedSkills) {
     const gk = path.join(skillsDir, skill, '.gitkeep');
@@ -276,8 +290,8 @@ test('module-help.csv has correct header columns', () => {
   }
 });
 
-test('module-help.csv has 58 skill entries (excluding header)', () => {
-  assert.strictEqual(csvData.rows.length, 58, `Expected 58 rows, found ${csvData.rows.length}`);
+test('module-help.csv has 61 skill entries (excluding header)', () => {
+  assert.strictEqual(csvData.rows.length, 61, `Expected 61 rows, found ${csvData.rows.length}`);
 });
 
 test('all CSV entries use module code ma-skills', () => {
@@ -287,11 +301,19 @@ test('all CSV entries use module code ma-skills', () => {
   }
 });
 
-test('CSV has entries for all 5 agent skills', () => {
+test('CSV has entries for all 6 agent skills', () => {
   const codeIdx = csvData.headers.indexOf('code');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedAgentSkills) {
     assert.ok(codes.includes(skill), `Missing CSV entry for agent skill: ${skill}`);
+  }
+});
+
+test('CSV has entries for all 2 SQA skills', () => {
+  const codeIdx = csvData.headers.indexOf('code');
+  const codes = csvData.rows.map(r => r[codeIdx]);
+  for (const skill of expectedSqaSkills) {
+    assert.ok(codes.includes(skill), `Missing CSV entry for SQA skill: ${skill}`);
   }
 });
 

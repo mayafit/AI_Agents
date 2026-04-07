@@ -1,9 +1,11 @@
 ---
-stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-24', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-25', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-07']
+stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-24', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-25', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-07', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-08']
 workflowStatus: 'complete'
 completedDate: '2026-03-05'
-lastEdited: '2026-04-07'
+lastEdited: '2026-04-08'
 editHistory:
+  - date: '2026-04-08'
+    changes: 'Added F18: Software Quality Assurance (SQA) capability area (Planned). Added SQA agent (Gad) to Executive Summary specialized agents bullet. Added Test Engineer (Oren) journey reference to SQA workflows. Extended Specialized Agent Personas FR35 to include SQA. Added FR158–FR171: SQA agent persona and menu, Project Audit workflow (full/partial scope selection, 5 audit dimensions: code-to-story traceability, stories-to-architecture/PRD alignment, process compliance, sprint health, release state, written report output), IEEE/ISO/IEC 12207 compliance workflow (full/partial scope selection, 23 process areas across 4 groups, COMPLIANT/PARTIAL/NON-COMPLIANT/NOT-APPLICABLE/ORGANIZATION-SCOPE ratings, compliance matrix report, gap-driven backlog story creation). Added NFR42–NFR43: audit report reproducibility, air-gapped IEEE 12207 workflow.'
   - date: '2026-04-07'
     changes: 'Added F17: BMAD Knowledge Graph capability area (Planned). Added non-hierarchical knowledge graph innovation pattern. Extended Executive Summary with knowledge graph bullet. Added 3 measurable outcomes to Success Criteria. Extended Yael, Noam, and Alon journeys with graph navigation use cases. Added knowledge graph row to Journey Requirements Summary. Added FR141–FR157: graph data model (nodes as file-id#anchor, typed any-to-any directed edges with provenance including AI agent identity), files table for file-pointer-agnostic document registration (relative path/absolute path/URL), LLM-optimized JSON format with meta/files/nodes/edges structure, automatic skill emission with non-hierarchical multi-source edge support, VSCode-native navigation with browser fallback, interactive visualization with filtering and full provenance tooltips, air-gapped self-contained renderer. Added NFR38–NFR41: render performance, LLM-parseable format contract, additive-only emission, air-gapped renderer. Fixed 5 implementation leakage items from validation: removed force-directed algorithm specifics, checkbox UI specifics, internal write mechanism, VSCode URI scheme, and CSS/JS inlining mechanism.'
   - date: '2026-04-03'
@@ -59,7 +61,7 @@ The core insight is convergence: AI agents need governance, and engineering meth
 
 - **Install AND enforce** — 28+ codified engineering skills install identically across 12 target agents with automatic translation to each agent's native format. Skills are not merely available — they are enforced via BMAD `critical_actions`, top-priority instruction injection, and per-agent enforcement hooks
 - **Full SDLC coverage via BMAD-METHOD** — integrated workflows spanning product discovery, requirements, architecture, sprint planning, implementation, QA, and retrospectives, orchestrated by specialized AI personas (PM, Architect, Developer, QA, Scrum Master, Tech Writer)
-- **Enterprise-grade specialized agents** — purpose-built personas for defense/enterprise needs: SRE (Alex), DevOps (Amit), Cyber Analyst (Yael), and MIL-STD-498 Expert (Joseph) with operational playbooks. Migrated to native BMAD 6.2.0 skill-based architecture: each agent is a full skill folder (`SKILL.md`, `prompts/`, `resources/`, `scripts/`) with internal commands replacing legacy `.customize.yaml` injection, and all 34 operational workflows (11 MIL-498 DIDs + 9 SRE + 6 DevOps + 8 Cyber) packaged as proper BMAD skill packages
+- **Enterprise-grade specialized agents** — purpose-built personas for defense/enterprise needs: SRE (Alex), DevOps (Amit), Cyber Analyst (Yael), MIL-STD-498 Expert (Joseph), and SQA Engineer (Gad) with operational playbooks and compliance workflows. Migrated to native BMAD 6.2.0 skill-based architecture: each agent is a full skill folder (`SKILL.md`, `prompts/`, `resources/`, `scripts/`) with internal commands replacing legacy `.customize.yaml` injection, and all 34 operational workflows (11 MIL-498 DIDs + 9 SRE + 6 DevOps + 8 Cyber) packaged as proper BMAD skill packages
 - **Bug management** — Agents autonomously detect problems in delivered code and propose bug issues. BMAD extension workflows generate structured bug stories. Bugs live in the backlog section of `sprint-status.yaml` alongside stories for unified sprint planning
 - **Unified sprint-status management** — All sprint, backlog, and epic data consolidated into a single `sprint-status.yaml` file with movement semantics (items move between backlog and sprints, never duplicated), done archival (completed items removed and archived), sprint close lifecycle, and Jira adapter readiness. Sprints defined by capacity, flat backlogs containing both stories and bugs, multi-criteria prioritization, and workflows to add/modify/close/remove-from sprints
 - **Agent activity visibility** — Real-time dashboard showing all active AI agents: type, assigned story, worktree, branch, and status, auto-refreshing every 30 seconds from existing project file structures
@@ -115,7 +117,9 @@ Each capability area represents a permanent part of the product that is enhanced
 
 16. **Methodology Onboarding** — Methodology presentation bundled with BMAD installation, deployed to `_bmad-output/methodology/` for team onboarding. — **In Development**
 
-17. **BMAD Knowledge Graph** — Dynamic any-to-any knowledge graph built automatically from BMAD-generated artifacts. Any artifact can reference any other regardless of hierarchy — a story's AC may derive from the epic, an architecture decision, and a UX design simultaneously. A central `files` table maps short file IDs to arbitrary file pointers (relative paths, absolute paths, Confluence URLs, or any document reference). Nodes are addressable anchors within registered files (`file-id#heading`), edges are directional typed relationships with full provenance (creator name, AI agent identifier, date, label). Stored as LLM-friendly JSON at `_bmad-output/knowledge-graph.json`. Rendered as an interactive graph in VSCode webview (browser fallback) via `_bmad-output/knowledge-graph.html`. `open-graph` skill surfaces the visualization from any BMAD session. — **Planned**
+17. **BMAD Knowledge Graph** — Dynamic any-to-any knowledge graph built automatically from BMAD-generated artifacts.
+
+18. **Software Quality Assurance (SQA)** — Dedicated SQA agent (Gad) providing structured quality workflows for software projects: a multi-dimensional Project Audit (code-to-story traceability, stories-to-architecture/PRD alignment, process compliance, sprint health, release state) and an IEEE/ISO/IEC 12207 lifecycle process compliance assessment with compliance matrix, gap analysis, and backlog story generation for identified gaps. — **Planned** Any artifact can reference any other regardless of hierarchy — a story's AC may derive from the epic, an architecture decision, and a UX design simultaneously. A central `files` table maps short file IDs to arbitrary file pointers (relative paths, absolute paths, Confluence URLs, or any document reference). Nodes are addressable anchors within registered files (`file-id#heading`), edges are directional typed relationships with full provenance (creator name, AI agent identifier, date, label). Stored as LLM-friendly JSON at `_bmad-output/knowledge-graph.json`. Rendered as an interactive graph in VSCode webview (browser fallback) via `_bmad-output/knowledge-graph.html`. `open-graph` skill surfaces the visualization from any BMAD session. — **Planned**
 
 ### Future Directions
 
@@ -435,7 +439,7 @@ ma-agents does not integrate as an IDE extension. Instead, it injects skill cont
 
 ### Specialized Agent Personas (MIL-STD-498 / SRE / DevOps / Cyber)
 
-- FR35: Engineers can target BMAD specialized agents (SRE, DevOps, Cyber, MIL-STD-498) for persona installation
+- FR35: Engineers can target BMAD specialized agents (SRE, DevOps, Cyber, MIL-STD-498, SQA) for persona installation
 - FR42: The Chief Architect can develop new specialized agent personas for enterprise-specific roles
 
 ### MIL-STD-498 Document Generation
@@ -651,6 +655,31 @@ sprints:
 - FR156: The graph supports filtering by node type and edge type via interactive controls in the visualization panel. Selecting a node highlights all its direct neighbors and their connecting edges, dimming everything else — isolating all influences on any artifact regardless of which documents they come from
 - FR157: The `knowledge-graph.html` renderer functions without network access and without a local server — no external CDN, font, or script dependencies
 
+### Software Quality Assurance (SQA)
+
+#### SQA Agent Persona
+
+- FR158: Quality engineers can activate the SQA Agent (Gad) — a purpose-built persona specializing in structured quality assurance workflows: project auditing, process compliance verification, and standards conformance assessment
+- FR159: On activation, Gad presents a numbered menu of available quality workflows with keyboard shortcuts and trigger phrases. Menu items include: Project Audit, IEEE/ISO/IEC 12207 Compliance, and Dismiss Agent. Chat mode is available for ad-hoc quality questions
+
+#### Project Audit Workflow
+
+- FR160: Gad's Project Audit workflow begins by asking whether to run a full audit (all five dimensions) or a partial audit (user selects which dimensions by number) — execution only begins after the user confirms scope
+- FR161: The Code-to-Stories Traceability dimension reads done and in-progress items from `sprint-status.yaml` and verifies that each story has traceable code evidence; it also surfaces significant code changes with no backing story, flagging each finding with its story ID and traceability status
+- FR162: The Stories-to-Architecture/PRD Alignment dimension maps each epic to its corresponding PRD section, verifies that stories do not introduce architectural decisions contradicting `architecture.md`, and identifies PRD requirements with no corresponding epic or story — producing a PRD coverage table (COVERED / MISSING / PARTIAL) and an architecture compliance issue list
+- FR163: The Process Compliance dimension evaluates development process adherence: commit message format conventions, feature-branch discipline (changes not committed directly to main), test file presence alongside new implementation files, and code review evidence — producing a process checklist with PASS / FAIL / UNKNOWN per item
+- FR164: The Sprint Health dimension reads all sprints from `sprint-status.yaml` and reports: completion percentage per sprint, overdue items, stalled in-progress items, blockers, and backlog grooming health (prioritization, epic linkage, item clarity)
+- FR165: The Release State dimension evaluates release readiness by mapping done stories to declared release scope, identifying blocking items preventing release, and reporting deployment environment status as provided by the user
+- FR166: After all selected dimensions execute, Gad produces a written audit report saved to `{output_folder}/sqa-audit-report-{YYYY-MM-DD}.md`. The report includes an executive summary, per-dimension findings tables with PASS / WARNING / FAIL severity, a prioritized action-item list, and a skipped-dimension list with required artifacts for each skip
+
+#### IEEE/ISO/IEC 12207 Compliance Workflow
+
+- FR167: Gad's IEEE/ISO/IEC 12207 compliance workflow begins by presenting the four process groups and asking whether to evaluate all groups or selected ones — evaluation only begins after the user confirms scope
+- FR168: The workflow evaluates 23 process areas across four IEEE/ISO/IEC 12207:2017 process groups: Technical Processes (11 areas: Business Analysis, Stakeholder Requirements, Software Requirements, Architecture, Design, System Analysis, Implementation, Integration, Verification, Validation, Transition), Technical Management Processes (8 areas: Project Planning, Project Assessment, Decision Management, Risk Management, Configuration Management, Information Management, Measurement, Quality Assurance), Agreement Processes (2 areas: Acquisition, Supply), and Organizational Enabling Processes (2 areas: Life Cycle Model Management, Knowledge Management)
+- FR169: Each evaluated process area receives a compliance rating: COMPLIANT (evidence satisfies process intent), PARTIAL (some evidence, gaps remain), NON-COMPLIANT (no evidence or clear violation), NOT APPLICABLE (process not relevant to this project type), or ORGANIZATION-SCOPE (verifiable only at organizational level, not from project artifacts). Ratings are derived from available project artifacts: `prd.md`, `architecture.md`, `sprint-status.yaml`, test files, git history, and changelog
+- FR170: The workflow produces a compliance matrix report saved to `{output_folder}/sqa-ieee12207-report-{YYYY-MM-DD}.md`. The report includes an executive summary, per-group compliance matrices (clause, process area, compliance rating, key evidence, gaps), a gap analysis separating critical gaps from partial compliance items, a prioritized recommended-action table, and a compliance summary table with counts per group and an overall compliance percentage
+- FR171: After any SQA workflow that identifies gaps, Gad offers to create structured bug or story entries in the project backlog for each P1 (critical) gap — invoking the `create-bug-story` workflow for each accepted item
+
 ## Non-Functional Requirements
 
 ### Security & Data Protection
@@ -730,3 +759,8 @@ sprints:
 - NFR23: Project-context generation is additive-only — the installer never modifies or deletes an existing `_bmad-output/project-context.md` regardless of its content or age
 - NFR24: The project-context template is maintained as a standalone file (`lib/templates/project-context.template.md`), not as an inline string in installer code — allowing the template to be updated independently of installer logic
 - NFR25: The generated project-context.md includes a machine-readable generator version comment (e.g., `<!-- ma-agents-template-version: 1.0 -->`). When a future ma-agents version detects a lower template version in an existing file, it logs a warning suggesting the user run `/bmad-generate-project-context` to refresh — it never auto-overwrites
+
+### Software Quality Assurance (SQA)
+
+- NFR42: SQA audit reports must be reproducible — running the Project Audit or IEEE 12207 compliance workflow on unchanged artifacts produces findings identical to the prior run. Report differences may only arise from changes in the underlying project artifacts, not from workflow execution variance
+- NFR43: The IEEE/ISO/IEC 12207 compliance workflow must not require internet access — all evaluation logic, process area definitions, and rating criteria are embedded in the skill; no external standard document download or network call is made during execution
