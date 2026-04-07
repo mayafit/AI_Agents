@@ -2,7 +2,10 @@
 stepsCompleted: [1, 2, 3, 4, 'phase2-step-01', 'phase2-step-02', 'phase2-step-03', 'phase2-step-04']
 workflowStatus: 'complete'
 completedDate: '2026-03-08'
-lastEdited: '2026-04-03'
+lastEdited: '2026-04-07'
+phase3EditHistory:
+  - date: '2026-04-07'
+    changes: 'Added Epic 19: BMAD Knowledge Graph (Phase 3). 7 stories (19.1-19.7): core emitToGraph() library, graph emission for 7 BMAD skills (create-prd, create-architecture, create-epics-and-stories, create-story, validate-prd, dev-story, bmad-sprint-planning), open-graph skill with VSCode/browser detection, and interactive HTML renderer. Added FR141-FR157 to Requirements Inventory and FR Coverage Map. Added NFR38-NFR41. Updated Epic List and Development Execution Order. Fixed duplicate FR141 entry in Epic 17 coverage map (was remove-from-sprint, correctly FR129). Updated Roo Code Epic 18 proposed FRs to FR156-FR159 to avoid conflict with new Knowledge Graph FRs.'
 phase2EditHistory:
   - date: '2026-04-03'
     changes: 'Major rework of Epic 17: Sprint Management Model Rework. Replaced 3-file model (backlog.yaml, sprints/sprint-N.yaml, sprint-status.yaml) with unified single sprint-status.yaml approach. Stories rewritten: 17.9 (unified schema), 17.10 (generate-backlog rework), 17.11 (add-to-sprint movement semantics), 17.12 (remove-from-sprint movement semantics), 17.13 (sprint-status-view single-source read), 17.14 (cleanup-done single-source), 17.15 (bmad-sprint-planning bootstrap), 17.16 (add-sprint section-based), 17.17 (modify-sprint section-based), 17.18 (bmad-dev-story cross-section update), 17.19 (story-status-lookup cross-section search), 17.20 (bmad-sprint-status structured sections), 17.21 (close-sprint new skill), 17.22 (Jira adapter pattern), 17.23 (migration/deprecation of old files). Added FR133-FR140. Updated FR Coverage Map. Updated Epic 17 description in Epic List. Updated Development Execution Order.'
@@ -168,6 +171,27 @@ This document provides the complete epic and story breakdown for agents, decompo
 - FR139: The unified schema replaces the previous three-file model (`backlog.yaml`, `sprints/sprint-N.yaml`, `sprint-status.yaml`) — deprecated files are migrated or removed
 - FR140: All 12 sprint-related skills are reworked to operate against the single unified file
 
+### Functional Requirements (Phase 3 — added 2026-04-07)
+
+#### BMAD Knowledge Graph (FR141-FR157)
+- FR141: Each node in the knowledge graph is identified by `file-id#heading-anchor` where `file-id` is a short stable key that resolves to a file pointer via the `files` table
+- FR142: Each directed edge carries full provenance: `from` (node id), `to` (node id), `type` (edge type), `label` (human description), `created_by` (user), `agent` (AI agent identity), `created_at` (ISO timestamp); edge types include `implements`, `derives-from`, `validates`, `traces-to`, `refines`, `informed-by`
+- FR143: The graph maintains a bidirectional index — for each node, the system can resolve both inbound (nodes that reference it) and outbound (nodes it references) edges in O(1) time
+- FR144: The knowledge graph JSON file uses a flat four-section structure: `meta` (file statistics), `files` (file registry), `nodes` (node list), `edges` (edge list) — maximum two levels of nesting throughout
+- FR145: The `files` section maps each `file-id` to an object with `pointer` (the file reference), `title` (display name), and `pointer_type` (one of: `relative_path`, `absolute_path`, `url`) — enabling nodes in the same graph to address local files, files in other repos, and external URLs (Confluence, Jira, etc.) uniformly
+- FR146: Each node object carries: `id` (`file-id#anchor`), `file` (the `file-id` from the files table), `anchor` (the heading slug), `title` (human-readable heading text), `type` (document type: `prd`, `architecture`, `epic`, `story`, `decision`, `validation`)
+- FR147: Each edge object carries: `from`, `to`, `type`, `label`, `created_by`, `agent`, `created_at` — all fields required, no optional fields
+- FR148: The `meta` section carries: `schema_version`, `generated_at`, `project`, `file_count`, `node_count`, `edge_count`
+- FR149: BMAD skills emit nodes and edges automatically on artifact completion — no user prompt, no opt-in — as a silent post-artifact step
+- FR150: When emitting, if a file is not yet in the `files` table, it is registered automatically; external URLs (e.g., Confluence page) are registered with `pointer_type: url`
+- FR151: Any node may derive from multiple source documents simultaneously — a story AC can carry `informed-by` edges from both the architecture and a UX design doc, not just from its parent epic
+- FR152: The emit operation is additive-only: new nodes and edges are appended; existing nodes and edges are never deleted or overwritten; duplicate detection uses the full `(from, to, type)` triple for edges and `id` for nodes
+- FR153: The `open-graph` skill detects the execution environment (VSCode vs. terminal) and opens `knowledge-graph.html` via the appropriate mechanism — VSCode webview API when inside VSCode, `open`/`start` shell command otherwise
+- FR154: The visualization renders nodes as color-coded circles by document type and supports click-to-navigate (opens the source document at the specific heading anchor in the IDE or browser)
+- FR155: Hovering over an edge displays a tooltip with the full provenance record: type, label, created_by, agent, created_at
+- FR156: The visualization provides interactive filtering by node type and edge type, and highlights the immediate neighbors of any selected node
+- FR157: The visualization has no external CDN, font, or script dependencies — all rendering code and graph data are self-contained in a single HTML file suitable for air-gapped environments
+
 ### NonFunctional Requirements
 
 - NFR1: Skills must not transmit project data externally — all content is static instruction delivery, not data collection
@@ -206,6 +230,13 @@ This document provides the complete epic and story breakdown for agents, decompo
 - NFR35: Remote repo cloning must work with internal git URLs (air-gapped)
 - NFR36: project-layout.yaml must be deterministic
 - NFR37: All BMAD workflows must resolve paths through config, no hardcoded `_bmad-output/`
+
+### NonFunctional Requirements (Phase 3 — added 2026-04-07)
+
+- NFR38: The `open-graph` skill must render the knowledge graph visualization within 3 seconds for graphs up to 500 nodes and 1000 edges, measured from skill invocation to first interactive frame
+- NFR39: The knowledge graph JSON format must be writable by any LLM without external schema — structure is self-describing; an LLM can add a new node or edge by copying an existing pattern with no external reference
+- NFR40: The `emitToGraph()` operation must never delete or overwrite existing graph data — additive-only semantics are enforced at the function level, verified by the absence of delete/overwrite operations during emission
+- NFR41: The knowledge graph visualization (`knowledge-graph.html`) must function fully without network access — verified by disabling network access and confirming the graph renders identically
 
 ### Additional Requirements
 
@@ -281,7 +312,7 @@ This document provides the complete epic and story breakdown for agents, decompo
 | FR66 (rework) | Epic 17 | Sprint capacity with first-class sprint entity |
 | FR67 (rework) | Epic 17 | Multi-criteria prioritization |
 | FR128 | Epic 17 | Bug as story type in backlog |
-| FR129 | Epic 17 | Move items from sprint back to backlog |
+| FR129 | Epic 17 | Move items from sprint back to backlog (remove-from-sprint skill) |
 | FR130 | Epic 17 | Done items removed from sprint status file |
 | FR131 | Epic 17 | Done story files moved to done/ subfolder |
 | FR132 | Epic 17 | Sprints as first-class YAML entities |
@@ -293,11 +324,27 @@ This document provides the complete epic and story breakdown for agents, decompo
 | FR138 | Epic 17 / Epic 14 | Jira adapter pattern (tracking_system switch) |
 | FR139 | Epic 17 | Migration/removal of deprecated 3-file model |
 | FR140 | Epic 17 | All 12 sprint skills reworked for unified file |
-| FR141 | Epic 17 | Remove items from sprint back to backlog (remove-from-sprint skill) |
-| FR142 | Epic 18 | Roo Code custom modes from BMAD agents |
-| FR143 | Epic 18 | Roo Code rules from BMAD instructions |
-| FR144 | Epic 18 | Roo Code slash commands from BMAD workflows |
-| FR145 | Epic 18 | Cline-to-Roo Code migration |
+| FR141 | Epic 19 | Graph node identity: file-id#heading-anchor |
+| FR142 | Epic 19 | Directed typed edges with full provenance (6 edge types) |
+| FR143 | Epic 19 | Bidirectional index per node |
+| FR144 | Epic 19 | Flat four-section JSON structure (meta/files/nodes/edges) |
+| FR145 | Epic 19 | Files table with pointer_type (relative_path, absolute_path, url) |
+| FR146 | Epic 19 | Node schema (id, file, anchor, title, type) |
+| FR147 | Epic 19 | Edge schema (from, to, type, label, created_by, agent, created_at) |
+| FR148 | Epic 19 | Meta schema (schema_version, generated_at, project, counts) |
+| FR149 | Epic 19 | Automatic silent emission on artifact completion (7 BMAD skills) |
+| FR150 | Epic 19 | Auto-registration of new files; external URL support |
+| FR151 | Epic 19 | Non-hierarchical multi-source emission (any-to-any informed-by edges) |
+| FR152 | Epic 19 | Additive-only emit; duplicate detection by (from,to,type) for edges and id for nodes |
+| FR153 | Epic 19 | open-graph skill with VSCode/browser detection |
+| FR154 | Epic 19 | Interactive visualization: color-coded nodes by type, click-to-navigate |
+| FR155 | Epic 19 | Edge tooltip with full provenance record |
+| FR156 | Epic 19 | Interactive filtering by node/edge type; neighbor highlight |
+| FR157 | Epic 19 | No external dependencies — fully self-contained HTML (air-gap compatible) |
+| FR158 | Epic 18 | Roo Code custom modes from BMAD agents (proposed — pending PRD addition) |
+| FR159 | Epic 18 | Roo Code rules from BMAD instructions (proposed — pending PRD addition) |
+| FR160 | Epic 18 | Roo Code slash commands from BMAD workflows (proposed — pending PRD addition) |
+| FR161 | Epic 18 | Cline-to-Roo Code migration (proposed — pending PRD addition) |
 
 ## Epic List
 
@@ -383,6 +430,16 @@ Sprint management is redesigned around a **single unified `sprint-status.yaml`**
 **Note:** Epic 12 delivered workflow files but not the underlying sprint data model. This epic builds the unified model, rewires all workflows, and provides the Jira adapter pattern.
 **Skills affected:** Heavy rework (6): generate-backlog, add-to-sprint, remove-from-sprint, sprint-status-view, cleanup-done, bmad-sprint-planning. Moderate rework (3): add-sprint, modify-sprint, bmad-dev-story. Light rework (3): story-status-lookup, bmad-sprint-status, prioritize-backlog. New skill (1): close-sprint.
 
+### Epic 19: BMAD Knowledge Graph (Phase 3)
+Every planning and implementation artifact generated by BMAD skills is automatically woven into a non-hierarchical knowledge graph stored as `_bmad-output/knowledge-graph.json`. Any-to-any directed relationships (not just parent-child traceability) are captured with full provenance. Engineers can open an interactive visualization of the entire project knowledge graph — navigating to any document at the specific heading where a concept is defined — via the `open-graph` skill.
+**FRs covered:** FR141–FR157
+**NFRs addressed:** NFR38 (render performance), NFR39 (LLM-writability), NFR40 (additive-only), NFR41 (air-gapped)
+**Architecture:** Decision P3-1 (BMAD Knowledge Graph) in `_bmad-output/planning-artifacts/architecture.md`
+**Dependencies:** Epic 15 (extension module structure) must be complete — `open-graph` skill deploys as a BMAD extension skill. Epic 17 complete (sprint skill structure settled before wiring emission).
+**New skill:** `open-graph` (45th total skill) in `lib/bmad-extension/skills/open-graph/`
+**Skills modified:** create-prd, create-architecture, create-epics-and-stories, create-story, validate-prd, dev-story, bmad-sprint-planning — each gains a silent `emitToGraph()` post-artifact call
+**Output artifacts:** `_bmad-output/knowledge-graph.json` (graph data), `_bmad-output/knowledge-graph.html` (self-contained renderer)
+
 ### Epic 15: BMAD 6.2.1 Agent Architecture Migration (Phase 2)
 ma-agents upgrades from bmad-method 6.0.4 to 6.2.1, restructures the extension module to follow BMAD 6.2.0 module conventions (agents as skill folders, workflows as skill folders, module.yaml with code field), and provides an installer-driven migration path for existing installations.
 **FRs covered:** FR94, FR95, FR96, FR97, FR98, FR99, FR100, FR101, FR102, FR103, FR104, FR105, FR106, FR107, FR108, FR109, FR110
@@ -418,6 +475,10 @@ Stories in Epics 6, 8, and 15 that touch `bmad.js` must build on Epic 5's vendor
 4. **Epic 16** (Multi-Repo Layout) — depends on Epic 15 module restructure
 5. **Epics 4, 7** (VS Integration, Test Suite) — on hold, can resume in parallel
 6. **Epic 14** (External Tooling) — Phase 3, depends on Epics 12, 13. Story 14.3 architecture is prerequisite for Epic 17 Story 17.22 (Jira adapter).
+
+**Phase D — Phase 3 Features:**
+7. **Epic 19** (BMAD Knowledge Graph) — depends on Epic 15 (extension module structure) and Epic 17 (sprint skill structure settled). Story execution order: 19.1 (core library) → 19.2 (PRD emission) → 19.3 (architecture + epics emission) → 19.4 (story + remaining emission) → 19.5 (open-graph skill) → 19.6 (visualization renderer) → 19.7 (LLM contract validation + tests). Stories 19.2-19.4 can proceed in parallel once 19.1 is done.
+8. **Epic 18** (Roo Code IDE Support) — no dependencies, can proceed independently at any point in Phase C or D.
 
 ---
 
@@ -2907,7 +2968,7 @@ So that backlog reprioritization works against the single source of truth instea
 
 **Goal:** Full Roo Code integration — ma-agents skill installation, BMAD agent personas as custom modes, planning instructions as rules, and BMAD workflows as slash commands.
 **FRs covered:** FR34 (extended to include Roo Code), FR36, FR38
-**Proposed FRs:** FR142 (Roo Code custom modes from BMAD agents), FR143 (Roo Code rules from BMAD instructions), FR144 (Roo Code slash commands from BMAD workflows), FR145 (Cline-to-Roo migration)
+**Proposed FRs:** FR158 (Roo Code custom modes from BMAD agents), FR159 (Roo Code rules from BMAD instructions), FR160 (Roo Code slash commands from BMAD workflows), FR161 (Cline-to-Roo migration) — renumbered from FR142-145; FR141-FR157 are now reserved for Epic 19 (Knowledge Graph)
 **Research:** `_bmad-output/planning-artifacts/domain-research-roocode-2026-03-31.md`
 **Dependency:** None (can proceed independently; upstream `bmad-method` already has `roo` in `platform-codes.yaml`)
 
@@ -3285,3 +3346,319 @@ The `bmad-method` npm package already has `roo` in `platform-codes.yaml` and can
 6. Story 18.6 (mode-specific rules) — depends on 18.4
 7. Story 18.7 (Cline migration) — depends on 18.1, 18.3
 8. Story 18.8 (validation/tests) — depends on all above
+
+---
+
+## Epic 19: BMAD Knowledge Graph (Phase 3)
+
+Every planning and implementation artifact generated by BMAD skills is automatically woven into a non-hierarchical knowledge graph stored as `_bmad-output/knowledge-graph.json`. Any-to-any directed relationships (not just parent-child traceability) are captured with full provenance. Engineers can open an interactive visualization of the entire project knowledge graph — navigating to any document at the specific heading where a concept is defined — via the `open-graph` skill.
+
+### Story 19.1: Knowledge Graph Core Library (`emitToGraph`)
+
+As a **Chief Architect**,
+I want a shared `emitToGraph()` utility function in the BMAD extension module,
+So that all BMAD skills can emit nodes and edges to the knowledge graph using a single consistent API without duplicating file I/O logic.
+
+**Acceptance Criteria:**
+
+**Given** the function `emitToGraph(projectRoot, emission)` is called with a valid emission payload
+**When** `_bmad-output/knowledge-graph.json` does not yet exist
+**Then** the function creates the file with a valid four-section structure: `meta`, `files`, `nodes`, `edges`
+**And** `meta` contains `schema_version: "1.0"`, `generated_at` (ISO timestamp), `project` (derived from package.json name or directory name), `file_count: 0`, `node_count: 0`, `edge_count: 0`
+**And** `files`, `nodes`, `edges` are initialized as empty object, empty array, empty array respectively
+
+**Given** `knowledge-graph.json` already exists with prior content
+**When** `emitToGraph()` is called
+**Then** it reads the existing file, appends new files/nodes/edges, updates counts in `meta`, and writes the result back atomically
+**And** no existing nodes, edges, or file registrations are deleted or overwritten
+
+**Given** an emission payload includes a `files` entry with `pointer_type: "relative_path"`
+**When** that file-id does not yet exist in the `files` table
+**Then** the file is registered: `files[file-id] = { pointer, title, pointer_type }`
+**And** if the file-id already exists, registration is skipped (first-write-wins)
+
+**Given** an emission payload includes a node with id `file-id#heading-anchor`
+**When** a node with that id already exists in `nodes`
+**Then** the node is not duplicated
+
+**Given** an emission payload includes an edge with `(from, to, type)` triple
+**When** an edge with the same `(from, to, type)` already exists in `edges`
+**Then** the edge is not duplicated (provenance of the first edge is preserved)
+
+**Given** the function writes the updated graph
+**When** the write operation completes
+**Then** `meta.file_count`, `meta.node_count`, `meta.edge_count` reflect the total counts in the file
+
+**Technical notes:**
+- Implement in `lib/bmad-extension/skills/` as a shared utility module (e.g., `lib/knowledge-graph/emit.js`)
+- Heading anchor derivation: `heading.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')` (GitHub slug algorithm)
+- File path for graph: always `path.join(projectRoot, '_bmad-output', 'knowledge-graph.json')`
+- Use synchronous file I/O (`fs.readFileSync` / `fs.writeFileSync`) — graph updates happen after artifact generation, not in hot paths
+- JSON serialization: `JSON.stringify(graph, null, 2)` for human-readable output
+- FRs: FR141, FR142, FR143, FR144, FR145, FR146, FR147, FR148
+- NFRs: NFR39 (LLM-writability — flat structure, copy-pattern extension), NFR40 (additive-only)
+
+### Story 19.2: Graph Emission — `create-prd` (Graph Seed)
+
+As a **Product Manager**,
+I want the `create-prd` skill to automatically seed the knowledge graph when a PRD is generated,
+So that the PRD becomes the root of the project knowledge graph without any user action.
+
+**Acceptance Criteria:**
+
+**Given** the `create-prd` skill completes generation of `_bmad-output/planning-artifacts/prd.md`
+**When** the artifact write step finishes
+**Then** `emitToGraph()` is called silently as the final step — no user prompt, no output message
+**And** the PRD file is registered in the `files` table as `{ pointer: "_bmad-output/planning-artifacts/prd.md", title: "Product Requirements Document", pointer_type: "relative_path" }` with file-id `prd`
+
+**Given** the PRD contains top-level `##` headings (e.g., `## Executive Summary`, `## Functional Requirements`)
+**When** emission runs
+**Then** one node is emitted per heading: `{ id: "prd#executive-summary", file: "prd", anchor: "executive-summary", title: "Executive Summary", type: "prd" }`
+
+**Given** the graph is seeded from a new PRD
+**When** the `knowledge-graph.json` file is inspected
+**Then** it contains no edges (PRD is the root — it does not reference other documents yet)
+**And** `meta.node_count` equals the number of `##` headings in the PRD
+
+**Given** `create-prd` runs on a project where `knowledge-graph.json` already exists
+**When** emission runs
+**Then** only new headings (not yet present as nodes) are added — re-runs are idempotent
+
+**Technical notes:**
+- Extract headings by scanning the generated markdown for `^## ` lines
+- Emit only level-2 (`##`) headings as nodes — level-3+ create noise without adding navigation value
+- The PRD seeding call is the only emission that produces zero edges — all other skills emit edges pointing back to PRD nodes
+- FRs: FR149, FR150, FR151, FR152
+
+### Story 19.3: Graph Emission — `create-architecture` and `create-epics-and-stories`
+
+As a **Chief Architect** and **Product Manager**,
+I want the `create-architecture` and `create-epics-and-stories` skills to emit traceability edges to the knowledge graph automatically,
+So that every architectural decision and every epic traces back to the PRD sections that motivated it.
+
+**Acceptance Criteria:**
+
+**Given** the `create-architecture` skill completes generation of `_bmad-output/planning-artifacts/architecture.md`
+**When** emission runs
+**Then** the architecture file is registered as file-id `arch` with `pointer_type: "relative_path"`
+**And** one node is emitted per `##` heading in architecture.md (type: `architecture`)
+**And** for each architecture decision section (headings matching `## Decision` or similar), an `implements` edge is emitted: `{ from: "arch#decision-slug", to: "prd#relevant-fr-section", type: "implements", label: "implements PRD requirement", created_by: <user>, agent: <agent-id>, created_at: <timestamp> }`
+
+**Given** the `create-architecture` skill is run when PRD nodes do not yet exist in the graph
+**When** an edge references a PRD node that is not yet in `nodes`
+**Then** a stub node is emitted for the referenced PRD heading so the edge is not orphaned
+**And** the stub node carries `type: "prd"` and the correct `file` and `anchor` fields
+
+**Given** the `create-epics-and-stories` skill completes updating `_bmad-output/planning-artifacts/epics.md`
+**When** emission runs
+**Then** the epics file is registered as file-id `epics` with `pointer_type: "relative_path"`
+**And** one node is emitted per epic heading (type: `epic`)
+**And** for each epic, a `derives-from` edge is emitted to the PRD Functional Requirements node: `{ from: "epics#epic-N-name", to: "prd#functional-requirements", type: "derives-from", ... }`
+**And** where an epic was informed by an architecture decision, an `informed-by` edge is also emitted: `{ from: "epics#epic-N-name", to: "arch#decision-slug", type: "informed-by", ... }`
+
+**Technical notes:**
+- The `informed-by` edge is the non-hierarchical edge type — it captures cross-domain influence (an epic shaped by an architectural decision, not just a PRD section)
+- Architecture decision headings can be detected by scanning for `## Decision` or `## P[0-9]-[0-9]` patterns (architecture doc convention)
+- Epic headings can be detected by scanning for `## Epic [0-9]+:` pattern
+- Emit after the file write step completes; `created_by` is read from BMAD config (user name); `agent` is the BMAD agent identity string from the skill context
+- FRs: FR149, FR150, FR151, FR152
+
+### Story 19.4: Graph Emission — `create-story`, `validate-prd`, `dev-story`, `bmad-sprint-planning`
+
+As a **Developer** and **QA Engineer**,
+I want individual story files and validation artifacts to emit traceability edges automatically,
+So that the knowledge graph captures the full SDLC chain from PRD through architecture through epics through stories through implementation.
+
+**Acceptance Criteria:**
+
+**Given** the `create-story` skill generates a story file (e.g., `_bmad-output/implementation-artifacts/17-9-unified-sprint-status-schema.md`)
+**When** emission runs
+**Then** the story file is registered in the `files` table with `pointer_type: "relative_path"` and a file-id derived from the story number (e.g., `story-17-9`)
+**And** a node is emitted for the story root heading (type: `story`)
+**And** a `traces-to` edge is emitted from the story node to its parent epic node: `{ from: "story-17-9#story-title", to: "epics#epic-17-sprint-management", type: "traces-to", ... }`
+**And** if the story's technical notes reference architecture decisions, `informed-by` edges are emitted from the story node to the relevant architecture nodes
+
+**Given** the `validate-prd` skill completes a validation report
+**When** emission runs
+**Then** the validation report file is registered with file-id `validation-<date>`
+**And** a `validates` edge is emitted from the validation report node to `prd#functional-requirements`: `{ type: "validates", label: "PRD validation report <date>", ... }`
+
+**Given** `dev-story` completes implementation guidance for a story
+**When** emission runs
+**Then** an `informed-by` edge is emitted from the story node to `arch#implementation-notes` (or the most relevant architecture section)
+
+**Given** `bmad-sprint-planning` completes sprint plan generation
+**When** emission runs
+**Then** sprint plan nodes are emitted and `derives-from` edges connect them to the relevant epic nodes
+
+**Technical notes:**
+- Story file-ids use the format `story-<epic-number>-<story-number>` (derived from the file path)
+- The 7 skills emitting to the graph: `create-prd`, `create-architecture`, `create-epics-and-stories`, `create-story`, `validate-prd`, `dev-story`, `bmad-sprint-planning`
+- All emission calls are identical in structure: call `emitToGraph(projectRoot, emission)` at the end of the artifact write step
+- FRs: FR149, FR150, FR151, FR152
+
+### Story 19.5: `open-graph` Skill
+
+As an **Engineer**,
+I want to run `/open-graph` in any BMAD agent,
+So that the knowledge graph visualization opens in VSCode (as a webview) or in my default browser when outside VSCode — without any additional configuration.
+
+**Acceptance Criteria:**
+
+**Given** `open-graph` is invoked inside VSCode (detected via `process.env.TERM_PROGRAM === 'vscode'` or `process.env.VSCODE_PID !== undefined`)
+**When** the skill runs
+**Then** it generates `_bmad-output/knowledge-graph.html` (if not already current) from the JSON data
+**And** opens the HTML file via VSCode's `vscode.env.openExternal(Uri.file(...))` API or equivalent open command
+
+**Given** `open-graph` is invoked outside VSCode (standard terminal)
+**When** the skill runs
+**Then** it generates `knowledge-graph.html` from the current JSON data
+**And** opens it using the platform-appropriate command: `start` (Windows), `open` (macOS), `xdg-open` (Linux)
+
+**Given** `_bmad-output/knowledge-graph.json` does not exist
+**When** `open-graph` is invoked
+**Then** the skill informs the user that no knowledge graph data has been generated yet
+**And** suggests running a BMAD planning skill to seed the graph
+
+**Given** `knowledge-graph.html` already exists and is newer than `knowledge-graph.json`
+**When** `open-graph` is invoked
+**Then** the skill skips regeneration and opens the existing HTML directly
+
+**Technical notes:**
+- Skill location: `lib/bmad-extension/skills/open-graph/`
+- Skill files: `SKILL.md` (agent instruction), `skill.json` (metadata), `generate-html.js` (HTML renderer generator)
+- The `generate-html.js` script reads the JSON, inlines the data as a JavaScript literal, and writes the self-contained HTML file
+- `always_load: false` — this is an on-demand skill, not a mandatory load
+- Add `open-graph` to the BMAD extension module's MANIFEST.yaml
+- FR: FR153
+
+### Story 19.6: Interactive Visualization Renderer
+
+As an **Engineer**,
+I want the knowledge graph HTML file to render an interactive, navigable visualization of all project artifacts and their relationships,
+So that I can explore cross-document traceability visually and jump directly to any document section from the graph.
+
+**Acceptance Criteria:**
+
+**Given** `knowledge-graph.html` is opened in a browser or VSCode webview
+**When** the graph renders
+**Then** each node appears as a circle color-coded by document type:
+- `prd` → blue
+- `architecture` → orange
+- `epic` → green
+- `story` → teal
+- `decision` → purple
+- `validation` → red
+**And** directed edges are rendered as arrows with the edge type as a label
+**And** the initial render completes within 3 seconds for graphs up to 500 nodes and 1000 edges (NFR38)
+
+**Given** the user clicks a node
+**When** the click handler fires
+**Then** the node's source document opens at the specific heading anchor via the IDE's file protocol or a browser file URL
+
+**Given** the user hovers over an edge
+**When** the tooltip renders
+**Then** it displays: edge type, label, created_by, agent, created_at (FR155)
+
+**Given** the user selects a node
+**When** the selection occurs
+**Then** the immediate neighbors (one hop in either direction) are highlighted
+**And** non-neighbor nodes and edges are dimmed (FR156)
+
+**Given** the user uses the filter controls
+**When** a node type or edge type is deselected
+**Then** nodes and edges of that type are hidden from the visualization
+**And** re-selecting them restores visibility (FR156)
+
+**Given** the HTML file is opened in an air-gapped environment with no network access
+**When** the page loads
+**Then** the graph renders identically to a connected environment — no CDN requests, no external fonts, no script fetches (FR157, NFR41)
+
+**Technical notes:**
+- All JavaScript and CSS are inlined in the HTML file — no external dependencies
+- Graph data is embedded as a `const GRAPH_DATA = {...}` literal at generation time (not fetched at runtime)
+- Use SVG for node and edge rendering — no canvas required, simpler interaction model
+- Pre-compute the first 100 physics ticks at generation time to arrive at a stable initial layout (avoids animation jitter on open)
+- The renderer is approximately 300-500 lines of vanilla JS — no framework, no bundler
+- Node positioning: simple force-directed simulation using Coulomb repulsion + spring attraction
+- FRs: FR154, FR155, FR156, FR157
+- NFRs: NFR38, NFR41
+
+### Story 19.7: LLM-Writability Contract Validation and Integration Tests
+
+As a **Chief Architect**,
+I want the knowledge graph JSON format validated against the LLM-writability contract and covered by integration tests,
+So that we can verify that any LLM can extend the graph by copying existing patterns, and that the additive-only semantics are enforced.
+
+**Acceptance Criteria:**
+
+**Given** a `knowledge-graph.json` file with one existing node and one existing edge
+**When** an LLM is instructed to add a new node and a new edge by copying the existing patterns (no external schema provided)
+**Then** the resulting JSON is valid and passes `emitToGraph()` ingestion without errors
+**And** the existing node and edge are preserved unchanged (NFR40)
+
+**Given** `emitToGraph()` is called with a node id that already exists in `nodes`
+**When** the function completes
+**Then** `nodes` contains exactly one entry with that id (no duplicate)
+**And** the original node's fields are unchanged
+
+**Given** `emitToGraph()` is called with an edge `(from, to, type)` triple that already exists
+**When** the function completes
+**Then** `edges` contains exactly one entry with that triple (no duplicate)
+**And** the original edge's provenance (created_by, agent, created_at) is unchanged
+
+**Given** a graph with 500 nodes and 1000 edges
+**When** `emitToGraph()` adds one new node and one new edge
+**Then** the operation completes in under 1 second
+
+**Given** the full emission sequence is run (all 7 skills emit in order)
+**When** the resulting `knowledge-graph.json` is inspected
+**Then** all emitted nodes are present
+**And** all emitted edges are present with correct provenance
+**And** `meta.file_count`, `meta.node_count`, `meta.edge_count` are accurate
+
+**Technical notes:**
+- Tests live in `tests/knowledge-graph/` following the existing test structure
+- Use temp directories for all file I/O in tests
+- The LLM-writability test can use a fixture JSON and verify that extending it by hand-editing produces valid output
+- Test the VSCode detection logic with environment variable mocks
+- NFRs: NFR39 (LLM-writability), NFR40 (additive-only)
+
+---
+
+### Epic 19 — Cross-Epic Notes
+
+**Relationship to Epic 15 (BMAD 6.2.1 Migration):**
+The `open-graph` skill deploys as a BMAD extension skill following the 6.2.1 module structure established by Epic 15. Epic 15 must be complete before Story 19.5.
+
+**Relationship to Epic 17 (Sprint Management):**
+`bmad-sprint-planning` is one of the 7 skills that emit to the knowledge graph. Epic 17 must be complete (skill structure settled) before Story 19.4 wires in sprint planning emission.
+
+**Relationship to Epic 7 (Test Suite):**
+Story 19.7 integration tests follow the test infrastructure from Epic 7. Epic 7 is on hold, so Story 19.7 uses the existing Node.js test runner pattern directly.
+
+**File outputs produced by this epic:**
+```
+_bmad-output/
+├── knowledge-graph.json   ← graph data (generated by Stories 19.2-19.4)
+└── knowledge-graph.html   ← self-contained renderer (generated by Story 19.5/19.6)
+
+lib/
+├── knowledge-graph/
+│   └── emit.js            ← shared emitToGraph() utility (Story 19.1)
+└── bmad-extension/
+    └── skills/
+        └── open-graph/    ← new BMAD extension skill (Story 19.5)
+            ├── SKILL.md
+            ├── skill.json
+            └── generate-html.js
+```
+
+**Development Execution Order:**
+1. Story 19.1 (core library) — no dependencies; establish before any emission story
+2. Story 19.2 (create-prd emission) — depends on 19.1
+3. Story 19.3 (create-architecture + create-epics-and-stories emission) — depends on 19.1; can run in parallel with 19.2
+4. Story 19.4 (create-story + remaining emission) — depends on 19.1; can run in parallel with 19.2 and 19.3
+5. Story 19.5 (open-graph skill) — depends on 19.1 (needs the generate-html logic)
+6. Story 19.6 (visualization renderer) — depends on 19.5 (renderer is invoked by open-graph skill)
+7. Story 19.7 (LLM contract validation + tests) — depends on all above
