@@ -762,5 +762,5 @@ sprints:
 
 ### Software Quality Assurance (SQA)
 
-- NFR42: SQA audit reports must be reproducible — running the Project Audit or IEEE 12207 compliance workflow on unchanged artifacts produces findings identical to the prior run. Report differences may only arise from changes in the underlying project artifacts, not from workflow execution variance
+- NFR42: SQA audit findings driven by project artifacts (prd.md, architecture.md, epics.md, sprint-status.yaml) must be deterministic — re-running a workflow on unchanged artifacts must not introduce variance from execution alone. Findings that depend on user-provided inputs (git log output, deployment environment status) may differ across runs only when the user provides different data; this is expected behavior, not a defect.
 - NFR43: The IEEE/ISO/IEC 12207 compliance workflow must not require internet access — all evaluation logic, process area definitions, and rating criteria are embedded in the skill; no external standard document download or network call is made during execution

@@ -146,6 +146,7 @@ const expectedAgentSkills = [
 const expectedSqaSkills = [
   'sqa-audit',
   'sqa-ieee12207',
+  'sqa-requirements-quality',
 ];
 
 const expectedMil498Skills = [
@@ -194,11 +195,11 @@ const allExpectedSkills = [
   ...expectedSqaSkills,
 ];
 
-test('skills/ has exactly 61 subdirectories', () => {
+test('skills/ has exactly 62 subdirectories', () => {
   const entries = fs.readdirSync(skillsDir).filter(e =>
     fs.statSync(path.join(skillsDir, e)).isDirectory()
   );
-  assert.strictEqual(entries.length, 61, `Expected 61 skill dirs, found ${entries.length}`);
+  assert.strictEqual(entries.length, 62, `Expected 62 skill dirs, found ${entries.length}`);
 });
 
 test('all 6 agent skill directories exist', () => {
@@ -250,7 +251,7 @@ test('all 14 extension workflow skill directories exist', () => {
   }
 });
 
-test('all 2 SQA skill directories exist', () => {
+test('all 3 SQA skill directories exist', () => {
   for (const skill of expectedSqaSkills) {
     const p = path.join(skillsDir, skill);
     assert.ok(fs.existsSync(p), `Missing SQA skill dir: ${skill}`);
@@ -290,8 +291,8 @@ test('module-help.csv has correct header columns', () => {
   }
 });
 
-test('module-help.csv has 61 skill entries (excluding header)', () => {
-  assert.strictEqual(csvData.rows.length, 61, `Expected 61 rows, found ${csvData.rows.length}`);
+test('module-help.csv has 62 skill entries (excluding header)', () => {
+  assert.strictEqual(csvData.rows.length, 62, `Expected 62 rows, found ${csvData.rows.length}`);
 });
 
 test('all CSV entries use module code ma-skills', () => {
@@ -309,7 +310,7 @@ test('CSV has entries for all 6 agent skills', () => {
   }
 });
 
-test('CSV has entries for all 2 SQA skills', () => {
+test('CSV has entries for all 3 SQA skills', () => {
   const codeIdx = csvData.headers.indexOf('code');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedSqaSkills) {
