@@ -59,6 +59,8 @@ Inform the user of which artifacts were found before proceeding.
 
 ## Step 3 — Evaluate Process Areas
 
+**Scope guard:** For each process group below, only evaluate if that group's number is in {ieee12207_scope}. Skip all process areas in unselected groups.
+
 Evaluate each selected process group. For each process area, assign a compliance level:
 
 - **COMPLIANT** — Evidence found that satisfies the process intent
@@ -66,6 +68,7 @@ Evaluate each selected process group. For each process area, assign a compliance
 - **NON-COMPLIANT** — No evidence found or clear violation of process intent
 - **NOT APPLICABLE** — Process not relevant to this project type
 - **ORGANIZATION-SCOPE** — Verifiable only at organizational level, not from project artifacts
+- **SKIPPED** — The primary evidence source for this process area is missing; evaluation cannot be completed. Record the missing artifact path.
 
 ---
 
@@ -95,12 +98,12 @@ Evaluate each selected process group. For each process area, assign a compliance
 
 #### 1.5 Design Definition (6.4.5)
 - Is there a detailed design that refines the architecture to implementable units?
-- Evidence: SDD, detailed design docs, API specs, data models within story files
+- Evidence: `{output_folder}/planning-artifacts/` — look for SDD, design.md, or detailed design files; API specs or data models within story files
 - Check: Is there design documentation below the architecture level?
 
 #### 1.6 System Analysis (6.4.6)
 - Are design decisions analyzed and justified?
-- Evidence: Architecture decision records (ADRs), trade-off notes in architecture doc
+- Evidence: `{output_folder}/planning-artifacts/architecture.md` — look for ADR sections, decision rationale, or trade-off notes
 - Check: Are significant technology/design choices explained with rationale?
 
 #### 1.7 Implementation (6.4.7)
@@ -144,7 +147,7 @@ Evaluate each selected process group. For each process area, assign a compliance
 
 #### 2.3 Decision Management (6.3.3)
 - Are significant decisions documented with rationale?
-- Evidence: Architecture decision records, PRD change log, sprint retrospectives
+- Evidence: `{output_folder}/planning-artifacts/architecture.md` (ADR or decision sections), `{output_folder}/planning-artifacts/prd.md` (revision history table), sprint retrospectives
 - Check: Are key architectural or design decisions recorded?
 
 #### 2.4 Risk Management (6.3.4)
@@ -159,7 +162,7 @@ Evaluate each selected process group. For each process area, assign a compliance
 
 #### 2.6 Information Management (6.3.6)
 - Is project information organized, accessible, and preserved?
-- Evidence: `_bmad-output/` structure, project-context.md, documentation organization
+- Evidence: `{output_folder}/project-context.md`, `{output_folder}/` directory listing — assess whether artifacts are organized in a consistent, navigable structure
 - Check: Are project artifacts organized in a consistent structure?
 
 #### 2.7 Measurement (6.3.7)
@@ -288,15 +291,24 @@ Compile the full compliance report.
 
 ## Compliance Summary
 
-| Group | Total Clauses | Compliant | Partial | Non-Compliant | Org-Scope | N/A |
-|-------|--------------|-----------|---------|---------------|-----------|-----|
-| Technical Processes | 11 | ... | ... | ... | ... | ... |
-| Technical Management | 8 | ... | ... | ... | ... | ... |
-| Agreement Processes | 2 | ... | ... | ... | ... | ... |
-| Organizational Enabling | 2 | ... | ... | ... | ... | ... |
-| **Total** | **23** | ... | ... | ... | ... | ... |
+| Group | Total Clauses | Compliant | Partial | Non-Compliant | Org-Scope | N/A | Skipped |
+|-------|--------------|-----------|---------|---------------|-----------|-----|---------|
+| Technical Processes | 11 | ... | ... | ... | ... | ... | ... |
+| Technical Management | 8 | ... | ... | ... | ... | ... | ... |
+| Agreement Processes | 2 | ... | ... | ... | ... | ... | ... |
+| Organizational Enabling | 2 | ... | ... | ... | ... | ... | ... |
+| **Total** | **23** | ... | ... | ... | ... | ... | ... |
 
-**Overall Compliance Rate:** {compliant + partial} / {total applicable} = {X}%
+**Overall Compliance Rate:** {compliant + partial} / {total applicable (excluding Skipped and N/A)} = {X}%
+
+---
+
+## Skipped Process Areas
+{List each process area rated SKIPPED, with the artifact path that was missing and is required to complete evaluation}
+
+| Clause | Process Area | Missing Artifact |
+|--------|-------------|-----------------|
+| ...    | ...         | ...             |
 ```
 
 ---
@@ -307,6 +319,56 @@ Save the report to:
 `{output_folder}/sqa-ieee12207-report-{YYYY-MM-DD}.md`
 
 Inform the user of the saved path and ask:
-> "The IEEE/ISO/IEC 12207 compliance report has been saved. Would you like to drill into any specific process area, or create action items in the backlog for the identified gaps?"
+> "The IEEE/ISO/IEC 12207 compliance report has been saved. Would you like to create backlog stories for the P1 (NON-COMPLIANT) gaps?"
 
-If the user confirms creating action items, for each P1 gap: offer to create a bug/story in the backlog using the `create-bug-story` skill.
+After the gap-to-story flow completes (or is declined), ask:
+> "Would you like me to generate a remediation plan for all compliance gaps? This will produce a prioritized corrective-action document saved alongside the compliance report."
+
+If yes, generate and save a remediation plan to:
+`{output_folder}/sqa-remediation-plan-ieee12207-{YYYY-MM-DD}.md`
+
+### Remediation Plan Format
+
+```
+# IEEE/ISO/IEC 12207 Remediation Plan
+**Date:** {today's date}
+**Auditor:** Gad (SQA Agent)
+**Source Report:** sqa-ieee12207-report-{YYYY-MM-DD}.md
+**Standard:** IEEE/ISO/IEC 12207:2017
+
+---
+
+## Summary
+
+{1-2 sentences: number of non-compliant and partial areas, overall compliance rate, primary themes}
+
+---
+
+## Corrective Actions
+
+| Priority | Clause | Process Area | Gap Description | Corrective Action | Missing Artifact / Evidence | Effort | Owner |
+|----------|--------|-------------|-----------------|-------------------|----------------------------|--------|-------|
+| P1       | 6.x.x  | ...         | ...             | ...               | ...                        | Low/Medium/High | ... |
+
+**Priority definitions:**
+- P1 — NON-COMPLIANT; address before next formal review or release
+- P2 — PARTIAL compliance; address within current or next sprint
+- P3 — ORGANIZATION-SCOPE; escalate to organizational process owner
+
+---
+
+## Resolution Tracking
+
+{Re-run the IEEE 12207 compliance workflow after P1 items are addressed to verify closure}
+```
+
+Inform the user of the remediation plan path.
+
+If the user says yes, present P1 gaps one at a time. For each gap:
+1. Display the gap summary (clause, process area, missing evidence)
+2. Ask: "Create a backlog story for this gap? (yes/skip)"
+3. Wait for the user's response before moving to the next gap
+4. If yes, invoke the `create-bug-story` workflow for that item
+
+Once all P1 gaps have been offered, ask:
+> "Would you like to drill into any specific process area in more detail?"

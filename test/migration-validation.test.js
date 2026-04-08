@@ -348,11 +348,11 @@ test('5.2: module.yaml has extends-module: bmm', () => {
   assert.ok(content.includes('extends-module: bmm'), 'module.yaml must declare extends-module: bmm');
 });
 
-test('5.3: skills/ contains exactly 58 skill folders', () => {
+test('5.3: skills/ contains exactly 62 skill folders', () => {
   const folders = fs.readdirSync(SKILLS_DIR).filter(f =>
     fs.statSync(path.join(SKILLS_DIR, f)).isDirectory());
-  assert.strictEqual(folders.length, 58,
-    `Expected 58 skill folders, found ${folders.length}: ${folders.join(', ')}`);
+  assert.strictEqual(folders.length, 62,
+    `Expected 62 skill folders, found ${folders.length}: ${folders.join(', ')}`);
 });
 
 test('5.4: every skill folder has SKILL.md', () => {
@@ -373,12 +373,12 @@ test('5.5: every skill folder has bmad-skill-manifest.yaml', () => {
   }
 });
 
-test('5.6: module-help.csv exists and lists all 58 skills', () => {
+test('5.6: module-help.csv exists and lists all 62 skills', () => {
   const csv = fs.readFileSync(path.join(EXT_DIR, 'module-help.csv'), 'utf-8');
   const lines = csv.split('\n').filter(l => l.trim() && !l.startsWith('module,'));
-  // Should have a line for each of the 58 skills (header excluded)
-  assert.strictEqual(lines.length, 58,
-    `Expected 58 data rows in module-help.csv, found ${lines.length}`);
+  // Should have a line for each of the 62 skills (header excluded)
+  assert.strictEqual(lines.length, 62,
+    `Expected 62 data rows in module-help.csv, found ${lines.length}`);
 });
 
 test('5.7: module-help.csv references module code ma-skills', () => {
@@ -390,7 +390,7 @@ test('5.7: module-help.csv references module code ma-skills', () => {
   }
 });
 
-test('5.8: skill folder breakdown: 5 agents + 8 mil498 + 7 sre + 5 devops + 7 cyber + 12 ml + 14 extension', () => {
+test('5.8: skill folder breakdown: 6 agents + 8 mil498 + 7 sre + 5 devops + 7 cyber + 12 ml + 17 extension (14 workflow + 3 sqa)', () => {
   const folders = fs.readdirSync(SKILLS_DIR).filter(f =>
     fs.statSync(path.join(SKILLS_DIR, f)).isDirectory());
 
@@ -405,13 +405,13 @@ test('5.8: skill folder breakdown: 5 agents + 8 mil498 + 7 sre + 5 devops + 7 cy
     !f.startsWith('sre-') && !f.startsWith('devops-') && !f.startsWith('cyber-') &&
     !f.startsWith('ml-'));
 
-  assert.strictEqual(agents.length, 5, `Expected 5 agent folders, found ${agents.length}`);
+  assert.strictEqual(agents.length, 6, `Expected 6 agent folders, found ${agents.length}`);
   assert.strictEqual(mil498.length, 8, `Expected 8 mil498 folders, found ${mil498.length}`);
   assert.strictEqual(sre.length, 7, `Expected 7 sre folders, found ${sre.length}`);
   assert.strictEqual(devops.length, 5, `Expected 5 devops folders, found ${devops.length}`);
   assert.strictEqual(cyber.length, 7, `Expected 7 cyber folders, found ${cyber.length}`);
   assert.strictEqual(ml.length, 12, `Expected 12 ml folders, found ${ml.length}`);
-  assert.strictEqual(ext.length, 14, `Expected 14 extension folders, found ${ext.length}`);
+  assert.strictEqual(ext.length, 17, `Expected 17 extension folders, found ${ext.length}`);
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

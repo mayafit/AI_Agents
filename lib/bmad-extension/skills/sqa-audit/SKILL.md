@@ -40,13 +40,13 @@ Before running any audit dimension, collect the following project artifacts:
 
 ### Required reads
 - `{project-root}/_bmad/bmm/config.yaml` — resolve {output_folder}
-- `{project-root}/_bmad-output/planning-artifacts/prd.md` — product requirements (if exists)
-- `{project-root}/_bmad-output/planning-artifacts/architecture.md` — architecture doc (if exists)
-- `{project-root}/_bmad-output/planning-artifacts/epics.md` — epics (if exists)
-- `{project-root}/_bmad-output/implementation-artifacts/sprint-status.yaml` — sprint and backlog state
+- `{output_folder}/planning-artifacts/prd.md` — product requirements (if exists)
+- `{output_folder}/planning-artifacts/architecture.md` — architecture doc (if exists)
+- `{output_folder}/planning-artifacts/epics.md` — epics (if exists)
+- `{output_folder}/implementation-artifacts/sprint-status.yaml` — sprint and backlog state
 
 ### Optional reads (load if they exist)
-- `{project-root}/_bmad-output/project-context.md` — project context summary
+- `{output_folder}/project-context.md` — project context summary
 - Any story files referenced in sprint-status.yaml that are relevant to active/done items
 
 Inform the user which artifacts were found and which were missing before proceeding. Missing artifacts for a dimension will result in a SKIPPED status for that dimension.
@@ -54,6 +54,8 @@ Inform the user which artifacts were found and which were missing before proceed
 ---
 
 ## Step 3 — Run Selected Audit Dimensions
+
+**Scope guard:** For each dimension below, only execute if that dimension's number is in {audit_scope}. Skip silently — do not mention skipped dimensions until the report.
 
 Run each selected dimension in order. For each dimension, produce a findings block (see format below).
 
@@ -101,7 +103,7 @@ Run each selected dimension in order. For each dimension, produce a findings blo
 
 **Process:**
 1. Check for the presence of a git-workflow-skill or equivalent branching policy definition
-2. Review recent git log (ask user to paste `git log --oneline -20` output, or use available git tools):
+2. Retrieve recent git log using available git tools (run `git log --oneline -20` directly). Fall back to asking the user to paste the output only if tool execution fails or is not permitted:
    - Are commit messages following conventional commit format?
    - Are changes going through feature branches and PRs (not committed directly to main)?
 3. Check for test coverage evidence:
@@ -228,5 +230,50 @@ After running all selected dimensions, compile a full audit report.
 Save the report to:
 `{output_folder}/sqa-audit-report-{YYYY-MM-DD}.md`
 
-Inform the user of the saved path and ask:
-> "The audit report has been saved. Would you like to review any specific finding in more detail, or take action on any of the identified issues?"
+Inform the user of the saved path.
+
+Then, for each FAIL finding in the report, present it one at a time and ask:
+> "Would you like me to create a backlog story for this issue: [finding summary]? (yes/skip)"
+
+Wait for the user's response before proceeding to the next FAIL. If yes, invoke the `create-bug-story` workflow for that item. The user may accept or skip each item individually. Once all FAILs have been offered, ask:
+> "Would you like me to generate a remediation plan for all findings? This will produce a prioritized corrective-action document saved alongside the audit report."
+
+If yes, generate and save a remediation plan to:
+`{output_folder}/sqa-remediation-plan-{YYYY-MM-DD}.md`
+
+### Remediation Plan Format
+
+```
+# SQA Remediation Plan
+**Date:** {today's date}
+**Auditor:** Gad (SQA Agent)
+**Source Report:** sqa-audit-report-{YYYY-MM-DD}.md
+**Scope:** {audited dimensions}
+
+---
+
+## Summary
+
+{1-2 sentences: number of findings, overall risk level, key themes}
+
+---
+
+## Corrective Actions
+
+| Priority | Dimension | Finding | Corrective Action | Target State | Effort | Owner |
+|----------|-----------|---------|-------------------|--------------|--------|-------|
+| P1       | ...       | ...     | ...               | ...          | Low/Medium/High | ... |
+
+**Priority definitions:**
+- P1 — FAIL severity; must be resolved before next release or sprint boundary
+- P2 — WARNING severity; should be resolved within current or next sprint
+- P3 — Observation; address when capacity allows
+
+---
+
+## Resolution Tracking
+
+{Instructions to the team: update this table as items are resolved; re-run the audit after P1 items are addressed to verify closure}
+```
+
+Inform the user of the remediation plan path and ask if they want to review any finding in more detail.
