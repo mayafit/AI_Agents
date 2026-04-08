@@ -130,6 +130,7 @@ These domain-expert agents are installed alongside BMAD-METHOD and provide guide
 | Cyber Analyst | Yael | `_bmad/skills/cyber/` | `_bmad/bmm/agents/cyber.md` |
 | MIL-STD-498 Expert | Joseph | `_bmad/skills/mil498/` | `_bmad/bmm/agents/mil498.md` |
 | ML Scientist | Demerzel | `_bmad/skills/demerzel/` | `_bmad/bmm/agents/demerzel.md` |
+| SQA Engineer | Gad | `_bmad/skills/sqa/` | `_bmad/bmm/agents/qa.md` |
 
 ## Available Skills
 
@@ -173,7 +174,7 @@ These skills are installed into your coding tool of choice and provide reusable 
 | `docker-image-signing` | Security | Automated cryptographic signing for Docker images |
 | `docker-hardening-verification` | Security | Audits images for least-privilege and OpenShift compatibility |
 
-### Agent Workflows (24)
+### Agent Workflows (27)
 
 These workflows are installed as part of the BMAD agent system and are invoked through the agent's menu (not installed individually):
 
@@ -194,6 +195,10 @@ These workflows are installed as part of the BMAD agent system and are invoked t
 | `ml-retrospective` | ML Scientist | Capture session learnings and update project context |
 | **MIL-STD-498 (Joseph)** | | |
 | `mil498-requirement-quality` | MIL-STD-498 Expert | Evaluate requirements against 14 quality criteria — produces per-requirement audit table, Missing Elements report, and Overall Quality Score |
+| **SQA (Gad)** | | |
+| `sqa-audit` | SQA Engineer | Multi-dimensional project quality audit: code↔story traceability, stories↔architecture/PRD alignment, process compliance, sprint health, release state — saves audit report and optional remediation plan |
+| `sqa-ieee12207` | SQA Engineer | IEEE/ISO/IEC 12207:2017 compliance assessment across 23 process areas in 4 groups — produces compliance matrix, gap analysis, and optional remediation plan |
+| `sqa-requirements-quality` | SQA Engineer | Requirements quality audit against 14 criteria with scope selection (PRD FRs, NFRs, epics, stories) — per-requirement audit table, critical-fail detection, Overall Quality Score, and optional remediation plan |
 | **Sprint Management** | | |
 | `bmad-sprint-planning` | Scrum Master | Bootstrap or refresh the unified `sprint-status.yaml` from epics and bug stories |
 | `generate-backlog` | Scrum Master | Generate or refresh the `backlog` section of `sprint-status.yaml` from epics |
@@ -292,6 +297,11 @@ npx ma-agents install --yes    # fully offline BMAD install — no network neede
    - **Focus**: Hypothesis-driven machine learning lifecycle with scientific rigor.
    - **Capabilities**: EDA, architecture design, locked TechSpec contracts, experiment execution, failure-cost analysis.
    - **Workflows**: 12-stage ML lifecycle from ideation through retrospective, with mandatory review gates.
+6. **Gad (SQA Engineer)**:
+   - **Focus**: Software quality assurance — project auditing, standards compliance, and requirements quality.
+   - **Capabilities**: Multi-dimensional quality audits, IEEE/ISO/IEC 12207:2017 compliance assessments, requirements evaluation against 14 established quality criteria.
+   - **Workflows**: Project Audit (5 dimensions: code↔story traceability, stories↔architecture/PRD alignment, process compliance, sprint health, release state), IEEE 12207 Compliance (23 process areas across 4 groups with compliance matrix and gap analysis), Requirements Quality Audit (scope-selectable: PRD FRs, NFRs, epics, stories).
+   - **Remediation**: All audit workflows offer an optional remediation plan (`sqa-remediation-plan-{date}.md`) and per-finding `create-bug-story` integration for critical gaps.
 
 #### Operational Workflows
 The integration includes a suite of specialized playbooks:
