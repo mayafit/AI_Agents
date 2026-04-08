@@ -2,6 +2,8 @@
 
 [![Version](https://img.shields.io/npm/v/bmad-wds?color=blue&label=version)](https://www.npmjs.com/package/bmad-wds)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python Version](https://img.shields.io/badge/python-%3E%3D3.10-blue?logo=python&logoColor=white)](https://www.python.org)
+[![uv](https://img.shields.io/badge/uv-package%20manager-blueviolet?logo=uv)](https://docs.astral.sh/uv/)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-7289da?logo=discord&logoColor=white)](https://discord.gg/gk8jAdXWmj)
 
 **Strategic design methodology for creating products users love, powered by AI agents.**
@@ -116,6 +118,17 @@ npx whiteport-design-studio install
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Community
+
+- [Discord](https://discord.gg/gk8jAdXWmj) — Get help, share ideas, collaborate
+- [YouTube](https://youtube.com/@BMadCode) — Tutorials, master class, and more
+- [X / Twitter](https://x.com/BMadCode)
+- [Website](https://bmadcode.com)
+
+## Support BMad
+
+BMad is free for everyone and always will be. Star this repo, [buy me a coffee](https://buymeacoffee.com/bmad), or email contact@bmadcode.com for corporate sponsorship.
 
 ## License
 
