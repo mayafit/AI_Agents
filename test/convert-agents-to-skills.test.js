@@ -66,14 +66,14 @@ const AGENTS = [
     menuItemCount: 6 // MH, CH, VS, SA, TM, DA
   },
   {
-    folder: 'bmad-ma-agent-mil498',
-    name: 'bmad-ma-agent-mil498',
-    displayName: 'Joseph',
-    title: 'MIL-STD-498 Expert',
-    skillNames: ['mil498-srs', 'mil498-sdd', 'mil498-sdp', 'mil498-ocd', 'mil498-sss', 'mil498-std', 'mil498-ssdd'],
-    oldPaths: ['bmm/workflows/mil498/', '_bmad/bmm/workflows/mil498/'],
-    chatTopic: 'MIL-STD-498',
-    menuItemCount: 10 // MH, CH, GS, GD, GP, GO, SS, GT, SD, DA
+    folder: 'bmad-ma-agent-sqa',
+    name: 'bmad-ma-agent-sqa',
+    displayName: 'Gad',
+    title: 'Software Quality Assurance & Standards Expert',
+    skillNames: ['sqa-audit', 'sqa-ieee12207', 'sqa-requirements-quality'],
+    oldPaths: ['bmm/workflows/sqa/', '_bmad/bmm/workflows/sqa/'],
+    chatTopic: 'quality assurance',
+    menuItemCount: 14 // MH, CH, AU, IC, RQ, GS, GD, GP, GO, SS, GT, SD, MR, DA
   },
   {
     folder: 'bmad-ma-agent-ml',

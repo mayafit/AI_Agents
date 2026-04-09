@@ -79,7 +79,7 @@ test('2.1: lib/bmad-customize/ directory exists', () => {
 });
 
 const builtinAgents = [
-  'bmm-pm', 'bmm-architect', 'bmm-dev', 'bmm-qa',
+  'bmm-pm', 'bmm-architect', 'bmm-dev',
   'bmm-sm', 'bmm-tech-writer', 'bmm-ux-designer', 'bmm-bmad-master'
 ];
 
@@ -182,7 +182,7 @@ test('3.7: bmad-customizations retains platform and generic files (agent files r
     assert.ok(fs.existsSync(filePath), `${name}.customize.yaml must still exist in bmad-customizations/`);
   }
   // Custom agent files (bmm-sre, bmm-devops, etc.) were removed — now in skill folders
-  const removedAgents = ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-mil498'];
+  const removedAgents = ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-qa'];
   for (const id of removedAgents) {
     const filePath = path.join(customDir, `${id}.customize.yaml`);
     assert.ok(!fs.existsSync(filePath), `${id}.customize.yaml should NOT exist in bmad-customizations/ (moved to skill folders)`);

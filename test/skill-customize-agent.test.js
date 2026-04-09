@@ -50,7 +50,7 @@ try {
 console.log('\n validateBmadAgent unit tests\n');
 
 test('validates custom agents (full customization)', () => {
-  const customAgents = ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-mil498'];
+  const customAgents = ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-qa'];
   for (const agent of customAgents) {
     const result = validateBmadAgent(agent);
     assert.strictEqual(result.valid, true, `Expected ${agent} to be valid`);
@@ -59,7 +59,7 @@ test('validates custom agents (full customization)', () => {
 });
 
 test('validates builtin agents (critical_actions only)', () => {
-  const builtinAgents = ['bmm-pm', 'bmm-architect', 'bmm-dev', 'bmm-qa', 'bmm-sm', 'bmm-tech-writer', 'bmm-ux-designer'];
+  const builtinAgents = ['bmm-pm', 'bmm-architect', 'bmm-dev', 'bmm-sm', 'bmm-tech-writer', 'bmm-ux-designer'];
   for (const agent of builtinAgents) {
     const result = validateBmadAgent(agent);
     assert.strictEqual(result.valid, true, `Expected ${agent} to be valid`);
