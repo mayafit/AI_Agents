@@ -66,7 +66,7 @@ test('3.3: installer.js contains NO agent-name-specific logic', () => {
 console.log('\nTask 4 — Registry completeness');
 
 const EXPECTED_IDE = ['claude-code', 'gemini', 'copilot', 'kilocode', 'cline', 'cursor', 'antigravity', 'opencode'];
-const EXPECTED_BMAD = ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-mil498', 'bmm-demerzel'];
+const EXPECTED_BMAD = ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-qa', 'bmm-demerzel'];
 const EXPECTED_ALL = [...EXPECTED_IDE, ...EXPECTED_BMAD];
 
 test('4.1: registry has at least 13 agents (8+ IDE + 5 BMAD)', () => {
