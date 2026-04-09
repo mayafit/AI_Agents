@@ -128,9 +128,8 @@ These domain-expert agents are installed alongside BMAD-METHOD and provide guide
 | SRE Agent | Alex | `_bmad/skills/sre/` | `_bmad/bmm/agents/sre.md` |
 | DevOps Agent | Amit | `_bmad/skills/devops/` | `_bmad/bmm/agents/devops.md` |
 | Cyber Analyst | Yael | `_bmad/skills/cyber/` | `_bmad/bmm/agents/cyber.md` |
-| MIL-STD-498 Expert | Joseph | `_bmad/skills/mil498/` | `_bmad/bmm/agents/mil498.md` |
 | ML Scientist | Demerzel | `_bmad/skills/demerzel/` | `_bmad/bmm/agents/demerzel.md` |
-| SQA Engineer | Gad | `_bmad/skills/sqa/` | `_bmad/bmm/agents/qa.md` |
+| SQA & Standards Expert | Gad | `_bmad/skills/sqa/` | `_bmad/bmm/agents/qa.md` |
 
 ## Available Skills
 
@@ -174,7 +173,7 @@ These skills are installed into your coding tool of choice and provide reusable 
 | `docker-image-signing` | Security | Automated cryptographic signing for Docker images |
 | `docker-hardening-verification` | Security | Audits images for least-privilege and OpenShift compatibility |
 
-### Agent Workflows (27)
+### Agent Workflows (34)
 
 These workflows are installed as part of the BMAD agent system and are invoked through the agent's menu (not installed individually):
 
@@ -193,12 +192,18 @@ These workflows are installed as part of the BMAD agent system and are invoked t
 | `ml-revision` | ML Scientist | Amend hypothesis and requirements based on experiment findings |
 | `ml-advise` | ML Scientist | Search past experiments, surface findings and failure warnings |
 | `ml-retrospective` | ML Scientist | Capture session learnings and update project context |
-| **MIL-STD-498 (Joseph)** | | |
-| `mil498-requirement-quality` | MIL-STD-498 Expert | Evaluate requirements against 14 quality criteria — produces per-requirement audit table, Missing Elements report, and Overall Quality Score |
-| **SQA (Gad)** | | |
-| `sqa-audit` | SQA Engineer | Multi-dimensional project quality audit: code↔story traceability, stories↔architecture/PRD alignment, process compliance, sprint health, release state — saves audit report and optional remediation plan |
-| `sqa-ieee12207` | SQA Engineer | IEEE/ISO/IEC 12207:2017 compliance assessment across 23 process areas in 4 groups — produces compliance matrix, gap analysis, and optional remediation plan |
-| `sqa-requirements-quality` | SQA Engineer | Requirements quality audit against 14 criteria with scope selection (PRD FRs, NFRs, epics, stories) — per-requirement audit table, critical-fail detection, Overall Quality Score, and optional remediation plan |
+| **SQA & MIL-STD-498 (Gad)** | | |
+| `sqa-audit` | SQA & Standards Expert | Multi-dimensional project quality audit: code↔story traceability, stories↔architecture/PRD alignment, process compliance, sprint health, release state — saves audit report and optional remediation plan |
+| `sqa-ieee12207` | SQA & Standards Expert | IEEE/ISO/IEC 12207:2017 compliance assessment across 23 process areas in 4 groups — produces compliance matrix, gap analysis, and optional remediation plan |
+| `sqa-requirements-quality` | SQA & Standards Expert | Requirements quality audit against 14 criteria with scope selection (PRD FRs, NFRs, epics, stories) — per-requirement audit table, critical-fail detection, Overall Quality Score, and optional remediation plan |
+| `mil498-srs` | SQA & Standards Expert | Generate Software Requirements Specification (SRS) per MIL-STD-498 DID |
+| `mil498-sdd` | SQA & Standards Expert | Generate Software Design Description (SDD) per MIL-STD-498 DID |
+| `mil498-sdp` | SQA & Standards Expert | Generate Software Development Plan (SDP) per MIL-STD-498 DID |
+| `mil498-ocd` | SQA & Standards Expert | Generate Operational Concept Description (OCD) per MIL-STD-498 DID |
+| `mil498-sss` | SQA & Standards Expert | Generate System/Subsystem Specification (SSS) per MIL-STD-498 DID |
+| `mil498-std` | SQA & Standards Expert | Generate Software Test Description (STD) per MIL-STD-498 DID |
+| `mil498-ssdd` | SQA & Standards Expert | Generate System/Subsystem Design Description (SSDD) per MIL-STD-498 DID |
+| `mil498-requirement-quality` | SQA & Standards Expert | Evaluate requirements against 14 quality criteria — per-requirement audit table, Missing Elements report, and Overall Quality Score (MIL-STD-498 context) |
 | **Sprint Management** | | |
 | `bmad-sprint-planning` | Scrum Master | Bootstrap or refresh the unified `sprint-status.yaml` from epics and bug stories |
 | `generate-backlog` | Scrum Master | Generate or refresh the `backlog` section of `sprint-status.yaml` from epics |
@@ -288,20 +293,15 @@ npx ma-agents install --yes    # fully offline BMAD install — no network neede
    - **Focus**: Cyber immunity, security auditing, and vulnerability management.
    - **Capabilities**: Immunity estimation (scoring), Vault secret management, and PKI automation.
    - **Integration**: Orchestrates ma-agents security skills for deep scans.
-4. **Joseph (MIL-STD-498)**:
-   - **Focus**: Technical standards compliance and military document generation.
-   - **Capabilities**: Document Data Descriptions (DIDs), requirements traceability, and complex specification writing.
-   - **Workflows**: SRS, SSS, and SSDD generation with strict structural validation.
-   - **Requirements QA**: Built-in `mil498-requirement-quality` skill — evaluates every requirement against 14 quality criteria (Clarity, Single Verb, Sentence Structure, Glossary Presence, Necessity, Implementation-Independence, Unambiguity, Completeness, Feasibility, Testability, Stakeholder Alignment, Convention Conformance, Understandability, Precision). Produces a per-requirement audit table, a Missing Elements report, and an Overall Quality Score. Applies to MIL-STD-498 documents, PRDs, and Epics/Stories.
-5. **Demerzel (ML Scientist)**:
+4. **Demerzel (ML Scientist)**:
    - **Focus**: Hypothesis-driven machine learning lifecycle with scientific rigor.
    - **Capabilities**: EDA, architecture design, locked TechSpec contracts, experiment execution, failure-cost analysis.
    - **Workflows**: 12-stage ML lifecycle from ideation through retrospective, with mandatory review gates.
-6. **Gad (SQA Engineer)**:
-   - **Focus**: Software quality assurance — project auditing, standards compliance, and requirements quality.
-   - **Capabilities**: Multi-dimensional quality audits, IEEE/ISO/IEC 12207:2017 compliance assessments, requirements evaluation against 14 established quality criteria.
-   - **Workflows**: Project Audit (5 dimensions: code↔story traceability, stories↔architecture/PRD alignment, process compliance, sprint health, release state), IEEE 12207 Compliance (23 process areas across 4 groups with compliance matrix and gap analysis), Requirements Quality Audit (scope-selectable: PRD FRs, NFRs, epics, stories).
-   - **Remediation**: All audit workflows offer an optional remediation plan (`sqa-remediation-plan-{date}.md`) and per-finding `create-bug-story` integration for critical gaps.
+5. **Gad (SQA & Standards Expert)**:
+   - **Focus**: Software quality assurance and defense documentation standards — a unified persona covering SQA auditing and MIL-STD-498 document generation.
+   - **SQA Capabilities**: Multi-dimensional project quality audits, IEEE/ISO/IEC 12207:2017 compliance assessments (23 process areas, 4 groups), requirements evaluation against 14 established quality criteria (scope-selectable: PRD FRs, NFRs, epics, stories).
+   - **MIL-STD-498 Capabilities**: Full Data Item Description (DID) generation for SRS, SDD, SDP, OCD, SSS, STD, and SSDD. Requirements quality review tailored to MIL-STD-498 structure and military-standard terminology (CSCI, HWCI, IRS).
+   - **Remediation**: All audit and compliance workflows offer an optional remediation plan (`sqa-remediation-plan-{date}.md`) and per-finding `create-bug-story` integration for critical gaps.
 
 #### Operational Workflows
 The integration includes a suite of specialized playbooks:
