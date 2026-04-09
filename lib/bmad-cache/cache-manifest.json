@@ -1,12 +1,12 @@
 {
-  "generated": "2026-04-08T21:19:53.359Z",
+  "generated": "2026-04-09T10:08:13.598Z",
   "bmadMethodVersion": "6.2.2",
   "modules": {
     "bmb": {
       "url": "https://github.com/bmad-code-org/bmad-builder",
       "branch": "main",
-      "commitSha": "a873b7f0b30be65e1525e4e08ff046ae07c724af",
-      "clonedAt": "2026-04-08T21:19:18.546Z"
+      "commitSha": "605e07656f9f633b5e429297388e1db9687d1996",
+      "clonedAt": "2026-04-09T10:07:44.090Z"
     },
     "cis": {
       "url": "https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite",
