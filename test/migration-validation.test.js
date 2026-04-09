@@ -66,11 +66,11 @@ const AGENTS = [
     principles: ['Security is a process, not a product', 'Favor Defense in Depth', 'Prioritize mitigations based on risk']
   },
   {
-    id: 'mil498', folder: 'bmad-ma-agent-mil498', name: 'Joseph',
-    role: 'Expert Systems Engineer',
-    identity: 'Decades of experience in defense contracting',
-    style: 'Formal, precise, and authoritative',
-    principles: ['Documentation is the foundation of quality', 'Traceability is mandatory', 'Adherence to standards ensures mission success']
+    id: 'sqa', folder: 'bmad-ma-agent-sqa', name: 'Gad',
+    role: 'Software Quality Assurance Engineer and Defense Standards Expert',
+    identity: 'Experienced quality professional with deep expertise in SQA auditing',
+    style: 'Clear, precise, and structured for SQA work',
+    principles: ['Quality is everyone\'s responsibility but the SQA auditor\'s job to verify', 'Traceability from requirement to code', 'Process compliance prevents defects', 'Evidence matters more than opinions']
   },
 ];
 
@@ -148,9 +148,12 @@ const AGENT_MENUS = {
       { cmd: 'TM', skill: 'cyber-threat-modeling', exists: false, note: 'pre-existing: workflow never implemented in source' },
     ]
   },
-  'bmad-ma-agent-mil498': {
-    agent: 'MIL-498/Joseph',
+  'bmad-ma-agent-sqa': {
+    agent: 'SQA+MIL-498/Gad',
     items: [
+      { cmd: 'AU', skill: 'sqa-audit', exists: true },
+      { cmd: 'IC', skill: 'sqa-ieee12207', exists: true },
+      { cmd: 'RQ', skill: 'sqa-requirements-quality', exists: true },
       { cmd: 'GS', skill: 'mil498-srs', exists: true },
       { cmd: 'GD', skill: 'mil498-sdd', exists: true },
       { cmd: 'GP', skill: 'mil498-sdp', exists: true },
@@ -158,6 +161,7 @@ const AGENT_MENUS = {
       { cmd: 'SS', skill: 'mil498-sss', exists: true },
       { cmd: 'GT', skill: 'mil498-std', exists: true },
       { cmd: 'SD', skill: 'mil498-ssdd', exists: true },
+      { cmd: 'MR', skill: 'mil498-requirement-quality', exists: true },
     ]
   },
 };
@@ -348,11 +352,11 @@ test('5.2: module.yaml has extends-module: bmm', () => {
   assert.ok(content.includes('extends-module: bmm'), 'module.yaml must declare extends-module: bmm');
 });
 
-test('5.3: skills/ contains exactly 62 skill folders', () => {
+test('5.3: skills/ contains exactly 61 skill folders', () => {
   const folders = fs.readdirSync(SKILLS_DIR).filter(f =>
     fs.statSync(path.join(SKILLS_DIR, f)).isDirectory());
-  assert.strictEqual(folders.length, 62,
-    `Expected 62 skill folders, found ${folders.length}: ${folders.join(', ')}`);
+  assert.strictEqual(folders.length, 61,
+    `Expected 61 skill folders, found ${folders.length}: ${folders.join(', ')}`);
 });
 
 test('5.4: every skill folder has SKILL.md', () => {
@@ -373,12 +377,12 @@ test('5.5: every skill folder has bmad-skill-manifest.yaml', () => {
   }
 });
 
-test('5.6: module-help.csv exists and lists all 62 skills', () => {
+test('5.6: module-help.csv exists and lists all 61 skills', () => {
   const csv = fs.readFileSync(path.join(EXT_DIR, 'module-help.csv'), 'utf-8');
   const lines = csv.split('\n').filter(l => l.trim() && !l.startsWith('module,'));
-  // Should have a line for each of the 62 skills (header excluded)
-  assert.strictEqual(lines.length, 62,
-    `Expected 62 data rows in module-help.csv, found ${lines.length}`);
+  // Should have a line for each of the 61 skills (header excluded)
+  assert.strictEqual(lines.length, 61,
+    `Expected 61 data rows in module-help.csv, found ${lines.length}`);
 });
 
 test('5.7: module-help.csv references module code ma-skills', () => {
@@ -390,7 +394,7 @@ test('5.7: module-help.csv references module code ma-skills', () => {
   }
 });
 
-test('5.8: skill folder breakdown: 6 agents + 8 mil498 + 7 sre + 5 devops + 7 cyber + 12 ml + 17 extension (14 workflow + 3 sqa)', () => {
+test('5.8: skill folder breakdown: 5 agents + 8 mil498 + 7 sre + 5 devops + 7 cyber + 12 ml + 17 extension (14 workflow + 3 sqa)', () => {
   const folders = fs.readdirSync(SKILLS_DIR).filter(f =>
     fs.statSync(path.join(SKILLS_DIR, f)).isDirectory());
 
@@ -405,7 +409,7 @@ test('5.8: skill folder breakdown: 6 agents + 8 mil498 + 7 sre + 5 devops + 7 cy
     !f.startsWith('sre-') && !f.startsWith('devops-') && !f.startsWith('cyber-') &&
     !f.startsWith('ml-'));
 
-  assert.strictEqual(agents.length, 6, `Expected 6 agent folders, found ${agents.length}`);
+  assert.strictEqual(agents.length, 5, `Expected 5 agent folders, found ${agents.length}`);
   assert.strictEqual(mil498.length, 8, `Expected 8 mil498 folders, found ${mil498.length}`);
   assert.strictEqual(sre.length, 7, `Expected 7 sre folders, found ${sre.length}`);
   assert.strictEqual(devops.length, 5, `Expected 5 devops folders, found ${devops.length}`);

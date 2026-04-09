@@ -138,9 +138,9 @@ const expectedAgentSkills = [
   'bmad-ma-agent-sre',
   'bmad-ma-agent-devops',
   'bmad-ma-agent-cyber',
-  'bmad-ma-agent-mil498',
   'bmad-ma-agent-ml',
   'bmad-ma-agent-sqa',
+  // Note: bmad-ma-agent-mil498 retired — MIL-STD-498 workflows absorbed into Gad (bmad-ma-agent-sqa)
 ];
 
 const expectedSqaSkills = [
@@ -195,14 +195,14 @@ const allExpectedSkills = [
   ...expectedSqaSkills,
 ];
 
-test('skills/ has exactly 62 subdirectories', () => {
+test('skills/ has exactly 61 subdirectories', () => {
   const entries = fs.readdirSync(skillsDir).filter(e =>
     fs.statSync(path.join(skillsDir, e)).isDirectory()
   );
-  assert.strictEqual(entries.length, 62, `Expected 62 skill dirs, found ${entries.length}`);
+  assert.strictEqual(entries.length, 61, `Expected 61 skill dirs, found ${entries.length}`);
 });
 
-test('all 6 agent skill directories exist', () => {
+test('all 5 agent skill directories exist', () => {
   for (const skill of expectedAgentSkills) {
     const p = path.join(skillsDir, skill);
     assert.ok(fs.existsSync(p), `Missing agent skill dir: ${skill}`);
@@ -291,8 +291,8 @@ test('module-help.csv has correct header columns', () => {
   }
 });
 
-test('module-help.csv has 62 skill entries (excluding header)', () => {
-  assert.strictEqual(csvData.rows.length, 62, `Expected 62 rows, found ${csvData.rows.length}`);
+test('module-help.csv has 61 skill entries (excluding header)', () => {
+  assert.strictEqual(csvData.rows.length, 61, `Expected 61 rows, found ${csvData.rows.length}`);
 });
 
 test('all CSV entries use module code ma-skills', () => {
