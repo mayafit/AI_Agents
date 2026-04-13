@@ -90,7 +90,7 @@ development_status:
   # Architecture: Decision P3-3 in _bmad-output/planning-artifacts/architecture.md
   # Execution order: 21.1 → 21.2 → (21.3 + 21.4 + 21.5 in parallel) → 21.6 → 21.7 → 21.8 → 21.9
   epic-21: backlog
-  21-1-install-time-profile-prompt: ready-for-dev
+  21-1-install-time-profile-prompt: review
   21-2-universal-instruction-block-expansion: backlog
   21-3-roomodes-template-bmad-modes: backlog
   21-4-agents-md-template-opencode: backlog
