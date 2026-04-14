@@ -27,6 +27,10 @@ tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 
 development_status:
+  # ─── BUG FIXES (ACTIVE) ───────────────────────────────────────────────────────
+  # Bug A (2026-04-14): ExperimentalWarning on installer startup. Severity: medium.
+  bug-experimentalwarning-about-commonjs-loading-es-module-during-install: ready-for-dev
+
   # ─── IN PROGRESS ──────────────────────────────────────────────────────────────
 
   # Epic 5: Bundled BMAD Installation — stories 5.1-5.4 done (archived), 5.5-5.6 in review
