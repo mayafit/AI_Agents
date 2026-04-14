@@ -16,7 +16,7 @@ So that future changes to installer or templates do not silently regress on-prem
    - **(c) NFR46 — idempotency:** Two consecutive installs with the same profile produce byte-identical content within ma-agents-owned regions (marker blocks for markdown files, owned slugs for `.roomodes`) across all per-tool files.
    - **(d) `.roomodes` slug-collision behavior:** Pre-existing user-defined `customModes` with non-conflicting slugs are preserved through reinstall; conflicting slugs are overwritten with a console warning naming the slug.
    - **(e) NFR47 enforcement contract:** The four ma-agents BMAD modes' `fileRegex` patterns reject the expected code-file extensions and accept the expected planning-file extensions. `bmad-architect` regex matrix tested against `.ts`, `.py`, `.js`, `.go` (rejected) and `.md`, `.xml`, `.drawio` (accepted). Same shape of test for `bmad-pm`, `bmad-techlead`.
-   - **(f) Profile switch round-trip:** Install standard → switch to on-prem (`--profile=on-prem`) → switch back to standard. Final state must match the original standard install (byte-identical for ma-agents-owned regions). User content outside markers preserved across all switches.
+   - **(f) Profile switch round-trip:** Install standard → switch to on-prem (via the Story 21.10 reconfigure command, or — until 21.10 lands — by editing `.ma-agents.json` directly and re-running install) → switch back to standard. Final state must match the original standard install (byte-identical for ma-agents-owned regions). User content outside markers preserved across all switches.
 2. The full test suite (`npm test`) passes after Story 21.9 — no regressions in any pre-Epic-21 tests.
 3. A short test-coverage table is added to the PR body listing each Epic 21 NFR (44, 45, 46, 47) and the test(s) that cover it. Any uncovered NFR is flagged as an open issue, not silently shipped.
 4. The integration tests use temporary directories (`fs.mkdtempSync(os.tmpdir() + ...)` per test) to avoid touching the repo's own `.ma-agents.json` or instruction files.
@@ -36,7 +36,7 @@ So that future changes to installer or templates do not silently regress on-prem
 - [ ] Task 2: Run full `npm test` — verify no regressions (AC #2)
 - [ ] Task 3: PR body coverage table (AC #3)
   - [ ] 3.1 Tabulate NFR44, NFR45, NFR46, NFR47 → covering test name(s)
-  - [ ] 3.2 Confirm NFR45 (CI/CD compatibility) is covered by `test/profile.test.js` (Story 21.1) tests for `--yes` defaulting and `--profile=` override
+  - [ ] 3.2 Confirm NFR45 (CI/CD compatibility) is covered by `test/profile.test.js` (Story 21.1) tests for `--yes` defaulting and persisted-value precedence (no CLI flag exists)
 
 ## Dev Notes
 
@@ -81,3 +81,4 @@ _(to be filled)_
 
 ## Change Log
 - 2026-04-14: Story created (Epic 21, Story 21.9)
+- 2026-04-14: Removed prescriptive `--profile=` flag references from test (f) description and Task 3.2 (flag retired; profile switch deferred to Story 21.10 reconfigure). Aligned with P0 spec-alignment PR #34.

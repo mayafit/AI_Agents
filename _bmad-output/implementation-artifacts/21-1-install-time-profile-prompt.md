@@ -1,6 +1,6 @@
 # Story 21.1: Install-Time Profile Prompt and Persistence
 
-Status: review
+Status: done
 
 ## Story
 
@@ -16,12 +16,12 @@ So that on-prem-specific guardrails activate without me having to remember a CLI
 4. `setProfile` accepts only the values `"on-prem"` and `"standard"`. Any other value throws an `Error` naming the bad value.
 5. `resolveProfile({ persisted, yesMode })` returns the effective profile per this precedence: (a) `persisted` if set; (b) `"standard"` if `yesMode === true`; (c) `null` (caller must prompt). It does not perform any I/O.
 6. The interactive wizard in `bin/cli.js` shows a single `prompts({ type: 'select' })` question after agent selection (Step 2) and before repository-layout selection (Step 2.5), with message `Is this an on-prem / air-gapped install using a local LLM (e.g. Nemotron)?` and choices `Yes — apply local-LLM guardrails (recommended for non-Claude models)` (value `on-prem`) and `No  — standard install (Claude on web, Anthropic API, etc.)` (value `standard`). Default initial selection is the `No` (standard) row.
-7. The wizard prompt is shown only when `resolveProfile()` returns `null`. When a value is already persisted or `--yes` is in effect, no prompt appears and the resolved value is logged once: `Using profile: <value> (from <source>)` where source is one of `.ma-agents.json` or `--yes default`.
+7. The wizard prompt is shown only when `resolveProfile()` returns `null`. When a value is already persisted or `--yes` is passed, no prompt appears and the resolved value is logged once using one of the canonical formats: `Using profile: <value> (from .ma-agents.json)`, `Using profile: standard (from --yes default)`, or `Using profile: <value> (from wizard)`. These formats are pinned in architecture.md P3-3 and referenced by tests verbatim.
 8. After the wizard prompt is answered (or after resolver returns a non-null value), `setProfile` is called with the resolved value before any agent installation runs — guaranteeing the profile is persisted even if a later install step fails.
 9. Direct install command (`npx ma-agents install <skill> --agent <agent>`) respects `--yes`: `--yes` without a persisted value defaults to `standard` and persists; absence of `--yes` and no persisted value triggers the same prompt as the wizard when stdin is a TTY, and defaults silently to `standard` (same as `--yes`) when stdin is not a TTY.
 10. CI/CD path: `npx ma-agents install --yes` with no persisted profile writes `"profile": "standard"` to `.ma-agents.json` and proceeds without prompting (NFR45).
 11. Re-running install with a persisted profile does NOT re-prompt and does NOT change the persisted value (NFR45).
-12. The existing `manifestVersion` value is bumped from `1.1.0` to `1.2.0` in `ensureManifest` to reflect the new `"profile"` field. Manifests at `1.1.0` (no `profile`) are read without error — the `"profile"` field is treated as optional and absent equals `undefined`.
+12. The existing `manifestVersion` value is bumped from `1.1.0` to `1.2.0` in `ensureManifest` to reflect the new `"profile"` field. Manifests at `1.1.0` (no `profile`) are read without error — the `"profile"` field is treated as optional and absent equals `undefined`. Writing to an existing `1.1.0` manifest via `setProfile` MIGRATES `manifestVersion` to `1.2.0` (the `profile` field is only valid under the 1.2.0 schema — carrying it on a 1.1.0 manifest would be schema drift). The migration is logged once per install: `Migrated .ma-agents.json manifestVersion 1.1.0 → 1.2.0`. Fresh manifests bootstrapped via `ensureManifest` start at `1.2.0` directly. NOTE: This migration behavior is a Step 2 follow-up code change (tracked separately); this AC documents the intended end state.
 
 ## Tasks / Subtasks
 
@@ -176,3 +176,6 @@ Claude Opus 4.6 (1M context) — bmad-dev-story + bmad-code-review flow.
 - 2026-04-14: Story created (Epic 21, Story 21.1)
 - 2026-04-14: Story 21.1 implemented — `lib/profile.js` + install-time prompt + manifest 1.2.0 bump; status moved ready-for-dev → review.
 - 2026-04-13: Spec correction — `--profile=` CLI flag removed (never wanted); `resolveProfile` reduced to 2-arg `{ persisted, yesMode }`; direct-install non-TTY path now defaults to `standard` silently instead of aborting. AC count reduced 14 → 11.
+- 2026-04-14: Story delivered via PR #32 (feature/story-21-1-install-time-profile). Status → done. Dev Notes aligned with no-flag correction (removed stale `--profile=` references in Architecture Compliance, Source Tree Components, Library and Pattern References).
+- 2026-04-14: AC #12 clarified — `setProfile` on 1.1.0 manifest migrates to 1.2.0 (no schema drift). Migration implementation tracked as Step 2 follow-up (separate PR).
+- 2026-04-14: AC #7 log-string enum expanded to match canonical formats pinned in architecture.md P3-3 ("from wizard" source added).
