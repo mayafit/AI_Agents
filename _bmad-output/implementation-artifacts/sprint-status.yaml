@@ -2,6 +2,7 @@
 # updated: 2026-04-13 — Epic 21 (On-Prem / Local-LLM Tuning) added to backlog (9 stories, 21.1-21.9).
 # updated: 2026-04-14 — Epic 21 corrective plan: added Story 21.10 (Profile Reconfigure). Fixes adversarial review Findings #5 and #7.
 # updated: 2026-04-14 — Epic 21 corrective plan: added Story 21.11 (Profile Uninstall). Fixes adversarial review Finding #17.
+# updated: 2026-04-14 — Epic 21 corrective plan: added Epic 18 tracking block to sprint-status (Story 18.1 already delivered at code level; remaining stories backlog). Fixes adversarial review Finding #16.
 # updated: 2026-04-07 — All Epic 17 stories (17.9-17.24) implemented and marked done. Epic 19 (BMAD Knowledge Graph) added to backlog.
 # project: agents
 # project_key: NOKEY
@@ -86,6 +87,21 @@ development_status:
   19-6-interactive-visualization-renderer: ready-for-dev
   19-7-llm-writability-validation-tests: ready-for-dev
   epic-19-retrospective: optional
+
+  # Epic 18: Roo Code IDE Support (Phase 2)
+  # Dependencies: Epic 9 (OpenCode JSON-merge pattern reused), Epic 13 (project-context template stamping pattern)
+  # Note: Story 18.1 (Roo Code agent registration in lib/agents.js) was delivered ahead of formal Epic 18 tracking. Remaining stories (18.2-18.8) have not been started.
+  # Execution order: 18.1 → 18.2 → 18.3 → 18.4 → 18.5 → 18.6 → 18.7 → 18.8
+  epic-18: backlog
+  18-1-add-roo-code-agent-entry: done
+  18-2-create-bmad-ide-config: backlog
+  18-3-update-installer-roo-code-rules-injection: backlog
+  18-4-generate-roomodes-bmad-personas: backlog
+  18-5-deploy-bmad-workflows-slash-commands: backlog
+  18-6-mode-specific-rules-bmad-agents: backlog
+  18-7-cline-to-roo-code-migration: backlog
+  18-8-end-to-end-validation-test-coverage: backlog
+  epic-18-retrospective: optional
 
   # Epic 21: On-Prem / Local-LLM Tuning (Phase 3)
   # Dependencies: Epics 9 (OpenCode JSON-merge), 13 (project-context template stamping pattern), 15 (customize-loader), 18 (Roo Code agent registration)
