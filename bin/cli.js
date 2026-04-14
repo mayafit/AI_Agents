@@ -4,8 +4,29 @@
 // CommonJS require() of an ES Module. Must be installed BEFORE any
 // other require() so the filter catches warnings fired by the very
 // first dependency-loading call below. See lib/warning-filter.js.
+//
+// Re-exec gating:
+//   - Only when this file is launched as the CLI (require.main === module).
+//     When imported by the test suite or another script, skip the re-exec
+//     path — otherwise the importing process would silently fork itself.
+//   - Only for commands that can trigger the CJS-require-ESM warning,
+//     i.e. those that spawn bmad-method or otherwise load the heavy
+//     transitive dependency graph. Informational commands (--help,
+//     --version, status, list, agents) stay single-process for fast
+//     cold start. The listener-only fallback is still attached so
+//     in-process warnings still route through our filter.
 const { installExperimentalWarningFilter } = require('../lib/warning-filter');
-installExperimentalWarningFilter();
+const _reexecCommands = new Set([
+  'install', 'uninstall', 'remove',
+  'create-skill', 'validate-skill', 'set-mandatory',
+  'customize-agent', 'create-agent',
+  'config',
+  undefined, // bare `ma-agents` → interactive wizard
+]);
+const _firstArg = process.argv[2];
+installExperimentalWarningFilter({
+  reexec: require.main === module && _reexecCommands.has(_firstArg),
+});
 
 const prompts = require('prompts');
 const chalk = require('chalk');

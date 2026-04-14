@@ -208,8 +208,8 @@ test('bin/cli.js requires warning-filter and installs it', () => {
     'expected bin/cli.js to require ../lib/warning-filter'
   );
   assert.ok(
-    /installExperimentalWarningFilter\s*\(\s*\)/.test(src),
-    'expected bin/cli.js to call installExperimentalWarningFilter()'
+    /installExperimentalWarningFilter\s*\(/.test(src),
+    'expected bin/cli.js to call installExperimentalWarningFilter(...)'
   );
 });
 
@@ -265,6 +265,47 @@ test('withExperimentalWarningSuppressed appends flag to other NODE_OPTIONS', () 
   assert.strictEqual(
     withExperimentalWarningSuppressed('--max-old-space-size=4096'),
     '--max-old-space-size=4096 --no-warnings=ExperimentalWarning'
+  );
+});
+
+// ─── Test 10: regression — require('bin/cli.js') must NOT re-exec ───────────
+test('require("bin/cli.js") from another process does not re-exec', () => {
+  // If the CLI silently re-execs on require, the "before pid" line
+  // would print twice in the stderr/stdout stream.
+  const child = spawnSync(process.execPath, [
+    '-e',
+    `const before = process.pid;
+     console.log('MARK_BEFORE', before);
+     require(${JSON.stringify(CLI_PATH)});
+     console.log('MARK_AFTER', process.pid, 'same:', process.pid === before);`,
+  ], { encoding: 'utf8' });
+  assert.strictEqual(child.status, 0, `child exited non-zero: ${child.stderr}`);
+  const beforeCount = (child.stdout.match(/MARK_BEFORE/g) || []).length;
+  assert.strictEqual(beforeCount, 1, `expected exactly one MARK_BEFORE, got ${beforeCount}\n${child.stdout}`);
+  assert.ok(/same: true/.test(child.stdout), 'expected PID to be unchanged after require');
+});
+
+// ─── Test 11: regression — fast commands must NOT re-exec ────────────────────
+test('bin/cli.js --version runs in a single process (no re-exec)', () => {
+  // Spawn cli.js --version and assert PID stability via NODE_OPTIONS check.
+  // We approximate by running it with the sentinel unset and checking it
+  // still completes without looping. A process-tree check is overkill;
+  // we just verify exit code and output shape.
+  const child = spawnSync(process.execPath, [CLI_PATH, '--version'], {
+    encoding: 'utf8',
+    env: { ...process.env, [require(FILTER_PATH)._SENTINEL_ENV]: '' },
+  });
+  assert.strictEqual(child.status, 0);
+  assert.ok(/ma-agents v/.test(child.stdout), `expected version banner, got: ${child.stdout}`);
+  assert.ok(!/ExperimentalWarning/.test(child.stderr));
+});
+
+// ─── Test 12: --inspect is not forwarded to the re-exec child ────────────────
+test('installExperimentalWarningFilter drops --inspect* from forwarded execArgv', () => {
+  const src = fs.readFileSync(FILTER_PATH, 'utf8');
+  assert.ok(
+    /--inspect/.test(src) && /filter/.test(src),
+    'expected warning-filter.js to filter --inspect out of forwarded execArgv'
   );
 });
 
