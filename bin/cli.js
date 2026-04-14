@@ -1,5 +1,12 @@
 #!/usr/bin/env node
 
+// Bug A fix — suppress the cosmetic Node.js ExperimentalWarning about
+// CommonJS require() of an ES Module. Must be installed BEFORE any
+// other require() so the filter catches warnings fired by the very
+// first dependency-loading call below. See lib/warning-filter.js.
+const { installExperimentalWarningFilter } = require('../lib/warning-filter');
+installExperimentalWarningFilter();
+
 const prompts = require('prompts');
 const chalk = require('chalk');
 const path = require('path');
