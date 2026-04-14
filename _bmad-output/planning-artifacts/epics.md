@@ -3912,19 +3912,14 @@ So that on-prem-specific guardrails activate without me having to remember a CLI
 **And** the persisted profile is used to drive instruction generation
 **And** the resolved profile is logged once at the start of the install (e.g., `Using profile: on-prem (from .ma-agents.json)`)
 
-**Given** `--profile=on-prem` or `--profile=standard` is passed on the command line
-**When** the installer runs (with or without `--yes`)
-**Then** the CLI flag value overrides any persisted value
-**And** the new value is persisted to `.ma-agents.json`
-
-**Given** `--yes` is passed without `--profile=` and there is no persisted profile
+**Given** `--yes` is passed and there is no persisted profile
 **When** the installer runs
 **Then** the profile defaults to `standard`
 **And** no prompt is shown
 **And** `standard` is persisted to `.ma-agents.json`
 
 **Technical notes:**
-- Implement a new module `lib/profile.js` exposing `getProfile(projectRoot)`, `setProfile(projectRoot, value)`, and `resolveProfile({ flag, persisted, yesMode })`. All call sites (installer, customize-loader) go through this module — no direct reads/writes from elsewhere
+- Implement a new module `lib/profile.js` exposing `getProfile(projectRoot)`, `setProfile(projectRoot, value)`, and `resolveProfile({ persisted, yesMode })`. All call sites (installer, customize-loader) go through this module — no direct reads/writes from elsewhere
 - Wizard prompt uses the same prompt library already used by other install questions (consistent UX)
 - `.ma-agents.json` schema gains an optional top-level `"profile"` field; absence is treated as unset, not as `standard` (forces explicit choice on first install)
 

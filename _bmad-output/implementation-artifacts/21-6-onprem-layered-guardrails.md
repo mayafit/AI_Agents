@@ -23,7 +23,7 @@ So that Nemotron and other local LLMs stop hallucinating `str_replace_editor`, d
 5. The `AGENTS.md` template (Story 21.4) gains the same profile-conditional treatment within its marker block.
 6. The `.clinerules` template (Story 21.5) gains the same profile-conditional treatment within its marker block.
 7. Re-running install with profile=on-prem produces byte-identical content in all three files (`.roomodes`, `AGENTS.md`, `.clinerules`/`.cline/clinerules.md`) for ma-agents-owned sections (NFR46).
-8. Switching profile from standard to on-prem (via `--profile=on-prem` re-run) updates all marker-block content and `.roomodes` `customInstructions` to include the on-prem rules; switching back to standard removes them. User content outside markers/owned slugs is preserved.
+8. Switching profile from standard to on-prem (via the Story 21.10 `reconfigure` command — no CLI flag) updates all marker-block content and `.roomodes` `customInstructions` to include the on-prem rules; switching back to standard removes them. User content outside markers/owned slugs is preserved. NOTE: Story 21.10 (Profile Reconfigure) is a separately-tracked new story in the corrective plan; until it lands, profile switching is done by hand-editing `.ma-agents.json`.
 
 ## Tasks / Subtasks
 
@@ -35,8 +35,8 @@ So that Nemotron and other local LLMs stop hallucinating `str_replace_editor`, d
 - [ ] Task 4: Extend `AGENTS.md` template stamping (Story 21.4) to append on-prem rules when profile=on-prem (AC #5)
 - [ ] Task 5: Extend `.clinerules` template stamping (Story 21.5) to append on-prem rules when profile=on-prem (AC #6)
 - [ ] Task 6: Profile switching (AC #8)
-  - [ ] 6.1 Verify re-install with `--profile=on-prem` updates all three files correctly
-  - [ ] 6.2 Verify re-install with `--profile=standard` removes on-prem content cleanly
+  - [ ] 6.1 Verify profile-switch to on-prem (via reconfigure path or manual `.ma-agents.json` edit) updates all three files correctly
+  - [ ] 6.2 Verify profile-switch to standard (via reconfigure path or manual `.ma-agents.json` edit) removes on-prem content cleanly
 - [ ] Task 7: Tests in `test/onprem-guardrails.test.js`
   - [ ] 7.1 Standard profile: no on-prem strings in any output (AC #3 — NFR44)
   - [ ] 7.2 On-prem profile: `/no_think`, no-home-dir, no-str_replace_editor present in all three files
@@ -95,3 +95,4 @@ _(to be filled)_
 
 ## Change Log
 - 2026-04-14: Story created (Epic 21, Story 21.6)
+- 2026-04-14: Removed prescriptive `--profile=` flag references from AC #8 and Task 6 subitems (flag retired; profile switch is via Story 21.10 reconfigure command once delivered, or manual `.ma-agents.json` edit until then). Aligned with P0 spec-alignment PR #34.

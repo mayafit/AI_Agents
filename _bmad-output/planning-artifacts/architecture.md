@@ -1906,6 +1906,7 @@ The inference-server tuning (vLLM flags, quantization, context length) is docume
 | Roo Code BMAD modes | The `.roomodes` template defines four custom modes (`bmad-pm`, `bmad-architect`, `bmad-techlead`, `bmad-dev`) with `groups` declaring `fileRegex` restrictions per BMAD phase. Enforcement happens at Roo Code's tool-call layer (`FileRestrictionError`) — not just in the prompt. This is the highest-leverage application-layer guardrail in the design |
 | BMAD persona phase prefix | When profile=on-prem, [lib/bmad-customize/](lib/bmad-customize/) `*.customize.yaml` files gain an additional system-prompt prefix block keyed by phase. Planning personas (PM, Architect, SM, Analyst, Tech Writer, UX, SQA) get reasoning-OFF / text-response guidance; implementation personas (Dev Amelia, Solo Dev Barry) get reasoning-ON / careful-implementation guidance. The customize loader composes the prefix only when profile=on-prem; standard profile customizations are unchanged |
 | Profile read site | A small new module [lib/profile.js](lib/profile.js) wraps profile read/write against `.ma-agents.json` with a single-source-of-truth API (`getProfile()`, `setProfile()`, `resolveProfile({ persisted, yesMode })`). All callers in installer/customize go through it |
+| Log string formats | Canonical formats (pin these exactly): `Using profile: on-prem (from .ma-agents.json)` / `Using profile: standard (from .ma-agents.json)` / `Using profile: standard (from --yes default)` / `Using profile: <value> (from wizard)`. Tests and docs reference these strings verbatim |
 | OpenCode JSON merge | OpenCode's existing JSON-merge injection into `opencode.json::instructions[]` is reused unchanged. The expanded `AGENTS.md` is added to the instructions array; on-prem block is appended only when profile=on-prem |
 | Idempotency | Profile-driven content is rewritten only inside marker blocks (`<!-- MA-AGENTS-START -->`/`<!-- MA-AGENTS-END -->`) and inside ma-agents-owned `customModes` slugs in `.roomodes`. User content outside markers is preserved (NFR46) |
 | Reference deployment doc | `docs/deployment/vllm-nemotron.md` ships in the repo, not under `lib/templates/`. It is not stamped into target projects. Linked from README's on-prem section |
@@ -1918,7 +1919,7 @@ The inference-server tuning (vLLM flags, quantization, context length) is docume
 - *Generate per-tool config purely via prompt instruction (no `.roomodes`):* Rejected — Roo Code's `fileRegex` restriction is application-layer enforcement that catches violations the prompt cannot. NFR47 makes this enforcement contract testable.
 
 **Files affected:**
-- `bin/cli.js` (new wizard prompt; `--profile=` CLI flag plumbing)
+- `bin/cli.js` (new wizard prompt only; no CLI flag — correction applied 2026-04-14)
 - `lib/installer.js` (read profile via `lib/profile.js`; compose universal + on-prem instruction blocks; stamp `.roomodes` and `AGENTS.md` per-tool artifacts)
 - `lib/profile.js` (new — profile read/write API against `.ma-agents.json`)
 - `lib/agents.js` (per-agent `extraInstructionTemplates` field for `.roomodes` and `AGENTS.md`)
