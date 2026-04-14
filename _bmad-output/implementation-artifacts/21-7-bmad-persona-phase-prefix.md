@@ -94,6 +94,8 @@ So that planning agents (PM, Architect, SM) stop overthinking and producing file
 
 ### Notes on Phase Enum Extension (Epic 15 Prerequisite)
 
+**2026-04-14 audit clarification:** `lib/bmad-customize/` in this repo contains only `*.customize.yaml` artifacts — no JS loader or validator code. The customize-loader lives upstream in BMAD (bmad-method). Per the project's durable policy of overriding BMAD built-ins via extension (not upstream PRs to bmad-method), the `phase: mixed` extension is implemented by either (a) relying on BMAD's loader accepting unknown YAML fields silently (outcome 1 below — trivially satisfied) or (b) the ma-agents extension intercepting the YAML at install time and producing profile-specific variants (`*.customize.yaml` for standard, `*.customize.on-prem.yaml` for on-prem) with the installer choosing based on the persisted profile (outcome 3 below). Outcome 2 is only relevant if BMAD's loader has an enum validator that accepts `mixed` — nice to discover, no action required.
+
 AC #10 requires the Epic 15 customize-loader schema validator to accept `mixed` as a valid `phase` value. During Task 1's loader-discovery pass, verify whether a validator is in place and what enum it enforces. Three outcomes:
 
 1. **No validator present** — `phase` is a free-form string today; AC #10 is trivially satisfied. Document this in Dev Agent Record.
@@ -121,3 +123,4 @@ _(to be filled)_
 ## Change Log
 - 2026-04-14: Story created (Epic 21, Story 21.7)
 - 2026-04-14: Extended phase enum to `{planning, implementation, mixed}` via new ACs #8, #9, #10 (Finding #11, corrective plan step 3). Reassigned SM Bob, SQA Gad, Analyst Mary to `mixed`. AC #1's binary classification is SUPERSEDED by AC #8 but left in place to preserve the historical decision trail. Added Epic 15 validator-extension prerequisite note to Dev Notes.
+- 2026-04-14: Clarified Epic 15 prerequisite — customize-loader lives upstream in BMAD, not in ma-agents. Phase enum extension implemented via BMAD-built-in override policy (extension pattern, not upstream PR). Closes corrective-plan step 6 dependency-wiring audit.
