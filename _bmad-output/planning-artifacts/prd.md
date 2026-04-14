@@ -5,6 +5,8 @@ completedDate: '2026-03-05'
 lastEdited: '2026-04-08'
 editHistory:
   - date: '2026-04-14'
+    changes: 'Added FR180 (Profile Reconfigure subcommand) and NFR48 (profile history audit) to support Epic 21 corrective work. Closes adversarial-review Findings #5 and #7 — no escape hatch for persisted profile, CI-default silent-downgrade. Full spec in Epic 21 Story 21.10.'
+  - date: '2026-04-14'
     changes: 'Spec correction: removed `--profile=` CLI flag from FR173 and NFR45. Profile is user-facing (install-time prompt, persisted) or team-facing (committed `.ma-agents.json`) — not per-invocation. On-prem CI/CD served by committing the persisted `.ma-agents.json`, not a flag.'
   - date: '2026-04-13'
     changes: 'Added F19: Local-LLM / On-Prem Agent Tuning capability area (Planned). Added FR172–FR179: install-time profile prompt (on-prem vs standard) with persistence in `.ma-agents.json`; universal per-tool guardrail templates shipped to all profiles (.roomodes with BMAD-mode file-regex restrictions, expanded AGENTS.md/.clinerules/CLAUDE.md injection enforcing text-vs-file discipline and BMAD phase boundaries); on-prem-only layered guardrails (no-home-dir-writes, no str_replace_editor, /no_think planning prefix, reasoning-mode guidance); BMAD persona phase-aware prompt prefixes when profile=on-prem; reference deployment doc for vLLM serving (tool-call-parser, max-model-len, quantization). Added NFR44–NFR47: profile isolation (standard install unchanged), CI/CD compatibility via --yes defaulting to standard, idempotent per-tool template stamping, application-layer phase enforcement via .roomodes file-regex (not solely prompt-based).'
@@ -709,6 +711,7 @@ sprints:
 #### Reference Deployment Documentation
 
 - FR179: A reference deployment document for on-prem inference servers ships under `docs/deployment/vllm-nemotron.md` covering recommended vLLM flags (`--enable-auto-tool-choice`, `--tool-call-parser qwen3_coder`, `--max-model-len 32768`, `--enforce-eager`), quantization choices (BF16/FP8/NVFP4), reasoning-mode behavior, and per-phase sampling parameters. This is documentation only — the ma-agents installer does not manage the inference server
+- FR180: The installer CLI exposes a `npx ma-agents reconfigure` subcommand that re-runs the profile-selection prompt with the currently-persisted value as the default, and — if the user changes the value — re-stamps all profile-dependent artifacts (instruction-block injection files, `.roomodes`, BMAD persona customize output). Each overwritten marker-block region is backed up to `<target>.backup-<ISO-timestamp>`. A history entry is appended to `.ma-agents.json::profileHistory` (new append-only field, capped at 20 entries). `--yes` is explicitly rejected for this subcommand to prevent accidental CI-triggered profile changes.
 
 ## Non-Functional Requirements
 
@@ -801,3 +804,4 @@ sprints:
 - NFR45: The profile prompt must be non-blocking in CI/CD — `--yes` defaults the profile to `standard` without prompting; in interactive mode the prompt appears once and the answer is persisted in `.ma-agents.json`; subsequent runs honor the persisted value without re-prompting. On-prem CI/CD is served by committing `.ma-agents.json` with `"profile": "on-prem"` to the repo — no per-invocation flag is provided
 - NFR46: Per-tool template stamping must be idempotent — re-running `npx ma-agents install` with the same profile against the same project produces byte-identical instruction-file content within the marker blocks (only the marker block is rewritten; user content outside is untouched)
 - NFR47: BMAD planning-mode file restrictions in the generated `.roomodes` must enforce phase boundaries at the application layer, not solely via prompt — verified by attempting a `.ts`/`.py` edit while in `bmad-architect` mode and confirming Roo Code rejects with `FileRestrictionError`
+- NFR48: Profile changes via `ma-agents reconfigure` must leave an auditable forensic trail — `.ma-agents.json::profileHistory` is append-only (capped at 20 entries to prevent unbounded growth), and each entry records `date`, `from` (previous profile), `to` (new profile), and `source` (always `reconfigure` for entries produced by this subcommand; future sources — e.g., a direct `install --profile-override` if ever added — would use a distinct source identifier)

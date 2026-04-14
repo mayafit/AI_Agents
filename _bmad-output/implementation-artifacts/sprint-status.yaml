@@ -1,5 +1,6 @@
 # generated: 2026-03-15
 # updated: 2026-04-13 — Epic 21 (On-Prem / Local-LLM Tuning) added to backlog (9 stories, 21.1-21.9).
+# updated: 2026-04-14 — Epic 21 corrective plan: added Story 21.10 (Profile Reconfigure). Fixes adversarial review Findings #5 and #7.
 # updated: 2026-04-07 — All Epic 17 stories (17.9-17.24) implemented and marked done. Epic 19 (BMAD Knowledge Graph) added to backlog.
 # project: agents
 # project_key: NOKEY
@@ -88,9 +89,10 @@ development_status:
   # Epic 21: On-Prem / Local-LLM Tuning (Phase 3)
   # Dependencies: Epics 9 (OpenCode JSON-merge), 13 (project-context template stamping pattern), 15 (customize-loader), 18 (Roo Code agent registration)
   # Architecture: Decision P3-3 in _bmad-output/planning-artifacts/architecture.md
-  # Execution order: 21.1 → 21.2 → (21.3 + 21.4 + 21.5 in parallel) → 21.6 → 21.7 → 21.8 → 21.9
+  # Execution order: 21.1 → 21.2 → (21.3 + 21.4 + 21.5 in parallel) → 21.6 → 21.10 → 21.7 → 21.8 → 21.9
   epic-21: backlog
-  21-1-install-time-profile-prompt: review
+  # 2026-04-14: 21-1 status corrected review → done (PR #34 landed; sprint-status was stale).
+  21-1-install-time-profile-prompt: done
   21-2-universal-instruction-block-expansion: backlog
   21-3-roomodes-template-bmad-modes: backlog
   21-4-agents-md-template-opencode: backlog
@@ -99,6 +101,7 @@ development_status:
   21-7-bmad-persona-phase-prefix: backlog
   21-8-vllm-reference-doc-readme: backlog
   21-9-tests-validation: backlog
+  21-10-profile-reconfigure: backlog
   epic-21-retrospective: optional
 
   # Epic 14: External Tooling Integration
