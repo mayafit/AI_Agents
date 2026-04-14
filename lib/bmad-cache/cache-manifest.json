@@ -1,12 +1,12 @@
 {
-  "generated": "2026-04-09T10:08:13.598Z",
+  "generated": "2026-04-14T07:01:59.067Z",
   "bmadMethodVersion": "6.2.2",
   "modules": {
     "bmb": {
       "url": "https://github.com/bmad-code-org/bmad-builder",
       "branch": "main",
-      "commitSha": "605e07656f9f633b5e429297388e1db9687d1996",
-      "clonedAt": "2026-04-09T10:07:44.090Z"
+      "commitSha": "f8b793001493ec991b718a3f41cf73e6743f3dc6",
+      "clonedAt": "2026-04-14T07:01:41.831Z"
     },
     "cis": {
       "url": "https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite",
@@ -23,8 +23,8 @@
     "tea": {
       "url": "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise",
       "branch": "main",
-      "commitSha": "05472f9f4ad0a3aeeff445252bd4dd342667f34a",
-      "clonedAt": "2026-04-08T21:19:51.612Z"
+      "commitSha": "a7dfc0d9bd1b1b75203e8eedfb940ae130fe15e5",
+      "clonedAt": "2026-04-14T07:01:58.082Z"
     },
     "wds": {
       "url": "https://github.com/bmad-code-org/bmad-method-wds-expansion",
