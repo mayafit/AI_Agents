@@ -5,6 +5,8 @@ completedDate: '2026-03-08'
 lastEdited: '2026-04-07'
 phase3EditHistory:
   - date: '2026-04-14'
+    changes: 'Added Story 21.11: Profile Uninstall. Adds `ma-agents uninstall --profile-artifacts` to remove ma-agents-owned profile content while preserving user content and audit trails. Adds FR181 and NFR49. Closes adversarial-review Finding #17 (no uninstall / rollback). Execution order: 21.11 runs after 21.10 (both depend on full profile-dependent stamping from 21.6).'
+  - date: '2026-04-14'
     changes: 'Added Story 21.10: Profile Reconfigure. Adds `ma-agents reconfigure` subcommand to change a previously-persisted profile and re-stamp all profile-dependent artifacts. Adds FR180 and NFR48. Closes adversarial-review Findings #5 (CI-default silent-downgrade) and #7 (no escape hatch once persisted). Execution order updated: 21.10 runs after 21.6 (depends on profile-dependent artifacts being layered first).'
   - date: '2026-04-13'
     changes: 'Added Epic 21: On-Prem / Local-LLM Tuning (Phase 3). 9 stories (21.1-21.9): install-time profile prompt + persistence, universal per-tool guardrail expansion, .roomodes template with BMAD-mode file-regex restrictions, expanded AGENTS.md (OpenCode), expanded .clinerules, on-prem layered guardrails, BMAD persona phase-aware prompt prefixes, vLLM reference deployment doc. Added FR172-FR179 and NFR44-NFR47 to Requirements Inventory and FR Coverage Map. Architecture Decision P3-3 covers design.'
@@ -377,6 +379,7 @@ This document provides the complete epic and story breakdown for agents, decompo
 | FR178 | Epic 21 | BMAD persona phase-aware system-prompt prefix (on-prem only) |
 | FR179 | Epic 21 | vLLM reference deployment doc — documentation only |
 | FR180 | Epic 21 | `ma-agents reconfigure` subcommand — re-runs profile prompt and re-stamps all profile-dependent artifacts. Closes no-escape-hatch gap. |
+| FR181 | Epic 21 | `ma-agents uninstall --profile-artifacts` — removes ma-agents-owned profile content, preserves user content and audit trails. Closes no-uninstall gap. |
 
 ## Epic List
 
@@ -464,8 +467,8 @@ Sprint management is redesigned around a **single unified `sprint-status.yaml`**
 
 ### Epic 21: On-Prem / Local-LLM Tuning (Phase 3)
 The primary deployment scenario for ma-agents — air-gapped enterprise networks running local non-Claude LLMs (e.g., Nemotron Super 49B) — is made first-class. An install-time profile prompt (on-prem vs standard) drives a two-layer tuning model: (1) **universal** per-tool guardrail templates shipped to every install (`.roomodes` with BMAD-mode `fileRegex` restrictions, expanded `AGENTS.md`/`.clinerules`/`CLAUDE.md` injection enforcing text-vs-file discipline and BMAD phase boundaries), and (2) **on-prem-only** layered guardrails (`/no_think` planning prefix, no-home-dir-writes, no `str_replace_editor`, BMAD persona phase-aware prompt prefixes). A reference vLLM deployment doc ships under `docs/deployment/`. Implements the field-validated playbook from `optimizing-local-llm-coding-agents-bmad.md`.
-**FRs covered:** FR172, FR173, FR174, FR175, FR176, FR177, FR178, FR179, FR180
-**NFRs addressed:** NFR44 (profile isolation), NFR45 (CI/CD compatibility), NFR46 (idempotency), NFR47 (application-layer phase enforcement), NFR48 (profile-history audit trail)
+**FRs covered:** FR172, FR173, FR174, FR175, FR176, FR177, FR178, FR179, FR180, FR181
+**NFRs addressed:** NFR44 (profile isolation), NFR45 (CI/CD compatibility), NFR46 (idempotency), NFR47 (application-layer phase enforcement), NFR48 (profile-history audit trail), NFR49 (content removal preservation contract)
 **Architecture:** Decision P3-3 (Local-LLM / On-Prem Agent Tuning Profile) in `_bmad-output/planning-artifacts/architecture.md`
 **Dependencies:** Epic 9 (OpenCode JSON-merge injection — reused for AGENTS.md). Epic 18 (Roo Code agent registration — `.roomodes` ships into `.roo/`). Epic 15 (BMAD 6.2.1 module restructure — phase prefix integrates with customize-loader). Epic 13 (project-context generator — pattern reused for template stamping).
 **New files:** `lib/profile.js`, `lib/templates/instruction-block-universal.template.md`, `lib/templates/instruction-block-onprem.template.md`, `lib/templates/roomodes.template.yaml`, `lib/templates/agents-md.template.md`, `lib/templates/clinerules.template.md`, `docs/deployment/vllm-nemotron.md`
@@ -4182,6 +4185,41 @@ So that a CI-default `standard` profile or a mistaken interactive answer can be 
 - Reuses `lib/profile.js` (unchanged public contract); reuses injection helpers from `lib/installer.js`
 - `.ma-agents.json` gains optional top-level `"profileHistory"` field (append-only, capped at 20)
 - Detailed spec: `_bmad-output/implementation-artifacts/21-10-profile-reconfigure.md`
+
+---
+
+### Story 21.11: Profile Uninstall
+
+As an **engineer migrating a project away from ma-agents or switching from on-prem to a different deployment model**,
+I want a `ma-agents uninstall --profile-artifacts` subcommand that removes all ma-agents-owned profile-dependent content while preserving user content,
+So that I can cleanly reverse the install without hand-editing every generated file or leaving dead guardrails that no longer reflect the project's actual deployment.
+
+**Acceptance Criteria:**
+
+**Given** a project with ma-agents-stamped content (marker blocks in CLAUDE.md/.clinerules/etc., ma-agents-owned slugs in `.roomodes`, `profile` set in `.ma-agents.json`)
+**When** the engineer runs `npx ma-agents uninstall --profile-artifacts` interactively
+**Then** the command lists every file and region it will modify and asks for confirmation
+**And** after confirmation, all marker-block content (including the markers) is removed, `.roomodes` ma-agents-owned slugs are removed (user slugs preserved), and the `profile` field is cleared from `.ma-agents.json`
+
+**Given** each to-be-removed file or region
+**When** `uninstall --profile-artifacts` proceeds
+**Then** a backup is written to `<target>.backup-<ISO-timestamp>` before removal
+
+**Given** the `profileHistory` field from Story 21.10 or the `roomodesOverwriteLog` field from Story 21.3
+**When** `uninstall --profile-artifacts` runs
+**Then** both fields are PRESERVED (audit trails survive uninstall)
+**And** a new entry `{ date, from: <previous>, to: null, source: "uninstall" }` is appended to `profileHistory`
+
+**Given** `--yes` is passed to `uninstall --profile-artifacts`
+**When** the command runs in CI
+**Then** the confirmation prompt is skipped and the operation proceeds (unlike `reconfigure` where `--yes` is rejected — uninstall has legitimate CI use cases such as decommissioning scripts)
+
+**Technical notes:**
+- New CLI flag `--profile-artifacts` on the `uninstall` subcommand (creates the subcommand if not already present)
+- New orchestrator module `lib/uninstall.js` exporting `uninstallProfileArtifacts(projectRoot, opts)`
+- Expands `lib/profile.js` with a 4th export `clearProfile(projectRoot)` — see Dev Notes in the story spec for the Story 21.1 AC #1 contract-update decision
+- Idempotent: second run is a no-op with friendly message
+- Detailed spec: `_bmad-output/implementation-artifacts/21-11-profile-uninstall.md`
 
 ---
 
