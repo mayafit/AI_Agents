@@ -4,6 +4,8 @@ workflowStatus: 'complete'
 completedDate: '2026-03-08'
 lastEdited: '2026-04-07'
 phase3EditHistory:
+  - date: '2026-04-13'
+    changes: 'Added Epic 21: On-Prem / Local-LLM Tuning (Phase 3). 9 stories (21.1-21.9): install-time profile prompt + persistence, universal per-tool guardrail expansion, .roomodes template with BMAD-mode file-regex restrictions, expanded AGENTS.md (OpenCode), expanded .clinerules, on-prem layered guardrails, BMAD persona phase-aware prompt prefixes, vLLM reference deployment doc. Added FR172-FR179 and NFR44-NFR47 to Requirements Inventory and FR Coverage Map. Architecture Decision P3-3 covers design.'
   - date: '2026-04-07'
     changes: 'Added Epic 19: BMAD Knowledge Graph (Phase 3). 7 stories (19.1-19.7): core emitToGraph() library, graph emission for 7 BMAD skills (create-prd, create-architecture, create-epics-and-stories, create-story, validate-prd, dev-story, bmad-sprint-planning), open-graph skill with VSCode/browser detection, and interactive HTML renderer. Added FR141-FR157 to Requirements Inventory and FR Coverage Map. Added NFR38-NFR41. Updated Epic List and Development Execution Order. Fixed duplicate FR141 entry in Epic 17 coverage map (was remove-from-sprint, correctly FR129). Updated Roo Code Epic 18 proposed FRs to FR156-FR159 to avoid conflict with new Knowledge Graph FRs.'
 phase2EditHistory:
@@ -238,6 +240,25 @@ This document provides the complete epic and story breakdown for agents, decompo
 - NFR40: The `emitToGraph()` operation must never delete or overwrite existing graph data — additive-only semantics are enforced at the function level, verified by the absence of delete/overwrite operations during emission
 - NFR41: The knowledge graph visualization (`knowledge-graph.html`) must function fully without network access — verified by disabling network access and confirming the graph renders identically
 
+### Functional Requirements (Phase 3 — added 2026-04-13)
+
+#### Local-LLM / On-Prem Agent Tuning (FR172-FR179)
+- FR172: Install-time profile prompt (on-prem vs standard) persisted as `"profile"` in `.ma-agents.json`
+- FR173: `--yes` defaults to `standard` for CI/CD; on-prem CI/CD served by committing `.ma-agents.json` with persisted profile — no per-invocation CLI flag
+- FR174: Universal per-tool guardrail templates shipped to all profiles — expanded `CLAUDE.md`/`.clinerules`/`.roo/rules/` injection, expanded `AGENTS.md` for OpenCode, new `.roomodes` for Roo Code with 4 BMAD modes
+- FR175: `.roomodes` template restricts file edit access by BMAD phase via `fileRegex` (planning modes can only edit `.md`); enforced by Roo Code's `FileRestrictionError` at the application layer
+- FR176: Per-tool template stamping is additive — merges via `<!-- MA-AGENTS-START -->` markers; preserves user content outside markers; `.roomodes` preserves non-conflicting user `customModes`
+- FR177: When profile=on-prem, layered local-LLM guardrails are added — no-home-dir-writes, no `str_replace_editor`, `/no_think` planning prefix, reasoning-mode/sampling guidance
+- FR178: When profile=on-prem, BMAD agent persona customizations gain a phase-aware system-prompt prefix (planning agents reasoning-OFF, implementation agents reasoning-ON); not applied when profile=standard
+- FR179: Reference deployment doc `docs/deployment/vllm-nemotron.md` ships in the repo (vLLM flags, tool-call-parser, max-model-len, quantization, per-phase sampling) — documentation only, installer does not manage the inference server
+
+### NonFunctional Requirements (Phase 3 — added 2026-04-13)
+
+- NFR44: On-prem profile guardrails must not regress standard profile — when profile=standard, no on-prem-specific instructions appear in any generated file
+- NFR45: Profile prompt is non-blocking in CI/CD — `--yes` defaults to `standard`; persisted answer not re-prompted on subsequent installs; on-prem CI/CD served via committed `.ma-agents.json`, not a flag
+- NFR46: Per-tool template stamping is idempotent — re-running install with the same profile produces byte-identical content within marker blocks
+- NFR47: BMAD planning-mode file restrictions in `.roomodes` enforced at the application layer (Roo Code `FileRestrictionError`), verified by attempting a code-file edit in `bmad-architect` mode and confirming rejection
+
 ### Additional Requirements
 
 - Testing framework needs formalization — Node.js built-in test runner recommended per architecture
@@ -345,6 +366,14 @@ This document provides the complete epic and story breakdown for agents, decompo
 | FR159 | Epic 18 | Roo Code rules from BMAD instructions (proposed — pending PRD addition) |
 | FR160 | Epic 18 | Roo Code slash commands from BMAD workflows (proposed — pending PRD addition) |
 | FR161 | Epic 18 | Cline-to-Roo Code migration (proposed — pending PRD addition) |
+| FR172 | Epic 21 | Install-time profile prompt + persistence in `.ma-agents.json` |
+| FR173 | Epic 21 | `--yes` defaults to standard; on-prem CI/CD via committed `.ma-agents.json` (no CLI flag) |
+| FR174 | Epic 21 | Universal per-tool guardrail templates (all profiles) |
+| FR175 | Epic 21 | `.roomodes` BMAD-mode `fileRegex` restrictions enforced by Roo Code |
+| FR176 | Epic 21 | Additive marker-based stamping; `.roomodes` slug-isolation |
+| FR177 | Epic 21 | On-prem layered guardrails (`/no_think`, no-home-dir-writes, no `str_replace_editor`) |
+| FR178 | Epic 21 | BMAD persona phase-aware system-prompt prefix (on-prem only) |
+| FR179 | Epic 21 | vLLM reference deployment doc — documentation only |
 
 ## Epic List
 
@@ -430,6 +459,16 @@ Sprint management is redesigned around a **single unified `sprint-status.yaml`**
 **Note:** Epic 12 delivered workflow files but not the underlying sprint data model. This epic builds the unified model, rewires all workflows, and provides the Jira adapter pattern.
 **Skills affected:** Heavy rework (6): generate-backlog, add-to-sprint, remove-from-sprint, sprint-status-view, cleanup-done, bmad-sprint-planning. Moderate rework (3): add-sprint, modify-sprint, bmad-dev-story. Light rework (3): story-status-lookup, bmad-sprint-status, prioritize-backlog. New skill (1): close-sprint.
 
+### Epic 21: On-Prem / Local-LLM Tuning (Phase 3)
+The primary deployment scenario for ma-agents — air-gapped enterprise networks running local non-Claude LLMs (e.g., Nemotron Super 49B) — is made first-class. An install-time profile prompt (on-prem vs standard) drives a two-layer tuning model: (1) **universal** per-tool guardrail templates shipped to every install (`.roomodes` with BMAD-mode `fileRegex` restrictions, expanded `AGENTS.md`/`.clinerules`/`CLAUDE.md` injection enforcing text-vs-file discipline and BMAD phase boundaries), and (2) **on-prem-only** layered guardrails (`/no_think` planning prefix, no-home-dir-writes, no `str_replace_editor`, BMAD persona phase-aware prompt prefixes). A reference vLLM deployment doc ships under `docs/deployment/`. Implements the field-validated playbook from `optimizing-local-llm-coding-agents-bmad.md`.
+**FRs covered:** FR172, FR173, FR174, FR175, FR176, FR177, FR178, FR179
+**NFRs addressed:** NFR44 (profile isolation), NFR45 (CI/CD compatibility), NFR46 (idempotency), NFR47 (application-layer phase enforcement)
+**Architecture:** Decision P3-3 (Local-LLM / On-Prem Agent Tuning Profile) in `_bmad-output/planning-artifacts/architecture.md`
+**Dependencies:** Epic 9 (OpenCode JSON-merge injection — reused for AGENTS.md). Epic 18 (Roo Code agent registration — `.roomodes` ships into `.roo/`). Epic 15 (BMAD 6.2.1 module restructure — phase prefix integrates with customize-loader). Epic 13 (project-context generator — pattern reused for template stamping).
+**New files:** `lib/profile.js`, `lib/templates/instruction-block-universal.template.md`, `lib/templates/instruction-block-onprem.template.md`, `lib/templates/roomodes.template.yaml`, `lib/templates/agents-md.template.md`, `lib/templates/clinerules.template.md`, `docs/deployment/vllm-nemotron.md`
+**Files modified:** `bin/cli.js`, `lib/installer.js`, `lib/agents.js`, `lib/bmad-customize/*.customize.yaml` (additive phase prefix), customize-loader, README.md
+**New tests:** `test/profile.test.js`, `test/onprem-injection.test.js`
+
 ### Epic 19: BMAD Knowledge Graph (Phase 3)
 Every planning and implementation artifact generated by BMAD skills is automatically woven into a non-hierarchical knowledge graph stored as `_bmad-output/knowledge-graph.json`. Any-to-any directed relationships (not just parent-child traceability) are captured with full provenance. Engineers can open an interactive visualization of the entire project knowledge graph — navigating to any document at the specific heading where a concept is defined — via the `open-graph` skill.
 **FRs covered:** FR141–FR157
@@ -479,6 +518,7 @@ Stories in Epics 6, 8, and 15 that touch `bmad.js` must build on Epic 5's vendor
 **Phase D — Phase 3 Features:**
 7. **Epic 19** (BMAD Knowledge Graph) — depends on Epic 15 (extension module structure) and Epic 17 (sprint skill structure settled). Story execution order: 19.1 (core library) → 19.2 (PRD emission) → 19.3 (architecture + epics emission) → 19.4 (story + remaining emission) → 19.5 (open-graph skill) → 19.6 (visualization renderer) → 19.7 (LLM contract validation + tests). Stories 19.2-19.4 can proceed in parallel once 19.1 is done.
 8. **Epic 18** (Roo Code IDE Support) — no dependencies, can proceed independently at any point in Phase C or D.
+9. **Epic 21** (On-Prem / Local-LLM Tuning) — depends on Epics 9, 13, 15, 18 (OpenCode JSON-merge, project-context template stamping pattern, customize-loader, Roo Code agent registration). Story execution: 21.1 (profile prompt + persistence) → 21.2 (universal instruction-block expansion) → 21.3 (`.roomodes` template + Roo Code stamping) + 21.4 (`AGENTS.md` template + OpenCode merge) + 21.5 (`.clinerules` template extension) — these three can run in parallel after 21.2 → 21.6 (on-prem layered guardrails) → 21.7 (BMAD persona phase prefix) → 21.8 (vLLM reference doc + README on-prem section) → 21.9 (tests + validation).
 
 ---
 
@@ -3833,3 +3873,287 @@ _bmad-output/                          (generated at runtime, not committed)
 2. Story 20.1 (Gad agent skill) — no dependency on other Epic 20 stories; establishes the agent entry point
 3. Story 20.2 (Project Audit workflow) — no dependency on 20.1 at the code level; can develop in parallel with 20.1
 4. Story 20.3 (IEEE 12207 workflow) — no dependency on other Epic 20 stories; can develop in parallel with 20.1 and 20.2
+
+
+---
+
+## Epic 21: On-Prem / Local-LLM Tuning (Phase 3)
+
+The primary deployment scenario for ma-agents is an air-gapped enterprise network running a local non-Claude LLM (e.g., Nemotron Super 49B) behind one of the supported coding agents (Claude Code, Cline, Roo Code, OpenCode). Field experience documented in `optimizing-local-llm-coding-agents-bmad.md` shows local LLMs misinterpret Claude-tuned system prompts: they create files when asked questions, dump output into `~/.claude/`, hallucinate Claude Code's `str_replace_editor` tool, skip BMAD planning to start coding, and overthink simple prompts because reasoning mode is on by default. This epic adapts the installer-generated configuration so on-prem installs activate the application-layer guardrails the host tools already provide (Roo Code `fileRegex` restrictions, OpenCode permission gating, Cline Architect mode discipline) and inject local-LLM-aware system prompts.
+
+Two layers are introduced via a single install-time **profile** prompt persisted in `.ma-agents.json`:
+
+- **Universal** (all profiles): expanded per-tool instruction injection enforcing text-vs-file discipline and BMAD phase boundaries; new `.roomodes` template defining 4 BMAD modes with `fileRegex` restrictions; expanded `AGENTS.md` for OpenCode; expanded `.clinerules`.
+- **On-prem** (profile=on-prem only): `/no_think` planning prefix, no-home-dir-writes rule, no-`str_replace_editor` rule, BMAD persona phase-aware system-prompt prefixes.
+
+Inference-server tuning (vLLM flags, quantization) ships as documentation only at `docs/deployment/vllm-nemotron.md` — the installer does not manage the serving stack.
+
+### Story 21.1: Install-Time Profile Prompt and Persistence
+
+As an **engineer running `npx ma-agents install`**,
+I want the installer to ask whether this is an on-prem / air-gapped install once and remember my answer,
+So that on-prem-specific guardrails activate without me having to remember a CLI flag, and I am not re-prompted on subsequent installs.
+
+**Acceptance Criteria:**
+
+**Given** `npx ma-agents install` runs interactively in a project with no existing `.ma-agents.json` profile entry
+**When** the install wizard reaches the profile step
+**Then** the user is shown the prompt:
+```
+? Is this an on-prem / air-gapped install using a local LLM (e.g. Nemotron)?
+  > Yes — apply local-LLM guardrails (recommended for non-Claude models)
+    No  — standard install (Claude on web, Anthropic API, etc.)
+```
+**And** the chosen value is persisted as `"profile": "on-prem"` or `"profile": "standard"` in `.ma-agents.json`
+
+**Given** `.ma-agents.json` already contains a `"profile"` value from a previous install
+**When** `npx ma-agents install` runs again
+**Then** the prompt is NOT shown
+**And** the persisted profile is used to drive instruction generation
+**And** the resolved profile is logged once at the start of the install (e.g., `Using profile: on-prem (from .ma-agents.json)`)
+
+**Given** `--profile=on-prem` or `--profile=standard` is passed on the command line
+**When** the installer runs (with or without `--yes`)
+**Then** the CLI flag value overrides any persisted value
+**And** the new value is persisted to `.ma-agents.json`
+
+**Given** `--yes` is passed without `--profile=` and there is no persisted profile
+**When** the installer runs
+**Then** the profile defaults to `standard`
+**And** no prompt is shown
+**And** `standard` is persisted to `.ma-agents.json`
+
+**Technical notes:**
+- Implement a new module `lib/profile.js` exposing `getProfile(projectRoot)`, `setProfile(projectRoot, value)`, and `resolveProfile({ flag, persisted, yesMode })`. All call sites (installer, customize-loader) go through this module — no direct reads/writes from elsewhere
+- Wizard prompt uses the same prompt library already used by other install questions (consistent UX)
+- `.ma-agents.json` schema gains an optional top-level `"profile"` field; absence is treated as unset, not as `standard` (forces explicit choice on first install)
+
+---
+
+### Story 21.2: Universal Per-Tool Instruction Block Expansion
+
+As a **chief architect**,
+I want the existing `<!-- MA-AGENTS-START -->` injection block to enforce text-vs-file discipline and BMAD phase boundaries for every install (regardless of profile),
+So that all coding agents — even Claude on the web — stop dumping random files as responses and stop skipping BMAD planning to start coding.
+
+**Acceptance Criteria:**
+
+**Given** the universal instruction-block template `lib/templates/instruction-block-universal.template.md`
+**When** the file is created
+**Then** it includes (in addition to the current MANIFEST loading instruction):
+- A "respond in TEXT vs. create FILES" rules section listing concrete keyword triggers (`create`, `write`, `generate`, `build`, `implement` → file action; `what do you think`, `how should we`, `discuss`, `opinion` → text response)
+- An "if unsure, respond in text" default
+- A "never create response.md or output.md as a reply" rule
+- A BMAD phase discipline rule: respect the current phase declared in the conversation; do not skip ahead to implementation during planning
+- A "confirm file paths before writing" rule
+
+**Given** any agent with markdown instruction injection (Claude Code, Cline, Roo Code rules, Cursor, Kilocode, Copilot, Gemini)
+**When** the installer runs (any profile)
+**Then** the universal block content is rendered between `<!-- MA-AGENTS-START -->` / `<!-- MA-AGENTS-END -->` markers in that agent's instruction file
+**And** content outside the markers is preserved byte-for-byte
+
+**Given** the same profile and project state
+**When** the installer runs twice in a row
+**Then** the content within the marker block is byte-identical between runs (NFR46)
+
+**Technical notes:**
+- The injection function in `lib/installer.js` composes: `[universal block]` + `(profile === 'on-prem' ? [on-prem block] : '')`. Story 21.6 wires the on-prem layer; this story only requires the universal block render correctly with an empty on-prem layer
+- The block must NOT mention `/no_think`, `str_replace_editor`, `~/.claude/`, or any local-LLM-specific concept — those belong in the on-prem template (Story 21.6)
+
+---
+
+### Story 21.3: `.roomodes` Template with BMAD Mode File-Regex Restrictions
+
+As a **chief architect**,
+I want a `.roomodes` file generated for Roo Code installs defining 4 BMAD modes with `fileRegex` restrictions per phase,
+So that Roo Code's application-layer enforcement (`FileRestrictionError`) prevents agents from editing code files during planning phases — independent of whether the LLM follows the prompt.
+
+**Acceptance Criteria:**
+
+**Given** the template `lib/templates/roomodes.template.yaml`
+**When** the file is created
+**Then** it defines four `customModes`:
+- `bmad-pm` — read + edit restricted to `\.md$`
+- `bmad-architect` — read + edit restricted to `\.(md|xml|drawio)$`
+- `bmad-techlead` — read + edit restricted to `\.(md|json|yaml|yml)$`
+- `bmad-dev` — read + edit + command (full access)
+**And** each mode has a `roleDefinition`, `whenToUse`, and `customInstructions` block matching the BMAD phase descriptions in the source playbook
+
+**Given** the Roo Code agent is included in a `npx ma-agents install`
+**When** the installer runs
+**Then** `.roomodes` is written at the project root with the 4 BMAD modes
+**And** if `.roomodes` already exists with user-defined `customModes`, those entries are preserved as long as their slugs do not collide with the 4 ma-agents BMAD slugs (FR176)
+**And** colliding slugs are overwritten with the ma-agents version (with a console warning naming the slug)
+
+**Given** the user is in `bmad-architect` mode in Roo Code after install
+**When** the agent attempts to edit a `.ts` or `.py` file
+**Then** Roo Code rejects the edit with `FileRestrictionError` (NFR47 — verified via integration test)
+
+**Technical notes:**
+- `lib/agents.js` for the Roo Code entry gains a new optional field `extraInstructionTemplates: [{ template: 'roomodes.template.yaml', target: '.roomodes', merger: 'yaml-customModes' }]`
+- New YAML merger function `mergeRoomodes(existingYaml, templateYaml)` lives in `lib/installer.js` (or a new `lib/merge/roomodes.js` if size warrants)
+- Slug collision handling: only the 4 ma-agents-owned slugs (`bmad-pm`, `bmad-architect`, `bmad-techlead`, `bmad-dev`) are managed by ma-agents; all other entries are preserved untouched
+
+---
+
+### Story 21.4: Expanded `AGENTS.md` Template for OpenCode
+
+As an **OpenCode user installing ma-agents**,
+I want a comprehensive `AGENTS.md` generated at my project root covering text-vs-file rules, BMAD phase discipline, and the project's BMAD output structure,
+So that OpenCode's auto-loading of AGENTS.md gives the agent the same guardrails Roo Code gets via `.roomodes`.
+
+**Acceptance Criteria:**
+
+**Given** the template `lib/templates/agents-md.template.md`
+**When** the file is created
+**Then** it includes:
+- The same text-vs-file rules from the universal block
+- A "never create files in `~/.claude/` or any user home directory" rule (this is universal for AGENTS.md regardless of profile, because OpenCode + any model should respect it)
+- A BMAD phase declaration section (Discovery/PM, Architecture, Tech Lead/Stories, Implementation) with phase-specific behavior rules
+- The project BMAD output structure (`/docs/bmad/planning/`, `/docs/bmad/architecture/`, etc., adjusted to the project's actual `_bmad-output/` paths via stamping)
+
+**Given** the OpenCode agent is included in `npx ma-agents install`
+**When** the installer runs
+**Then** `AGENTS.md` is written at the project root using the existing additive injection pattern (markers preserved if file exists)
+**And** the `opencode.json::instructions[]` array gets `AGENTS.md` appended via the existing JSON-merge from Epic 9 if not already present (NFR18 still satisfied — additive only)
+
+**Technical notes:**
+- The phase declaration content is the same in both standard and on-prem profiles (universal layer); on-prem-specific bits (reasoning mode, `/no_think`) come via Story 21.6
+- Reuses Epic 9's JSON-merge function unchanged
+
+---
+
+### Story 21.5: Expanded `.clinerules` Template
+
+As a **Cline user**,
+I want `.clinerules` to include BMAD phase discipline and text-vs-file rules,
+So that Cline (which already supports `.clinerules` natively) gets the same universal guardrails.
+
+**Acceptance Criteria:**
+
+**Given** the template `lib/templates/clinerules.template.md`
+**When** the file is created
+**Then** it includes the universal text-vs-file rules and BMAD phase rules, formatted for the Cline `.clinerules` convention
+
+**Given** Cline is included in `npx ma-agents install`
+**When** the installer runs
+**Then** `.clinerules` is written/updated at the project root using the marker-based additive injection
+**And** existing user content outside markers is preserved
+
+**Technical notes:**
+- Cline currently writes to `.cline/clinerules.md` AND `.clinerules` (per `lib/agents.js`). This story keeps both in sync; both files contain the same expanded content
+
+---
+
+### Story 21.6: On-Prem Layered Guardrails
+
+As an **engineer running an on-prem install**,
+I want the installer to layer local-LLM-specific guardrails on top of the universal block when profile=on-prem,
+So that Nemotron and other local LLMs stop hallucinating `str_replace_editor`, dumping files into `~/.claude/`, and overthinking planning prompts.
+
+**Acceptance Criteria:**
+
+**Given** the template `lib/templates/instruction-block-onprem.template.md`
+**When** the file is created
+**Then** it contains:
+- A `/no_think` reasoning-OFF directive applied as a system-prompt prefix for planning-phase use
+- A "NEVER create files in `~/.claude/` or any user home directory; all files go under the project directory" rule
+- A "do NOT reference or use `str_replace_editor` or any Claude Code-specific tool that may not exist in this agent" rule
+- Reasoning-mode and sampling guidance per BMAD phase (planning: reasoning OFF, low temperature; implementation: reasoning ON, moderate temperature)
+
+**Given** profile=on-prem
+**When** any agent's instruction-block injection runs
+**Then** the universal block content is followed by the on-prem block content within the same `<!-- MA-AGENTS-START -->` markers
+
+**Given** profile=standard
+**When** any agent's instruction-block injection runs
+**Then** the on-prem block is NOT present in the rendered output (NFR44 — verified by absence of the strings `/no_think`, `str_replace_editor`, `~/.claude/` in standard-profile output)
+
+**Technical notes:**
+- The `.roomodes`, `AGENTS.md`, and `.clinerules` files from Stories 21.3–21.5 also gain on-prem-specific sections gated by profile — concretely, the `customInstructions` block per Roo Code mode and the AGENTS.md "Critical Behavior Rules" section get the on-prem rules appended when profile=on-prem
+- All on-prem additions are appended within ma-agents marker blocks or ma-agents-owned slugs only
+
+---
+
+### Story 21.7: BMAD Persona Phase-Aware Prompt Prefix (On-Prem Only)
+
+As an **engineer running an on-prem install with the BMAD module**,
+I want each BMAD agent persona to receive a phase-aware system-prompt prefix steering its reasoning mode appropriately,
+So that planning agents (PM, Architect, SM) stop overthinking and producing files for discussion prompts, and implementation agents (Dev) keep their reasoning mode for careful coding.
+
+**Acceptance Criteria:**
+
+**Given** profile=on-prem
+**When** the BMAD customize-loader composes a persona's system prompt from `lib/bmad-customize/{agent}.customize.yaml`
+**Then** a phase-aware prefix is prepended:
+- Planning personas (`bmm-pm` John, `bmm-architect` Winston, `bmm-sm` Bob, `bmm-analyst` Mary, `bmm-tech-writer` Paige, `bmm-ux-designer` Sally, `bmm-qa` Gad) — receive a `/no_think` + "respond in text for questions; create files only when explicitly asked" prefix
+- Implementation personas (`bmm-dev` Amelia, `bmm-quick-flow-solo-dev` Barry) — receive a "think carefully before writing code; reference the story you are implementing" prefix
+
+**Given** profile=standard
+**When** the customize-loader composes a persona's system prompt
+**Then** NO phase prefix is prepended (NFR44 — standard profile is byte-identical to pre-Epic-21 baseline for customize output)
+
+**Given** the `lib/bmad-customize/*.customize.yaml` files are committed
+**When** Story 21.7 is implemented
+**Then** the YAML files themselves contain a new optional `on_prem_phase_prefix:` field (per agent) with the prefix text — the customize-loader reads this field only when profile=on-prem, so the YAML files remain valid for both profiles
+
+**Technical notes:**
+- Phase classification (planning vs. implementation) is encoded in the `.customize.yaml` via a simple `phase: planning|implementation` field, not derived from agent slug — keeps the loader stateless
+- The phase prefix block is prepended to the persona's existing `critical_actions` / system-prompt content; all prior content is preserved
+
+---
+
+### Story 21.8: vLLM Reference Deployment Doc and README On-Prem Section
+
+As a **DevOps engineer setting up the on-prem inference server**,
+I want a single reference doc covering vLLM flags, tool-call-parser, context length, quantization, and per-phase sampling guidance,
+So that I can configure Nemotron Super 49B (or similar) to behave correctly with the coding agents ma-agents installs.
+
+**Acceptance Criteria:**
+
+**Given** the file `docs/deployment/vllm-nemotron.md`
+**When** the file is created
+**Then** it covers:
+- Recommended vLLM flags (`--enable-auto-tool-choice`, `--tool-call-parser qwen3_coder`, `--max-model-len 32768`, `--enforce-eager`, `--trust-remote-code`)
+- Quantization tradeoffs (BF16 vs FP8 vs NVFP4) including VRAM and instruction-following quality impact
+- Reasoning-mode behavior (`/no_think` system-prompt directive, default reasoning ON)
+- Per-phase sampling parameters table (planning: temp 0.0, top_p 1.0; implementation: temp 0.6, top_p 0.95)
+- The `str_replace_editor` hallucination warning and mitigation
+- A complete sample launch command
+
+**Given** the README is updated
+**When** Story 21.8 completes
+**Then** README has a new "On-Prem / Air-Gapped Deployment" section linking to the deployment doc and explaining the install-time profile prompt
+**And** the deployment doc is NOT stamped into target projects by the installer (it is repo documentation only — FR179)
+
+---
+
+### Story 21.9: Tests and Validation
+
+As a **chief architect**,
+I want automated regression tests for the profile system and the universal/on-prem instruction-block injection,
+So that future changes to installer or templates do not silently regress on-prem support or break standard installs.
+
+**Acceptance Criteria:**
+
+**Given** the test suite in `test/`
+**When** Story 21.9 completes
+**Then** the suite includes:
+- `test/profile.test.js` — covers `getProfile`, `setProfile`, `resolveProfile` precedence (CLI flag > persisted > yes-default), persistence round-trip, missing-file handling
+- `test/onprem-injection.test.js` — covers (a) standard profile produces no on-prem-specific strings; (b) on-prem profile produces both universal + on-prem content; (c) idempotency — two consecutive installs produce byte-identical marker-block content; (d) `.roomodes` slug-collision: ma-agents BMAD slugs overwrite, non-colliding user slugs preserved; (e) NFR47 enforcement contract — `bmad-architect` `fileRegex` rejects `.ts`/`.py` paths
+
+**Given** all Epic 21 stories are merged
+**When** the full test suite runs
+**Then** all new tests pass
+**And** existing tests in `test/` still pass (no regression)
+
+**Technical notes:**
+- NFR47 enforcement test does not require running Roo Code itself — verifies that the generated `.roomodes` `fileRegex` patterns match the expected restrictions (the actual `FileRestrictionError` is enforced by Roo Code at runtime; the contract under test is that we generate the correct restriction)
+
+### Epic 21 — Cross-Epic Notes
+
+- **bmad.js coordination:** Epic 21 does not modify `bmad.js`. The cross-epic `bmad.js` ordering note (Epics 5/15/6/8) is unaffected.
+- **OpenCode JSON-merge (Epic 9) reuse:** Story 21.4 reuses Epic 9's `mergeOpencodeJson()` unchanged — additive append to `instructions[]`. NFR18 remains satisfied.
+- **Roo Code agent registration (Epic 18) prerequisite:** Story 21.3 assumes Roo Code is registered in `lib/agents.js` (Epic 18 Story 18.1). If Epic 18 is not yet merged when Epic 21 starts, Story 21.3 must wait or include the Roo Code agent registration as part of its scope.
+- **Customize-loader (Epic 15) prerequisite:** Story 21.7 modifies the BMAD customize-loader path established in Epic 15. If the loader does not yet support per-agent prefix composition, Story 21.7 includes that infrastructure as a prerequisite sub-task.
+- **Knowledge graph (Epic 19) interaction:** None. Epic 21 does not emit graph nodes/edges.
