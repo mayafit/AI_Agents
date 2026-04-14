@@ -25,6 +25,8 @@ So that Roo Code's application-layer enforcement (`FileRestrictionError`) preven
 6. Re-running install produces byte-identical `.roomodes` content for the four ma-agents slugs (NFR46), with user-owned entries preserved.
 7. NFR47 contract: a unit test verifies the rendered `bmad-architect` `fileRegex` rejects paths ending in `.ts`, `.py`, `.js`, `.go`; accepts `.md`, `.xml`, `.drawio`. Verified by `RegExp(fileRegex).test(path)` — no Roo Code runtime needed.
 8. The Roo Code agent must already be registered in `lib/agents.js` (Epic 18 Story 18.1). If Epic 18 is not yet merged when this story starts, this story includes the minimal Roo Code agent registration as a prerequisite sub-task.
+9. **Slug-stomp protection.** On install, for each of the four ma-agents-owned slugs (`bmad-pm`, `bmad-architect`, `bmad-techlead`, `bmad-dev`) that already exist in the user's `.roomodes`, the installer diffs the existing slug body (`roleDefinition` + `customInstructions` + `groups`) against the current template output for the user's profile. If a non-whitespace-only diff exists, the installer ABORTS with a named error (e.g., `RoomodesSlugDivergenceError`) listing the diverged slugs and instructs the user to either (a) rename the slug (accept it as user-owned, dropping our version) or (b) rerun with `--force-roomodes-overwrite` to accept the stomp. Without `--force-roomodes-overwrite`, no overwrite happens. This supersedes the "console warning only" behavior described in AC #5's bullet about colliding slugs for the four ma-agents-owned slugs; collisions on other slugs are impossible (ma-agents only owns these four). `--yes` does NOT imply `--force-roomodes-overwrite` — silent stomps on user-edited BMAD modes would be a data-loss regression.
+10. **Overwrite audit log.** When a ma-agents-owned slug IS written or overwritten (first install, clean match of existing content, or user passed `--force-roomodes-overwrite`), the installer appends an entry to a top-level field `roomodesOverwriteLog` in `.ma-agents.json` with shape `{ slug, date: <ISO-timestamp>, previousContentHash: <sha256-of-previous-body-or-null-if-new>, profile: <value> }`. The array grows append-only and is capped at 50 entries (oldest dropped on insert beyond cap) to prevent unbounded growth of `.ma-agents.json`. Rationale: gives operators a forensic trail for "when did the BMAD mode definitions last change on this project?"
 
 ## Tasks / Subtasks
 
@@ -43,6 +45,15 @@ So that Roo Code's application-layer enforcement (`FileRestrictionError`) preven
   - [ ] 5.5 NFR47 contract — `bmad-architect` fileRegex matrix (AC #7)
   - [ ] 5.6 Same matrix for `bmad-pm` (`.md` only) and `bmad-techlead` (`.md|.json|.yaml|.yml` only)
 - [ ] Task 6: If Epic 18 not merged, add Roo Code agent registration as prerequisite (AC #8) — coordinate with epic execution order before starting
+- [ ] Task 7: Slug-stomp protection (AC #9)
+  - [ ] 7.1 For each of the 4 ma-agents-owned slugs, compute diff of existing `roleDefinition`+`customInstructions`+`groups` against current template render
+  - [ ] 7.2 On any non-whitespace diff without `--force-roomodes-overwrite`, abort with `RoomodesSlugDivergenceError` listing diverged slugs and remediation
+  - [ ] 7.3 Add `--force-roomodes-overwrite` flag to `bin/cli.js` install command; document in help text that `--yes` does not imply it
+- [ ] Task 8: Overwrite audit log (AC #10)
+  - [ ] 8.1 On write of a ma-agents-owned slug, append `{ slug, date, previousContentHash, profile }` to `.ma-agents.json::roomodesOverwriteLog`
+  - [ ] 8.2 `previousContentHash` is sha256 of the previous slug body (concat of `roleDefinition`+`customInstructions`+JSON.stringify(`groups`)) or `null` on first install of that slug
+  - [ ] 8.3 Cap array at 50 entries — oldest dropped on insert beyond cap
+  - [ ] 8.4 Test: install → log has 4 entries with null hashes; re-install with hand-edit + `--force-roomodes-overwrite` → log has 5 entries, 5th has non-null previous hash
 
 ## Dev Notes
 
@@ -92,3 +103,4 @@ _(to be filled)_
 
 ## Change Log
 - 2026-04-14: Story created (Epic 21, Story 21.3)
+- 2026-04-14: Added ACs #9 and #10 for slug-stomp protection and overwrite audit log (Findings #9 and #20, corrective plan step 3). New CLI flag: `--force-roomodes-overwrite`. New `.ma-agents.json` field: `roomodesOverwriteLog` (append-only, capped at 50). AC #5's "colliding slug overwrite with console warning" is superseded for the four ma-agents-owned slugs by AC #9's abort-and-require-force behavior; AC #5 still governs behavior for user-owned slugs (preserved untouched).

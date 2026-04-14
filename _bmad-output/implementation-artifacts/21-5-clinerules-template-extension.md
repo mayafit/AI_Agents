@@ -15,6 +15,7 @@ So that Cline (which already supports `.clinerules` natively) gets the same univ
 3. Existing user content outside `<!-- MA-AGENTS-START -->` / `<!-- MA-AGENTS-END -->` markers is preserved (NFR5).
 4. Re-running install produces byte-identical marker-block content in both files (NFR46).
 5. Mention Cline-specific concept: "Use Cline's Architect mode for BMAD planning phases (PM, Architect, Tech Lead). Switch to Code mode only for the implementation phase." This is universal guidance, not on-prem-specific.
+6. **Dual-file drift detection.** The installer writes both `.cline/clinerules.md` and `.clinerules` from the SAME template render. Before writing, it reads both existing files (if present) and compares their marker-block contents. If the two marker blocks diverge (non-whitespace diff), the installer ABORTS with a named error (e.g., `ClinerulesDualFileDriftError`) naming both files and their diff, instructing the user to reconcile manually before retrying. `--yes` does NOT bypass this check — reconciliation between the two Cline rule files is user work, and silently picking a "winner" could discard intentional edits. This is an explicit, documented exception to the usual `--yes` bypass convention.
 
 ## Tasks / Subtasks
 
@@ -29,6 +30,10 @@ So that Cline (which already supports `.clinerules` natively) gets the same univ
   - [ ] 4.2 User content outside markers preserved
   - [ ] 4.3 Idempotent re-install (NFR46)
   - [ ] 4.4 Both files have identical marker-block content
+- [ ] Task 5: Dual-file drift detection (AC #6)
+  - [ ] 5.1 Before write, compare marker-block contents of `.cline/clinerules.md` and `.clinerules` when both exist
+  - [ ] 5.2 On non-whitespace diff, abort with `ClinerulesDualFileDriftError` naming both files and emitting the diff
+  - [ ] 5.3 Verify `--yes` does NOT bypass this check; document in CLI help text as an explicit exception
 
 ## Dev Notes
 
@@ -74,3 +79,4 @@ _(to be filled)_
 
 ## Change Log
 - 2026-04-14: Story created (Epic 21, Story 21.5)
+- 2026-04-14: Added AC #6 for `.cline/clinerules.md` vs `.clinerules` drift detection (Finding #10, corrective plan step 3). `--yes` does NOT bypass this check — reconciliation is user work.

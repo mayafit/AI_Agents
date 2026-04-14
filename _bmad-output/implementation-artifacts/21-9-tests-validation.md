@@ -20,6 +20,8 @@ So that future changes to installer or templates do not silently regress on-prem
 2. The full test suite (`npm test`) passes after Story 21.9 — no regressions in any pre-Epic-21 tests.
 3. A short test-coverage table is added to the PR body listing each Epic 21 NFR (44, 45, 46, 47) and the test(s) that cover it. Any uncovered NFR is flagged as an open issue, not silently shipped.
 4. The integration tests use temporary directories (`fs.mkdtempSync(os.tmpdir() + ...)` per test) to avoid touching the repo's own `.ma-agents.json` or instruction files.
+5. **Standard-profile baseline fixture (byte-for-byte).** Commit `test/fixtures/standard-profile-baseline/` containing the expected byte-for-byte generated output for a canonical `npx ma-agents install --yes` run against a canonical empty-project fixture (also committed under `test/fixtures/empty-project/`). At a minimum the baseline fixture includes the rendered `CLAUDE.md`, `.clinerules`, `.roo/rules/00-ma-agents.md`, `AGENTS.md`, `.roomodes`, and `.ma-agents.json`. The test harness runs the installer against a scratch temp dir seeded with the empty-project fixture and diffs the result against this baseline byte-for-byte. Any drift in universal-block content, template rendering, or `.roomodes` rendering surfaces as a test failure pointing at the exact file and diff region. This replaces the vague "diff against pre-Epic-21 baseline" language in NFR44 with a concrete, version-controlled artifact.
+6. **End-to-end installer harness (exercises the actual binary).** The test harness at `test/onprem-injection.test.js` (or a sibling file) exercises the actual installer entry point (`node bin/cli.js install --yes` via `child_process.spawnSync` or equivalent, OR a direct programmatic call to the exported top-level install function that matches what the CLI does — no internal-only helpers) against a scratch tmpdir for BOTH profiles (`standard` and `on-prem`), snapshots the generated filesystem tree, and diffs it against per-profile fixtures (`test/fixtures/standard-profile-baseline/` for standard, `test/fixtures/onprem-profile-baseline/` for on-prem). This is distinct from — and additional to — unit-level template-rendering tests. Unit tests can pass while end-to-end install breaks (wiring bugs, file-path bugs, profile-resolution bugs); this AC closes that gap.
 
 ## Tasks / Subtasks
 
@@ -37,6 +39,15 @@ So that future changes to installer or templates do not silently regress on-prem
 - [ ] Task 3: PR body coverage table (AC #3)
   - [ ] 3.1 Tabulate NFR44, NFR45, NFR46, NFR47 → covering test name(s)
   - [ ] 3.2 Confirm NFR45 (CI/CD compatibility) is covered by `test/profile.test.js` (Story 21.1) tests for `--yes` defaulting and persisted-value precedence (no CLI flag exists)
+- [ ] Task 4: Commit baseline fixtures (AC #5)
+  - [ ] 4.1 Create `test/fixtures/empty-project/` — minimal canonical project seed (README.md, package.json, nothing else that affects install output)
+  - [ ] 4.2 Generate and commit `test/fixtures/standard-profile-baseline/` by running the installer once against the empty-project fixture with `--yes` (standard profile) and capturing all generated files
+  - [ ] 4.3 Generate and commit `test/fixtures/onprem-profile-baseline/` via the same pattern with profile=on-prem persisted in `.ma-agents.json`
+  - [ ] 4.4 Document regeneration procedure in a `test/fixtures/README.md` so future dev knows how to refresh when templates intentionally change
+- [ ] Task 5: End-to-end installer harness (AC #6)
+  - [ ] 5.1 Harness scaffolds a scratch tmpdir, copies the `empty-project` fixture into it, and invokes the installer entry point for each profile
+  - [ ] 5.2 After each install, walk the scratch dir and diff every file against the corresponding baseline fixture; any diff is a test failure naming the file and showing the diff hunk
+  - [ ] 5.3 Run for both `standard` and `on-prem` profiles sequentially (not in parallel — shared template files)
 
 ## Dev Notes
 
@@ -82,3 +93,4 @@ _(to be filled)_
 ## Change Log
 - 2026-04-14: Story created (Epic 21, Story 21.9)
 - 2026-04-14: Removed prescriptive `--profile=` flag references from test (f) description and Task 3.2 (flag retired; profile switch deferred to Story 21.10 reconfigure). Aligned with P0 spec-alignment PR #34.
+- 2026-04-14: Added ACs #5 and #6 for standard-profile byte-for-byte fixture baseline and end-to-end installer harness (Findings #14, #18, corrective plan step 3). Replaces the vague "diff against pre-Epic-21 baseline" language in NFR44 with concrete committed fixtures and a harness that exercises the actual installer entry point, not just template-rendering internals.
