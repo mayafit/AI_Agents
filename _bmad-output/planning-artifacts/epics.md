@@ -4,6 +4,8 @@ workflowStatus: 'complete'
 completedDate: '2026-03-08'
 lastEdited: '2026-04-07'
 phase3EditHistory:
+  - date: '2026-04-14'
+    changes: 'Added Story 21.10: Profile Reconfigure. Adds `ma-agents reconfigure` subcommand to change a previously-persisted profile and re-stamp all profile-dependent artifacts. Adds FR180 and NFR48. Closes adversarial-review Findings #5 (CI-default silent-downgrade) and #7 (no escape hatch once persisted). Execution order updated: 21.10 runs after 21.6 (depends on profile-dependent artifacts being layered first).'
   - date: '2026-04-13'
     changes: 'Added Epic 21: On-Prem / Local-LLM Tuning (Phase 3). 9 stories (21.1-21.9): install-time profile prompt + persistence, universal per-tool guardrail expansion, .roomodes template with BMAD-mode file-regex restrictions, expanded AGENTS.md (OpenCode), expanded .clinerules, on-prem layered guardrails, BMAD persona phase-aware prompt prefixes, vLLM reference deployment doc. Added FR172-FR179 and NFR44-NFR47 to Requirements Inventory and FR Coverage Map. Architecture Decision P3-3 covers design.'
   - date: '2026-04-07'
@@ -374,6 +376,7 @@ This document provides the complete epic and story breakdown for agents, decompo
 | FR177 | Epic 21 | On-prem layered guardrails (`/no_think`, no-home-dir-writes, no `str_replace_editor`) |
 | FR178 | Epic 21 | BMAD persona phase-aware system-prompt prefix (on-prem only) |
 | FR179 | Epic 21 | vLLM reference deployment doc — documentation only |
+| FR180 | Epic 21 | `ma-agents reconfigure` subcommand — re-runs profile prompt and re-stamps all profile-dependent artifacts. Closes no-escape-hatch gap. |
 
 ## Epic List
 
@@ -461,8 +464,8 @@ Sprint management is redesigned around a **single unified `sprint-status.yaml`**
 
 ### Epic 21: On-Prem / Local-LLM Tuning (Phase 3)
 The primary deployment scenario for ma-agents — air-gapped enterprise networks running local non-Claude LLMs (e.g., Nemotron Super 49B) — is made first-class. An install-time profile prompt (on-prem vs standard) drives a two-layer tuning model: (1) **universal** per-tool guardrail templates shipped to every install (`.roomodes` with BMAD-mode `fileRegex` restrictions, expanded `AGENTS.md`/`.clinerules`/`CLAUDE.md` injection enforcing text-vs-file discipline and BMAD phase boundaries), and (2) **on-prem-only** layered guardrails (`/no_think` planning prefix, no-home-dir-writes, no `str_replace_editor`, BMAD persona phase-aware prompt prefixes). A reference vLLM deployment doc ships under `docs/deployment/`. Implements the field-validated playbook from `optimizing-local-llm-coding-agents-bmad.md`.
-**FRs covered:** FR172, FR173, FR174, FR175, FR176, FR177, FR178, FR179
-**NFRs addressed:** NFR44 (profile isolation), NFR45 (CI/CD compatibility), NFR46 (idempotency), NFR47 (application-layer phase enforcement)
+**FRs covered:** FR172, FR173, FR174, FR175, FR176, FR177, FR178, FR179, FR180
+**NFRs addressed:** NFR44 (profile isolation), NFR45 (CI/CD compatibility), NFR46 (idempotency), NFR47 (application-layer phase enforcement), NFR48 (profile-history audit trail)
 **Architecture:** Decision P3-3 (Local-LLM / On-Prem Agent Tuning Profile) in `_bmad-output/planning-artifacts/architecture.md`
 **Dependencies:** Epic 9 (OpenCode JSON-merge injection — reused for AGENTS.md). Epic 18 (Roo Code agent registration — `.roomodes` ships into `.roo/`). Epic 15 (BMAD 6.2.1 module restructure — phase prefix integrates with customize-loader). Epic 13 (project-context generator — pattern reused for template stamping).
 **New files:** `lib/profile.js`, `lib/templates/instruction-block-universal.template.md`, `lib/templates/instruction-block-onprem.template.md`, `lib/templates/roomodes.template.yaml`, `lib/templates/agents-md.template.md`, `lib/templates/clinerules.template.md`, `docs/deployment/vllm-nemotron.md`
@@ -4144,6 +4147,43 @@ So that future changes to installer or templates do not silently regress on-prem
 
 **Technical notes:**
 - NFR47 enforcement test does not require running Roo Code itself — verifies that the generated `.roomodes` `fileRegex` patterns match the expected restrictions (the actual `FileRestrictionError` is enforced by Roo Code at runtime; the contract under test is that we generate the correct restriction)
+
+### Story 21.10: Profile Reconfigure
+
+As an **engineer who needs to change a previously-persisted profile**,
+I want a `ma-agents reconfigure` subcommand that re-runs the profile prompt and re-stamps all profile-dependent artifacts,
+So that a CI-default `standard` profile or a mistaken interactive answer can be corrected without hand-editing `.ma-agents.json`.
+
+**Acceptance Criteria:**
+
+**Given** a project with `.ma-agents.json` containing `"profile": "standard"` (perhaps auto-persisted by a CI `--yes` run)
+**When** the engineer runs `npx ma-agents reconfigure` interactively
+**Then** the profile-selection prompt appears with the currently-persisted value as the default highlighted option
+**And** the user can switch to `on-prem` and confirm
+
+**Given** the user changes the profile from `standard` to `on-prem` (or vice versa)
+**When** `reconfigure` proceeds after the confirmation prompt
+**Then** all profile-dependent artifacts are re-stamped (instruction-block injection files, `.roomodes`, BMAD persona customize output)
+**And** each to-be-overwritten marker-block region is backed up to `<target>.backup-<ISO-timestamp>`
+**And** a history entry `{ date, from, to, source: "reconfigure" }` is appended to `.ma-agents.json::profileHistory` (new field, capped at 20 entries)
+
+**Given** `--yes` is passed to `reconfigure`
+**When** the command runs
+**Then** it exits nonzero with the message `--yes is not valid for reconfigure — this command is interactive by design to prevent accidental CI-triggered profile changes.`
+**And** no files are modified
+
+**Given** the user-edited `.roomodes` ma-agents-owned slugs have diverged from the template
+**When** `reconfigure` runs without `--force-roomodes-overwrite`
+**Then** it aborts with `RoomodesSlugDivergenceError` per Story 21.3 AC #9
+
+**Technical notes:**
+- New CLI subcommand `reconfigure` in `bin/cli.js`
+- New orchestrator module `lib/reconfigure.js` — composes prompt, injection re-stamp, backup, history append
+- Reuses `lib/profile.js` (unchanged public contract); reuses injection helpers from `lib/installer.js`
+- `.ma-agents.json` gains optional top-level `"profileHistory"` field (append-only, capped at 20)
+- Detailed spec: `_bmad-output/implementation-artifacts/21-10-profile-reconfigure.md`
+
+---
 
 ### Epic 21 — Cross-Epic Notes
 
