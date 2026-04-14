@@ -22,6 +22,10 @@ So that all coding agents — even Claude on the web — stop dumping random fil
 5. For every existing markdown-injection agent (Claude Code, Cline, Roo Code rules, Cursor, Kilocode, Copilot, Gemini), a fresh install produces an instruction file containing the universal block. Existing user content outside the markers is preserved byte-for-byte (NFR5, NFR46).
 6. Two consecutive installs with the same profile and project state produce byte-identical content within the marker block (NFR46).
 7. The block must NOT mention `/no_think`, `str_replace_editor`, `~/.claude/`, or any local-LLM-specific concept — those belong in the on-prem template (Story 21.6). Verified by grep on the rendered standard-profile output.
+8. **Upgrade-safety (marker-block hand-edit detection).** When `npx ma-agents install` runs against an already-installed project, before overwriting the content inside `<!-- MA-AGENTS-START -->`/`<!-- MA-AGENTS-END -->` markers the installer compares the existing marker-block content against the ma-agents-generated content for the project's previously recorded profile+version. If the existing content differs from what ma-agents would have produced (i.e., the user hand-edited inside the markers):
+   - **Interactive mode:** the installer surfaces a diff of the in-marker changes and requires explicit confirmation before proceeding to overwrite.
+   - **`--yes` mode:** the prompt is skipped but the installer emits a visible migration warning line that CI will capture, in the exact format `WARNING: ma-agents marker-block content modified since last install — overwriting. Previous content backed up to <path>.backup-<timestamp>`.
+   - **Backup:** before overwriting, the installer writes a backup sibling file alongside the target — same directory, same basename, suffix `.backup-<ISO-timestamp>` (example: `CLAUDE.md.backup-2026-04-14T12-34-56Z`). Only the portion between (and including) the markers is written to the backup; the rest of the target file is untouched by the installer and therefore needs no backup. Rationale: hand-edits inside markers represent work the user expects to keep; silent overwrite is a data-loss regression.
 
 ## Tasks / Subtasks
 
@@ -39,6 +43,11 @@ So that all coding agents — even Claude on the web — stop dumping random fil
   - [ ] 5.4 Idempotency: two installs produce byte-identical marker-block content
   - [ ] 5.5 No on-prem-specific strings (`/no_think`, `str_replace_editor`, `~/.claude/`) appear in standard-profile output
   - [ ] 5.6 User content outside markers preserved across runs
+- [ ] Task 6 (upgrade-safety): Marker-block hand-edit detection, backup, and warning (AC #8)
+  - [ ] 6.1 Before overwrite, compare existing in-marker content against expected ma-agents-generated content for the persisted profile+version
+  - [ ] 6.2 On drift: interactive prompt shows a diff and requires confirmation; `--yes` bypasses the prompt and emits the pinned WARNING line so CI captures it
+  - [ ] 6.3 Write `<target>.backup-<ISO-timestamp>` alongside the target, containing only the original marker-block region (including the marker lines themselves)
+  - [ ] 6.4 Test: clean marker block → no warning, no backup file; hand-edited marker block + `--yes` → WARNING emitted and backup file exists with original content
 
 ## Dev Notes
 
@@ -86,3 +95,4 @@ _(to be filled)_
 
 ## Change Log
 - 2026-04-14: Story created (Epic 21, Story 21.2)
+- 2026-04-14: Added AC #8 for upgrade-safety — installer detects hand-edited marker content, backs it up, warns on --yes override (Finding #15, corrective plan step 3).

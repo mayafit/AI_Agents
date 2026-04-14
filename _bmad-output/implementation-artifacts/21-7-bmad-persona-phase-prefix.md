@@ -27,6 +27,13 @@ So that planning agents (PM, Architect, SM) stop overthinking and producing file
    - "Reference the story or spec you are implementing before starting."
    - "When asked a question, respond in text. Do not start coding unless asked."
 7. The customize-loader's prefix composition is idempotent — running the loader twice produces the same composed content (NFR46).
+8. **Phase enum extended to `{planning | implementation | mixed}` with persona reassignment (supersedes AC #1).** The `phase` field in each `*.customize.yaml` now accepts the value `mixed` in addition to `planning` and `implementation`. Final per-persona assignment is:
+   - **`phase: planning`** — `bmm-pm` (John), `bmm-architect` (Winston), `bmm-ux-designer` (Sally), `bmm-tech-writer` (Paige)
+   - **`phase: implementation`** — `bmm-dev` (Amelia), `bmm-quick-flow-solo-dev` (Barry)
+   - **`phase: mixed`** — `bmm-sm` (Bob), `bmm-qa` (Gad), `bmm-analyst` (Mary)
+   This supersedes AC #1's binary classification (which listed Bob, Gad, and Mary under `planning` and Paige under `planning`). The reason: Bob and Gad straddle planning conversations and story-file edits; Mary moves between research discussion and brief edits. A binary classification mislabels them and forces the wrong phase prefix. Each `*.customize.yaml` file must encode the `phase` value per this list.
+9. **Composite prefix for `phase: mixed`.** Personas with `phase: mixed` receive the following composite preamble as their `on_prem_phase_prefix` value (in addition to any persona-specific content): `"This persona handles both discussion and editing. Default to text responses when asked questions; only create or edit files when explicitly asked (verbs: create, write, generate, update, edit). When editing code, reason carefully; when discussing, keep responses concise without deep reasoning chains."` The customize-loader composes this prefix when profile=on-prem AND `phase: mixed`, parallel to the planning/implementation branches in AC #5/#6.
+10. **Customize-loader validator must accept `mixed`.** The Epic 15 customize-loader schema validation (wherever it lives — see Dev Notes) must recognize `mixed` as a valid `phase` value. If the current loader validator only accepts `{planning, implementation}`, a prerequisite sub-task is to extend the validator enum. This AC is satisfied when: (a) the validator accepts all three values without error, and (b) a `*.customize.yaml` file with `phase: mixed` is loaded successfully in a unit test.
 
 ## Tasks / Subtasks
 
@@ -44,6 +51,11 @@ So that planning agents (PM, Architect, SM) stop overthinking and producing file
   - [ ] 5.3 Profile=standard: no prefix prepended for any agent (snapshot match — AC #4)
   - [ ] 5.4 Profile=on-prem with agent missing `on_prem_phase_prefix`: no prefix, no error
   - [ ] 5.5 Idempotency: two loader runs produce identical composed content (NFR46)
+- [ ] Task 6: Phase enum extension and persona reassignment (AC #8, #9, #10)
+  - [ ] 6.1 Reassign `phase` values per AC #8: Bob, Gad, Mary → `mixed`; Paige stays `planning`; others unchanged
+  - [ ] 6.2 Populate `on_prem_phase_prefix` for the three `mixed` personas with the composite preamble in AC #9 (plus any persona-specific tail)
+  - [ ] 6.3 PREREQUISITE: audit the Epic 15 customize-loader schema validator — if it enforces enum `{planning, implementation}`, extend it to `{planning, implementation, mixed}`. If the validator lives outside this story's scope, raise an Epic 15 issue/story and document the blocker in Dev Agent Record before proceeding
+  - [ ] 6.4 Tests: (a) profile=on-prem + `phase: mixed` → composite prefix prepended; (b) validator accepts all three enum values
 
 ## Dev Notes
 
@@ -80,6 +92,14 @@ So that planning agents (PM, Architect, SM) stop overthinking and producing file
 - vLLM serving doc (Story 21.8)
 - Customize-loader refactoring beyond what's needed for prefix composition
 
+### Notes on Phase Enum Extension (Epic 15 Prerequisite)
+
+AC #10 requires the Epic 15 customize-loader schema validator to accept `mixed` as a valid `phase` value. During Task 1's loader-discovery pass, verify whether a validator is in place and what enum it enforces. Three outcomes:
+
+1. **No validator present** — `phase` is a free-form string today; AC #10 is trivially satisfied. Document this in Dev Agent Record.
+2. **Validator present and accepts `mixed` already** — no change needed; satisfy AC #10 with a regression test.
+3. **Validator present and rejects `mixed`** — extend the enum to `{planning, implementation, mixed}`. If the validator is owned by Epic 15 code outside this story's change scope, raise an Epic 15 issue/story as a prerequisite and block Task 6 until it lands. Document explicitly rather than letting the dev hit this at implementation time.
+
 ### Notes on Customize-Loader Discovery
 
 If the loader is implicit (BMAD itself reads `*.customize.yaml` directly with no ma-agents intermediation), this story's design may need adjustment. In that case, the prefix must be embedded directly into the YAML's existing `critical_actions` block under a profile-aware key, OR ma-agents must intercept the file at install time and produce two variants (`*.customize.yaml` for standard, `*.customize.on-prem.yaml` for on-prem) with the installer choosing which to deploy. Decide during Task 1 and document the chosen approach.
@@ -100,3 +120,4 @@ _(to be filled)_
 
 ## Change Log
 - 2026-04-14: Story created (Epic 21, Story 21.7)
+- 2026-04-14: Extended phase enum to `{planning, implementation, mixed}` via new ACs #8, #9, #10 (Finding #11, corrective plan step 3). Reassigned SM Bob, SQA Gad, Analyst Mary to `mixed`. AC #1's binary classification is SUPERSEDED by AC #8 but left in place to preserve the historical decision trail. Added Epic 15 validator-extension prerequisite note to Dev Notes.

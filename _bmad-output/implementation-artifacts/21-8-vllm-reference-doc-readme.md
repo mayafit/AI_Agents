@@ -26,6 +26,8 @@ So that I can configure Nemotron Super 49B (or similar) to behave correctly with
 3. The deployment doc is NOT stamped into target projects by the installer — it is repo documentation only (FR179). Verified by grep on `lib/installer.js` and `lib/templates/` for any reference to the deployment doc path.
 4. The deployment doc explicitly states it is informational only — running ma-agents does not configure or manage the vLLM server.
 5. Documentation only: this story adds NO code, NO tests beyond a docs-link sanity check.
+6. **Sampling parameters owned by the vLLM reference doc, not the prompt.** The per-phase sampling-parameters table (temperature/top_p values, e.g., planning: temp 0.0, top_p 1.0; implementation: temp 0.6, top_p 0.95) lives in `docs/deployment/vllm-nemotron.md` and nowhere else in the repo. The doc must contain an explicit statement of this ownership with a phrase along the lines of: `"The agent prompt does not control sampling; sampling is set at the vLLM request/serve layer. The table below is for operators configuring the serve or the agent's request parameters, not for end-users."` Verified by (a) presence of the sampling table in the doc, (b) presence of the ownership statement, (c) cross-referenced with Story 21.6 AC #11 which forbids numerical values in the on-prem prompt template. Finding #12 is closed by the combination of 21.6 AC #11 (no numbers in prompt) + 21.8 AC #6 (numbers only in serving doc, with ownership disclaimer).
+7. **Tool-call-parser flag provenance and cross-model validation warning.** The doc must cite the provenance of `--tool-call-parser qwen3_coder`: specifically, that this parser was validated to work with Nemotron Super 49B v1.5 per the source conversation `optimizing-local-llm-coding-agents-bmad.md` (dated April 2026). Immediately following the citation, the doc must contain a clearly-marked warning paragraph (formatted as a `NOTE:` or `WARNING:` admonition) with content along the lines of: `"NOTE: This parser flag is validated for Nemotron Super 49B v1.5. Users deploying other Nemotron versions or different local LLMs MUST validate the parser flag against their model's HuggingFace card — copy-paste of this flag to an unvalidated model risks silent tool-call corruption."` Verified by grep: presence of `Nemotron Super 49B v1.5` in the same paragraph as `qwen3_coder`, and presence of the cross-model validation warning paragraph.
 
 ## Tasks / Subtasks
 
@@ -41,6 +43,13 @@ So that I can configure Nemotron Super 49B (or similar) to behave correctly with
   - [ ] 3.2 Doc explicitly disclaims installer responsibility for the inference server
 - [ ] Task 4: Optional — link-check
   - [ ] 4.1 If a markdown link checker is in the test suite, verify all internal links in the new doc and README section resolve
+- [ ] Task 5: Sampling ownership + prompt/server boundary (AC #6)
+  - [ ] 5.1 Include the per-phase sampling table in the vLLM reference doc
+  - [ ] 5.2 Add the ownership statement ("agent prompt does not control sampling...") immediately above the table
+  - [ ] 5.3 Cross-reference Story 21.6 AC #11 in a short parenthetical ("Numbers deliberately omitted from the on-prem prompt template; see Story 21.6 AC #11.")
+- [ ] Task 6: Tool-call-parser provenance + cross-model warning (AC #7)
+  - [ ] 6.1 Cite `optimizing-local-llm-coding-agents-bmad.md` (April 2026) as the source validating `--tool-call-parser qwen3_coder` for Nemotron Super 49B v1.5
+  - [ ] 6.2 Add the `NOTE:` admonition warning against copy-paste to unvalidated models
 
 ## Dev Notes
 
@@ -87,3 +96,5 @@ _(to be filled)_
 
 ## Change Log
 - 2026-04-14: Story created (Epic 21, Story 21.8)
+- 2026-04-14: Added AC #6 making the vLLM reference doc the sole owner of per-phase sampling parameters with an explicit prompt-vs-server ownership statement (Finding #12-b, corrective plan step 3). Paired with Story 21.6 AC #11 to close Finding #12 end-to-end.
+- 2026-04-14: Added AC #7 requiring parser-flag provenance citation for `--tool-call-parser qwen3_coder` (Nemotron Super 49B v1.5, per source playbook dated April 2026) and a cross-model validation warning (Finding #13, corrective plan step 3).
