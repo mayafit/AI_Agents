@@ -175,22 +175,8 @@ function parseFlags(args) {
   let customPath = '';
   let agentFlag = '';
 
-  // Story 21.1: --profile=on-prem|standard. Validate up front; fail fast on bad value.
-  // Accept only the `--profile=<value>` form (equals-syntax) per AC #6.
-  let profileFlag = null;
-  const profileArg = args.find(a => a.startsWith('--profile='));
-  if (profileArg !== undefined) {
-    const rawValue = profileArg.slice('--profile='.length);
-    if (rawValue !== 'on-prem' && rawValue !== 'standard') {
-      console.error(chalk.red(`Error: Invalid --profile value: '${rawValue}'`));
-      console.error(chalk.gray('  Expected: --profile=on-prem or --profile=standard'));
-      process.exit(1);
-    }
-    profileFlag = rawValue;
-  }
-
   let positional = [...args].filter(a =>
-    a !== '--global' && a !== '--force' && a !== '--yes' && !a.startsWith('--profile=')
+    a !== '--global' && a !== '--force' && a !== '--yes'
   );
 
   const pathIdx = positional.indexOf('--path');
@@ -217,7 +203,6 @@ function parseFlags(args) {
     yesFlag,
     agentFlag,
     customPath,
-    profileFlag,
     scope: globalFlag ? 'global' : 'project',
     positional
   };
@@ -671,7 +656,7 @@ async function collectRepoLayout(flags, existingLayout = null) {
 
 // --- Install wizard ---
 
-async function installWizard(preselectedSkill, preselectedAgents, customPath, forceFlag, yesFlag = false, cliScope, profileFlag = null) {
+async function installWizard(preselectedSkill, preselectedAgents, customPath, forceFlag, yesFlag = false, cliScope) {
   const skills = listSkills();
   const agents = listAgents();
 
@@ -851,13 +836,11 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
   const projectRootForProfile = process.cwd();
   const persistedProfile = getProfile(projectRootForProfile);
   let resolvedProfile = resolveProfile({
-    flag: profileFlag,
     persisted: persistedProfile,
     yesMode: yesFlag
   });
   let profileSource;
-  if (profileFlag) profileSource = '--profile flag';
-  else if (persistedProfile) profileSource = '.ma-agents.json';
+  if (persistedProfile) profileSource = '.ma-agents.json';
   else if (resolvedProfile === 'standard' && yesFlag) profileSource = '--yes default';
 
   if (resolvedProfile === null) {
@@ -1106,7 +1089,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 // --- Command handlers ---
 
 async function handleInstall(args) {
-  const { globalFlag, forceFlag, yesFlag, agentFlag, customPath, profileFlag, scope, positional } = parseFlags(args);
+  const { globalFlag, forceFlag, yesFlag, agentFlag, customPath, scope, positional } = parseFlags(args);
 
   // Task 3.2: Validate agentFlag against known agents
   if (agentFlag) {
@@ -1125,49 +1108,50 @@ async function handleInstall(args) {
 
   // No skill → launch wizard (Task 3.3, 3.4)
   if (!skillId) {
-    await installWizard(null, preselectedAgents, customPath, forceFlag, yesFlag, scope, profileFlag);
+    await installWizard(null, preselectedAgents, customPath, forceFlag, yesFlag, scope);
     return;
   }
 
   // Skill but no agents (and no agentFlag) → wizard with skill preselected
   if (!agentFlag && agentIds.length === 0) {
-    await installWizard(skillId, null, customPath, forceFlag, yesFlag, scope, profileFlag);
+    await installWizard(skillId, null, customPath, forceFlag, yesFlag, scope);
     return;
   }
 
-  // Direct install path — Story 21.1 AC #10, #11: resolve + persist profile BEFORE install.
+  // Direct install path — Story 21.1 AC #9, #11: resolve + persist profile BEFORE install.
   // Profile lives at the project root (cwd), not the custom skills-install path.
+  // When stdin is not a TTY and nothing is resolvable, default to 'standard' (same
+  // behavior as --yes) rather than aborting — keeps CI/CD direct installs working.
   const projectRootForProfile = process.cwd();
   const persistedProfile = getProfile(projectRootForProfile);
   let resolvedProfile = resolveProfile({
-    flag: profileFlag,
     persisted: persistedProfile,
     yesMode: yesFlag
   });
   let profileSource;
-  if (profileFlag) profileSource = '--profile flag';
-  else if (persistedProfile) profileSource = '.ma-agents.json';
+  if (persistedProfile) profileSource = '.ma-agents.json';
   else if (resolvedProfile === 'standard' && yesFlag) profileSource = '--yes default';
 
   if (resolvedProfile === null) {
-    // Direct-install interactive fallback. Fail fast on non-TTY stdin.
     if (!process.stdin.isTTY) {
-      console.error(chalk.red('Cannot determine install profile in non-interactive mode — pass --profile=on-prem|standard or --yes'));
-      process.exit(1);
+      // Non-interactive fallback: default to 'standard' and persist (mirrors --yes).
+      resolvedProfile = 'standard';
+      profileSource = '--yes default';
+    } else {
+      const { chosenProfile } = await prompts({
+        type: 'select',
+        name: 'chosenProfile',
+        message: 'Is this an on-prem / air-gapped install using a local LLM (e.g. Nemotron)?',
+        choices: [
+          { title: 'Yes — apply local-LLM guardrails (recommended for non-Claude models)', value: 'on-prem' },
+          { title: 'No  — standard install (Claude on web, Anthropic API, etc.)', value: 'standard' }
+        ],
+        initial: 1
+      });
+      if (!chosenProfile) process.exit(0);
+      resolvedProfile = chosenProfile;
+      profileSource = 'interactive prompt';
     }
-    const { chosenProfile } = await prompts({
-      type: 'select',
-      name: 'chosenProfile',
-      message: 'Is this an on-prem / air-gapped install using a local LLM (e.g. Nemotron)?',
-      choices: [
-        { title: 'Yes — apply local-LLM guardrails (recommended for non-Claude models)', value: 'on-prem' },
-        { title: 'No  — standard install (Claude on web, Anthropic API, etc.)', value: 'standard' }
-      ],
-      initial: 1
-    });
-    if (!chosenProfile) process.exit(0);
-    resolvedProfile = chosenProfile;
-    profileSource = 'interactive prompt';
   }
 
   console.log(chalk.cyan(`Using profile: ${resolvedProfile} (from ${profileSource})`));
@@ -1176,7 +1160,7 @@ async function handleInstall(args) {
   // Full args → direct install (Task 3.5)
   const targetAgents = agentFlag ? [agentFlag] : agentIds;
   try {
-    await installSkill(skillId, targetAgents, customPath, scope, { force: forceFlag, yes: yesFlag, profile: resolvedProfile });
+    await installSkill(skillId, targetAgents, customPath, scope, { force: forceFlag, yes: yesFlag });
     console.log(chalk.bold.green('\n Installation complete!\n'));
   } catch (error) {
     console.error(chalk.red('\n Installation failed:'), error.message);

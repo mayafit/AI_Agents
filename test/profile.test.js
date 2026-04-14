@@ -9,15 +9,14 @@
  *   6.4  setProfile creates file with standard schema    (AC #3)
  *   6.5  setProfile preserves existing fields            (AC #3)
  *   6.6  setProfile throws on invalid value              (AC #4)
- *   6.7  resolveProfile: flag > persisted                (AC #5)
- *   6.8  resolveProfile: persisted > yes-default         (AC #5)
- *   6.9  resolveProfile: yes-default only when no flag/persisted (AC #5)
- *   6.10 resolveProfile: null when nothing set, yesMode=false (AC #5)
- *   6.11 resolveProfile does no I/O                      (AC #5)
- *   6.12 round-trip setProfile -> getProfile             (AC #2/#3)
- *   6.13 setProfile idempotent (profile field stable)    (AC #3)
- *   6.14 setProfile('on-prem') bumps manifestVersion     (AC #14 — new files at 1.2.0)
- *   6.15 ma-agents-template 1.1.0 file w/o profile reads as undefined (AC #14 back-compat)
+ *   6.7  resolveProfile: persisted > yes-default         (AC #5)
+ *   6.8  resolveProfile: yes-default only when no persisted (AC #5)
+ *   6.9  resolveProfile: null when nothing set, yesMode=false (AC #5)
+ *   6.10 resolveProfile does no I/O                      (AC #5)
+ *   6.11 round-trip setProfile -> getProfile             (AC #2/#3)
+ *   6.12 setProfile idempotent (profile field stable)    (AC #3)
+ *   6.13 setProfile('on-prem') bumps manifestVersion     (AC #12 — new files at 1.2.0)
+ *   6.14 ma-agents-template 1.1.0 file w/o profile reads as undefined (AC #12 back-compat)
  */
 'use strict';
 
@@ -126,7 +125,7 @@ async function runAll() {
       assert.strictEqual(parsed.scope, 'project');
       assert.deepStrictEqual(parsed.skills, original.skills);
       assert.strictEqual(parsed.customField, 'preserved', 'unknown fields must also be preserved');
-      // Per AC #14: reads do NOT migrate version. Only setProfile itself does not rewrite
+      // Per AC #12: reads do NOT migrate version. Only setProfile itself does not rewrite
       // the version — the file was already at 1.1.0 and stays that way.
       assert.strictEqual(parsed.manifestVersion, '1.1.0', 'setProfile must not mutate manifestVersion on existing files');
     } finally { cleanup(dir); }
@@ -147,41 +146,33 @@ async function runAll() {
     } finally { cleanup(dir); }
   });
 
-  // 6.7 — resolveProfile: flag wins over persisted
-  await test('6.7 resolveProfile: flag wins over persisted', () => {
+  // 6.7 — resolveProfile: persisted wins over yes-default
+  await test('6.7 resolveProfile: persisted wins over --yes default', () => {
     assert.strictEqual(
-      resolveProfile({ flag: 'on-prem', persisted: 'standard', yesMode: true }),
+      resolveProfile({ persisted: 'on-prem', yesMode: true }),
       'on-prem'
     );
   });
 
-  // 6.8 — resolveProfile: persisted wins over yes-default
-  await test('6.8 resolveProfile: persisted wins over --yes default', () => {
+  // 6.8 — resolveProfile: yes-default returns standard only when no persisted
+  await test('6.8 resolveProfile: yesMode=true with no persisted returns "standard"', () => {
     assert.strictEqual(
-      resolveProfile({ flag: null, persisted: 'on-prem', yesMode: true }),
-      'on-prem'
-    );
-  });
-
-  // 6.9 — resolveProfile: yes-default returns standard only when no flag/persisted
-  await test('6.9 resolveProfile: yesMode=true with no flag and no persisted returns "standard"', () => {
-    assert.strictEqual(
-      resolveProfile({ flag: null, persisted: undefined, yesMode: true }),
+      resolveProfile({ persisted: undefined, yesMode: true }),
       'standard'
     );
   });
 
-  // 6.10 — resolveProfile: null when nothing set and yesMode is false
-  await test('6.10 resolveProfile: returns null when nothing set and yesMode=false', () => {
+  // 6.9 — resolveProfile: null when nothing set and yesMode is false
+  await test('6.9 resolveProfile: returns null when nothing set and yesMode=false', () => {
     assert.strictEqual(
-      resolveProfile({ flag: null, persisted: undefined, yesMode: false }),
+      resolveProfile({ persisted: undefined, yesMode: false }),
       null
     );
     assert.strictEqual(resolveProfile({}), null, 'empty options → null');
   });
 
-  // 6.11 — resolveProfile performs no I/O
-  await test('6.11 resolveProfile does not perform I/O (fs spies not triggered)', () => {
+  // 6.10 — resolveProfile performs no I/O
+  await test('6.10 resolveProfile does not perform I/O (fs spies not triggered)', () => {
     const calls = [];
     const originals = {};
     for (const name of ['readFileSync', 'writeFileSync', 'existsSync', 'readdirSync', 'statSync']) {
@@ -192,18 +183,18 @@ async function runAll() {
       };
     }
     try {
-      resolveProfile({ flag: 'on-prem', persisted: null, yesMode: false });
-      resolveProfile({ flag: null, persisted: 'standard', yesMode: true });
-      resolveProfile({ flag: null, persisted: null, yesMode: true });
-      resolveProfile({ flag: null, persisted: null, yesMode: false });
+      resolveProfile({ persisted: null, yesMode: false });
+      resolveProfile({ persisted: 'standard', yesMode: true });
+      resolveProfile({ persisted: null, yesMode: true });
+      resolveProfile({ persisted: null, yesMode: false });
       assert.strictEqual(calls.length, 0, `resolveProfile triggered fs calls: ${calls.map(c => c.name).join(',')}`);
     } finally {
       for (const name of Object.keys(originals)) fs[name] = originals[name];
     }
   });
 
-  // 6.12 — Round-trip: setProfile then getProfile
-  await test('6.12 round-trip: setProfile("on-prem") then getProfile() returns "on-prem"', () => {
+  // 6.11 — Round-trip: setProfile then getProfile
+  await test('6.11 round-trip: setProfile("on-prem") then getProfile() returns "on-prem"', () => {
     const dir = mktemp();
     try {
       setProfile(dir, 'on-prem');
@@ -213,8 +204,8 @@ async function runAll() {
     } finally { cleanup(dir); }
   });
 
-  // 6.13 — Idempotence: re-running setProfile with same value keeps the profile field stable
-  await test('6.13 setProfile is idempotent — profile field remains stable on re-apply', () => {
+  // 6.12 — Idempotence: re-running setProfile with same value keeps the profile field stable
+  await test('6.12 setProfile is idempotent — profile field remains stable on re-apply', () => {
     const dir = mktemp();
     try {
       setProfile(dir, 'on-prem');
@@ -228,8 +219,8 @@ async function runAll() {
     } finally { cleanup(dir); }
   });
 
-  // 6.14 — Fresh setProfile writes manifestVersion 1.2.0
-  await test('6.14 setProfile on fresh project bootstraps manifestVersion 1.2.0', () => {
+  // 6.13 — Fresh setProfile writes manifestVersion 1.2.0
+  await test('6.13 setProfile on fresh project bootstraps manifestVersion 1.2.0', () => {
     const dir = mktemp();
     try {
       setProfile(dir, 'standard');
@@ -238,8 +229,8 @@ async function runAll() {
     } finally { cleanup(dir); }
   });
 
-  // 6.15 — 1.1.0 back-compat: file without profile reads cleanly
-  await test('6.15 1.1.0 manifest without profile field reads without error (AC #14)', () => {
+  // 6.14 — 1.1.0 back-compat: file without profile reads cleanly
+  await test('6.14 1.1.0 manifest without profile field reads without error (AC #12)', () => {
     const dir = mktemp();
     try {
       fs.writeFileSync(
