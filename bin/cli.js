@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
 const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout } = require('../lib/installer');
+const { getProfile, setProfile, resolveProfile } = require('../lib/profile');
 const bmad = require('../lib/bmad');
 const { getBmadPlatformCode } = require('../lib/agents');
 const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
@@ -173,7 +174,10 @@ function parseFlags(args) {
   const yesFlag = args.includes('--yes');
   let customPath = '';
   let agentFlag = '';
-  let positional = [...args].filter(a => a !== '--global' && a !== '--force' && a !== '--yes');
+
+  let positional = [...args].filter(a =>
+    a !== '--global' && a !== '--force' && a !== '--yes'
+  );
 
   const pathIdx = positional.indexOf('--path');
   if (pathIdx !== -1) {
@@ -824,6 +828,43 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     }
   }
 
+  // Step 2.4: Profile resolution (Story 21.1, ACs #7–#9)
+  // Must run AFTER agent selection and BEFORE repo layout, so downstream stories
+  // can gate layout-related guidance on profile. setProfile() is called BEFORE
+  // any agent install runs — guaranteeing persistence even if a later step fails.
+  // Profile lives at the project root (cwd), NOT the custom skills-install path.
+  const projectRootForProfile = process.cwd();
+  const persistedProfile = getProfile(projectRootForProfile);
+  let resolvedProfile = resolveProfile({
+    persisted: persistedProfile,
+    yesMode: yesFlag
+  });
+  let profileSource;
+  if (persistedProfile) profileSource = '.ma-agents.json';
+  else if (resolvedProfile === 'standard' && yesFlag) profileSource = '--yes default';
+
+  if (resolvedProfile === null) {
+    const { chosenProfile } = await prompts({
+      type: 'select',
+      name: 'chosenProfile',
+      message: 'Is this an on-prem / air-gapped install using a local LLM (e.g. Nemotron)?',
+      choices: [
+        { title: 'Yes — apply local-LLM guardrails (recommended for non-Claude models)', value: 'on-prem' },
+        { title: 'No  — standard install (Claude on web, Anthropic API, etc.)', value: 'standard' }
+      ],
+      initial: 1
+    });
+    if (!chosenProfile) process.exit(0);
+    resolvedProfile = chosenProfile;
+    profileSource = 'interactive prompt';
+  }
+
+  console.log(chalk.cyan(`Using profile: ${resolvedProfile} (from ${profileSource})`));
+
+  // Persist BEFORE any agent install step (AC #9). setProfile bootstraps the
+  // manifest via ensureManifest when absent.
+  setProfile(projectRootForProfile, resolvedProfile);
+
   // Step 2.5: Repository layout (preserve existing config on update)
   const existingLayout = isUpdate ? readExistingLayout() : null;
   const repoLayout = await collectRepoLayout({ yes: yesFlag }, existingLayout);
@@ -1076,6 +1117,45 @@ async function handleInstall(args) {
     await installWizard(skillId, null, customPath, forceFlag, yesFlag, scope);
     return;
   }
+
+  // Direct install path — Story 21.1 AC #9, #11: resolve + persist profile BEFORE install.
+  // Profile lives at the project root (cwd), not the custom skills-install path.
+  // When stdin is not a TTY and nothing is resolvable, default to 'standard' (same
+  // behavior as --yes) rather than aborting — keeps CI/CD direct installs working.
+  const projectRootForProfile = process.cwd();
+  const persistedProfile = getProfile(projectRootForProfile);
+  let resolvedProfile = resolveProfile({
+    persisted: persistedProfile,
+    yesMode: yesFlag
+  });
+  let profileSource;
+  if (persistedProfile) profileSource = '.ma-agents.json';
+  else if (resolvedProfile === 'standard' && yesFlag) profileSource = '--yes default';
+
+  if (resolvedProfile === null) {
+    if (!process.stdin.isTTY) {
+      // Non-interactive fallback: default to 'standard' and persist (mirrors --yes).
+      resolvedProfile = 'standard';
+      profileSource = '--yes default';
+    } else {
+      const { chosenProfile } = await prompts({
+        type: 'select',
+        name: 'chosenProfile',
+        message: 'Is this an on-prem / air-gapped install using a local LLM (e.g. Nemotron)?',
+        choices: [
+          { title: 'Yes — apply local-LLM guardrails (recommended for non-Claude models)', value: 'on-prem' },
+          { title: 'No  — standard install (Claude on web, Anthropic API, etc.)', value: 'standard' }
+        ],
+        initial: 1
+      });
+      if (!chosenProfile) process.exit(0);
+      resolvedProfile = chosenProfile;
+      profileSource = 'interactive prompt';
+    }
+  }
+
+  console.log(chalk.cyan(`Using profile: ${resolvedProfile} (from ${profileSource})`));
+  setProfile(projectRootForProfile, resolvedProfile);
 
   // Full args → direct install (Task 3.5)
   const targetAgents = agentFlag ? [agentFlag] : agentIds;
