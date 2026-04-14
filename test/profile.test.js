@@ -16,7 +16,8 @@
  *   6.11 round-trip setProfile -> getProfile             (AC #2/#3)
  *   6.12 setProfile idempotent (profile field stable)    (AC #3)
  *   6.13 setProfile('on-prem') bumps manifestVersion     (AC #12 — new files at 1.2.0)
- *   6.14 ma-agents-template 1.1.0 file w/o profile reads as undefined (AC #12 back-compat)
+ *   6.14 1.1.0 manifest reads + setProfile migrates to 1.2.0 with pinned log line (AC #12)
+ *   6.15 setProfile on 1.2.0 manifest does not emit migration log (AC #12)
  */
 'use strict';
 
@@ -104,8 +105,8 @@ async function runAll() {
     } finally { cleanup(dir); }
   });
 
-  // 6.5 — setProfile preserves existing fields
-  await test('6.5 setProfile preserves existing fields (manifestVersion, agent, agents, scope, skills)', () => {
+  // 6.5 — setProfile preserves existing fields and migrates manifestVersion 1.1.0 → 1.2.0
+  await test('6.5 setProfile preserves existing fields and migrates manifestVersion 1.1.0 → 1.2.0', () => {
     const dir = mktemp();
     try {
       const original = {
@@ -125,9 +126,10 @@ async function runAll() {
       assert.strictEqual(parsed.scope, 'project');
       assert.deepStrictEqual(parsed.skills, original.skills);
       assert.strictEqual(parsed.customField, 'preserved', 'unknown fields must also be preserved');
-      // Per AC #12: reads do NOT migrate version. Only setProfile itself does not rewrite
-      // the version — the file was already at 1.1.0 and stays that way.
-      assert.strictEqual(parsed.manifestVersion, '1.1.0', 'setProfile must not mutate manifestVersion on existing files');
+      // Per AC #12 (clarified): the "profile" field is 1.2.0-only, so setProfile must
+      // migrate a 1.1.0 manifest to 1.2.0 on write. Writing "profile" onto a 1.1.0
+      // manifest would be schema drift.
+      assert.strictEqual(parsed.manifestVersion, '1.2.0', 'setProfile must migrate manifestVersion 1.1.0 → 1.2.0');
     } finally { cleanup(dir); }
   });
 
@@ -229,9 +231,11 @@ async function runAll() {
     } finally { cleanup(dir); }
   });
 
-  // 6.14 — 1.1.0 back-compat: file without profile reads cleanly
-  await test('6.14 1.1.0 manifest without profile field reads without error (AC #12)', () => {
+  // 6.14 — 1.1.0 back-compat read + setProfile migration to 1.2.0 with pinned log line
+  await test('6.14 1.1.0 manifest reads without profile; setProfile migrates to 1.2.0 and logs (AC #12)', () => {
     const dir = mktemp();
+    const captured = [];
+    const originalLog = console.log;
     try {
       fs.writeFileSync(
         path.join(dir, '.ma-agents.json'),
@@ -239,12 +243,51 @@ async function runAll() {
         'utf-8'
       );
       assert.strictEqual(getProfile(dir), undefined);
-      // And setProfile on top preserves existing version (does not force migrate on read path)
+      // setProfile must migrate the 1.1.0 manifest to 1.2.0, since the "profile" field
+      // is 1.2.0-only. It must also emit the pinned migration log line to stdout.
+      console.log = (...args) => { captured.push(args.join(' ')); };
       setProfile(dir, 'on-prem');
+      console.log = originalLog;
       const after = JSON.parse(fs.readFileSync(path.join(dir, '.ma-agents.json'), 'utf-8'));
       assert.strictEqual(after.profile, 'on-prem');
-      assert.strictEqual(after.manifestVersion, '1.1.0', 'existing manifestVersion must be preserved');
-    } finally { cleanup(dir); }
+      assert.strictEqual(after.manifestVersion, '1.2.0', 'setProfile must migrate manifestVersion 1.1.0 → 1.2.0');
+      const output = captured.join('\n');
+      assert.ok(
+        output.includes('Migrated .ma-agents.json manifestVersion 1.1.0 → 1.2.0'),
+        `expected pinned migration log line; got: ${JSON.stringify(output)}`
+      );
+    } finally {
+      console.log = originalLog;
+      cleanup(dir);
+    }
+  });
+
+  // 6.15 — no migration log when manifest is already at 1.2.0
+  await test('6.15 setProfile on 1.2.0 manifest does not emit migration log (AC #12)', () => {
+    const dir = mktemp();
+    const captured = [];
+    const originalLog = console.log;
+    try {
+      fs.writeFileSync(
+        path.join(dir, '.ma-agents.json'),
+        JSON.stringify({ manifestVersion: '1.2.0', skills: {} }, null, 2),
+        'utf-8'
+      );
+      console.log = (...args) => { captured.push(args.join(' ')); };
+      setProfile(dir, 'on-prem');
+      console.log = originalLog;
+      const after = JSON.parse(fs.readFileSync(path.join(dir, '.ma-agents.json'), 'utf-8'));
+      assert.strictEqual(after.profile, 'on-prem');
+      assert.strictEqual(after.manifestVersion, '1.2.0');
+      const output = captured.join('\n');
+      assert.ok(
+        !output.includes('Migrated .ma-agents.json manifestVersion'),
+        `expected no migration log; got: ${JSON.stringify(output)}`
+      );
+    } finally {
+      console.log = originalLog;
+      cleanup(dir);
+    }
   });
 
   // ─── Report ───
