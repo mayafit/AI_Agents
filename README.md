@@ -103,6 +103,23 @@ The file is version-controlled as part of `_bmad-output/` project knowledge. Com
 
 ---
 
+## On-Prem / Air-Gapped Deployment
+
+When running AI coding agents against a locally-hosted LLM (e.g., Nemotron Super 49B on vLLM), `ma-agents install` asks a one-time profile question at setup:
+
+```
+? Profile (standard / on-prem):
+```
+
+Your answer is persisted in `.ma-agents.json` under the `profile` field and is read on every subsequent install, update, or reconfigure. The `standard` profile produces the same output as always; the `on-prem` profile additionally stamps on-prem-specific guardrails into every agent's instruction block — including `/no_think` directives for planning personas, `str_replace_editor` prohibition, and home-directory write restrictions.
+
+To change your profile after initial setup: `npx ma-agents reconfigure`
+To remove all on-prem profile artifacts: `npx ma-agents uninstall --profile-artifacts`
+
+For vLLM server configuration, quantization tradeoffs, per-phase sampling parameters, and the `str_replace_editor` hallucination mitigation, see [`docs/deployment/vllm-nemotron.md`](docs/deployment/vllm-nemotron.md).
+
+---
+
 ## Supported Coding Tools
 
 Skills can be installed into any of these AI coding agents:
