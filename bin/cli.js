@@ -112,6 +112,10 @@ ${chalk.bold('Install options:')}
   ${chalk.cyan('--agent <name>')}    Target a specific agent (skip agent selection)
   ${chalk.cyan('--log')}              Log all console output to install_<datetime>.log
 
+${chalk.bold('Notes:')}
+  Divergent \`.cline/clinerules.md\` vs. \`.clinerules\` marker blocks require
+  manual reconciliation — \`--yes\` does not bypass this check.
+
 ${chalk.bold('Examples:')}
   npx ${NAME} install
   npx ${NAME} install code-review claude-code
