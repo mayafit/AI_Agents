@@ -35,6 +35,7 @@ const fs = require('fs');
 const { execFileSync } = require('child_process');
 const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout } = require('../lib/installer');
 const { getProfile, setProfile, resolveProfile } = require('../lib/profile');
+const { reconfigure: runReconfigure, ReconfigureYesRejectedError, ManifestNotFoundError, RoomodesSlugDivergenceError } = require('../lib/reconfigure');
 const bmad = require('../lib/bmad');
 const { getBmadPlatformCode } = require('../lib/agents');
 const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
@@ -100,6 +101,7 @@ ${chalk.bold('Usage:')}
   ${chalk.cyan(`npx ${NAME} set-mandatory`)} <name> [--off]  Mark a skill as always-load (or remove)
   ${chalk.cyan(`npx ${NAME} customize-agent`)} <agent>       Customize a BMAD agent persona and actions
   ${chalk.cyan(`npx ${NAME} create-agent`)} <name>           Create a new specialized BMAD agent
+  ${chalk.cyan(`npx ${NAME} reconfigure`)}                 Re-run the profile prompt and re-stamp artifacts
   ${chalk.cyan(`npx ${NAME} config layout`)}                Reconfigure repository layout
   ${chalk.cyan(`npx ${NAME} config layout --show`)}         Show current layout (read-only)
   ${chalk.cyan(`npx ${NAME} help`)}                         Show this help
@@ -111,6 +113,10 @@ ${chalk.bold('Install options:')}
   ${chalk.cyan('--yes')}             Skip all prompts, use defaults (for CI/CD)
   ${chalk.cyan('--agent <name>')}    Target a specific agent (skip agent selection)
   ${chalk.cyan('--log')}              Log all console output to install_<datetime>.log
+
+${chalk.bold('Reconfigure options:')}
+  ${chalk.cyan('--force-roomodes-overwrite')}  Accept slug-stomp on user-edited ma-agents slugs
+  ${chalk.gray('(reconfigure rejects --yes by design — it is interactive only)')}
 
 ${chalk.bold('Notes:')}
   Divergent \`.cline/clinerules.md\` vs. \`.clinerules\` marker blocks require
@@ -1285,6 +1291,32 @@ async function handleConfigLayout(args) {
   console.log(chalk.bold.green('\n  Layout reconfigured!\n'));
 }
 
+// --- Profile reconfigure (Story 21.10) ---
+async function handleReconfigure(args) {
+  try {
+    await runReconfigure({ projectRoot: process.cwd(), argv: args });
+  } catch (err) {
+    if (err instanceof ReconfigureYesRejectedError) {
+      console.error(chalk.red(err.message));
+      process.exit(1);
+    }
+    if (err instanceof ManifestNotFoundError) {
+      console.error(chalk.red(err.message));
+      console.error(chalk.gray('  Hint: run `npx ma-agents install` before `reconfigure`.'));
+      process.exit(1);
+    }
+    if (err instanceof RoomodesSlugDivergenceError) {
+      console.error(chalk.red(err.message));
+      process.exit(1);
+    }
+    if (err && err.name === 'ClinerulesDualFileDriftError') {
+      console.error(chalk.red(err.message));
+      process.exit(1);
+    }
+    throw err;
+  }
+}
+
 // --- Interactive mode ---
 
 async function interactiveMode() {
@@ -1388,6 +1420,9 @@ async function main() {
         console.error(chalk.gray('  Usage: npx ma-agents config layout [--show] [--yes]'));
         process.exit(1);
       }
+      break;
+    case 'reconfigure':
+      await handleReconfigure(args.slice(1));
       break;
     case 'help':
     case '--help':
