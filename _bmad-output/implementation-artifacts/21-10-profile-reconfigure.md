@@ -1,6 +1,6 @@
 # Story 21.10: Profile Reconfigure
 
-Status: ready-for-dev
+Status: Review
 
 ## Story
 
@@ -122,17 +122,40 @@ Match the existing test layout (node:test or mocha-style — verify by reading o
 ## Dev Agent Record
 
 ### Agent Model Used
-_(to be filled by dev agent)_
+Claude Opus 4.6 (1M context) — bmad-dev-story flow.
 
 ### Debug Log References
-_(to be filled by dev agent)_
+- `.roomodes` slug-divergence comparison deliberately strips `customInstructions` because installed files already carry the profile-composed universal block; a profile flip legitimately rewrites that field. `whenToUse`, `roleDefinition`, `groups`, `name` are the user-editable surfaces the check catches. Documented inline in `lib/reconfigure.js::checkRoomodesSlugDivergence`.
+- `updateAgentInstructions` is invoked with `yesMode: true` from the reconfigure loop so per-file drift prompts do not re-ask after the global `Continue?` confirmation (AC #7). The installer's `handleMarkerBlockDrift` still emits the pinned WARNING line and writes the canonical `<target>.backup-<ISO>` sibling (AC #8).
+- `appendProfileHistory` does a fresh read-modify-write of `.ma-agents.json` so it composes with `setProfile`'s write — no parallel JSON-IO path. Cap enforcement is `shift()`-based (oldest-first eviction).
 
 ### Completion Notes List
-_(to be filled by dev agent)_
+- New `lib/reconfigure.js` orchestrator exports `reconfigure({ projectRoot, argv, promptsLib, now })` plus three named error classes (`RoomodesSlugDivergenceError`, `ManifestNotFoundError`, `ReconfigureYesRejectedError`) and the `PROFILE_HISTORY_CAP` constant (20).
+- `bin/cli.js` registers the `reconfigure` verb and routes to `handleReconfigure`, which maps each error class to a user-facing exit(1) message. `--yes` on reconfigure exits nonzero with the pinned message verbatim (AC #6).
+- Re-stamp reuses the canonical `updateAgentInstructions` path from `lib/installer.js`; zero forked logic. Backups are produced by the installer's existing drift handler using the canonical `buildBackupFilename` helper owned by Story 21.2.
+- `checkRoomodesSlugDivergence` throws `RoomodesSlugDivergenceError` when any ma-agents-owned slug present in the existing `.roomodes` differs from the shipped template on non-customInstructions fields; `--force-roomodes-overwrite` bypasses the check (AC #9). `.clinerules` dual-file drift is delegated to Story 21.5's `checkClinerulesDualFileDrift` (no override, AC #10).
+- `profileHistory` append uses a fresh read-modify-write that composes with `setProfile`'s write — capped at 20, oldest-first eviction (AC #11). Missing-field start is handled (first reconfigure creates the array).
+- Prompt shape mirrors Story 21.1's wizard prompt (same two choices) but with `initial` set to the persisted value's row and the message `Current profile: <value>. Change to?` per AC #2.
+
+### Adversarial Review Findings
+
+| # | Layer | Severity | Finding | Disposition |
+|---|-------|----------|---------|-------------|
+| 1 | Cynical | P1 | setProfile runs BEFORE re-stamp loop; mid-flight re-stamp failure leaves profile+artifacts out of sync | Accepted — story explicitly lists "Auto-rollback" as out of scope; `profileHistory` append is gated on full loop success so forensic log does not falsely record a partial reconfigure |
+| 2 | Cynical | P2 | `--yes` detection is string-includes on argv; benign for reconfigure (no positional args) | Accepted — same pattern as installer; reconfigure AC #1 forbids positional args |
+| 3 | Edge-case | P1 | Slug-divergence check drops `customInstructions` from the compare | Correct by design — installer-stamped `customInstructions` carries the composed block which legitimately changes per profile; other fields remain user-edit detectors. Test 8.7 exercises `whenToUse` drift |
+| 4 | Cynical | P2 | `appendProfileHistory` is read-modify-write, not atomic rename | Accepted — matches `setProfile`'s write pattern; reconfigure is interactive-only so concurrency isn't a realistic vector |
+| 5 | Edge-case | P2 | Same-value short-circuit when `persistedProfile === undefined` requires user to pick a value; cannot short-circuit to undefined | Accepted — prompt choices are `on-prem` | `standard` only; chosenProfile is always a concrete value |
+| 6 | Edge-case | P2 | No help-text doc for `--force-roomodes-overwrite` | **Fixed** — added Reconfigure options block in `showHelp()` |
 
 ### File List
-_(to be filled by dev agent)_
+- CREATED: `lib/reconfigure.js`
+- CREATED: `test/reconfigure.test.js` (12 tests, all passing)
+- MODIFIED: `bin/cli.js` (new `reconfigure` case + `handleReconfigure` + help text)
+- MODIFIED: `package.json` (added `test/reconfigure.test.js` to npm test script)
+- MODIFIED: `_bmad-output/implementation-artifacts/21-10-profile-reconfigure.md` (Dev Agent Record / File List / Change Log)
 
 ## Change Log
+- 2026-04-15: Story 21.10 implemented — reconfigure CLI verb + orchestrator + slug/dual-file guards + profileHistory append. Status ready-for-dev → review.
 - 2026-04-15: Upstream dependency list completed per adversarial-review finding — added Stories 21.4 (`AGENTS.md` re-stamping surface), 21.7 (BMAD persona phase prefix re-composition). Restores Dependencies bidirectionality with those stories' downstream lists.
 - 2026-04-14: Story created (Epic 21, Story 21.10). Closes adversarial-review Findings #5 and #7 (no escape hatch for persisted profile; CI-default silent-downgrade trap).
