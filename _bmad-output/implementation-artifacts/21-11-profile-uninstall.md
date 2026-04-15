@@ -129,7 +129,7 @@ Story 21.1 AC #1 pinned `lib/profile.js` to exactly three exports: `getProfile`,
 
 ### Epic 21 Cross-Story Context
 
-**Story 21.11 (this):** Uninstall subcommand — rollback path for profile-dependent content. Depends on Stories 21.1 (profile API — extends it), 21.2 (marker injection + backup convention), 21.3 (slug list + audit log), 21.6 (on-prem layer composition — reverses it), 21.10 (`profileHistory` field — preserves + appends). Runs LAST in the Epic 21 execution order (after 21.9) because the 21.9 end-to-end test harness needs uninstall as part of round-trip coverage, and uninstall must not land before all upstream stamping work is committable.
+**Story 21.11 (this):** Uninstall subcommand — rollback path for profile-dependent content. Depends on Stories 21.1 (profile API — extends it), 21.2 (marker injection + backup convention), 21.3 (slug list + audit log), 21.4 (`AGENTS.md` — removes the ma-agents-stamped file / marker block), 21.5 (`.clinerules` + `.cline/clinerules.md` — removes both Cline rule files' ma-agents marker blocks), 21.6 (on-prem layer composition — reverses it), 21.7 (BMAD persona `on_prem_phase_prefix` — strips prefix when uninstalling profile artifacts), 21.10 (`profileHistory` field — preserves + appends). Runs LAST in the Epic 21 execution order (after 21.9) because the 21.9 end-to-end test harness needs uninstall as part of round-trip coverage, and uninstall must not land before all upstream stamping work is committable.
 
 ## Dev Agent Record
 
@@ -146,4 +146,5 @@ _(to be filled by dev agent)_
 _(to be filled by dev agent)_
 
 ## Change Log
+- 2026-04-15: Upstream dependency list completed per adversarial-review finding — added Stories 21.4 (`AGENTS.md` removal surface), 21.5 (`.clinerules` dual-file removal surface), 21.7 (BMAD persona phase-prefix strip on uninstall). Restores Dependencies bidirectionality with those stories' downstream lists.
 - 2026-04-14: Story created (Epic 21, Story 21.11). Closes adversarial-review Finding #17 (no uninstall / rollback path).

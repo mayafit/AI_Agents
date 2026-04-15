@@ -1,86 +1,233 @@
 # Story 21.4: Expanded `AGENTS.md` Template for OpenCode
 
-Status: backlog
+Status: Ready
 
 ## Story
 
 As an **OpenCode user installing ma-agents**,
 I want a comprehensive `AGENTS.md` generated at my project root covering text-vs-file rules, BMAD phase discipline, and the project's BMAD output structure,
-So that OpenCode's auto-loading of `AGENTS.md` gives the agent the same guardrails Roo Code gets via `.roomodes`.
+So that OpenCode's auto-loading of AGENTS.md gives the agent the same guardrails Roo Code gets via `.roomodes`.
 
 ## Acceptance Criteria
 
-1. New template `lib/templates/agents-md.template.md` exists containing:
-   - The same text-vs-file rules from the universal block (Story 21.2)
-   - A "never create files in `~/.claude/` or any user home directory" rule (universal for AGENTS.md regardless of profile — OpenCode + any model should respect it)
-   - A BMAD phase declaration section (Discovery/PM, Architecture, Tech Lead/Stories, Implementation) with phase-specific behavior rules
-   - The project BMAD output structure with placeholders: `{{PLANNING_DIR}}`, `{{ARCHITECTURE_DIR}}`, `{{STORIES_DIR}}` — stamped to project's actual `_bmad-output/` paths at install time
-2. The OpenCode agent entry in `lib/agents.js` gains an `extraInstructionTemplates` entry: `[{ template: 'agents-md.template.md', target: 'AGENTS.md', merger: 'markdown-markers' }]`.
-3. The marker-based markdown merger reuses the function used by Story 21.2 — content within `<!-- MA-AGENTS-START -->` / `<!-- MA-AGENTS-END -->` is rewritten; outside content preserved (NFR5, NFR46).
-4. After Story 21.4 ships, on a fresh OpenCode install:
-   - `AGENTS.md` is written at project root with the stamped content
-   - `opencode.json::instructions[]` array contains `"AGENTS.md"` if not already present (reuses Epic 9's JSON-merge function unchanged — additive only, NFR18)
-5. Re-running install produces byte-identical `AGENTS.md` marker-block content and does not duplicate the `instructions[]` entry (NFR46, NFR18).
-6. The phase declaration content is profile-agnostic in this story; on-prem-specific rules (`/no_think`, reasoning mode) come via Story 21.6 by appending to the same marker block.
+> Acceptance criteria marked **(gap-fill)** are additions made by the story author to make the epic's AC operational and testable. They do not contradict the epic; they refine the "how" where the epic only stated the "what".
+
+1. **AGENTS.md template file exists.** A new template `lib/templates/agents-md.template.md` (new) is present and contains:
+   - The same text-vs-file rules defined in the universal block source `lib/templates/instruction-block-universal.template.md` (new, Story 21.2) — specifically the keyword-trigger tables (file-action: `create`, `write`, `generate`, `build`, `implement`; text-response: `what do you think`, `how should we`, `discuss`, `opinion`), the "if unsure, respond in text" default, the "never create `response.md` or `output.md` as a reply" rule, and the "confirm file paths before writing" rule.
+   - A "never create files in `~/.claude/` or any user home directory" rule — universal for AGENTS.md regardless of profile (per epic: OpenCode + any model should respect it).
+   - A BMAD phase declaration section listing the four phases (Discovery/PM, Architecture, Tech Lead/Stories, Implementation) with phase-specific behavior rules consistent with the universal block's BMAD phase discipline rule.
+   - A project BMAD output structure section whose concrete path values are produced by the composer (21.2) at install time; the template itself is static text (see AC #2).
+
+2. **(gap-fill) Template is static text — no placeholders.** Per canonical decision A, `lib/templates/agents-md.template.md` is STATIC TEXT and contains NO `{{...}}` placeholders. The composer `composeInstructionBlock({ profile, projectRoot }): string` (21.2-owned; see Upstream) is the single owner of universal-rules content and of any path/manifest resolution. Substitution, if any, is the caller's responsibility AFTER composition. Directory and manifest paths that were previously listed as template placeholders (`{{PLANNING_DIR}}`, `{{ARCHITECTURE_DIR}}`, `{{STORIES_DIR}}`, `{{MANIFEST_PATH}}`) are handled by the composer and/or resolved by the stamper caller — NOT by the template file itself.
+
+3. **(gap-fill) Universal-rules source of truth via the composer.** The installer (stamper) in `lib/installer.js` calls `composeInstructionBlock({ profile, projectRoot })` exactly once per artifact and writes the composed string into the `AGENTS.md` MA-AGENTS marker block via the `markdown-markers` merger. The merger receives the composed string as input — it does NOT perform placeholder substitution. Because `agents-md.template.md` is static text (AC #2), there is a single authoritative source for universal-rules wording across Stories 21.3–21.5 (no drift). If the composer is not yet available (Story 21.2 not merged), Story 21.4 is blocked (see Dependencies).
+
+4. **Installer registration via `extraInstructionTemplates`.** The OpenCode agent entry in `lib/agents.js` (line ~224–246, `id: 'opencode'`) gains a new optional field:
+
+   ```
+   extraInstructionTemplates: [
+     { template: 'agents-md.template.md', target: 'AGENTS.md', merger: 'markdown-markers' }
+   ]
+   ```
+
+   This reuses the `extraInstructionTemplates` field introduced by Story 21.3 for Roo Code's `.roomodes`. The installer (`lib/installer.js`, per-agent install loop) reads `extraInstructionTemplates` and stamps each entry. Story 21.4 does NOT re-define the processor — it consumes the processor delivered by Story 21.3.
+
+5. **(gap-fill) `markdown-markers` merger.** The `merger: 'markdown-markers'` dispatch key resolves to the same marker-wrap logic already used by `updateAgentInstructions` in `lib/installer.js` (markers `<!-- MA-AGENTS-START -->` / `<!-- MA-AGENTS-END -->` — HTML-comment shape, lines ~424–459). The merger consumes the composed string produced by `composeInstructionBlock({ profile, projectRoot })` (per AC #3) and writes it into the marker block. Anchor shape is fixed to the existing HTML-comment marker pair — no alternative shape is considered (matches the current `lib/installer.js` implementation the story reuses unchanged per epics.md:4229). On write:
+   - If the target file (`AGENTS.md`) does not exist, the installer creates it with only the marker block + stamped content between markers, a leading comment `<!-- Generated by ma-agents. Edit outside the MA-AGENTS-START/END markers to preserve your changes. -->`, and a trailing newline.
+   - If the target file exists with markers, content inside markers is replaced; content outside is preserved byte-for-byte (**NFR5 additive-only contract; NFR46 idempotency**).
+   - If the target file exists without markers, the marker block is appended at end-of-file separated by one blank line; existing content preserved.
+   - Story 21.2's upgrade-safety drift detection (backup + warning) is inherited unchanged.
+
+6. **OpenCode JSON-merge append of `AGENTS.md`.** The existing `injectionStrategy.position === 'json-merge'` branch in `lib/installer.js` (lines ~365–405) already appends a ma-agents-prefixed string to `opencode.json::instructions[]`. In addition, this story adds one more entry: the literal string `"AGENTS.md"` is appended to `opencode.json::instructions[]` if not already present. The entry is a plain string (no `[ma-agents]` prefix) because it is a file-path reference OpenCode resolves against the project root — not a ma-agents-owned instruction body. Duplicate detection compares by string equality against existing entries in `instructions[]`. Other keys in `opencode.json` are untouched (**NFR18 additive-only JSON merge**).
+
+7. **(gap-fill) `AGENTS.md` entry is user-owned after first install.** Because the `"AGENTS.md"` entry has no `[ma-agents]` prefix (AC #6), the existing `isMaEntry` filter in `lib/installer.js` (lines ~372–374) does NOT match it. Consequence: once appended, the entry is treated as user-owned — a subsequent install will NOT re-append (de-duplicated by string equality) and will NOT remove the entry if the user later removes OpenCode from the agent set. This is intentional: the `AGENTS.md` file may continue to exist and be loaded even if ma-agents is uninstalled. Story 21.11 (Profile Uninstall) is responsible for removing the entry on explicit uninstall.
+
+8. **Idempotency (NFR46).** Two consecutive installs with the same profile and project state produce:
+   - Byte-identical content between `AGENTS.md`'s marker lines.
+   - An `opencode.json::instructions[]` array whose length and element order is unchanged (the ma-agents-prefixed entry from Story 21.2 is replaced in place, the `"AGENTS.md"` entry is not duplicated, user entries preserved).
+   - No new `.backup-<timestamp>` files when no hand-edit drift is detected.
+
+9. **Profile isolation (NFR44).** The rendered `AGENTS.md` content for a standard-profile install MUST NOT contain the strings `/no_think`, `str_replace_editor`, or `~/.claude/` **inside the universal section or the BMAD phase declaration section**. Exception: the "never create files in `~/.claude/` or any user home directory" rule (AC #1) is a non-negotiable universal safety rule per the epic and legitimately contains the literal `~/.claude/`. NFR44's intent — "standard profile is byte-identical to pre-Epic-21 for output that did not previously contain local-LLM-specific tokens" — is preserved because AGENTS.md is a new artifact and therefore has no pre-Epic-21 baseline to diverge from. Story 21.6 appends on-prem-only content (reasoning-mode, `/no_think`, `str_replace_editor` references) within the same marker block only when `profile === 'on-prem'`.
+
+10. **(gap-fill) Path stamping resolution.** The three directory values referenced by the `## Project BMAD Output Structure` section (planning, architecture, stories) are resolved by the composer (21.2) and/or the stamper caller AFTER composition; since the template itself is static text (AC #2), no placeholder substitution occurs inside the template. Resolution precedence:
+    a. If `_bmad/bmm/config.yaml` exists at the project root AND contains explicit `planning_artifacts`, `architecture_artifacts`, and `implementation_artifacts` fields, use those values (relative to project root, forward-slash-normalized).
+    b. Otherwise, fall back to the repository's documented defaults: `_bmad-output/planning-artifacts/`, `_bmad-output/planning-artifacts/` (architecture currently co-located), `_bmad-output/implementation-artifacts/`.
+    c. Resolution happens once per install, cached, and reused for the marker-block render. The resolved values are logged once at the same verbosity as the Story 21.1 `Using profile: ...` line.
+
+    > **Dev Note (precedence rule, resolved):** When both `_bmad/bmm/config.yaml` and an ad-hoc `_bmad-output/` tree exist, `_bmad/bmm/config.yaml` is authoritative. This matches the BMAD-create-story workflow config loader at `.claude/skills/bmad-create-story/workflow.md` lines 20–27, which declares `_bmad/bmm/config.yaml` as the canonical source for `planning_artifacts` and `implementation_artifacts`. Verified against the repo's own `_bmad/bmm/config.yaml`, which defines `planning_artifacts: "_bmad-output/planning-artifacts"` and `implementation_artifacts: "_bmad-output/implementation-artifacts"` — i.e. the config values and the documented defaults agree here, but the config file wins by rule whenever they diverge. No project-level `architecture.md` override was found that pins a different precedence.
+
+11. **(gap-fill) Upgrade-safety: hand-edit detection.** Before overwriting content inside the markers in `AGENTS.md`, the installer compares existing in-marker content against what would be rendered for the project's current resolved profile, using the exact same drift detection, backup-filename format, and warning format pinned in Story 21.2 AC #10. Per canonical decision C, the backup filename format is `<target>.backup-<ISO-8601-timestamp>` (21.2-owned — cite Story 21.2 as the upstream source of this format). This story does not redefine the format; it inherits it. The `<target>` is `AGENTS.md` at project root.
+
+12. **(gap-fill) OpenCode agent instructionFiles remains `opencode.json`.** This story does NOT change `lib/agents.js` line ~244 (`instructionFiles: ['opencode.json']`). The `AGENTS.md` file is written via `extraInstructionTemplates` only. Rationale: `instructionFiles[]` is the existing contract read by `updateAgentInstructions` for marker-wrap-or-JSON-merge stamping; AGENTS.md is a sibling output and must not be funneled through the existing single-file dispatch.
+
+> **Open question:** The epic treats OpenCode's "auto-loading of AGENTS.md" as a given. OpenCode's current behavior is: `AGENTS.md` at project root is NOT auto-loaded unless listed in `opencode.json::instructions[]`. AC #6 appends it to `instructions[]` which makes auto-loading explicit. If a future OpenCode version auto-discovers `AGENTS.md` without the `instructions[]` entry, AC #6's append becomes redundant but not harmful. Flagged for the implementing dev to confirm against the installed OpenCode version referenced in `lib/agents.js` and the tests in `test/opencode-*.test.js`.
+
+> **Anchor shape (resolved):** Story 21.4 reuses the existing HTML-comment marker pair `<!-- MA-AGENTS-START -->` / `<!-- MA-AGENTS-END -->` in `lib/installer.js` (`updateAgentInstructions`, lines ~424–459) unchanged — this matches the existing implementation the story reuses per epics.md:4229. No alternative marker shape is considered. Story 21.4 creates `## Critical Behavior Rules` inside the marker block with the universal "never write to `~/.claude/`" rule as its first entry; Story 21.6 appends on-prem rules after that entry.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `lib/templates/agents-md.template.md` per AC #1
-- [ ] Task 2: Add `extraInstructionTemplates` to OpenCode entry in `lib/agents.js` (AC #2)
-- [ ] Task 3: Verify the existing OpenCode JSON-merge from Epic 9 handles the additive append idempotently (AC #4, #5) — read `lib/installer.js` JSON-merge function to confirm; no changes expected
-- [ ] Task 4: Wire `markdown-markers` merger handling for `extraInstructionTemplates` (likely already handled by Story 21.3's `extraInstructionTemplates` processor — extend, do not duplicate)
-- [ ] Task 5: Tests in `test/agents-md.test.js`
-  - [ ] 5.1 Fresh install: `AGENTS.md` created with universal rules, phase section, stamped paths
-  - [ ] 5.2 `opencode.json::instructions[]` contains `AGENTS.md` after install
-  - [ ] 5.3 Re-install: `instructions[]` not duplicated (NFR18)
-  - [ ] 5.4 Re-install: `AGENTS.md` marker-block content byte-identical (NFR46)
-  - [ ] 5.5 Existing `AGENTS.md` user content outside markers preserved
-  - [ ] 5.6 Path placeholders correctly stamped from project's `_bmad-output/` layout
+- [ ] **Task 1: Create `lib/templates/agents-md.template.md` (STATIC TEXT, no placeholders)** (AC #1, #2, #3, #9)
+  - [ ] 1.1 Create `lib/templates/agents-md.template.md` (new) as static text with NO `{{...}}` placeholders (canonical decision A). Structure: (a) leading generated-by comment, (b) `# Project Agent Instructions` H1, (c) `## Universal Rules` section — its body is provided at install time by the composer output written into the MA-AGENTS marker block; the template itself contains the section heading and static framing text only, (d) `## Critical Behavior Rules` section containing the "never create files in `~/.claude/` or any user home directory" rule (stable anchor for Story 21.6), (e) `## BMAD Phase Declaration` section with the four phases and phase-specific rules, (f) `## Project BMAD Output Structure` section — path and manifest resolution is performed by the composer (21.2) and/or by the stamper caller AFTER composition; the template contains static framing text only.
+  - [ ] 1.2 Verify by inspection that no string in the template matches `/no_think` or `str_replace_editor`. The single permitted `~/.claude/` occurrence is inside the Critical Behavior Rules "never create files in `~/.claude/`" sentence (AC #9 exception).
+
+- [ ] **Task 2: Add `extraInstructionTemplates` to OpenCode agent entry** (AC #4)
+  - [ ] 2.1 In `lib/agents.js` (line ~224–246), add the `extraInstructionTemplates` field per AC #4 to the OpenCode entry. Do NOT modify `instructionFiles: ['opencode.json']` (AC #12).
+
+- [ ] **Task 3: Consume Story 21.3's `extraInstructionTemplates` processor** (AC #4, #5)
+  - [ ] 3.1 Confirm Story 21.3's processor dispatches on `merger` values. If `markdown-markers` is not already registered, extend the dispatcher in `lib/installer.js` to handle it by delegating to the existing marker-wrap logic (`updateAgentInstructions`'s markdown branch — factor the marker-wrap into a helper if duplication is the alternative).
+  - [ ] 3.2 Per canonical decision A: the stamper calls `composeInstructionBlock({ profile, projectRoot })` exactly once per artifact and passes the composed string to the `markdown-markers` merger as input. The merger does NOT perform `{{...}}` substitution — the template is static text (AC #2). Any path/manifest substitution, if ever required post-composition, is the stamper caller's responsibility AFTER composition.
+
+- [ ] **Task 4: Path resolution helper** (AC #10)
+  - [ ] 4.1 Add a small helper (new) — `resolveBmadOutputDirs(projectRoot)` in `lib/installer.js` (new function) or, if size warrants, `lib/bmad-output-paths.js` (new) — implementing the AC #10 precedence. Read once per install, memoize via module-level `Map<projectRoot, dirs>` to keep `composeInstructionBlock`-style parity.
+  - [ ] 4.2 Log the resolved paths once, using the format `Resolved BMAD output dirs: planning=<...>, architecture=<...>, stories=<...>`.
+
+- [ ] **Task 5: Wire JSON-merge append of `"AGENTS.md"` to `opencode.json::instructions[]`** (AC #6, #7, #8, #12)
+  - [ ] 5.1 In `lib/installer.js` json-merge branch (lines ~365–405), after the existing ma-agents-prefixed string is emplaced, append the literal string `"AGENTS.md"` to `data[targetKey]` if and only if no existing element in the array is `=== 'AGENTS.md'`.
+  - [ ] 5.2 Confirm the `isMaEntry` filter (lines ~372–374) does not match `"AGENTS.md"` (string prefix check only) — this is the intentional behavior for AC #7.
+  - [ ] 5.3 Confirm no other keys in `opencode.json` are read or written (NFR18).
+
+- [ ] **Task 6: Unit and integration tests** — see Testing section below.
+
+- [ ] **Task 7: Documentation touch-up** (no new files)
+  - [ ] 7.1 If an existing doc already describes OpenCode stamping (likely `docs/` or the README section introduced by Story 21.8), append a one-sentence reference to `AGENTS.md`. Otherwise skip — Story 21.8 will cover it.
 
 ## Dev Notes
 
-### Architecture Compliance
+### Architecture compliance
 
-- **Decision P3-3** — OpenCode parallel to Roo Code's `.roomodes` for application-layer guidance. OpenCode lacks file-regex enforcement (no `FileRestrictionError`), so reliance on prompt + Plan/Build mode is acceptable; this story does what's possible within OpenCode's capabilities.
-- **NFR18** (Epic 9 contract) — JSON-merge into `opencode.json::instructions[]` remains additive-only.
+- **Decision P3-3 (Local-LLM / On-Prem Agent Tuning Profile)** — OpenCode parallel to Roo Code's `.roomodes` for application-layer guidance. OpenCode lacks file-regex enforcement (no `FileRestrictionError`), so reliance on prompt + plan-mode discipline is the available leverage. This story installs the prompt-layer half; NFR47 (fileRegex) does not apply to OpenCode.
 
-### Source Tree Components to Touch
+- **NFR44 (byte-identity for standard profile)** — `AGENTS.md` is a new artifact and has no pre-Epic-21 baseline to diverge from. The NFR44 contract that applies here is the narrower one: standard-profile rendered output MUST NOT contain `/no_think` or `str_replace_editor`. The literal `~/.claude/` is permitted only inside the "never create files in `~/.claude/`" safety rule because that rule is universal per the epic (line 4012). See AC #9 for the full contract.
 
-| File | Change |
-|------|--------|
-| `lib/templates/agents-md.template.md` | CREATE |
-| `lib/agents.js` | MODIFY — `extraInstructionTemplates` on OpenCode entry |
-| `lib/installer.js` | MAYBE-MODIFY — extend `extraInstructionTemplates` processor (Story 21.3) for `markdown-markers` merger if not already supported |
-| `test/agents-md.test.js` | CREATE |
+- **NFR46 (idempotency)** — Two consecutive installs with identical inputs must produce byte-identical marker-block content in `AGENTS.md` AND must not duplicate the `"AGENTS.md"` entry in `opencode.json::instructions[]`. The composer-output route inherits Story 21.2's Task 3.3 insert/replace whitespace normalization. The `isMaEntry`-bypassed string-equality dedup in Task 5.1 is what prevents `instructions[]` duplication.
 
-### Dependencies
+- **NFR47 (Roo Code fileRegex enforcement)** — Not applicable to OpenCode. Story 21.3 handles NFR47 for Roo Code.
 
-- Story 21.2 (universal rules content — `AGENTS.md` reuses the same wording sourced from `lib/templates/instruction-block-universal.template.md` to avoid drift; consider reading the universal template and embedding it within the AGENTS.md template at stamp time, OR duplicate the rules text and add a comment marking the source of truth)
-- Story 21.3 (`extraInstructionTemplates` processor pattern — extend if needed)
-- Epic 9 (OpenCode JSON-merge — reused unchanged)
+- **NFR18 (additive JSON-merge for OpenCode)** — The existing json-merge path already implements additive merge for `opencode.json::instructions[]` (Epic 9). Task 5.1 extends it with one additional append (`"AGENTS.md"`) using string-equality de-dup rather than prefix match. No other keys are touched. This is a strict superset of the NFR18 contract already satisfied for the ma-agents-prefixed entry.
 
-### Reference
+### Verified source-tree surface
 
-Source playbook: `optimizing-local-llm-coding-agents-bmad.md` Section 5.3 — full `AGENTS.md` example with phase rules.
+| File | Exists? | Role in this story |
+|------|---------|--------------------|
+| `lib/agents.js` | verified (OpenCode entry at lines 224–246, `instructionFiles: ['opencode.json']` at 244, `injectionStrategy: { position: 'json-merge', targetKey: 'instructions' }` at 245) | MODIFY — add `extraInstructionTemplates` to OpenCode entry |
+| `lib/installer.js` | verified (`MA_AGENTS_SOURCE` const line 9, json-merge branch lines 365–405, `isMaEntry` at 372–374) | MODIFY — json-merge branch extension (Task 5); path-resolution helper (Task 4); `markdown-markers` merger dispatch (Task 3.1, if not delivered by Story 21.3) |
+| `lib/profile.js` | verified (Story 21.1, exports `getProfile`, `setProfile`, `resolveProfile`) | Read-only — consumed via `getProfile(projectRoot)` inside `composeInstructionBlock` upstream |
+| `lib/templates/project-context.template.md` | verified | Reference pattern (unrelated — `agents-md.template.md` is static text per canonical decision A, no placeholder substitution) |
+| `lib/templates/instruction-block-universal.template.md` | **new (Story 21.2)** | Source of truth consumed by `composeInstructionBlock` upstream |
+| `lib/templates/instruction-block-onprem.template.md` | **new (Story 21.6)** | Consumed transitively through `composeInstructionBlock` when profile=on-prem |
+| `lib/templates/agents-md.template.md` | **new** | Template source (AC #1, #2, #3) |
+| `lib/templates/roomodes.template.yaml` | **new (Story 21.3)** | Unrelated target; the `extraInstructionTemplates` processor this story consumes is delivered alongside it |
+| `test/agents-md.test.js` | **new** | Unit + integration tests (see Testing section) |
+| `test/opencode-json-merge.test.js` | verified | Existing json-merge baseline tests — this story adds a sibling test file rather than extending these |
+| `test/profile.test.js` | verified | Reference for test framework, tmp-dir isolation pattern |
 
-### Out of Scope
+### Stamper/merger site map (for reviewers)
 
-- On-prem-specific additions (Story 21.6)
-- BMAD persona phase prefix in customize-loader (Story 21.7)
+- **`extraInstructionTemplates` processing** (delivered by Story 21.3, extended here): per-agent loop reads each entry, loads `lib/templates/<template>`, calls the composer (21.2) to produce the composed string, dispatches to `merger` — `yaml-customModes` (Story 21.3) or `markdown-markers` (this story). Per canonical decision A, the merger receives the composed string as input; no placeholder substitution occurs.
+- **JSON-merge stamping** (`lib/installer.js` lines 365–405, this story's Task 5): OpenCode gets TWO `instructions[]` entries after this story — the existing `[ma-agents]` prefixed string AND the plain `"AGENTS.md"` literal.
+- **Markdown marker-wrap (merger)** (`lib/installer.js` lines 407–459): not invoked for OpenCode — OpenCode's `instructionFiles` is `opencode.json`, not a markdown file. `AGENTS.md` reaches the marker-wrap logic via the `markdown-markers` merger dispatch, NOT via `updateAgentInstructions`.
 
-## Dev Agent Record
+### Library and pattern references
 
-### Agent Model Used
-_(to be filled by dev agent)_
+- **Composer (21.2-owned):** `composeInstructionBlock({ profile, projectRoot }): string` is the single owner of universal-rules composition. The stamper in `lib/installer.js` calls it once per artifact. The `agents-md.template.md` source contains no `{{...}}` placeholders (canonical decision A).
+- **Markdown markers:** reuse `<!-- MA-AGENTS-START -->` / `<!-- MA-AGENTS-END -->` verbatim; same regex as `updateAgentInstructions`. Anchor shape fixed — no alternative shape.
+- **Backup filename format (21.2-owned, canonical decision C):** `<target>.backup-<ISO-8601-timestamp>` — cite Story 21.2 as the upstream source; matches Stories 21.10, 21.11 transitively.
+- **Manifest-path computation:** `path.relative(projectRoot, path.join(agent.getProjectPath(), 'MANIFEST.yaml')).replace(/\\/g, '/')` — already present in `lib/installer.js` json-merge branch, line 369.
+- **`isMaEntry`:** existing filter at `lib/installer.js` lines 372–374. NOT extended here. Intentional (AC #7).
 
-### Debug Log References
-_(to be filled)_
+### Composition pattern (how this story fits Stories 21.3–21.6)
 
-### Completion Notes List
-_(to be filled)_
+```
+extraInstructionTemplates processor (Story 21.3)
+  ├── merger: 'yaml-customModes' → .roomodes (Story 21.3)
+  └── merger: 'markdown-markers' → AGENTS.md (this story), .clinerules (Story 21.5 — if it uses the same processor)
 
-### File List
-_(to be filled)_
+composeInstructionBlock (Story 21.2)
+  └── invoked once per artifact by the stamper; the composed string is passed to the 'markdown-markers' merger as input (no placeholder substitution — template is static text)
+      ├── universal template (Story 21.2)
+      └── on-prem template (Story 21.6, conditional on profile)
+```
+
+Story 21.6 extends the on-prem layer by (a) appending on-prem content inside `composeInstructionBlock`'s output (transparent to this story), and (b) appending a phase-aware on-prem block directly under the `## Critical Behavior Rules` anchor in `agents-md.template.md` — see Open question in AC #11 about Story 21.6 anchoring expectations.
+
+### Out of scope
+
+- On-prem template content appended to `AGENTS.md` (Story 21.6).
+- BMAD persona phase prefix in customize-loader (Story 21.7).
+- vLLM deployment documentation and README on-prem section (Story 21.8).
+- `.roomodes` template and `yaml-customModes` merger (Story 21.3).
+- `.clinerules` template (Story 21.5).
+- Profile-reconfigure flow that re-stamps `AGENTS.md` (Story 21.10).
+- Profile-uninstall removal of the `"AGENTS.md"` entry from `opencode.json::instructions[]` (Story 21.11).
+- Bumping `manifestVersion` — already at `1.2.0` (Story 21.1) and not touched here.
+- NFR44 byte-comparison integration test against pre-Epic-21 baseline (Story 21.9).
+
+## Dependencies
+
+### Upstream (blocking)
+
+- **Story 21.1 (done)** — `lib/profile.js` `getProfile(projectRoot)` consumed transitively via `composeInstructionBlock`.
+- **Story 21.2 (Ready)** — owns TWO deliverables consumed by this story (cited as upstream per canonical decisions A and C):
+  - The composer `composeInstructionBlock({ profile, projectRoot }): string` in `lib/installer.js` — sole source of the universal-rules content written into the AGENTS.md MA-AGENTS marker block. The stamper (this story, single owner in `lib/installer.js`) calls the composer exactly once per artifact and passes the composed string to the `markdown-markers` merger.
+  - The canonical backup-filename format `<target>.backup-<ISO-8601-timestamp>` (21.2-owned) — inherited verbatim by AC #11.
+  Story 21.4 cannot land before 21.2 without duplicating the universal-rules wording (drift risk) or the backup format.
+- **Story 21.3 (Ready)** — delivers the `extraInstructionTemplates` field convention on `lib/agents.js` entries AND the per-agent processor in `lib/installer.js`. Story 21.4 reuses both. If Story 21.3 lands without the `markdown-markers` merger, this story's Task 3.1 adds it.
+- **Epic 9 (done)** — `opencode.json` additive JSON-merge pattern in `updateAgentInstructions` (lines 365–405) is extended unchanged for the `AGENTS.md` append. NFR18 already satisfied by that code; this story must not regress it.
+
+### Downstream (consumers of this story's surface)
+
+- **Story 21.5** — may share the `markdown-markers` merger for `.clinerules` (if Story 21.5 routes through `extraInstructionTemplates` rather than the existing `updateAgentInstructions` path). Story 21.4 does not pre-commit Story 21.5 to that routing — Story 21.5 decides.
+- **Story 21.6** — appends on-prem content (reasoning-mode, `/no_think`) inside the `## Critical Behavior Rules` section of `agents-md.template.md` (see Open question in AC #11). Requires the section anchor to exist.
+- **Story 21.9** — tests verifying NFR44 (absence of `/no_think`, `str_replace_editor` in standard-profile `AGENTS.md`), NFR46 (idempotency), NFR18 (JSON-merge not regressed for the dual-entry case).
+- **Story 21.10** — re-stamps `AGENTS.md` on `reconfigure`, reusing the same backup format.
+- **Story 21.11** — on `uninstall --profile-artifacts`, removes the `"AGENTS.md"` entry from `opencode.json::instructions[]` AND the file itself (with backup).
+
+## Testing
+
+**Framework and isolation:** Match the pattern in `test/profile.test.js` (Story 21.1) and `test/opencode-json-merge.test.js` (Epic 9) — node's built-in test runner, `os.tmpdir()` + `fs.mkdtempSync` per-test temporary project roots, never mutate the repo's own `.ma-agents.json`, `lib/templates/`, or `opencode.json`.
+
+New test file: `test/agents-md.test.js` (new).
+
+**Unit tests:**
+
+- 6.1 Template is loaded verbatim from disk as static text — assert the source contains NO `{{...}}` placeholders (AC #2, canonical decision A).
+- 6.2 The stamper invokes `composeInstructionBlock({ profile, projectRoot })` exactly once per artifact and passes the resulting string to the `markdown-markers` merger (AC #3). Assert single invocation via a spy or call-count instrumentation permitted by the test harness (do not stub the real module — wrap via a local test double per `test/profile.test.js` conventions).
+- 6.3 The composed string produced by `composeInstructionBlock({ profile: 'standard', projectRoot })` appears byte-for-byte inside the MA-AGENTS marker block of the rendered `AGENTS.md` (AC #3).
+- 6.4 NFR44 assertion: standard-profile rendered output does not contain `/no_think` or `str_replace_editor`. The single permitted `~/.claude/` occurrence is the Critical Behavior Rules sentence (AC #9 exception) — asserted by verifying exactly one match and that it appears within the expected sentence.
+- 6.5 Path-resolution precedence (AC #10): with `_bmad/bmm/config.yaml` present → config values win; absent → documented defaults used; tmp project covers both cases.
+
+**Integration tests (within this story — full end-to-end lives in Story 21.9):**
+
+- 6.6 Fresh install selecting OpenCode writes `AGENTS.md` at project root with stamped paths, universal rules, Critical Behavior Rules section, BMAD phase declaration, and output-structure section (AC #1, #5 create case).
+- 6.7 `opencode.json::instructions[]` after fresh install contains BOTH the ma-agents-prefixed string AND `"AGENTS.md"`, in that order; other keys in `opencode.json` untouched (AC #6, AC #12 NFR18).
+- 6.8 Re-install (idempotency — AC #8, NFR46):
+  - `AGENTS.md` marker-block content byte-identical.
+  - `opencode.json::instructions[]` unchanged (length and order): the ma-agents entry is replaced in place; the `"AGENTS.md"` entry is not duplicated.
+  - No `.backup-*` files created when no drift.
+- 6.9 Pre-existing `AGENTS.md` with user content outside markers: user content preserved byte-for-byte; marker-block content replaced (AC #5 merge case).
+- 6.10 Pre-existing `AGENTS.md` without markers: marker block appended at EOF separated by one blank line; existing content preserved (AC #5 no-markers case).
+- 6.11 Upgrade-safety drift (AC #11): hand-edited marker block → behavior matches Story 21.2 AC #10 (interactive confirm; `--yes` emits verbatim WARNING; backup file at `<target>.backup-<timestamp>` contains only the marker region including markers).
+- 6.12 User already has `"AGENTS.md"` in `opencode.json::instructions[]` before install → install does NOT append a duplicate (string-equality de-dup — AC #6).
+- 6.13 User entry `{ "path": "AGENTS.md" }` (object form, not string) in `instructions[]` before install → install appends the string `"AGENTS.md"` (not considered a duplicate because the existing entry is not `=== 'AGENTS.md'`). Decision rationale captured in test comment referencing AC #6's "string equality" contract.
+
+**Test data isolation:** All tests create a tmp project with a stub `.ma-agents.json` written via `setProfile(tmpRoot, 'standard' | 'on-prem')` (Story 21.1 API). Do not stub `lib/profile.js`, `lib/installer.js`, or `lib/agents.js` — use the real modules against the tmp project root.
+
+**Coverage note:** Story 21.9 adds (a) standard-profile vs. on-prem-profile NFR44 absence-of-strings byte-check, (b) dual-layer content presence for on-prem, (c) NFR18 full `opencode.json` round-trip across profiles. Do not duplicate those here.
+
+## Out of Scope
+
+(See Dev Notes → Out of scope above — summarized for quick reference.)
+
+- On-prem-specific additions to `AGENTS.md` (Story 21.6).
+- BMAD persona phase prefix in customize-loader (Story 21.7).
+- vLLM deployment documentation and README on-prem section (Story 21.8).
+- `.roomodes` template and `yaml-customModes` merger (Story 21.3).
+- `.clinerules` template (Story 21.5).
+- Profile-reconfigure re-stamping flow (Story 21.10).
+- Profile-uninstall removal of `"AGENTS.md"` entry and file (Story 21.11).
 
 ## Change Log
-- 2026-04-14: Story created (Epic 21, Story 21.4)
+
+- 2026-04-14: Story created (Epic 21, Story 21.4) — initial draft.
+- 2026-04-15: Story rewritten in Story 21.2 "Ready" shape — gap-fills flagged explicitly (AC #2, #3, #5, #7, #10, #11, #12); NFR44/NFR46/NFR47/NFR18 citations made explicit in Dev Notes; Dependencies section split into upstream/downstream; Testing section expanded; verified source-tree surface table added distinguishing existing vs. new paths; injection-site map added; three Open questions raised inline rather than invented as ACs; Out of Scope promoted to its own top-level section. Status set to Ready.
+- 2026-04-15: Adversarial-review findings resolved. Applied canonical decisions A/B/C: (A) `agents-md.template.md` is STATIC TEXT with no `{{...}}` placeholders; composer `composeInstructionBlock({ profile, projectRoot }): string` is 21.2-owned and called once per artifact by the stamper in `lib/installer.js` (single owner); mergers consume the composed string. (B) Terminology normalized to composer / merger / stamper — "injection function" and "marker-injection" removed. (C) Backup filename format `<target>.backup-<ISO-8601-timestamp>` cited as 21.2-owned. Marker-shape Open question closed: story reuses the existing HTML-comment marker pair `<!-- MA-AGENTS-START -->` / `<!-- MA-AGENTS-END -->` from `lib/installer.js::updateAgentInstructions` unchanged (confirmed by reading `lib/installer.js`; no `mergeOpencodeJson()` symbol exists — logic is the json-merge branch of `updateAgentInstructions`). ACs #2, #3, #5 rewritten accordingly; Testing 6.1–6.3 rewritten to assert static-text template + single composer invocation. Status moved to Draft pending upstream 21.2 and 21.3 landings (see blockers).

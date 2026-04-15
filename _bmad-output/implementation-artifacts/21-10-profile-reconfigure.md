@@ -117,7 +117,7 @@ Match the existing test layout (node:test or mocha-style — verify by reading o
 
 ### Epic 21 Cross-Story Context
 
-**Story 21.10 (this):** Reconfigure subcommand — escape hatch for a previously-persisted profile. Depends on Stories 21.1 (profile API), 21.2 (marker injection + backup convention), 21.3 (slug-stomp protection), 21.5 (dual-file drift detection), 21.6 (on-prem layer composition — the actual content being re-stamped). Runs after 21.6 in the execution order; must exist before 21.9's end-to-end tests so the round-trip test (21.9 AC #1 (f)) can exercise the real command instead of manual `.ma-agents.json` edits.
+**Story 21.10 (this):** Reconfigure subcommand — escape hatch for a previously-persisted profile. Depends on Stories 21.1 (profile API), 21.2 (marker injection + backup convention), 21.3 (slug-stomp protection), 21.4 (`AGENTS.md` template + `markdown-markers` merger — re-stamped on profile flip), 21.5 (dual-file drift detection), 21.6 (on-prem layer composition — the actual content being re-stamped), 21.7 (BMAD persona `on_prem_phase_prefix` — re-composed when profile flips, per Task 3.3). Runs after 21.6 in the execution order; must exist before 21.9's end-to-end tests so the round-trip test (21.9 AC #1 (f)) can exercise the real command instead of manual `.ma-agents.json` edits.
 
 ## Dev Agent Record
 
@@ -134,4 +134,5 @@ _(to be filled by dev agent)_
 _(to be filled by dev agent)_
 
 ## Change Log
+- 2026-04-15: Upstream dependency list completed per adversarial-review finding — added Stories 21.4 (`AGENTS.md` re-stamping surface), 21.7 (BMAD persona phase prefix re-composition). Restores Dependencies bidirectionality with those stories' downstream lists.
 - 2026-04-14: Story created (Epic 21, Story 21.10). Closes adversarial-review Findings #5 and #7 (no escape hatch for persisted profile; CI-default silent-downgrade trap).
