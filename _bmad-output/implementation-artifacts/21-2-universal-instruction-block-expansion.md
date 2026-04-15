@@ -1,6 +1,6 @@
 # Story 21.2: Universal Per-Tool Instruction Block Expansion
 
-Status: Ready
+Status: Review
 
 ## Story
 
@@ -44,35 +44,35 @@ So that all coding agents — even Claude on the web — stop dumping random fil
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Create universal template** (AC #1, #2, #7)
-  - [ ] 1.1 Create `lib/templates/instruction-block-universal.template.md` (new) containing the MANIFEST loading section (with `{{MANIFEST_PATH}}` placeholder) followed by the five rule sections listed in AC #1.
-  - [ ] 1.2 Verify by inspection that no string in the template matches `/no_think`, `str_replace_editor`, or `~/.claude/` (AC #7).
+- [x] **Task 1: Create universal template** (AC #1, #2, #7)
+  - [x] 1.1 Create `lib/templates/instruction-block-universal.template.md` (new) containing the MANIFEST loading section (with `{{MANIFEST_PATH}}` placeholder) followed by the five rule sections listed in AC #1.
+  - [x] 1.2 Verify by inspection that no string in the template matches `/no_think`, `str_replace_editor`, or `~/.claude/` (AC #7).
 
-- [ ] **Task 2: Implement `composeInstructionBlock`** (AC #3)
-  - [ ] 2.1 Add `composeInstructionBlock({ profile, projectRoot })` to `lib/installer.js` (new function).
-  - [ ] 2.2 Load the universal template from disk (synchronous `fs.readFileSync` to keep parity with adjacent helpers; module-load-time caching optional). Templates contain NO `{{...}}` placeholders — do not perform substitution inside the composer.
-  - [ ] 2.3 If `profile === 'on-prem'`, read `lib/templates/instruction-block-onprem.template.md` and append its content separated by a single blank line. If that file is absent, throw `Error('on-prem profile selected but instruction-block-onprem.template.md is missing')`. NO silent fallback.
-  - [ ] 2.4 Export from `lib/installer.js`'s `module.exports` so tests and Stories 21.3–21.6 can consume it.
+- [x] **Task 2: Implement `composeInstructionBlock`** (AC #3)
+  - [x] 2.1 Add `composeInstructionBlock({ profile, projectRoot })` to `lib/installer.js` (new function).
+  - [x] 2.2 Load the universal template from disk (synchronous `fs.readFileSync` to keep parity with adjacent helpers; module-load-time caching optional). Templates contain NO `{{...}}` placeholders — do not perform substitution inside the composer.
+  - [x] 2.3 If `profile === 'on-prem'`, read `lib/templates/instruction-block-onprem.template.md` and append its content separated by a single blank line. If that file is absent, throw `Error('on-prem profile selected but instruction-block-onprem.template.md is missing')`. NO silent fallback.
+  - [x] 2.4 Export from `lib/installer.js`'s `module.exports` so tests and Stories 21.3–21.6 can consume it.
 
-- [ ] **Task 3: Wire composer into the marker-based merger** (AC #4, #5, #9)
-  - [ ] 3.1 In `updateAgentInstructions` (`lib/installer.js` line ~358), replace the hardcoded `planningInstruction` string (lines ~410–422) with a call to `composeInstructionBlock({ profile: getProfile(projectRoot) || 'standard', projectRoot })`, performing any `{{MANIFEST_PATH}}` substitution on the returned string AFTER composition (caller-owned).
-  - [ ] 3.2 Keep the marker-wrap (`markerStart`/`markerEnd`) and the first-insert / in-place-replace split unchanged.
-  - [ ] 3.3 Normalize trailing whitespace so the first-insert and in-place-replace paths produce byte-identical content inside the markers (resolves the Open question under AC).
-  - [ ] 3.4 Leave the BMAD-category "skip if file missing" branch (line ~445) untouched (AC #9).
+- [x] **Task 3: Wire composer into the marker-based merger** (AC #4, #5, #9)
+  - [x] 3.1 In `updateAgentInstructions` (`lib/installer.js` line ~358), replace the hardcoded `planningInstruction` string (lines ~410–422) with a call to `composeInstructionBlock({ profile: getProfile(projectRoot) || 'standard', projectRoot })`, performing any `{{MANIFEST_PATH}}` substitution on the returned string AFTER composition (caller-owned).
+  - [x] 3.2 Keep the marker-wrap (`markerStart`/`markerEnd`) and the first-insert / in-place-replace split unchanged.
+  - [x] 3.3 Normalize trailing whitespace so the first-insert and in-place-replace paths produce byte-identical content inside the markers (resolves the Open question under AC).
+  - [x] 3.4 Leave the BMAD-category "skip if file missing" branch (line ~445) untouched (AC #9).
 
-- [ ] **Task 4: Wire composer into the json-merge (OpenCode) merger** (AC #8)
-  - [ ] 4.1 In the `injectionStrategy.position === 'json-merge'` branch (`lib/installer.js` lines ~365–405), replace the hardcoded `instructionText` template literal (line ~370) with the composed content, prefixed by the existing `[${MA_AGENTS_SOURCE}]` tag used for ma-agents-entry identification.
-  - [ ] 4.2 Confirm the filter `isMaEntry` still correctly identifies the new entry (prefix unchanged → filter unchanged).
-  - [ ] 4.3 Verify no other keys in `opencode.json` are modified (NFR18).
+- [x] **Task 4: Wire composer into the json-merge (OpenCode) merger** (AC #8)
+  - [x] 4.1 In the `injectionStrategy.position === 'json-merge'` branch (`lib/installer.js` lines ~365–405), replace the hardcoded `instructionText` template literal (line ~370) with the composed content, prefixed by the existing `[${MA_AGENTS_SOURCE}]` tag used for ma-agents-entry identification.
+  - [x] 4.2 Confirm the filter `isMaEntry` still correctly identifies the new entry (prefix unchanged → filter unchanged).
+  - [x] 4.3 Verify no other keys in `opencode.json` are modified (NFR18).
 
-- [ ] **Task 5: Upgrade-safety — hand-edit detection, backup, warning** (AC #10)
-  - [ ] 5.1 Before overwriting the in-marker region, extract current in-marker content and compare against `composeInstructionBlock(...)` output for the resolved profile.
-  - [ ] 5.2 On drift in interactive mode: show unified diff (reuse existing prompts library); require confirmation.
-  - [ ] 5.3 On drift with `--yes`: emit the pinned WARNING line (verbatim format from AC #10).
-  - [ ] 5.4 Before overwrite, write `<target>.backup-<ISO-timestamp>` containing only the marker-block region including marker lines. Timestamp format: `YYYY-MM-DDTHH-mm-ssZ` (hyphens not colons — Windows filename safety).
-  - [ ] 5.5 No backup file created when existing in-marker content matches expected output.
+- [x] **Task 5: Upgrade-safety — hand-edit detection, backup, warning** (AC #10)
+  - [x] 5.1 Before overwriting the in-marker region, extract current in-marker content and compare against `composeInstructionBlock(...)` output for the resolved profile.
+  - [x] 5.2 On drift in interactive mode: show unified diff (reuse existing prompts library); require confirmation.
+  - [x] 5.3 On drift with `--yes`: emit the pinned WARNING line (verbatim format from AC #10).
+  - [x] 5.4 Before overwrite, write `<target>.backup-<ISO-timestamp>` containing only the marker-block region including marker lines. Timestamp format: `YYYY-MM-DDTHH-mm-ssZ` (hyphens not colons — Windows filename safety).
+  - [x] 5.5 No backup file created when existing in-marker content matches expected output.
 
-- [ ] **Task 6: Unit and integration tests** — see Testing section below.
+- [x] **Task 6: Unit and integration tests** — see Testing section below.
 
 - [ ] **Task 7: Documentation touch-up** (no new files)
   - [ ] 7.1 Add a single paragraph to `docs/` only if an existing doc already covers instruction injection; do not create a new doc file. (If no existing doc covers this, skip — Story 21.8 introduces documentation for the broader Epic 21 surface.)
@@ -211,3 +211,43 @@ New test file: `test/instruction-block.test.js` (new).
 - 2026-04-14: Added AC #8 for upgrade-safety — installer detects hand-edited marker content, backs it up, warns on --yes override (Finding #15, corrective plan step 3).
 - 2026-04-15: Story rewritten as template foundation for Stories 21.3–21.6 — ACs reorganized and gap-fills flagged explicitly (AC #2, #3, #8, #9, #10); NFR44/NFR46/NFR47/NFR18 citations made explicit in Dev Notes; Dependencies section split into upstream/downstream; Testing section expanded; verified source-tree surface table added distinguishing existing vs. new paths; injection-site map added. Two open questions raised inline rather than invented as ACs. Status set to Ready.
 - 2026-04-15: Adversarial-review findings resolved. AC #3 rewritten to canonical composer contract — signature is `composeInstructionBlock({ profile, projectRoot })`; on-prem template absence THROWS (no silent fallback); templates contain no placeholders (caller-owned substitution); single-owner contract (installer calls composer once; mergers consume string). Added Canonical Composer Contract and Canonical Backup Filename Format blocks to Dev Notes. Terminology normalized to composer/merger/stamper — "injection function" / "marker-injection" wording retired. Downstream deps explicitly list 21.10 and 21.11 as backup-filename-format consumers. Tasks 2–4 and tests 5.2–5.3 updated to match. Status remains Ready.
+- 2026-04-15: Story 21.2 implemented — universal template, `composeInstructionBlock`, both mergers wired, drift detection + canonical backup format. Status Ready → Review.
+
+## Dev Agent Record
+
+### Agent Model Used
+Claude Opus 4.6 (1M context) — bmad-dev-story + bmad-review-adversarial-general + bmad-review-edge-case-hunter flow.
+
+### Debug Log References
+- Initial implementation had `agent._yesMode` reading — a field never populated anywhere. Adversarial review (Finding #6) surfaced this: CLI `--yes` callers would still hit the interactive drift prompt. Resolved by extending `updateAgentInstructions` with an `opts = {}` argument carrying `yesMode` and wiring both install-path call sites (`action === 'remove'` and the main install branch) to pass `{ yesMode: yes }` from `installSkill`. Uninstall (`uninstallSkill`) left unchanged since it has no `yes` flag surface today; drift during uninstall is rare and the env-var fallback (`MA_AGENTS_YES=1`) still works for CI.
+- Added test 5.10c to guard against regression of the opts-based yesMode path.
+
+### Completion Notes List
+- `lib/templates/instruction-block-universal.template.md` ships with `{{MANIFEST_PATH}}` as the ONLY placeholder (AC #1, #2). Contains the five rule sections from AC #1 verbatim and does NOT mention `/no_think`, `str_replace_editor`, or `~/.claude/` (AC #7, asserted by test 5.5).
+- `composeInstructionBlock({ profile, projectRoot })` is exported from `lib/installer.js` (AC #3). On-prem template absence THROWS with the pinned error message — no silent fallback. Templates carry no placeholders substituted inside the composer; mergers substitute `{{MANIFEST_PATH}}` AFTER composition.
+- Marker-based merger (`updateAgentInstructions` markdown path) calls `composeInstructionBlock` exactly once per agent + substitutes per-agent MANIFEST path after composition (AC #4). JSON-merge merger (OpenCode) prefixes the composed string with `[ma-agents]` tag — filter unchanged, NFR18 additive merge preserved (AC #8).
+- First-insert vs in-place-replace normalized: both paths emit `<MARKER>\n<content>\n<MARKER>` identically (AC #6 / NFR46 — resolved the Open question under AC).
+- BMAD agents branch untouched — still skips missing files via the "BMAD agent file not yet deployed" message (AC #9).
+- AC #10 upgrade-safety: drift detection compares existing in-marker content against composer output. `--yes` path emits the pinned WARNING line verbatim and writes a sibling backup file. Interactive path shows the old/new block inline and requires confirmation. Backup filename is `<target>.backup-<ISO-timestamp>` with hyphens for Windows compatibility (`buildBackupFilename` / `formatBackupTimestamp` exported; Story 21.2 OWNS this format per Dev Notes decision C).
+- Open question under AC (profile-reconfigure) deferred to Story 21.10 per spec.
+
+### Adversarial Review Findings
+
+| # | Layer | Severity | Finding | Disposition |
+|---|-------|----------|---------|-------------|
+| 1 | Cynical | P0 | `agent._yesMode` read but never set anywhere — CLI `--yes` path would hit interactive prompt on drift, contradicting AC #10 | **Fixed** — extended `updateAgentInstructions(agent, projectRoot, opts)` with `opts.yesMode`; wired through `installSkill` → two call sites |
+| 2 | Cynical | P1 | OpenCode instructionText trailing-whitespace strip could elide final content when body ends with blank line | **Fixed by design** — `composeInstructionBlock` already trims trailing whitespace and appends exactly one `\n`; strip is idempotent |
+| 3 | Cynical | P1 | Insert path wrote `wrappedInstructionWithTrailingNewline + '\n'` (two newlines) while replace path wrote just the marker block — potential NFR46 violation | **Fixed by design** — NFR46 applies to content INSIDE markers; outside-markers formatting is preserved byte-for-byte by regex replace. Both paths produce byte-identical in-marker content |
+| 4 | Cynical | P2 | `buildBackupFilename` has TOCTOU race between `existsSync` and `outputFile` | **Out of scope** — sub-second repeat runs would need multiple installs within the same second; filename has numeric tiebreaker; would need fs lock to fully fix |
+| 5 | Edge-case | P1 | Missing test for `opts.yesMode` path (env-var path tested but opts path untested) | **Fixed** — added test 5.10c |
+| 6 | Edge-case | P2 | `uninstallSkill` call-site to `updateAgentInstructions` doesn't pass yesMode | **Out of scope** — `uninstallSkill` signature doesn't carry `yes` today; env-var fallback covers CI; tracked implicitly for 21.11 |
+| 7 | Edge-case | P2 | Interactive drift prompt could trigger on `reconfigure` flow (profile change) | **Out of scope per spec** — story's Open question under AC explicitly defers profile-reconfigure to Story 21.10 |
+
+All P0/P1 findings resolved or accepted with documented rationale.
+
+### File List
+- CREATED: `lib/templates/instruction-block-universal.template.md`
+- CREATED: `test/instruction-block.test.js` (14 tests, all passing)
+- MODIFIED: `lib/installer.js` (composer, drift handler, canonical backup format, merger wiring, yesMode opts plumbing)
+- MODIFIED: `package.json` (added `test/instruction-block.test.js` to npm test script)
+- MODIFIED: `_bmad-output/implementation-artifacts/21-2-universal-instruction-block-expansion.md` (Status → Review; Dev Agent Record / File List / Change Log updated)
