@@ -1,5 +1,6 @@
 # Local AI agent installation directories — not part of the published package
 .claude/
+_bmad-output/methodology/
 .cursor/
 .cline/
 .roo/
