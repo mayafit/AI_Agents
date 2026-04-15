@@ -36,6 +36,7 @@ const { execFileSync } = require('child_process');
 const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout } = require('../lib/installer');
 const { getProfile, setProfile, resolveProfile } = require('../lib/profile');
 const { reconfigure: runReconfigure, ReconfigureYesRejectedError, ManifestNotFoundError, RoomodesSlugDivergenceError } = require('../lib/reconfigure');
+const { uninstallProfileArtifacts } = require('../lib/uninstall');
 const bmad = require('../lib/bmad');
 const { getBmadPlatformCode } = require('../lib/agents');
 const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
@@ -93,6 +94,7 @@ ${chalk.bold('Usage:')}
   ${chalk.cyan(`npx ${NAME} install`)}                      Interactive install wizard
   ${chalk.cyan(`npx ${NAME} install`)} <skill> <agents...>  Install directly
   ${chalk.cyan(`npx ${NAME} uninstall`)} <skill> <agents..> Uninstall a skill
+  ${chalk.cyan(`npx ${NAME} uninstall --profile-artifacts`)}  Remove ma-agents-owned profile content from all injection files
   ${chalk.cyan(`npx ${NAME} status`)}                       Show installed skills
   ${chalk.cyan(`npx ${NAME} list`)}                         List available skills
   ${chalk.cyan(`npx ${NAME} agents`)}                       List supported agents
@@ -117,6 +119,10 @@ ${chalk.bold('Install options:')}
 ${chalk.bold('Reconfigure options:')}
   ${chalk.cyan('--force-roomodes-overwrite')}  Accept slug-stomp on user-edited ma-agents slugs
   ${chalk.gray('(reconfigure rejects --yes by design — it is interactive only)')}
+
+${chalk.bold('Uninstall --profile-artifacts options:')}
+  ${chalk.cyan('--yes')}  Skip confirmation prompt (supported for CI decommissioning)
+  ${chalk.gray('(asymmetry note: uninstall --profile-artifacts accepts --yes; reconfigure does not)')}
 
 ${chalk.bold('Notes:')}
   Divergent \`.cline/clinerules.md\` vs. \`.clinerules\` marker blocks require
@@ -1207,6 +1213,20 @@ async function handleInstall(args) {
 }
 
 async function handleUninstall(args) {
+  // Story 21.11 — if --profile-artifacts flag is present, route to uninstallProfileArtifacts.
+  // --yes IS supported for profile-artifact uninstall (CI decommissioning use-case).
+  // This is an intentional asymmetry vs. `reconfigure` which REJECTS --yes.
+  if (args.includes('--profile-artifacts')) {
+    const yesFlag = args.includes('--yes');
+    try {
+      await uninstallProfileArtifacts(process.cwd(), { yes: yesFlag });
+    } catch (error) {
+      console.error(chalk.red('\n Profile artifact uninstall failed:'), error.message);
+      process.exit(1);
+    }
+    return;
+  }
+
   const { globalFlag, customPath, scope, positional } = parseFlags(args);
 
   const skillId = positional[0];
