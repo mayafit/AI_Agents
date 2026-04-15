@@ -36,8 +36,9 @@ Skills are written in a **unified generic format** and stored in this package. W
 3. Copies the skill and its resources into the target agent's directory
 4. Renames resource directories to match the agent's native structure (e.g., `references/` becomes `docs/` for Cline)
 5. **Generates `MANIFEST.yaml`**: A central discovery file for the agent to find all installed skills.
-6. **Updates Instructions**: Injects planning hints into agent files (e.g., `CLAUDE.md`, `.clinerules`) to ensure the agent uses the skills.
-7. **BMAD-METHOD Integration**: Automatically detects and integrates with [BMAD-METHOD](https://docs.bmad-method.org/), applying project-specific customizations and orchestration.
+6. **Updates Instruction Blocks**: Stamps a universal planning-instruction block into every agent's instruction file (`CLAUDE.md`, `.clinerules`, `.cline/clinerules.md`, `.roo/rules/00-ma-agents.md`, `AGENTS.md`) between `<!-- MA-AGENTS-START -->` / `<!-- MA-AGENTS-END -->` markers. User content outside the markers is preserved. On-prem profile additionally stamps guardrails for local LLMs.
+7. **BMAD Roo Code Modes**: Generates `.roomodes` with 4 BMAD planning-mode custom modes (`bmad-pm`, `bmad-architect`, `bmad-techlead`, `bmad-dev`), each with `fileRegex` restrictions that enforce planning-phase file access at the application layer.
+8. **BMAD-METHOD Integration**: Automatically detects and integrates with [BMAD-METHOD](https://docs.bmad-method.org/), applying project-specific customizations and orchestration.
 
 ```
 Generic (this repo)                    Installed Output
@@ -111,10 +112,24 @@ When running AI coding agents against a locally-hosted LLM (e.g., Nemotron Super
 ? Profile (standard / on-prem):
 ```
 
-Your answer is persisted in `.ma-agents.json` under the `profile` field and is read on every subsequent install, update, or reconfigure. The `standard` profile produces the same output as always; the `on-prem` profile additionally stamps on-prem-specific guardrails into every agent's instruction block — including `/no_think` directives for planning personas, `str_replace_editor` prohibition, and home-directory write restrictions.
+Your answer is persisted in `.ma-agents.json` under the `profile` field and is read on every subsequent install, update, or reconfigure. The manifest also records the `toolVersion` (ma-agents version) and `bmadVersion` (bundled bmad-method version) on every install, making it easy to verify what ran last. The `standard` profile produces the same output as always; the `on-prem` profile additionally stamps on-prem-specific guardrails into every agent's instruction block — including `/no_think` directives for planning personas, `str_replace_editor` prohibition, and home-directory write restrictions.
 
 To change your profile after initial setup: `npx ma-agents reconfigure`
 To remove all on-prem profile artifacts: `npx ma-agents uninstall --profile-artifacts`
+
+### What the on-prem profile stamps
+
+| File | What is added |
+|------|--------------|
+| `CLAUDE.md` | Universal instruction block + on-prem guardrails (inside `MA-AGENTS-START/END` markers) |
+| `.roo/rules/00-ma-agents.md` | Same block for Roo Code |
+| `.clinerules` + `.cline/clinerules.md` | Same block for Cline |
+| `AGENTS.md` | Same block for OpenCode |
+| `opencode.json` | Additive entry in `instructions[]` array |
+| `.roomodes` | 4 BMAD planning modes with `fileRegex` phase enforcement |
+| `_bmad/_config/agents/bmm-*.customize.yaml` | Per-persona phase prefix: planning personas get `/no_think` prefix; dev personas get careful-coding prefix |
+
+The standard profile stamps the universal block only (no `/no_think`, no `str_replace_editor` prohibition, no home-dir restriction).
 
 For vLLM server configuration, quantization tradeoffs, per-phase sampling parameters, and the `str_replace_editor` hallucination mitigation, see [`docs/deployment/vllm-nemotron.md`](docs/deployment/vllm-nemotron.md).
 
@@ -263,6 +278,8 @@ npx ma-agents status                       # Show installed skills and paths
 npx ma-agents list                         # List all available skills
 npx ma-agents agents                       # List supported agents
 npx ma-agents uninstall <skill> <agents>   # Direct uninstall
+npx ma-agents reconfigure               # Re-run profile prompt and re-stamp all artifacts
+npx ma-agents uninstall --profile-artifacts  # Remove on-prem profile content from all agent files
 ```
 
 ### The Update Process
@@ -590,16 +607,25 @@ ma-agents/
 ├── bin/
 │   └── cli.js                  # CLI entry point (wizard + commands)
 ├── lib/
-│   ├── agents.js               # Agent configurations and paths
-│   ├── installer.js            # Skill discovery and installation logic
-│   ├── bmad.js                 # BMAD-METHOD integration and injection logic
+│   ├── agents.js               # Agent configurations, paths, and extraInstructionTemplates
+│   ├── installer.js            # Skill installation, instruction-block stamping, marker management
+│   ├── bmad.js                 # BMAD-METHOD integration, recompile, persona phase prefix
+│   ├── profile.js              # Profile persistence (getProfile / setProfile / resolveProfile / clearProfile)
+│   ├── reconfigure.js          # ma-agents reconfigure — re-stamp profile-dependent artifacts
+│   ├── uninstall.js            # ma-agents uninstall --profile-artifacts
+│   ├── merge/
+│   │   └── roomodes.js         # YAML merger for .roomodes slug collision / user-slug preservation
+│   ├── templates/
+│   │   ├── instruction-block-universal.template.md   # Universal planning-instruction block
+│   │   ├── instruction-block-onprem.template.md      # On-prem guardrails append (profile=on-prem)
+│   │   ├── roomodes.template.yaml                    # 4 BMAD Roo Code modes with fileRegex
+│   │   ├── agents-md.template.md                     # AGENTS.md for OpenCode
+│   │   ├── clinerules.template.md                    # .clinerules expansion for Cline
+│   │   └── project-context.template.md               # project-context.md generation template
+│   ├── bmad-customize/         # Per-persona customize.yaml with phase: + on_prem_phase_prefix:
 │   ├── bmad-cache/             # Pre-bundled BMAD external modules (bmb, cis, gds, tea)
 │   ├── bmad-customizations/    # BMAD persona templates (.md) and YAML configs
 │   ├── bmad-extension/         # Extension module: sprint management, bug tracking, agent skills
-│   │   ├── skills/             # SKILL.md packages (add-sprint, generate-backlog, etc.)
-│   │   ├── workflows/          # Legacy workflow copies (redirects to SKILL.md)
-│   │   ├── module.yaml         # Extension module definition
-│   │   └── module-help.csv     # Skill registry with descriptions and output paths
 │   ├── bmad-workflows/         # Specialized BMAD playbooks (SRE, Cyber, etc.)
 │   └── mil498-templates/       # MIL-STD-498 DID library (SRS, SSS, SSDD, etc.)
 ├── scripts/
