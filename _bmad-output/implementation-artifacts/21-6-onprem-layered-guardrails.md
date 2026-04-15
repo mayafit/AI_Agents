@@ -1,6 +1,6 @@
 # Story 21.6: On-Prem Layered Guardrails
 
-Status: Ready
+Status: Review
 
 **Resolutions (2026-04-15, epic owner):**
 - **AC #7 Shape A/B:** **Shape A committed.** On-prem content flows through the composer into the Universal Rules section of AGENTS.md; the Critical Behavior Rules section is NOT modified by this story. Rationale: (a) preserves Decision A's "templates are static text, no placeholders" contract; (b) no downstream depends on on-prem rules being the last rules in AGENTS.md; (c) epic's "append to Critical Behavior Rules" is satisfied logically — on-prem rules land inside AGENTS.md's marker block. Shape B is explicitly rejected. Task 4.2's conditional "if Shape B" branch is removed.
@@ -243,8 +243,45 @@ New test file: `test/onprem-layer.test.js` (new) — avoids collision with `test
 - Profile-reconfigure flow (Story 21.10).
 - Profile-uninstall flow (Story 21.11).
 
+## Dev Agent Record
+
+### Agent Model Used
+Claude Opus 4.6 (1M context) — bmad-dev-story + adversarial review.
+
+### Completion Notes List
+- Shipped `lib/templates/instruction-block-onprem.template.md` (90 lines) containing the four AC #1 content categories: `/no_think` planning-phase directive, no-home-dir-writes rule referencing `~/.claude/`, no-`str_replace_editor` rule, per-phase reasoning+sampling guidance (planning/implementation/review).
+- Template has no `{{...}}` placeholders (AC #3), ends with exactly one trailing newline, has no trailing whitespace on any line (AC #1.4 idempotency precondition).
+- Composer (Story 21.2, `lib/installer.js`) already implemented the on-prem append branch. Verified by Task 2 inspection — no 21.2 blocker raised. The on-prem template now flows transparently through every injection surface: markdown-marker merger (Claude Code, Cline ×2, Roo Code rules, Cursor, Kilocode, Copilot, Gemini, Antigravity), json-merge merger (OpenCode `opencode.json::instructions[]`), yaml-customModes merger (`.roomodes`), and markdown-markers merger (AGENTS.md).
+- Fresh on-prem install confirmed to render all three NFR44 literals (`/no_think`, `str_replace_editor`, `~/.claude/`) into every stamped injection surface (test 7.8 passes across 11+ files).
+- Fresh standard-profile install confirmed to render NONE of the three literals into any injection surface except AGENTS.md's legitimate Critical Behavior Rules `~/.claude/` occurrence (AC #4 exception, verified by excluding that surface from the universal-rule assertion).
+- NFR46 idempotency: two consecutive on-prem installs produce byte-identical marker-block content across `.claude/CLAUDE.md`, `.cline/clinerules.md`, `.clinerules`, `.roo/rules/00-ma-agents.md`, `AGENTS.md`, and byte-identical `.roomodes` YAML (test 7.9).
+- NFR18 non-regression: on-prem install's `opencode.json` has exactly one `[ma-agents]`-prefixed entry, user entries preserved, `otherKey` untouched, `instructions[]` length stable across re-installs (test 7.10).
+- NFR47 non-regression: `.roomodes` `fileRegex` patterns byte-identical between standard and on-prem profiles (test 7.11).
+- Obsolete precondition fixed: `test/clinerules.test.js` test 5.7a was written assuming the on-prem template is absent (pre-21.6 state). Updated to temporarily rename the template to simulate absence (mirrors `test/instruction-block.test.js` test 5.6 pattern).
+
+### Adversarial Review Findings
+
+| # | Layer | Severity | Finding | Disposition |
+|---|-------|----------|---------|-------------|
+| 1 | Cynical | P1 | Tests 7.7/7.8 skip missing surfaces via `continue` — a regression dropping every rendered surface would pass vacuously | **Fixed** — added sanity guards asserting `.claude/CLAUDE.md` (both), `.roomodes` + `AGENTS.md` (on-prem only) exist before the content loop |
+| 2 | Cynical | P1 | `/no_think` substring match would also match e.g. `//no_think` in comments | **Accepted** — template writes the token on its own line; no other ma-agents-owned template contains any `//no_think`-adjacent literal |
+| 3 | Edge-case | P1 | NFR47 regex parse `/fileRegex:\s*([^\n]+)/g` would double-count if a future on-prem rule mentioned "fileRegex" | **Accepted** — current on-prem template contains no "fileRegex" literal; future rules added via follow-up stories can extend the parse |
+| 4 | Edge-case | P1 | Test 7.9 re-runs `installAllInjectionSurfaces` — second pass risks drift-detection false-positives | **Accepted** — `composeInstructionBlock` is deterministic (verified by 21.2 test 5.4 + this story's 7.6); drift path not entered on clean re-install (21.2 test 5.10a confirms) |
+| 5 | Cynical | P2 | Template uses backtick inline code spans — markdown renderers in agent UIs may strip them | **Accepted** — cosmetic; the three literals are also written in plain prose outside code spans, and tests assert literal substring presence (renderer-independent) |
+| 6 | Edge-case | P2 | `.roomodes` drift via `reconfigure` flow (profile flip) could surface 21.2 AC #10 warning on standard→on-prem | **Out of scope per spec** — AC #13 explicitly defers profile-flip to Story 21.10 |
+
+All P0/P1 findings resolved or accepted with documented rationale.
+
+### File List
+- CREATED: `lib/templates/instruction-block-onprem.template.md`
+- CREATED: `test/onprem-layer.test.js` (12 tests, all passing)
+- MODIFIED: `test/clinerules.test.js` (test 5.7a updated — simulate on-prem template absence via rename)
+- MODIFIED: `package.json` (added `test/onprem-layer.test.js` to npm test script)
+- MODIFIED: `_bmad-output/implementation-artifacts/21-6-onprem-layered-guardrails.md` (Status → Review; Dev Agent Record / File List / Change Log updated)
+
 ## Change Log
 
+- 2026-04-15: Story 21.6 implemented — on-prem template shipped, all 12 story-local tests green (onprem-layer.test.js), full `npm test` green (no regressions). Composer wiring from 21.2 reused unchanged — no blocker raised. Status Ready → Review.
 - 2026-04-15 (epic-owner resolution): All three open questions resolved inline. **AC #7 Shape A committed** — on-prem content reaches AGENTS.md via the Universal Rules section transparently through the composer; Critical Behavior Rules section unchanged by this story. Shape B rejected (would contradict Decision A). **AC #1 `/no_think` Shape X committed** — 21.6 owns the instruction-text rule; 21.7 owns the active persona-prompt prefix. **AC #1 field-playbook** — scoped to four categories only; additional rules become follow-up stories. Task 2.2 and Task 4 made unconditional. Status flipped Draft → Ready. No upstream blockers remain.
 - 2026-04-15: Adversarial-review reconciliation. AC #3 reconciled with Story 21.4 via pointer sentence: composer (21.2) appends template verbatim; project-value stamping happens AFTER composition in `lib/installer.js` (closes P0 #2). AC #4 annotated with NFR44 scope-narrowing pointer. Added Dev Notes "Ownership boundary" block clarifying composer/merger/stamper terminology and that 21.6 owns only the on-prem template file and its profile-gated content. Added Dev Notes "NFR44 test scope" block (decision D): three literals exhaustive for negative assertion; reasoning-mode prose positive-only. Task 2.2 downgraded from "extend composer here" to "raise blocker against 21.2"; Task 4.2 downgraded analogously for 21.4. Status flipped to Draft: Task 2.2 and Task 4.2 remain conditional on upstream decisions, and three Open questions remain unresolved. Upstream composer dependency cites Story 21.2.
 - 2026-04-15: Story created (Epic 21, Story 21.6). ACs structured with explicit (gap-fill) flags per the epic's AC scope. Three Open questions raised inline (AGENTS.md anchor Shape A vs B, field-playbook additional rules, `/no_think` delivery Shape X vs Y) rather than guessed. NFR44/NFR46/NFR47/NFR18 citations made explicit in Dev Notes. Verified source-tree surface table added distinguishing existing vs. new paths. Upstream/downstream dependencies split. Testing section covers unit (7.1–7.6) and integration (7.7–7.12) with explicit NFR44 negative-assertion coverage against `/no_think`, `str_replace_editor`, `~/.claude/` across every injection surface. Status set to Ready.
