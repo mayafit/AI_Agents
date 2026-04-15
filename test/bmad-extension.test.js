@@ -83,9 +83,9 @@ const builtinAgents = [
   'bmm-sm', 'bmm-tech-writer', 'bmm-ux-designer', 'bmm-bmad-master'
 ];
 
-test('2.2: lib/bmad-customize/ contains exactly 8 .customize.yaml files', () => {
+test('2.2: lib/bmad-customize/ contains exactly 10 .customize.yaml files', () => {
   const files = fs.readdirSync(customizeDir).filter(f => f.endsWith('.customize.yaml'));
-  assert.strictEqual(files.length, 8, `Expected 8 .customize.yaml files, found ${files.length}`);
+  assert.strictEqual(files.length, 10, `Expected 10 .customize.yaml files, found ${files.length}`);
 });
 
 for (const agentId of builtinAgents) {

@@ -438,10 +438,10 @@ test('6.2: bmad.js applyCustomizations is exported', () => {
   assert.ok(typeof bmad.applyCustomizations === 'function', 'applyCustomizations must be exported');
 });
 
-test('6.3: lib/bmad-customize/ has exactly 8 built-in agent files', () => {
+test('6.3: lib/bmad-customize/ has exactly 10 built-in agent files', () => {
   assert.ok(fs.existsSync(CUSTOMIZE_DIR), 'lib/bmad-customize/ must exist');
   const files = fs.readdirSync(CUSTOMIZE_DIR).filter(f => f.endsWith('.customize.yaml'));
-  assert.strictEqual(files.length, 8, `Expected 8 built-in agent files, found ${files.length}`);
+  assert.strictEqual(files.length, 10, `Expected 10 built-in agent files, found ${files.length}`);
 });
 
 const BUILTIN_AGENTS = [

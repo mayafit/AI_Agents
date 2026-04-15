@@ -184,11 +184,11 @@ console.log('\nTask 1 — End-to-end IDE agent test');
           `lib/bmad-extension/agents/ must have 0 .customize.yaml files after Story 15.6, found ${agentFiles.length}`);
       }
 
-      // 8 built-in customize.yaml files now in lib/bmad-customize/
+      // 10 built-in customize.yaml files now in lib/bmad-customize/
       const customizeDir = path.join(__dirname, '..', 'lib', 'bmad-customize');
       assert.ok(await fs.pathExists(customizeDir), 'lib/bmad-customize/ must exist');
       const files = (await fs.readdir(customizeDir)).filter(f => f.endsWith('.customize.yaml'));
-      assert.strictEqual(files.length, 8, `Expected 8 .customize.yaml files in bmad-customize/, found ${files.length}`);
+      assert.strictEqual(files.length, 10, `Expected 10 .customize.yaml files in bmad-customize/, found ${files.length}`);
     });
 
     // Task 2.2 (continued): Verify deployment via fs.copy
