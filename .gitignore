@@ -14,6 +14,7 @@ coverage/
 test-security-project/
 _bmad/
 _bmad-custom-backup-temp/
+_bmad-output/methodology/
 .agent/
 .antigravity/
 .worktrees/
