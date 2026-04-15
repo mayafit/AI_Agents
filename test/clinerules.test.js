@@ -43,6 +43,7 @@ const {
   ClinerulesDualFileDriftError,
   checkClinerulesDualFileDrift,
   CLINERULES_TEMPLATE_PATH,
+  ONPREM_INSTRUCTION_TEMPLATE_PATH,
   _testUpdateAgentInstructions: updateAgentInstructions
 } = installerModule;
 const { setProfile } = require('../lib/profile');
@@ -184,11 +185,21 @@ async function runAll() {
   }));
 
   // 5.7a — On-prem profile with onprem template absent: throws (composer contract)
+  // Story 21.6 ships the on-prem template, so we temporarily rename it to simulate
+  // absence (mirrors instruction-block.test.js test 5.6 pattern for the universal template).
   await test('5.7a On-prem profile without onprem template: composer throws (Story 21.2 AC #3)', () => {
-    assert.throws(
-      () => composeInstructionBlock({ profile: 'on-prem', projectRoot: mktemp() }),
-      /instruction-block-onprem\.template\.md is missing/
-    );
+    const fs = require('fs');
+    const bak = ONPREM_INSTRUCTION_TEMPLATE_PATH + '.bak-test-5-7a';
+    const had = fs.existsSync(ONPREM_INSTRUCTION_TEMPLATE_PATH);
+    if (had) fs.renameSync(ONPREM_INSTRUCTION_TEMPLATE_PATH, bak);
+    try {
+      assert.throws(
+        () => composeInstructionBlock({ profile: 'on-prem', projectRoot: mktemp() }),
+        /instruction-block-onprem\.template\.md is missing/
+      );
+    } finally {
+      if (had) fs.renameSync(bak, ONPREM_INSTRUCTION_TEMPLATE_PATH);
+    }
   });
 
   // 5.8 — MANIFEST_PATH resolves to .cline/skills/MANIFEST.yaml (forward-slashed)
