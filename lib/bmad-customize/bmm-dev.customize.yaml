@@ -1,4 +1,6 @@
 # MA-AGENTS: skill enforcement for bmm-dev
+phase: implementation
+on_prem_phase_prefix: "Think carefully before writing code. Always reference the story you are implementing before making edits."
 critical_actions:
   - "Read the skills MANIFEST at {project-root}/skills/MANIFEST.yaml"
   - "For each skill marked always_load: true, read the skill file completely"
