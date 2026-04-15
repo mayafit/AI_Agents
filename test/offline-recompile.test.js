@@ -207,6 +207,36 @@ test('emits actionable error when offline and cache incomplete', () => {
     }
 });
 
+test('classifyRecompileFailure() warns and continues on EBUSY (resource busy)', () => {
+    const prev = process.env.MA_AGENTS_OFFLINE;
+    delete process.env.MA_AGENTS_OFFLINE;
+    try {
+        const err = new Error('EBUSY: resource busy, rmdir \'C:\\\\project\\\\_bmad\\\\agents\'');
+        const result = bmad.classifyRecompileFailure(err, { cacheInspector: intactCache });
+        assert.strictEqual(result.action, 'warn');
+        assert.strictEqual(result.reason, 'ebusy');
+        assert.ok(result.message.includes('EBUSY') || result.message.includes('file-lock'),
+            'message should mention file-lock or EBUSY');
+    } finally {
+        if (prev !== undefined) process.env.MA_AGENTS_OFFLINE = prev;
+    }
+});
+
+test('classifyRecompileFailure() warns and continues on EBUSY (resource busy or locked)', () => {
+    const prev = process.env.MA_AGENTS_OFFLINE;
+    delete process.env.MA_AGENTS_OFFLINE;
+    try {
+        const err = new Error('EBUSY: resource busy or locked, rmdir \'C:\\\\project\\\\_bmad\'');
+        const result = bmad.classifyRecompileFailure(err, { cacheInspector: intactCache });
+        assert.strictEqual(result.action, 'warn');
+        assert.strictEqual(result.reason, 'ebusy');
+        assert.ok(result.message.includes('EBUSY') || result.message.includes('file-lock'),
+            'message should mention file-lock or EBUSY');
+    } finally {
+        if (prev !== undefined) process.env.MA_AGENTS_OFFLINE = prev;
+    }
+});
+
 // ---- inspectBmadCache (lightweight integration — uses real manifest) ----
 
 console.log('\ninspectBmadCache()');
