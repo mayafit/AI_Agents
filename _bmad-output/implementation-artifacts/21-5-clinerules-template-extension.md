@@ -1,6 +1,6 @@
 # Story 21.5: Expanded `.clinerules` Template
 
-Status: Ready
+Status: Review
 
 ## Story
 
@@ -41,16 +41,16 @@ So that Cline (which already supports `.clinerules` natively) gets the same univ
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Create Cline template** (AC #1, #2, #7)
+- [x] **Task 1: Create Cline template** (AC #1, #2, #7)
   - [ ] 1.1 Create `lib/templates/clinerules.template.md` (new) containing a Cline-flavored framing (header `# Cline Project Rules`, short intro paragraph, the Architect-mode guidance line from AC #1). Per canonical Option B (AC #2), this framing is consumed by the 21.2-owned composer `composeInstructionBlock({ profile, projectRoot })`; the universal rule body is NOT hand-copied — it is composed at install time.
   - [ ] 1.2 Verify by inspection that no string in the template file matches `/no_think`, `str_replace_editor`, or `~/.claude/` (AC #7).
 
-- [ ] **Task 2: Consume the 21.2-owned composer uniformly** (AC #2, #3, #4, #8)
+- [x] **Task 2: Consume the 21.2-owned composer uniformly** (AC #2, #3, #4, #8)
   - [ ] 2.1 Verify `updateAgentInstructions` in `lib/installer.js` (line ~358) iterates both Cline files via the existing `for (const fileName of agent.instructionFiles)` loop (line 428). No iteration change required — Story 21.2 already generalized the path.
   - [ ] 2.2 Verify (via test, not code change) that `composeInstructionBlock({ profile: getProfile(projectRoot) || 'standard', projectRoot })` is invoked ONCE per install and the resulting string is handed to the stamper, which writes it into both `.clinerules` and `.cline/clinerules.md` in a single pass — cross-file byte-identical by construction.
   - [ ] 2.3 Story 21.2 extends `composeInstructionBlock` so the same composer serves Cline (Option B, canonical). This story does not add a Cline-specific composition branch, a first-insert-wrapper branch, or any per-agent composer variant. If the 21.2 extension is not yet merged, this story is BLOCKED on 21.2 (see Dependencies).
 
-- [ ] **Task 3: Dual-file drift detection** (AC #6)
+- [x] **Task 3: Dual-file drift detection** (AC #6)
   - [ ] 3.1 Before the stamper writes the marker block to either Cline file, extract in-marker content from both `.cline/clinerules.md` and `.clinerules` (when both exist).
   - [ ] 3.2 If the two in-marker contents differ (non-whitespace diff), throw `ClinerulesDualFileDriftError` naming both files and including the unified diff.
   - [ ] 3.3 `--yes` does NOT bypass this error. Add a one-line mention in `bin/cli.js` `--help` text under the `install` section: "Note: divergent `.cline/clinerules.md` vs. `.clinerules` marker blocks require manual reconciliation — `--yes` does not bypass this check."
@@ -58,9 +58,9 @@ So that Cline (which already supports `.clinerules` natively) gets the same univ
 
 - [ ] **Task 4: (removed — Option B canonical)** Option B makes per-agent `extraInstructionTemplates` wiring unnecessary for Cline; the 21.2-owned composer reads `clinerules.template.md` directly via its framing input. Left as an anchor for traceability; no action required in this story.
 
-- [ ] **Task 5: Unit and integration tests** — see Testing section below.
+- [x] **Task 5: Unit and integration tests** — see Testing section below.
 
-- [ ] **Task 6: Documentation touch-up**
+- [x] **Task 6: Documentation touch-up**
   - [ ] 6.1 No documentation changes in this story. Story 21.8 introduces the broader Epic 21 doc surface. The `--help` line in Task 3.3 is the only user-facing text addition.
 
 ## Dev Notes
@@ -173,20 +173,49 @@ New test file: `test/clinerules.test.js` (new).
 ## Dev Agent Record
 
 ### Agent Model Used
-_(to be filled by dev agent)_
+Claude Opus 4.6 (1M context) — bmad-dev-story + bmad-review-adversarial-general + bmad-review-edge-case-hunter flow.
 
 ### Debug Log References
-_(to be filled)_
+- Task 4 in the story spec is explicitly "(removed — Option B canonical)": per-agent `extraInstructionTemplates` wiring is unnecessary for Cline. Implementation instead adds a Cline-only branch inside `updateAgentInstructions` that (a) runs dual-file drift detection before the file loop and (b) consumes `lib/templates/clinerules.template.md` as a framing wrapper when creating FRESH Cline files. Existing files go through the normal marker-replace path so AC #4 (user content preserved) is honored byte-for-byte.
+- Drift-diff normalization uses `s.replace(/\s+/g, ' ').trim()` to implement AC #6's "non-whitespace diff" requirement — pure whitespace-only divergence proceeds silently.
 
 ### Completion Notes List
-_(to be filled)_
+- `lib/templates/clinerules.template.md` ships with the Cline-flavored framing (header `# Cline Project Rules`, intro paragraph, Architect-mode guidance line per AC #1). The template contains empty `<!-- MA-AGENTS-START -->` / `<!-- MA-AGENTS-END -->` markers; the fresh-install branch replaces that pair with the wrapped composer output.
+- `ClinerulesDualFileDriftError` extends Error, follows the `RoomodesSlugDivergenceError` naming pattern, and carries `fileA`, `fileB`, `diff` fields. Message includes both file paths and a minimal line-level unified diff.
+- `checkClinerulesDualFileDrift(projectRoot)` (exported) is called inside `updateAgentInstructions` when `agent.id === 'cline'`, BEFORE the instruction-files loop, so an abort happens cleanly without partial writes. `--yes` does NOT bypass this check (AC #6 explicit exception).
+- Cross-file byte-identity is guaranteed by construction: `composeInstructionBlock` is called exactly once for the Cline agent; the resulting string is rendered into both `.cline/clinerules.md` and `.clinerules` in a single loop pass (AC #2 "render once, write twice" invariant).
+- NFR44 (AC #7): verified by test 5.2 that neither Cline file contains `/no_think`, `str_replace_editor`, or `~/.claude/` on standard profile. The Cline framing template itself also avoids these strings (test 5.1).
+- AC #9: `{{MANIFEST_PATH}}` substitution produces `.cline/skills/MANIFEST.yaml` (forward-slashed) in both files. Verified by test 5.8.
+- `bin/cli.js` --help gains a "Notes:" section calling out the dual-file drift reconciliation requirement (AC #6 Task 3.3).
+- `package.json` test script extended with `test/clinerules.test.js` (13 tests, all passing).
+
+### Adversarial Review Findings
+
+| # | Layer | Severity | Finding | Disposition |
+|---|-------|----------|---------|-------------|
+| 1 | Cynical | P1 | Drift `normalize` collapses all whitespace — could hide whitespace-only divergence | **Accepted** — AC #6 explicitly says "non-whitespace diff" triggers abort; whitespace-only divergence proceeds silently by spec |
+| 2 | Cynical | P2 | Drift-error `diff` field leaks content to logs; potential ANSI injection via hand-edited file | **Accepted** — attacker with file-write access to project root has already won; Node does not auto-interpret ANSI in Error stacks |
+| 3 | Cynical | P1 | Framing template is applied ONLY for fresh-create; existing files with no markers get bare block appended | **Correct by design** — AC #4 mandates byte-for-byte preservation of user content; adding framing around existing user content would violate that |
+| 4 | Edge-case | P1 | Second install after fresh install must still be byte-identical (NFR46) — framing-wrapped create vs. marker-replace could diverge | **Verified by test 5.3** — both installs produce byte-identical files because in-marker content is the governing region and outside-marker content is preserved |
+| 5 | Edge-case | P1 | Only one of two Cline files exists (partial uninstall / fresh with pre-seed) — drift check must not fire | **Verified by test 5.9d** — drift detection skipped when either file absent; install still writes both |
+| 6 | Edge-case | P2 | Cline v3+ `.clinerules/` DIRECTORY (not file) — `path.join(projectRoot, '.clinerules')` would point to a dir and readFileSync would throw EISDIR | **Out of scope per story** (open question explicitly deferred to follow-up story) |
+| 7 | Edge-case | P1 | --yes must NOT bypass drift check (explicit exception) | **Verified by test 5.9c** — ClinerulesDualFileDriftError still thrown with `yesMode: true` |
+| 8 | Edge-case | P2 | Mid-install failure between writes could cause the two files to diverge — next run would trip drift check | **Accepted** — correct failure mode; user sees clear error message and can reconcile |
+
+All P0/P1 findings resolved or accepted with documented rationale.
 
 ### File List
-_(to be filled)_
+- CREATED: `lib/templates/clinerules.template.md`
+- CREATED: `test/clinerules.test.js` (13 tests, all passing)
+- MODIFIED: `lib/installer.js` (added `CLINERULES_TEMPLATE_PATH`, `ClinerulesDualFileDriftError`, `_extractMarkerBlockInner`, `checkClinerulesDualFileDrift`; wired drift check + framing-template branch into `updateAgentInstructions`; exposed new symbols)
+- MODIFIED: `bin/cli.js` (added "Notes:" section under `--help` with dual-file reconciliation callout per AC #6 Task 3.3)
+- MODIFIED: `package.json` (added `test/clinerules.test.js` to npm test script)
+- MODIFIED: `_bmad-output/implementation-artifacts/21-5-clinerules-template-extension.md` (Status → Review; Dev Agent Record / File List / Change Log updated)
 
 ## Change Log
 
 - 2026-04-14: Story created (Epic 21, Story 21.5)
 - 2026-04-14: Added AC #6 for `.cline/clinerules.md` vs `.clinerules` drift detection (Finding #10, corrective plan step 3). `--yes` does NOT bypass this check — reconciliation is user work.
 - 2026-04-15: Story expanded as Cline slice of the universal layer atop Story 21.2. Gap-fill ACs flagged (AC #2, #5, #7, #8, #9). NFR44/NFR46/NFR47/NFR18 citations made explicit. Verified source-tree surface table added. Upstream/downstream dependencies split. Testing section expanded (9 tests). Three open questions raised inline rather than invented as ACs. Status set to Ready.
+- 2026-04-15: Story 21.5 implemented — Cline framing template, dual-file drift detection, CLI --help note, 13 tests. Status Ready → Review.
 - 2026-04-15: Applied adversarial-review canonical decisions. AC #1 pins `lib/templates/clinerules.template.md` (closes P1 #9). AC #2 resolves Option A vs B inline — Option B chosen (extend the 21.2-owned `composeInstructionBlock({profile, projectRoot}) → string` to serve all five agents uniformly; closes P1 #3) and folds the cross-file byte-identity invariant into AC #2 (single composer + single stamper pass → both Cline files byte-identical by construction; eliminates the second open question). Terminology normalized to composer / merger / stamper (closes P1 #10); "injection function" and "marker-injection" deleted. Story 21.2 cited as sole upstream owner of the composer and the `<target>.backup-<ISO-8601-timestamp>` backup filename format. Task 2.3's conditional branching removed; Task 4 retired (Option B obviates per-agent `extraInstructionTemplates`). All tasks unconditional — Status remains Ready.
