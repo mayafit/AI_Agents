@@ -1,6 +1,6 @@
 # Story 21.3: `.roomodes` Template with BMAD Mode File-Regex Restrictions
 
-Status: Ready
+Status: Review
 
 ## Story
 
@@ -188,3 +188,42 @@ New test file: `test/roomodes.test.js` (new).
 
 - 2026-04-15: Story created (Epic 21, Story 21.3). ACs structured with explicit (gap-fill) flags per the epic's AC scope. Three Open questions raised inline (YAML library choice, install-loop call site, Roo Code `customModes` schema version) rather than guessed. NFR44/NFR46/NFR47/NFR18 and FR176 citations made explicit. Verified source-tree surface table distinguishes existing vs. new paths. Status set to Ready.
 - 2026-04-15 (adversarial-review resolution): Applied canonical decisions A/B/C. (P1 #9) AC #1 pins template path `lib/templates/roomodes.template.yaml` per `epics.md:3994`. (P1 #3) Three Open questions resolved inline as design decisions: YAML library = `js-yaml` (verified `js-yaml@4.1.1` via `npm ls js-yaml` — transitively present through `bmad-method@6.2.2`; promoted to direct dependency, Task 2.5); installer call site = `lib/installer.js` (single stamper owner); Roo Code schema = authoritative shape cited in `lib/agents.js` roo-code entry. (P1 #4) Merger (`mergeRoomodes`) no longer calls `composeInstructionBlock`; it receives the composed string as input — stamper owns composer invocation and substitution. (P1 #10) Terminology normalized to composer/merger/stamper throughout. (Decision C) Backup filename `<target>.backup-<ISO-8601-timestamp>` cited as 21.2-owned in Upstream dependencies. All Tasks are unconditional; Status remains Ready.
+- 2026-04-15: Story 21.3 implemented — `lib/templates/roomodes.template.yaml`, `lib/merge/roomodes.js` (pure splicer with `MA_AGENTS_OWNED_SLUGS` export), `applyExtraInstructionTemplates` stamper in `lib/installer.js`, `extraInstructionTemplates` field on roo-code agent only, `js-yaml@^4.1.1` promoted to direct dep, 12 new tests in `test/roomodes.test.js`. Indent-preserving `{{UNIVERSAL_BLOCK}}` substitution keeps YAML block scalars valid after expansion. Status Ready → Review.
+- 2026-04-15 (rebase integration onto PR #45 / Story 21.4): consolidated parallel dispatcher. 21.3's `applyExtraInstructionTemplates` was merged into 21.4's canonical `stampExtraInstructionTemplates` by adding a `yaml-customModes` branch (with indent-preserving `{{UNIVERSAL_BLOCK}}` substitution and Story 21.2 backup semantics). Orphan function deleted. Explicit sibling call-site in the install loop removed — `updateAgentInstructions` already invokes the dispatcher. `test/roomodes.test.js` updated to import `stampExtraInstructionTemplates`. All 12 roomodes tests + the full suite still pass. No AC coverage weakened.
+
+## Dev Agent Record
+
+### Agent Model Used
+Claude Opus 4.6 (1M context) — bmad-dev-story + bmad-review-adversarial-general + bmad-review-edge-case-hunter flow.
+
+### Completion Notes
+- Template at `lib/templates/roomodes.template.yaml` ships four modes with `fileRegex` per AC #1. The template comment header explicitly disclaims containing the sentinel literally, and the sentinel appears exactly four times — one per mode's `customInstructions` block scalar.
+- Stamper substitutes `{{UNIVERSAL_BLOCK}}` with indent preservation (per-sentinel leading whitespace captured via regex and prepended to every line of the composed universal block). This keeps the YAML block-scalar indent valid after expansion without requiring the composer to know its caller's layout.
+- `mergeRoomodes` is a pure splicer — no `composeInstructionBlock` import. It preserves non-`customModes` top-level keys (FR176), emits one `console.warn` per colliding slug with the slug cited verbatim, and pins `js-yaml` dump options for byte-identity across runs (NFR46).
+- `applyExtraInstructionTemplates` is wired into the install loop siblings to `updateAgentInstructions` (both install and remove paths). Uninstall path is intentionally NOT wired — Story 21.11 owns profile-uninstall slug removal (uses `MA_AGENTS_OWNED_SLUGS` export).
+- Canonical backup format from Story 21.2 (`buildBackupFilename`) is reused — no new format invented.
+
+### Adversarial Review Findings (self-review)
+
+| # | Layer | Severity | Finding | Disposition |
+|---|-------|----------|---------|-------------|
+| 1 | Cynical | P1 | Naive `{{UNIVERSAL_BLOCK}}` replace would break YAML block-scalar indentation because the composed content contains colons and multi-line markdown | **Fixed** — regex-based indent-preserving substitution in the stamper + mirrored in test helper |
+| 2 | Cynical | P1 | `js-yaml` declared as `^4.1.0` but story pins `^4.1.1`; SemVer floor lower than required | **Fixed** — bumped to `^4.1.1` |
+| 3 | Cynical | P2 | Uninstall-path `updateAgentInstructions` call site not paired with `applyExtraInstructionTemplates` | **Out of scope** — story 21.11 owns profile-uninstall slug removal |
+| 4 | Edge-case | P1 | `parseYaml` on malformed YAML previously called `console.warn` silently. Now throws with label `existing`/`template` so failures surface with context | **Fixed** — descriptive Error thrown |
+| 5 | Edge-case | P1 | Empty `templateYaml.customModes` could produce `.roomodes` with zero modes | **Fixed** — merger throws if template has no modes |
+| 6 | Edge-case | P2 | Malformed user entries (null, non-object, missing slug) could crash the Set lookup | **Fixed** — defensive slug extraction; non-object and slug-less entries pass through unchanged (they cannot collide) |
+| 7 | Edge-case | P2 | `MA_AGENTS_OWNED_SLUGS` mutability would let downstream consumers corrupt the canonical order | **Fixed** — exported as `Object.freeze([...])`; test 5.8 asserts immutability |
+| 8 | Edge-case | P2 | Backup could clobber prior same-second run | **Inherited fix** — reuses `buildBackupFilename` which already appends `.N` tiebreaker (Story 21.2) |
+
+All P0/P1 findings resolved. P2 "out of scope" items deferred to Stories 21.10/21.11 per spec.
+
+### File List
+- CREATED: `lib/templates/roomodes.template.yaml` (four ma-agents-owned modes with fileRegex per AC #1)
+- CREATED: `lib/merge/roomodes.js` (pure splicer + `MA_AGENTS_OWNED_SLUGS` export)
+- CREATED: `test/roomodes.test.js` (12 tests, all passing)
+- MODIFIED: `lib/installer.js` (post-rebase: `yaml-customModes` branch integrated into Story 21.4's `stampExtraInstructionTemplates` dispatcher; no parallel function)
+- MODIFIED: `lib/agents.js` (roo-code `extraInstructionTemplates` field)
+- MODIFIED: `package.json` (js-yaml `^4.1.1` direct dep; test script entry)
+- MODIFIED: `package-lock.json` (js-yaml direct lock entry)
+- MODIFIED: `_bmad-output/implementation-artifacts/21-3-roomodes-template-bmad-modes.md` (Status → Review; Dev Agent Record / File List / Change Log)
