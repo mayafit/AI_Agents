@@ -1,6 +1,6 @@
 # Story 21.8: vLLM Reference Deployment Doc and README On-Prem Section
 
-Status: backlog
+Status: Ready
 
 ## Story
 
@@ -10,91 +10,149 @@ So that I can configure Nemotron Super 49B (or similar) to behave correctly with
 
 ## Acceptance Criteria
 
-1. New file `docs/deployment/vllm-nemotron.md` exists covering:
-   - Recommended vLLM launch command with all critical flags: `--enable-auto-tool-choice`, `--tool-call-parser qwen3_coder`, `--max-model-len 32768`, `--enforce-eager`, `--trust-remote-code`, `--seed=1`
-   - Quantization tradeoffs (BF16 vs FP8 vs NVFP4) including VRAM and instruction-following quality impact — table format
-   - Reasoning-mode behavior: `/no_think` system-prompt directive enables reasoning-OFF; default is reasoning-ON
-   - Per-phase sampling parameters table (planning: temp 0.0, top_p 1.0; implementation: temp 0.6, top_p 0.95)
-   - The `str_replace_editor` hallucination warning and mitigation (cross-reference to the on-prem template content from Story 21.6)
-   - A complete sample launch command block ready to copy-paste
-   - Cross-reference to `optimizing-local-llm-coding-agents-bmad.md` as the source playbook
-2. `README.md` gains a new top-level section "On-Prem / Air-Gapped Deployment" containing:
-   - One-paragraph overview of the on-prem use case
-   - Explanation of the install-time profile prompt (`Is this an on-prem install?`)
-   - Link to `docs/deployment/vllm-nemotron.md`
-   - Link to the source playbook `optimizing-local-llm-coding-agents-bmad.md`
-3. The deployment doc is NOT stamped into target projects by the installer — it is repo documentation only (FR179). Verified by grep on `lib/installer.js` and `lib/templates/` for any reference to the deployment doc path.
-4. The deployment doc explicitly states it is informational only — running ma-agents does not configure or manage the vLLM server.
-5. Documentation only: this story adds NO code, NO tests beyond a docs-link sanity check.
-6. **Sampling parameters owned by the vLLM reference doc, not the prompt.** The per-phase sampling-parameters table (temperature/top_p values, e.g., planning: temp 0.0, top_p 1.0; implementation: temp 0.6, top_p 0.95) lives in `docs/deployment/vllm-nemotron.md` and nowhere else in the repo. The doc must contain an explicit statement of this ownership with a phrase along the lines of: `"The agent prompt does not control sampling; sampling is set at the vLLM request/serve layer. The table below is for operators configuring the serve or the agent's request parameters, not for end-users."` Verified by (a) presence of the sampling table in the doc, (b) presence of the ownership statement, (c) cross-referenced with Story 21.6 AC #11 which forbids numerical values in the on-prem prompt template. Finding #12 is closed by the combination of 21.6 AC #11 (no numbers in prompt) + 21.8 AC #6 (numbers only in serving doc, with ownership disclaimer).
-7. **Tool-call-parser flag provenance and cross-model validation warning.** The doc must cite the provenance of `--tool-call-parser qwen3_coder`: specifically, that this parser was validated to work with Nemotron Super 49B v1.5 per the source conversation `optimizing-local-llm-coding-agents-bmad.md` (dated April 2026). Immediately following the citation, the doc must contain a clearly-marked warning paragraph (formatted as a `NOTE:` or `WARNING:` admonition) with content along the lines of: `"NOTE: This parser flag is validated for Nemotron Super 49B v1.5. Users deploying other Nemotron versions or different local LLMs MUST validate the parser flag against their model's HuggingFace card — copy-paste of this flag to an unvalidated model risks silent tool-call corruption."` Verified by grep: presence of `Nemotron Super 49B v1.5` in the same paragraph as `qwen3_coder`, and presence of the cross-model validation warning paragraph.
+1. A new file `docs/deployment/vllm-nemotron.md` (new) is created at the repository root under `docs/deployment/` (the `docs/deployment/` directory does not yet exist and is created as part of this story).
+2. The `docs/deployment/vllm-nemotron.md` document covers recommended vLLM flags, specifically listing `--enable-auto-tool-choice`, `--tool-call-parser qwen3_coder`, `--max-model-len 32768`, `--enforce-eager`, and `--trust-remote-code`, each with a one-paragraph rationale.
+3. The document covers quantization tradeoffs across **BF16**, **FP8**, and **NVFP4**, including an at-a-glance table capturing approximate VRAM footprint and instruction-following quality impact for Nemotron Super 49B at each quantization level.
+4. The document covers reasoning-mode behavior — specifically the `/no_think` system-prompt directive to disable reasoning for planning-phase prompts, and the note that reasoning is ON by default for Nemotron-class models.
+5. The document includes a per-phase sampling-parameters table with at least the following rows: *planning* (`temperature 0.0`, `top_p 1.0`) and *implementation* (`temperature 0.6`, `top_p 0.95`).
+6. The document includes the `str_replace_editor` hallucination warning — describing the failure mode (local LLMs inventing a tool that does not exist outside Claude Code) and the mitigation (the on-prem instruction-block rule delivered by Story 21.6 plus Roo Code / OpenCode application-layer permissioning).
+7. The document includes a complete, copy-paste-runnable sample `vllm serve` launch command for Nemotron Super 49B that composes all recommended flags.
+8. The repository README (`README.md`) gains a new top-level section titled **"On-Prem / Air-Gapped Deployment"** that (a) links to `docs/deployment/vllm-nemotron.md` and (b) explains the install-time profile prompt delivered by Story 21.1 (including that the prompt is asked once and persisted in `.ma-agents.json` under the `profile` field).
+9. The deployment doc is NOT stamped into target projects by the installer — it lives in this repository only as reference documentation (FR179). Specifically, `lib/installer.js` and `lib/agents.js` are NOT modified by this story; no template file for this doc exists under `lib/templates/`.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `docs/deployment/vllm-nemotron.md` per AC #1
-  - [ ] 1.1 Source content from `optimizing-local-llm-coding-agents-bmad.md` Section 6 (Model Deployment Optimization)
-  - [ ] 1.2 Include the full sample launch command from Section 6.7
-  - [ ] 1.3 Include the sampling table from Section 8 (Quick Reference Cheat Sheet)
-- [ ] Task 2: Update `README.md` per AC #2
-  - [ ] 2.1 Choose insertion point — after "Installation" / before "Skill Library" reads naturally
-  - [ ] 2.2 Add the section with overview, profile-prompt explanation, and links
-- [ ] Task 3: Sanity check (AC #3, #4, #5)
-  - [ ] 3.1 Grep `lib/` for any reference to the deployment doc path → must return zero matches
-  - [ ] 3.2 Doc explicitly disclaims installer responsibility for the inference server
-- [ ] Task 4: Optional — link-check
-  - [ ] 4.1 If a markdown link checker is in the test suite, verify all internal links in the new doc and README section resolve
-- [ ] Task 5: Sampling ownership + prompt/server boundary (AC #6)
-  - [ ] 5.1 Include the per-phase sampling table in the vLLM reference doc
-  - [ ] 5.2 Add the ownership statement ("agent prompt does not control sampling...") immediately above the table
-  - [ ] 5.3 Cross-reference Story 21.6 AC #11 in a short parenthetical ("Numbers deliberately omitted from the on-prem prompt template; see Story 21.6 AC #11.")
-- [ ] Task 6: Tool-call-parser provenance + cross-model warning (AC #7)
-  - [ ] 6.1 Cite `optimizing-local-llm-coding-agents-bmad.md` (April 2026) as the source validating `--tool-call-parser qwen3_coder` for Nemotron Super 49B v1.5
-  - [ ] 6.2 Add the `NOTE:` admonition warning against copy-paste to unvalidated models
+- [ ] Task 1: Create the deployment doc skeleton (AC: #1, #2)
+  - [ ] 1.1 Create directory `docs/deployment/` (new) and file `docs/deployment/vllm-nemotron.md` (new)
+  - [ ] 1.2 Draft "Recommended vLLM flags" section with a table/list covering the five flags from AC #2 and a rationale per flag
+
+- [ ] Task 2: Quantization and reasoning sections (AC: #3, #4)
+  - [ ] 2.1 Author the BF16 vs FP8 vs NVFP4 table — columns: quantization, approx. VRAM, instruction-following quality notes
+  - [ ] 2.2 Author the reasoning-mode section explaining `/no_think` and the default-ON behavior; cross-link to the Story 21.6 on-prem guardrail template (`lib/templates/instruction-block-onprem.template.md` (new in 21.6))
+
+- [ ] Task 3: Per-phase sampling table and hallucination warning (AC: #5, #6)
+  - [ ] 3.1 Author the sampling-parameters table with planning and implementation rows
+  - [ ] 3.2 Author the `str_replace_editor` hallucination callout describing failure mode and mitigation, cross-linking to the on-prem block (Story 21.6) and `.roomodes` / `AGENTS.md` generated by Stories 21.3 / 21.4
+
+- [ ] Task 4: Sample launch command (AC: #7)
+  - [ ] 4.1 Write a complete `vllm serve` command block including model path placeholder, all five flags from AC #2, and a comment pointing at the sampling-parameter table for per-phase client-side settings
+
+- [ ] Task 5: README On-Prem section (AC: #8)
+  - [ ] 5.1 Edit `README.md` to insert a new `## On-Prem / Air-Gapped Deployment` section after the existing "Project Context" section
+  - [ ] 5.2 Section body: 1 paragraph explaining the profile prompt + `.ma-agents.json` `profile` field, and one sentence linking to `docs/deployment/vllm-nemotron.md`. Optionally (per Recommendations section below) include one sentence referencing `ma-agents reconfigure` / `uninstall --profile-artifacts` for profile lifecycle
+
+- [ ] Task 6: Installer-neutrality verification (AC: #9)
+  - [ ] 6.1 Confirm `lib/installer.js` is untouched by this story — no new template copy, no new stamping entry
+  - [ ] 6.2 Confirm `lib/agents.js` is untouched — no agent entry gains a reference to `vllm-nemotron.md`
+  - [ ] 6.3 Confirm no file is created under `lib/templates/` for this doc
+
+- [ ] Task 7: Tests (AC: all, scope per story)
+  - [ ] 7.1 This is a docs-only story. No unit/integration test is added in this story; the regression guard that the deployment doc is not stamped into target projects will be added alongside the broader profile-isolation tests in Story 21.9 (`test/onprem-injection.test.js` (new in 21.9))
+  - [ ] 7.2 Manual verification: run `npx ma-agents install --yes` against a scratch project and confirm `docs/deployment/vllm-nemotron.md` does NOT appear in the target project tree
 
 ## Dev Notes
 
 ### Architecture Compliance
 
-- **Decision P3-3** — Inference-server tuning is documentation only. The installer runs on engineer dev machines, not inference servers. Mixing concerns rejected in the architecture decision.
-- **FR179** — Doc ships in the repo, not into projects.
+- **Decision P3-3** (Local-LLM / On-Prem Agent Tuning Profile, `_bmad-output/planning-artifacts/architecture.md:1888`) — this story delivers the reference-documentation half of P3-3. The installer-side work (profile prompt, template expansion, on-prem guardrails, persona prefixes) is covered by Stories 21.1–21.7; this story makes the serving-stack configuration discoverable to the human operator who runs vLLM.
+- **NFR44** (profile isolation) — indirectly relevant. The deployment doc deliberately contains on-prem-specific strings such as `/no_think` and `str_replace_editor`. Because the doc lives under `docs/deployment/` in the ma-agents repo and is never stamped by the installer (AC #9), it cannot leak into a `standard`-profile target project. NFR44 is satisfied by installer neutrality, not by content redaction.
+- **NFR46** (idempotency) — not directly applicable. NFR46 governs marker-block stamping in installer-produced files. A hand-authored reference doc has no marker block and no stamping path. Called out explicitly so reviewers do not mis-apply NFR46 to this story.
+- **NFR47** (application-layer phase enforcement) — the deployment doc's sampling-parameters table (AC #5) and `str_replace_editor` mitigation (AC #6) document the *serving-side complement* to NFR47. The `FileRestrictionError` contract itself is delivered by Stories 21.3 and verified by 21.9.
+- **NFR18** (additive-only OpenCode JSON merge) — not touched by this story. Called out because Story 21.4 (sibling in Epic 21) relies on it; this story's README edit and new doc do not interact with `opencode.json` at all.
+
+### Scope Discipline — Installer Does Not Manage the Serving Stack
+
+Per the Epic 21 intro paragraph at `_bmad-output/planning-artifacts/epics.md:3895`:
+
+> Inference-server tuning (vLLM flags, quantization) ships as documentation only at `docs/deployment/vllm-nemotron.md` — the installer does not manage the serving stack.
+
+And Story 21.8 acceptance text at `_bmad-output/planning-artifacts/epics.md:4128`:
+
+> And the deployment doc is NOT stamped into target projects by the installer (it is repo documentation only — FR179)
+
+This story writes a markdown file and edits `README.md`. It MUST NOT modify `lib/profile.js`, `lib/installer.js`, `lib/agents.js`, or any file under `lib/templates/`. Attempts to "helpfully" add a template-stamping step for the deployment doc should be rejected in review.
 
 ### Source Tree Components to Touch
 
 | File | Change |
 |------|--------|
-| `docs/deployment/vllm-nemotron.md` | CREATE |
-| `README.md` | MODIFY — new "On-Prem / Air-Gapped Deployment" section |
-| `optimizing-local-llm-coding-agents-bmad.md` | NO CHANGE — referenced as source |
+| `docs/deployment/vllm-nemotron.md` (new) | CREATE — full reference doc per AC #2–#7 |
+| `docs/deployment/` (new directory) | CREATE — does not currently exist |
+| `README.md` | MODIFY — add "On-Prem / Air-Gapped Deployment" section |
+| `lib/profile.js` | NO CHANGE — referenced in README text only |
+| `lib/installer.js` | NO CHANGE — explicitly verified in Task 6 |
+| `lib/agents.js` | NO CHANGE — explicitly verified in Task 6 |
+| `lib/templates/` | NO NEW FILE — this doc is not a stamped template |
+| `test/onprem-injection.test.js` (new in 21.9) | NO CHANGE in this story — the regression assertion is added by Story 21.9 |
 
-### Dependencies
+### Content References for the Doc Author
 
-- None — pure docs story, can ship in parallel with other Epic 21 stories.
+- The "Recommended vLLM flags" list is sourced from `optimizing-local-llm-coding-agents-bmad.md` — an external field-experience document cited in the Epic 21 intro paragraph (`_bmad-output/planning-artifacts/epics.md:3888`). That source document is **not** present in the ma-agents repo tree. See Open Questions.
+- The per-phase sampling values (`temp 0.0` / `top_p 1.0` planning; `temp 0.6` / `top_p 0.95` implementation) are pinned in AC #5 and in the epic at `epics.md:4121`. Do not invent alternate values.
+- The `str_replace_editor` hallucination description should mirror the on-prem-block rule text that will be delivered by Story 21.6 at `lib/templates/instruction-block-onprem.template.md` (new in 21.6). If Story 21.6 has not yet landed when 21.8 is implemented, the doc should paraphrase the epic's AC text (`epics.md:4062`) and add a forward-reference.
 
-### Reference
+### README Insertion Point
 
-Entire source playbook `optimizing-local-llm-coding-agents-bmad.md` Section 6 — verbatim usable for most of the content. Adapt formatting to match repo doc conventions.
+The README currently runs through Installation & Usage, How It Works, Project Knowledge (`_bmad-output/`), and Project Context (from `README.md:79` onward). Insert the new `## On-Prem / Air-Gapped Deployment` section after "Project Context" and before any existing contribution/license content. Do not alter any existing section.
 
-### Out of Scope
+### Cross-Story Ordering
 
-- Any installer changes
-- vLLM Docker images, Helm charts, or deployment automation
-- Per-model tuning beyond Nemotron Super 49B (other local LLMs may need different parsers — out of scope; doc may include a one-line note)
+- **Upstream (satisfied):** Story 21.1 (`done`) — `lib/profile.js` + install-time prompt. The README text explaining "asked once and persisted in `.ma-agents.json`" describes 21.1 behavior.
+- **Upstream (concept-level, not blocking):** Story 21.6 (on-prem guardrail content) — the `str_replace_editor` and `/no_think` wording in the doc parallels the instruction-block template delivered by 21.6. If 21.6 has not shipped, the doc paraphrases the epic AC text and adds a forward-reference.
+- **Upstream (for Recommendations cross-reference only, not blocking):** Stories 21.10 / 21.11 — optionally referenced from the README section per the Recommendations section. If 21.10/21.11 have not shipped when 21.8 lands, the optional sentence can be phrased as "will be available once Stories 21.10/21.11 ship" or omitted entirely without failing the story.
+- **Downstream:** Story 21.9 (`backlog`) — adds a regression assertion to `test/onprem-injection.test.js` (new in 21.9) confirming the installer does not stamp `docs/deployment/*` into target projects.
 
-## Dev Agent Record
+## Testing
 
-### Agent Model Used
-_(to be filled by dev agent)_
+This is a documentation-only story. No automated tests are added here.
 
-### Debug Log References
-_(to be filled)_
+**Manual verification steps the implementing dev MUST perform before moving to review:**
 
-### Completion Notes List
-_(to be filled)_
+1. Render `docs/deployment/vllm-nemotron.md` in a markdown viewer and confirm all seven required content items from AC #2–#7 are present and well-formed (flags list, quantization table, reasoning-mode section, sampling table, `str_replace_editor` warning, sample launch command).
+2. Render the updated `README.md` and confirm the new "On-Prem / Air-Gapped Deployment" section appears, the link to `docs/deployment/vllm-nemotron.md` resolves, and the section references the `profile` field in `.ma-agents.json`.
+3. Run `npx ma-agents install --yes` against a scratch project and grep the target tree for `vllm-nemotron` and `str_replace_editor` — neither string should appear anywhere under the scratch project (confirms AC #9 / FR179).
+4. Run `git grep str_replace_editor lib/` in the ma-agents repo — should return no hits (confirms no inadvertent leak into installer-stamped templates).
 
-### File List
-_(to be filled)_
+The automated regression guard for step 3 is deferred to Story 21.9.
+
+## Dependencies
+
+**Upstream (blocking for content accuracy):**
+- Story 21.1 (`done`) — `lib/profile.js` API and `.ma-agents.json` `profile` field are the subjects of the README's install-prompt paragraph.
+
+**Upstream (content cross-referenced, not blocking):**
+- Story 21.6 (`backlog`) — on-prem instruction-block content (`/no_think`, `str_replace_editor` mitigation).
+- Story 21.10 (`backlog`) — `reconfigure` subcommand referenced by the Recommendations cross-reference (optional).
+- Story 21.11 (`backlog`) — `uninstall --profile-artifacts` subcommand referenced by the Recommendations cross-reference (optional).
+
+**Downstream:**
+- Story 21.9 (`backlog`) — adds the "installer does not stamp `docs/deployment/*`" regression assertion to `test/onprem-injection.test.js` (new in 21.9).
+
+## Out of Scope
+
+- Any installer code change (`lib/installer.js`, `lib/agents.js`, `lib/profile.js`, `lib/templates/**`) — explicitly forbidden by the Epic 21 intro and AC #9.
+- On-prem instruction-block template content — Story 21.6.
+- BMAD persona phase prefix — Story 21.7.
+- Profile isolation / idempotency / slug-collision tests — Story 21.9.
+- `reconfigure` / `uninstall --profile-artifacts` implementations — Stories 21.10 / 21.11 (referenced only from the README).
+- Measured benchmark data for quantization tradeoffs — AC #3 asks for qualitative "approximate VRAM" and "quality impact" notes, not measured benchmarks.
+- Translating the doc into other languages or authoring a PDF variant.
+
+## Recommendations
+
+These are non-contractual, helpful cross-references that the implementing dev SHOULD consider but which are not required by the epic spec. Unlike Acceptance Criteria, failing to include these does not fail the story.
+
+- **Profile lifecycle cross-reference:** The README On-Prem section may additionally point readers who want to change a previously-persisted profile to `npx ma-agents reconfigure` (Story 21.10) and to `npx ma-agents uninstall --profile-artifacts` (Story 21.11) for complete removal. This cross-reference improves discoverability of the profile lifecycle surface introduced elsewhere in Epic 21 but is not part of the contractual README section described in AC #8. If Stories 21.10 / 21.11 have not yet shipped when 21.8 lands, omit this cross-reference or phrase it as a forward-reference.
+
+## Open Questions
+
+> **Open question:** The Epic 21 intro references the external field-experience document `optimizing-local-llm-coding-agents-bmad.md` as the source for vLLM flag recommendations (`epics.md:3888`). This document is not present in the ma-agents repo tree. Should the implementing dev (a) request a copy from the epic author before authoring `docs/deployment/vllm-nemotron.md`, (b) proceed using only the five flags explicitly named in AC #2 plus publicly documented vLLM flag semantics, or (c) defer the story until the source doc is made available?
+
+> **Open question:** AC #3 asks for approximate VRAM footprints for BF16 / FP8 / NVFP4 at Nemotron Super 49B. These numbers are hardware-dependent (H100 vs H200 vs B200, tensor-parallel degree, KV-cache budget). Should the table (a) pin a single reference hardware configuration and cite the assumption, (b) present a range, or (c) omit numeric VRAM values in favor of relative ordering (e.g., "BF16 > FP8 > NVFP4" on VRAM, inverse on throughput)? The epic does not specify.
+
+> **Open question:** The README insertion point ("after Project Context section") is a judgment call — the README could also host the On-Prem section near the top (more discoverable to ops readers) or adjacent to Installation & Usage (more contextually adjacent to `--yes` / direct-install flags). Epic spec does not pin placement. Default to after "Project Context" unless directed otherwise.
 
 ## Change Log
-- 2026-04-14: Story created (Epic 21, Story 21.8)
-- 2026-04-14: Added AC #6 making the vLLM reference doc the sole owner of per-phase sampling parameters with an explicit prompt-vs-server ownership statement (Finding #12-b, corrective plan step 3). Paired with Story 21.6 AC #11 to close Finding #12 end-to-end.
-- 2026-04-14: Added AC #7 requiring parser-flag provenance citation for `--tool-call-parser qwen3_coder` (Nemotron Super 49B v1.5, per source playbook dated April 2026) and a cross-model validation warning (Finding #13, corrective plan step 3).
+
+- 2026-04-15: Story created from Epic 21 spec (Story 21.8). Status: Ready.
+- 2026-04-15: Adversarial-review resolution — demoted AC #10 (profile-lifecycle cross-reference) from Acceptance Criteria to a new non-contractual "Recommendations" section placed below "Out of Scope"; updated Task 5, Cross-Story Ordering, Dependencies, and Open Questions to match. Canonical terminology ("composer"/"merger"/"stamper") already in use; no occurrences of "injection function" or "marker-injection" required deletion. Status: Ready (all remaining Tasks unconditional).

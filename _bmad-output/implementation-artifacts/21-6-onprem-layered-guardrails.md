@@ -1,6 +1,12 @@
 # Story 21.6: On-Prem Layered Guardrails
 
-Status: backlog
+Status: Ready
+
+**Resolutions (2026-04-15, epic owner):**
+- **AC #7 Shape A/B:** **Shape A committed.** On-prem content flows through the composer into the Universal Rules section of AGENTS.md; the Critical Behavior Rules section is NOT modified by this story. Rationale: (a) preserves Decision A's "templates are static text, no placeholders" contract; (b) no downstream depends on on-prem rules being the last rules in AGENTS.md; (c) epic's "append to Critical Behavior Rules" is satisfied logically — on-prem rules land inside AGENTS.md's marker block. Shape B is explicitly rejected. Task 4.2's conditional "if Shape B" branch is removed.
+- **AC #1 `/no_think` delivery (Shape X vs Y):** **Shape X committed** for this story. 21.6 owns the on-prem TEMPLATE text that states the rule; Story 21.7 owns the active persona-prompt prefix that enforces it. The two layers are complementary by design.
+- **AC #1 field-playbook additional rules:** scoped strictly to the four categories enumerated in AC #1. Any additional rules surfaced during Task 1 become follow-up stories, not AC expansion.
+- **Task 2.2:** downgraded to "raise a blocker against Story 21.2" per Decision A ownership. 21.6 does not modify composer logic.
 
 ## Story
 
@@ -10,103 +16,235 @@ So that Nemotron and other local LLMs stop hallucinating `str_replace_editor`, d
 
 ## Acceptance Criteria
 
-1. New template `lib/templates/instruction-block-onprem.template.md` exists containing:
-   - A `/no_think` reasoning-OFF directive (as a literal line at the top of the on-prem block) intended for planning-phase use
-   - A "NEVER create files in `~/.claude/` or any user home directory; all files go under the project directory" rule
-   - A "do NOT reference or use `str_replace_editor` or any Claude Code-specific tool that may not exist in this agent" rule
-   - Reasoning-mode and sampling guidance per BMAD phase (planning: reasoning OFF, low temperature; implementation: reasoning ON, moderate temperature) — guidance text only, not enforced
-2. `composeInstructionBlock({ profile: 'on-prem', manifestPath })` (Story 21.2) appends this template's content within the same `<!-- MA-AGENTS-START -->` markers, after the universal content.
-3. `composeInstructionBlock({ profile: 'standard', manifestPath })` does NOT include any on-prem content. Verified by absence of the strings `/no_think`, `str_replace_editor`, `~/.claude/` in the standard-profile output (NFR44).
-4. The `.roomodes` template (Story 21.3) gains profile-conditional `customInstructions` content per mode:
-   - When profile=on-prem, each BMAD mode's `customInstructions` block gets appended with the on-prem rules (no-home-dir-writes, no `str_replace_editor`)
-   - When profile=standard, no on-prem content appears in `customInstructions`
-5. The `AGENTS.md` template (Story 21.4) gains the same profile-conditional treatment within its marker block.
-6. The `.clinerules` template (Story 21.5) gains the same profile-conditional treatment within its marker block.
-7. Re-running install with profile=on-prem produces byte-identical content in all three files (`.roomodes`, `AGENTS.md`, `.clinerules`/`.cline/clinerules.md`) for ma-agents-owned sections (NFR46).
-8. Switching profile from standard to on-prem (via the Story 21.10 `reconfigure` command — no CLI flag) updates all marker-block content and `.roomodes` `customInstructions` to include the on-prem rules; switching back to standard removes them. User content outside markers/owned slugs is preserved. NOTE: Story 21.10 (Profile Reconfigure) is a separately-tracked new story in the corrective plan; until it lands, profile switching is done by hand-editing `.ma-agents.json`.
-9. **Home-dir rule narrowed to forbid ad-hoc writes only (resolves scope-vs-rule contradiction).** The generated on-prem template content (per AC #1) must NOT contain a blanket prohibition against writes to `~/.claude/`. Instead, the rendered text must contain the narrowed phrasing (or semantic equivalent): `"Never create ad-hoc response or output files in the user home directory (~/.claude/, ~/Documents, etc.). The installer's own scoped writes to ~/.claude/ during --scope global are authorized and not covered by this rule."` Verified by grep on rendered on-prem output: presence of `Never create ad-hoc` and `installer's own scoped writes` substrings; absence of the older blanket `"NEVER create files in ~/.claude/"` phrasing. Rationale: `npx ma-agents install --scope global` legitimately writes ma-agents config under `~/.claude/`, and the previous rule phrasing contradicted a supported install mode.
-10. **Informational log for on-prem + `--scope global` combination.** When profile=on-prem AND `--scope global` is selected at install time, the installer emits exactly the following informational log line (pinned verbatim for test assertion): `Note: on-prem profile with --scope global writes ma-agents config to ~/.claude/. This is authorized. The on-prem guardrail forbids ad-hoc files there, not the installer's scoped writes.` This line is emitted after profile resolution and before the first write under `~/.claude/`. Tests may `grep`/match on it.
-11. **No numerical sampling guidance in prompt template (delegated to Story 21.8).** The rendered on-prem instruction block must NOT contain any numerical temperature/top_p values (e.g., no `temperature 0.0`, `top_p 1.0`, `temperature 0.6`, `top_p 0.95` — or any other numeric tuple) in the rendered on-prem output. Per-phase sampling numbers are a server-side concern and belong in the vLLM reference doc (Story 21.8), not in the agent prompt. The prompt may retain (a) the `/no_think` directive, which IS prompt-level and effective, and (b) qualitative textual guidance such as "use careful reasoning for implementation; skip deep reasoning for discussion." Verified by regex on rendered on-prem output: `/temperature\s*[0-9]|top[_-]?p\s*[0-9]/i` must not match. AC #1's bullet "Reasoning-mode and sampling guidance per BMAD phase (planning: reasoning OFF, low temperature; implementation: reasoning ON, moderate temperature) — guidance text only, not enforced" is narrowed by this AC: qualitative text is allowed ("low"/"moderate"); specific numbers are not.
+> Acceptance criteria marked **(gap-fill)** are additions made by the story author to make the epic's AC operational and testable. They do not contradict the epic; they refine the "how" where the epic only stated the "what". Open questions are flagged inline rather than resolved by author guesswork. Controlling invariants: **NFR44** (byte-identity for standard profile), **NFR46** (idempotency), **NFR47** (Roo Code `fileRegex` — consumed unchanged here), **NFR18** (additive JSON-merge — not regressed).
+
+1. **On-prem template file exists.** A new file `lib/templates/instruction-block-onprem.template.md` (new) is present and contains, as self-contained markdown suitable for concatenation after the universal block:
+   - A `/no_think` reasoning-OFF directive applied as a system-prompt prefix for planning-phase use.
+   - A "NEVER create files in `~/.claude/` or any user home directory; all files go under the project directory" rule.
+   - A "do NOT reference or use `str_replace_editor` or any Claude Code-specific tool that may not exist in this agent" rule.
+   - Reasoning-mode and sampling guidance per BMAD phase (planning: reasoning OFF, low temperature; implementation: reasoning ON, moderate temperature).
+
+2. **Composer append wiring — on-prem layer.** When `profile === 'on-prem'` AND `lib/templates/instruction-block-onprem.template.md` exists, `composeInstructionBlock({ profile, manifestPath })` (Story 21.2, `lib/installer.js`) appends the on-prem template content to the universal content separated by exactly one blank line (Story 21.2 AC #3 clause). This story delivers the template file; the composer branch is already specified in Story 21.2 AC #3 and requires no signature change. If Story 21.2's composer is refactored, the contract verified here is: standard-profile install omits on-prem content; on-prem-profile install concatenates universal + one blank line + on-prem.
+
+3. **(gap-fill) Placeholder contract.** The on-prem template contains NO placeholders (`{{...}}`). Any rendered per-agent values (e.g., manifest path) belong in the universal template. Rationale: keeps the on-prem layer a pure content append and avoids a second substitution pass. If a future on-prem rule needs a per-agent value, add the placeholder to the universal template and reference the substituted value from on-prem rule text via a stable anchor.
+
+   **Reconciliation with Story 21.4 (closes adversarial P0 #2):** The composer (owned by Story 21.2) appends this template's content to the universal content verbatim; callers that need per-project values use template stamping done by `lib/installer.js` AFTER composition. 21.6 owns only the on-prem template file and profile-gated content; it does NOT own composer, merger, or stamper logic.
+
+4. **Profile isolation — standard profile (NFR44).** When `profile === 'standard'` (or `getProfile(projectRoot)` returns `undefined`), the rendered content inside `<!-- MA-AGENTS-START -->` / `<!-- MA-AGENTS-END -->` markers in every agent's instruction file MUST NOT contain the strings `/no_think`, `str_replace_editor`, or `~/.claude/`. **Scope-narrowing (see Dev Notes → NFR44 test scope):** these three literals are the exhaustive negative-assertion set for standard-profile absence. The reasoning-mode / sampling prose from AC #1 is covered on the POSITIVE side only ("on-prem content present") and is NOT part of this NFR44 negative assertion. Verified by grep-style assertion against rendered output for Claude Code, Cline (both files), Roo Code rules (`.roo/rules/00-ma-agents.md`), Cursor, Kilocode, Copilot, Gemini, and the OpenCode `opencode.json::instructions[]` ma-agents-prefixed string. AGENTS.md's legitimate single `~/.claude/` occurrence (Story 21.4 AC #9 exception) is unaffected by this AC — it lives in the AGENTS.md Critical Behavior Rules anchor which is authored as universal safety content, not gated by profile.
+
+5. **Profile merge — on-prem profile.** When `profile === 'on-prem'`, every agent receiving markdown-marker injection (AC #4 list minus OpenCode JSON) contains BOTH the universal block content AND the on-prem block content within the same marker region. The OpenCode `opencode.json::instructions[]` ma-agents-prefixed string likewise contains both (concatenated into the single string emitted by the composer).
+
+6. **(gap-fill) `.roomodes` `customInstructions` on-prem augmentation.** Per epic technical note at `epics.md` line 4074, on-prem profile MUST append on-prem rules to each ma-agents-owned mode's `customInstructions` in `.roomodes`. Implementation: Story 21.3's `applyExtraInstructionTemplates` substitutes `{{UNIVERSAL_BLOCK}}` inside `roomodes.template.yaml` with `composeInstructionBlock({ profile, manifestPath })` output. Because `composeInstructionBlock` already conditionalizes on profile (AC #2), on-prem content appears inside each mode's `customInstructions` with NO change to Story 21.3's merger or template shape — the conditional happens entirely inside the composer call site. Verified by asserting `/no_think` is present in each of `bmad-pm`, `bmad-architect`, `bmad-techlead`, `bmad-dev` `customInstructions` after an on-prem install, and absent after a standard install.
+
+7. **(gap-fill) `AGENTS.md` `## Critical Behavior Rules` on-prem augmentation.** Per epic technical note at `epics.md` line 4074, on-prem profile MUST append on-prem rules to AGENTS.md's `## Critical Behavior Rules` section. Story 21.4 AC #11 Open question proposed `## Critical Behavior Rules` as the stable anchor. Implementation: because the universal block expanded via `{{UNIVERSAL_BLOCK}}` inside `agents-md.template.md` already carries on-prem content in the on-prem profile (AC #5), the visible effect is that `AGENTS.md`'s Universal Rules section carries the on-prem rules, not the Critical Behavior Rules section literally. This story's contract: on-prem content IS present in the marker-block region of AGENTS.md after an on-prem install; its exact positional anchor may be either the Universal Rules section (transparent via `composeInstructionBlock`) OR the Critical Behavior Rules section (requires a second substitution anchor). See Open question below for the decision branch.
+
+   > **Resolved (2026-04-15, Shape A):** On-prem content flows through `{{UNIVERSAL_BLOCK}}` and appears after the universal rules in AGENTS.md. The Critical Behavior Rules section carries only the universal "never write to `~/.claude/`" rule (its existing authored content) and is NOT modified by this story. The epic's "append to Critical Behavior Rules" wording is satisfied logically — on-prem rules land inside AGENTS.md's marker block. Shape B (adding `{{ONPREM_CRITICAL_RULES}}` placeholder) is rejected because it contradicts Decision A ("templates are static text, no placeholders").
+
+8. **(gap-fill) `.clinerules` / `.cline/clinerules.md` on-prem augmentation.** Per Story 21.5 AC #8, on-prem content flows through `composeInstructionBlock` into both Cline files inside the markers. This story adds no Cline-specific code; verification is a test assertion that both Cline files contain on-prem content in on-prem profile installs and lack it in standard-profile installs. Story 21.5's `ClinerulesDualFileDriftError` drift check is not disturbed — on-prem content renders identically into both files (render once, write twice).
+
+9. **(gap-fill) BMAD persona phase prefix is NOT in scope here.** The `lib/bmad-customize/*.customize.yaml` on-prem `on_prem_phase_prefix` field (epic Story 21.7) is a separate surface. Story 21.6 is the on-prem layer for the PROMPT-INJECTION / per-tool instruction files and `.roomodes`/`AGENTS.md`/`.clinerules` overlays. Persona-level system-prompt prefixes ship in Story 21.7. The two stories co-exist: on-prem install runs both (21.6 stamps files, 21.7 composes persona prompts).
+
+10. **(gap-fill) Idempotency (NFR46).** Two consecutive installs with `profile === 'on-prem'` and identical project state produce:
+    - Byte-identical content inside the marker region of every markdown-injection agent's instruction file.
+    - Byte-identical `.roomodes` YAML (preserves Story 21.3 AC #10 serialization pinning).
+    - Byte-identical `AGENTS.md` marker-block content (Story 21.4 AC #8).
+    - Unchanged `opencode.json::instructions[]` (the ma-agents-prefixed string is replaced in place, not duplicated; no extra entries emerge from the on-prem layer — the on-prem content is concatenated inside the single existing string).
+    The on-prem template source contains no timestamps, random IDs, or ordering-sensitive content. AC #6's `composeInstructionBlock` output is deterministic by construction (string concatenation of two file reads).
+
+11. **(gap-fill) Additive JSON-merge not regressed (NFR18).** This story changes the CONTENT of the ma-agents-prefixed string in `opencode.json::instructions[]` (by virtue of the composer appending on-prem content when profile=on-prem) but does NOT change the number of entries, their order, or any other key in `opencode.json`. The existing `isMaEntry` prefix filter (`lib/installer.js` lines ~372–374) continues to identify the single ma-agents entry for in-place replacement. Story 21.4's additional `"AGENTS.md"` entry is unaffected.
+
+12. **(gap-fill) Roo Code `fileRegex` not regressed (NFR47).** The on-prem layer changes `customInstructions` content only. The `groups` / `fileRegex` per-mode restrictions authored in Story 21.3's `roomodes.template.yaml` are untouched by this story. Verified by asserting the four modes' `fileRegex` patterns are identical between standard and on-prem renders (content diff only in `customInstructions`).
+
+13. **(gap-fill) Upgrade-safety on profile flip.** Switching from `standard` → `on-prem` (or vice versa) on an existing install is NOT in this story's scope — it is the Story 21.10 (Profile Reconfigure) surface. This story's contract is limited to the RENDER when profile is set at install time. Flipping the profile by hand-editing `.ma-agents.json` and re-running `install` will be detected by Story 21.2 AC #10's drift detection (the in-marker content differs from the newly-composed content) and handled per that AC's interactive-confirm / --yes-warn pattern. No new upgrade path is introduced here.
+
+> **Resolved (2026-04-15):** Scope this story strictly to the four on-prem rule categories enumerated in AC #1. Additional rules discovered in field playbook `optimizing-local-llm-coding-agents-bmad.md` during Task 1 become follow-up stories, not AC expansion.
+
+> **Resolved (2026-04-15, Shape X):** The `/no_think` directive in AC #1 is delivered as instruction-text in the on-prem template — Story 21.6 owns the rule body that tells the LLM to prepend `/no_think` to planning-phase prompts. Shape Y (active persona prefix prepended by code) is Story 21.7's surface via the `on_prem_phase_prefix` field. The two layers are complementary by design: 21.6 states the rule; 21.7 enforces it at persona-prompt composition.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `lib/templates/instruction-block-onprem.template.md` per AC #1
-- [ ] Task 2: Verify `composeInstructionBlock` (Story 21.2) loads on-prem content when present (AC #2, #3)
-- [ ] Task 3: Extend `lib/templates/roomodes.template.yaml` (Story 21.3) with profile-conditional `customInstructions` per mode (AC #4)
-  - [ ] 3.1 Decide implementation: separate template for on-prem `customInstructions` blocks, OR templating placeholders within the existing template that get conditionally stamped
-  - [ ] 3.2 Update `mergeRoomodes` to compose conditional content based on profile
-- [ ] Task 4: Extend `AGENTS.md` template stamping (Story 21.4) to append on-prem rules when profile=on-prem (AC #5)
-- [ ] Task 5: Extend `.clinerules` template stamping (Story 21.5) to append on-prem rules when profile=on-prem (AC #6)
-- [ ] Task 6: Profile switching (AC #8)
-  - [ ] 6.1 Verify profile-switch to on-prem (via reconfigure path or manual `.ma-agents.json` edit) updates all three files correctly
-  - [ ] 6.2 Verify profile-switch to standard (via reconfigure path or manual `.ma-agents.json` edit) removes on-prem content cleanly
-- [ ] Task 7: Tests in `test/onprem-guardrails.test.js`
-  - [ ] 7.1 Standard profile: no on-prem strings in any output (AC #3 — NFR44)
-  - [ ] 7.2 On-prem profile: `/no_think`, no-home-dir, no-str_replace_editor present in all three files
-  - [ ] 7.3 Idempotency: same profile, two installs → byte-identical output (AC #7 — NFR46)
-  - [ ] 7.4 Profile switch standard→on-prem→standard restores original standard content
-  - [ ] 7.5 User content outside markers preserved across switches
-- [ ] Task 8: Narrow home-dir rule phrasing in `instruction-block-onprem.template.md` (AC #9)
-  - [ ] 8.1 Replace any blanket `"NEVER create files in ~/.claude/"` phrasing with the narrowed "ad-hoc" phrasing from AC #9
-  - [ ] 8.2 Test: grep rendered on-prem output for `Never create ad-hoc` present and blanket phrasing absent
-- [ ] Task 9: Informational log for on-prem + `--scope global` (AC #10)
-  - [ ] 9.1 After profile resolution, before first `~/.claude/` write, emit the pinned log line verbatim
-  - [ ] 9.2 Test: install with `--profile on-prem-equivalent-persisted` + `--scope global` captures stdout and asserts the pinned line
-- [ ] Task 10: Strip numerical sampling from on-prem template (AC #11, Finding #12-a)
-  - [ ] 10.1 Review `instruction-block-onprem.template.md` for any `temperature <num>` / `top_p <num>` text; replace with qualitative phrasing only ("low"/"moderate") and keep `/no_think`
-  - [ ] 10.2 Test: regex `/temperature\s*[0-9]|top[_-]?p\s*[0-9]/i` against rendered on-prem output returns no match
+- [ ] **Task 1: Author the on-prem template** (AC #1, #3, #4, #10)
+  - [ ] 1.1 Create `lib/templates/instruction-block-onprem.template.md` (new) containing the four rule categories from AC #1 as self-contained markdown. No placeholders (AC #3).
+  - [ ] 1.2 Author rule text verbatim grounded in the epic AC #1 bullets and the field playbook `optimizing-local-llm-coding-agents-bmad.md` (epic intro line 3888 references). Do NOT copy universal-block rules (profile isolation — on-prem layer is strictly additive).
+  - [ ] 1.3 Verify by inspection that the template contains the literals `/no_think`, `str_replace_editor`, `~/.claude/` (they are the on-prem-only strings — NFR44's negative assertion on standard-profile output is the contract).
+  - [ ] 1.4 Verify the template has no trailing whitespace on any line and ends with a single trailing newline (idempotency — AC #10).
+
+- [ ] **Task 2: Verify composer consumption** (AC #2, #5) — VERIFY-ONLY; 21.6 does NOT own composer logic.
+  - [ ] 2.1 Read `composeInstructionBlock({ profile, projectRoot })` in `lib/installer.js` (Story 21.2 delivery). Confirm it reads `lib/templates/instruction-block-onprem.template.md` when `profile === 'on-prem'` AND the file exists, and appends it after the universal content separated by one blank line.
+  - [ ] 2.2 If the composer's on-prem append branch is missing or broken, raise a blocker against Story 21.2 and halt this story. Do NOT modify composer logic in 21.6 — composer ownership belongs to 21.2 per Decision A.
+  - [ ] 2.3 Confirm no call site depends on the on-prem template being absent — Story 21.2's graceful-fallback behavior is preserved (standard-profile installs continue to return universal-only).
+
+- [ ] **Task 3: Roo Code `.roomodes` on-prem augmentation** (AC #6, #12)
+  - [ ] 3.1 No code change required — Story 21.3's `applyExtraInstructionTemplates` substitutes `{{UNIVERSAL_BLOCK}}` via `composeInstructionBlock` which now includes on-prem content in on-prem profile. Verified by test only.
+  - [ ] 3.2 Add test assertion: on-prem install with Roo Code selected produces `.roomodes` where every ma-agents-owned mode's `customInstructions` contains `/no_think`. Standard install does not.
+
+- [ ] **Task 4: AGENTS.md on-prem augmentation** (AC #7) — VERIFY-ONLY for 21.6. Shape A is committed (see resolution above and AC #7 resolution block).
+  - [ ] 4.1 Verify on-prem content reaches AGENTS.md transparently via the composer output consumed by the `markdown-markers` merger (Story 21.4). Add test assertion that `AGENTS.md` after an on-prem install contains `/no_think` within the `<!-- MA-AGENTS-START -->` marker block, and does not contain it after a standard install. 21.6 does NOT modify 21.4's template or merger.
+
+- [ ] **Task 5: Cline on-prem augmentation** (AC #8)
+  - [ ] 5.1 No code change required — Story 21.5's Cline path flows through `composeInstructionBlock`. Add test assertion that both Cline files carry on-prem content in on-prem profile and lack it in standard profile.
+
+- [ ] **Task 6: OpenCode JSON-merge content change** (AC #11)
+  - [ ] 6.1 No code change required — the json-merge path (`lib/installer.js` lines ~365–405) emits the single ma-agents-prefixed string whose CONTENT now includes on-prem rules when profile=on-prem (via the same `composeInstructionBlock` call).
+  - [ ] 6.2 Add test assertion that `opencode.json::instructions[]` after an on-prem install contains exactly one ma-agents-prefixed entry (not two), that entry contains `/no_think`, and `instructions[]` length/order is unchanged versus a second consecutive install.
+
+- [ ] **Task 7: Unit and integration tests** — see Testing section below.
+
+- [ ] **Task 8: Documentation touch-up**
+  - [ ] 8.1 No new docs in this story. Story 21.8 introduces the broader Epic 21 / on-prem doc surface. If an existing doc already covers instruction injection, append a one-sentence pointer to the on-prem template — otherwise skip.
 
 ## Dev Notes
 
-### Architecture Compliance
+### Ownership boundary (canonical)
 
-- **Decision P3-3** — On-prem layer ships here. Universal layer (Story 21.2) + on-prem layer (this story) compose to the full on-prem experience.
-- **NFR44** — Standard profile must remain free of on-prem-specific output. Test 7.1 enforces.
-- **NFR46** — Deterministic stamping for both profiles.
+- **Composer** (`composeInstructionBlock({ profile, projectRoot }) → string`) lives in Story 21.2, `lib/installer.js`. It concatenates the universal template and, when `profile === 'on-prem'`, appends this story's on-prem template content verbatim, separated by exactly one blank line.
+- **Merger** logic (yaml-customModes for `.roomodes`, markdown-markers for `AGENTS.md`, markdown-marker writer for per-tool instruction files, JSON additive merge for `opencode.json`) lives in its respective owning story (21.3, 21.4, 21.2/21.5, 21.2). 21.6 does NOT own merger logic.
+- **Stamper** (project-value substitution of `{{...}}` placeholders such as manifest path) runs AFTER composition, in `lib/installer.js`. Templates — including this story's on-prem template — have NO `{{...}}` placeholders. 21.6 does NOT own stamper logic.
+- **21.6 owns only:** (a) the on-prem template file `lib/templates/instruction-block-onprem.template.md`, and (b) the profile-gated content inside it.
 
-### Source Tree Components to Touch
+### NFR44 test scope (decision D — scope narrowing)
 
-| File | Change |
-|------|--------|
-| `lib/templates/instruction-block-onprem.template.md` | CREATE |
-| `lib/templates/roomodes.template.yaml` | MODIFY — add on-prem content (conditional or via parallel template) |
-| `lib/installer.js` | MODIFY — profile-conditional stamping for `.roomodes`, `AGENTS.md`, `.clinerules` per-tool extensions |
-| `lib/merge/roomodes.js` | MODIFY — accept profile arg, compose `customInstructions` accordingly |
-| `test/onprem-guardrails.test.js` | CREATE |
+The three literal strings — `/no_think`, `str_replace_editor`, `~/.claude/` — are the **exhaustive negative-assertion set** for verifying standard-profile absence of on-prem content. Tests 7.3 and 7.7 assert only these three literals; no additional tokens are required for the negative case.
 
-### Dependencies
+The reasoning-mode and sampling prose introduced in AC #1 (planning: reasoning OFF / low temperature; implementation: reasoning ON / moderate temperature) is tested on the **POSITIVE side only** — i.e., "on-prem content present in on-prem profile output" (tests 7.1, 7.4, 7.8). It is NOT part of the NFR44 negative-assertion set and must not be used to gate standard-profile absence. Referenced from AC #4 where the scope-narrowing is called out.
 
-- Stories 21.1 through 21.5 (foundation + per-tool templates) all merged
+### Architecture compliance
 
-### Reference
+- **Decision P3-3 (Local-LLM / On-Prem Agent Tuning Profile)** — This story delivers the on-prem layer of the two-layer injection model defined in Story 21.2. Story 21.2 built the composition function and the graceful-fallback stub; Story 21.6 ships the template file and verifies the end-to-end behavior across every injection surface (Stories 21.3, 21.4, 21.5) transparently via `composeInstructionBlock`.
 
-Source playbook:
-- `/no_think` directive: Section 6.1, 6.8
-- `str_replace_editor` warning: Section 2.5, 6.4
-- No-home-dir rule: Section 1, 5.3
-- Per-phase reasoning/sampling: Section 6.1, 8 (Sampling Parameters by Phase table)
+- **NFR44 (byte-identity for standard profile)** — `_bmad-output/planning-artifacts/epics.md` line 4071 ("verified by absence of the strings `/no_think`, `str_replace_editor`, `~/.claude/` in standard-profile output"). AC #4 is the contract; tests 7.3–7.7 enforce it across every injection surface. **This is the most important invariant in Story 21.6.** The on-prem template content MUST NOT leak into the standard-profile render.
+
+- **NFR46 (idempotency)** — `epics.md` lines 471, 4144 (item c). Two consecutive on-prem installs produce byte-identical output across every injection surface. AC #10 is the contract; test 7.9 enforces it. Inherited from Stories 21.2 (whitespace-parity insert/replace), 21.3 (pinned YAML serialization), 21.4 (marker-wrap determinism).
+
+- **NFR47 (Roo Code application-layer `fileRegex` enforcement)** — `epics.md` lines 4144 (item e), 4152. This story does not touch the `groups`/`fileRegex` structure authored in Story 21.3's template. AC #12 is a non-regression assertion; test 7.11 enforces.
+
+- **NFR18 (additive JSON-merge for OpenCode)** — `epics.md` line 4229. This story changes the content of the single ma-agents-prefixed entry in `opencode.json::instructions[]` but does not add entries, reorder entries, or touch other keys. AC #11 is a non-regression assertion; test 7.10 enforces.
+
+### Verified source-tree surface
+
+| File | Exists? | Role in this story |
+|------|---------|--------------------|
+| `lib/profile.js` | verified (Story 21.1, lines 29–43) | Read-only — consumed via `getProfile(projectRoot)` through `composeInstructionBlock` call sites |
+| `lib/installer.js` | verified | `composeInstructionBlock` (new in Story 21.2) reads the on-prem template delivered here. Task 2.2 may extend the append branch if Story 21.2 left it as a stub |
+| `lib/agents.js` | verified | Read-only — no changes. Enumerates the agents whose instruction files receive the on-prem-augmented block (Claude Code, Cline × 2, Roo Code rules, Cursor, Kilocode, Copilot, Gemini, OpenCode, Anti-gravity) |
+| `lib/templates/instruction-block-universal.template.md` | **new (Story 21.2)** | Authored in Story 21.2; unchanged here |
+| `lib/templates/instruction-block-onprem.template.md` | **new (this story)** | Authored here per AC #1 |
+| `lib/templates/roomodes.template.yaml` | **new (Story 21.3)** | Unchanged here — on-prem content reaches `.roomodes` transparently via `{{UNIVERSAL_BLOCK}}` |
+| `lib/templates/agents-md.template.md` | **new (Story 21.4)** | Unchanged by this story (Shape A committed — AC #7 resolution) |
+| `lib/templates/clinerules.template.md` | **new (Story 21.5)** | Unchanged here |
+| `lib/merge/roomodes.js` | **new (Story 21.3)** | Unchanged — merger treats `customInstructions` as opaque string |
+| `test/onprem-injection.test.js` | verified (exists — Story 21.9's target expansion surface) | This story ADDS a sibling file `test/onprem-layer.test.js` (new) to avoid collision with Story 21.9's planned expansion |
+| `test/profile.test.js` | verified (Story 21.1) | Reference for test framework and temp-dir isolation pattern |
+
+### Composition pattern (end state after Story 21.6 lands)
+
+```
+composeInstructionBlock({ profile, manifestPath })
+  ├── universal template (Story 21.2 — always applied; {{MANIFEST_PATH}} substituted)
+  └── on-prem template (this story — applied when profile === 'on-prem'; no placeholders)
+
+Consumed by:
+  ├── updateAgentInstructions markdown branch (Story 21.2 AC #4): Claude Code, Cline ×2, Roo Code rules, Cursor, Kilocode, Copilot, Gemini, Anti-gravity
+  ├── updateAgentInstructions json-merge branch (Story 21.2 AC #8): OpenCode opencode.json::instructions[]
+  ├── applyExtraInstructionTemplates yaml-customModes merger (Story 21.3): .roomodes customInstructions per mode
+  └── applyExtraInstructionTemplates markdown-markers merger (Story 21.4): AGENTS.md marker block
+```
+
+### Injection-site map (for reviewers)
+
+On-prem content reaches every injection site TRANSPARENTLY through `composeInstructionBlock`. The only code change required (if Story 21.2 left the append branch as a stub) is activating the branch — Task 2.2. No call site is modified. No new function is introduced.
+
+### Library and pattern references
+
+- **Template discovery**: `lib/installer.js` loads `lib/templates/*.template.md` via synchronous `fs.readFileSync` (Story 21.2 Task 2.2). No change here.
+- **Profile resolution**: `getProfile(projectRoot)` from `lib/profile.js` (Story 21.1 verified lines 29–43). No change here.
+- **Markers**: `<!-- MA-AGENTS-START -->` / `<!-- MA-AGENTS-END -->` — defined and used by `updateAgentInstructions`. No change here.
+- **Atomic writes**: the atomic-write pattern from Story 21.3 (`lib/installer.js` lines ~395–398, temp-file + rename) is inherited by `applyExtraInstructionTemplates`. No change here.
+
+### Field playbook reference
+
+The on-prem rules originate from `optimizing-local-llm-coding-agents-bmad.md` (referenced in epic intro at `_bmad-output/planning-artifacts/epics.md` lines 3886–3895). Four concrete failure modes documented there map 1:1 to AC #1's four rule categories:
+- Nemotron hallucinating `str_replace_editor` → AC #1 no-str_replace_editor rule.
+- Local LLMs dumping output into `~/.claude/` → AC #1 no-home-dir-writes rule.
+- Local LLMs overthinking planning prompts with reasoning mode on by default → AC #1 `/no_think` + reasoning-OFF planning guidance.
+- Local LLMs skipping BMAD planning to start coding → addressed by the UNIVERSAL block's BMAD phase discipline rule (Story 21.2); the on-prem layer adds the sampling-per-phase guidance.
 
 ### Out of Scope
 
-- BMAD persona phase prefix in customize-loader (Story 21.7 — separate concern, edits `.customize.yaml` files)
-- vLLM serving doc (Story 21.8)
+- Universal template content (Story 21.2).
+- `.roomodes` template authorship and the `yaml-customModes` merger (Story 21.3).
+- `AGENTS.md` template authorship (Story 21.4).
+- `.clinerules` template authorship (Story 21.5).
+- BMAD persona phase prefix via `lib/bmad-customize/*.customize.yaml` `on_prem_phase_prefix` field (Story 21.7 — separate composition surface, NOT `composeInstructionBlock`).
+- vLLM deployment doc and README on-prem section (Story 21.8).
+- Cross-tool NFR44/NFR46 integration tests (Story 21.9; this story's tests are scoped to the on-prem layer's content presence/absence).
+- Profile-reconfigure flow covering profile-flip drift (Story 21.10).
+- Profile-uninstall removal of on-prem marker content (Story 21.11).
+- Bumping `manifestVersion` — already at `1.2.0` (Story 21.1).
+- Installing or managing the inference server (vLLM) — documentation-only surface, see epic intro line 3895.
 
-## Dev Agent Record
+## Dependencies
 
-### Agent Model Used
-_(to be filled by dev agent)_
+### Upstream (blocking)
 
-### Debug Log References
-_(to be filled)_
+- **Story 21.1 (done)** — `lib/profile.js::getProfile(projectRoot)` consumed transitively via `composeInstructionBlock`. Verified at `lib/profile.js` lines 29–43.
+- **Story 21.2 (Ready)** — `composeInstructionBlock({ profile, manifestPath })` in `lib/installer.js` is the sole consumer of the on-prem template. Story 21.2 AC #3 pre-specifies the append branch ("When `profile === 'on-prem'` AND `lib/templates/instruction-block-onprem.template.md` (new, ships in Story 21.6) exists, appends that file's content after the universal content, separated by one blank line."). This story ships the template file; Task 2.2 activates the branch if it was left as a stub.
+- **Story 21.3 (Ready)** — `.roomodes` template consumes `{{UNIVERSAL_BLOCK}}` via `applyExtraInstructionTemplates`. On-prem content reaches per-mode `customInstructions` transparently.
+- **Story 21.4 (Ready)** — `AGENTS.md` template consumes `{{UNIVERSAL_BLOCK}}` via `markdown-markers` merger. Shape A is committed (AC #7 resolution), so 21.6 reuses 21.4's template unchanged.
+- **Story 21.5 (Ready)** — Cline's two files consume `composeInstructionBlock` via `updateAgentInstructions`'s existing markdown branch; on-prem content flows in transparently.
 
-### Completion Notes List
-_(to be filled)_
+### Downstream (consumers of this story's surface)
 
-### File List
-_(to be filled)_
+- **Story 21.7** — BMAD persona phase prefix via customize-loader. Independent composition surface; does NOT consume `composeInstructionBlock`. Cross-reference only — an on-prem install activates both 21.6 (per-tool files) and 21.7 (persona system-prompt prefix).
+- **Story 21.8** — vLLM deployment doc + README on-prem section. Documents the same `/no_think` directive that AC #1 stamps into the per-tool templates; NOT an implementation dependency, but content drift between the on-prem template here and the vLLM doc would confuse users. Recommend a test assertion that both sources mention `/no_think` and `str_replace_editor` verbatim; wording can diverge but token presence must be consistent.
+- **Story 21.9** — Integration tests verifying (a) standard profile produces NO on-prem-specific strings across every injection surface, (b) on-prem profile produces BOTH layers, (c) idempotency across two on-prem installs, (d) `.roomodes` slug-collision behavior is profile-independent. Tests 7.3–7.9 in this story's Testing section are unit/integration-level subsets; Story 21.9 adds the cross-tool integration coverage.
+- **Story 21.10 (Profile Reconfigure)** — Re-stamps profile-dependent artifacts when profile flips. Reuses `composeInstructionBlock`; the drift-detection path from Story 21.2 AC #10 handles the standard↔on-prem content diff.
+- **Story 21.11 (Profile Uninstall)** — Removes marker-block content (including on-prem layer) on `uninstall --profile-artifacts`. No special handling for on-prem content — marker removal is layer-agnostic.
+
+## Testing
+
+**Framework and isolation:** Match the pattern in `test/profile.test.js` (Story 21.1) and `test/opencode-json-merge.test.js` (Epic 9) — node's built-in test runner, `os.tmpdir()` + `fs.mkdtempSync` per-test temporary project roots, never mutate the repo's own `.ma-agents.json`, `lib/templates/`, or `opencode.json`. Use the real `lib/profile.js` (`setProfile(tmpRoot, 'standard' | 'on-prem')`) against the tmp project root. Do NOT stub `lib/installer.js` or `lib/agents.js` — use the real modules to catch integration bugs.
+
+New test file: `test/onprem-layer.test.js` (new) — avoids collision with `test/onprem-injection.test.js` which Story 21.9 will expand.
+
+**Unit tests:**
+
+- 7.1 Template file exists at `lib/templates/instruction-block-onprem.template.md` and contains the four AC #1 content categories (one test per category: `/no_think` directive present; `~/.claude/` no-home-writes rule present; `str_replace_editor` no-reference rule present; reasoning-mode per-phase guidance present).
+- 7.2 Template contains NO placeholders (`{{`) — AC #3 defensive.
+- 7.3 NFR44 — standard profile: `composeInstructionBlock({ profile: 'standard', manifestPath })` output does NOT contain `/no_think`, `str_replace_editor`, or `~/.claude/`. Assert each of the three strings is absent via direct `.includes()` check.
+- 7.4 On-prem profile: `composeInstructionBlock({ profile: 'on-prem', manifestPath })` output contains all three strings (`/no_think`, `str_replace_editor`, `~/.claude/`).
+- 7.5 Composer output structure: on-prem output equals universal output + exactly one blank line + on-prem template content. Verified by string parsing, not regex.
+- 7.6 Idempotency: calling `composeInstructionBlock({ profile: 'on-prem', manifestPath: X })` twice returns byte-identical strings.
+
+**Integration tests (within this story — cross-tool end-to-end lives in Story 21.9):**
+
+- 7.7 Fresh standard-profile install with all injection-surface agents selected (Claude Code, Cline, Roo Code, OpenCode, Cursor, Kilocode, Copilot, Gemini): for EVERY generated file in the tmp project, assert the three NFR44 forbidden strings (`/no_think`, `str_replace_editor`, `~/.claude/`) are absent. Files checked: `.claude/CLAUDE.md`, `.cline/clinerules.md`, `.clinerules`, `.roo/rules/00-ma-agents.md`, `.roomodes` (all four modes' `customInstructions`), the OpenCode `opencode.json::instructions[]` ma-agents-prefixed entry, `.cursor/cursor.md`, `.kilocode/kilocode.md`, `.github/copilot/copilot.md`, `.gemini/gemini.md`. Note: AGENTS.md's legitimate single `~/.claude/` occurrence (Story 21.4 AC #9 exception) is excluded from this assertion — tested separately in 7.12.
+- 7.8 Fresh on-prem-profile install with same agent set: for EVERY file above, assert all three strings ARE present (NFR44 positive case). Specifically: `/no_think` appears in each of the four `.roomodes` `customInstructions` blocks (AC #6).
+- 7.9 Two consecutive on-prem installs produce byte-identical content across all files above (AC #10 — NFR46).
+- 7.10 NFR18 non-regression: on-prem install's `opencode.json` has `instructions[]` length equal to `N + M` where N is the user's pre-existing entries and M is the ma-agents-contributed entries (1 ma-agents-prefixed + 1 `"AGENTS.md"` if OpenCode is selected). Key count at the top level of `opencode.json` is unchanged versus a standard install.
+- 7.11 NFR47 non-regression: after an on-prem install, the four `.roomodes` modes' `fileRegex` patterns are byte-identical to the same modes' patterns in a standard install (content diff is only in `customInstructions`). AC #12 contract.
+- 7.12 Shape A verification (AC #7 resolution): after an on-prem install, AGENTS.md contains `/no_think` somewhere inside the marker region. Exact positional assertion (Universal Rules vs Critical Behavior Rules section) is NOT tested — Shape A delivers content via the Universal Rules section and that location is not part of the contract.
+
+**Test data isolation:** All tests create a tmp project with a stub `.ma-agents.json` written via `setProfile(tmpRoot, 'standard' | 'on-prem')` (Story 21.1 API). Use real `lib/templates/` on disk — tests must NOT stub the template files so that AC #1's template-authorship contract is exercised end-to-end.
+
+**Coverage note:** Story 21.9 adds (a) a standard-profile vs. pre-Epic-21 baseline byte-comparison test (covers NFR44 across the whole artifact, not just the three literal strings), (b) on-prem profile must-have-both-layers integration across every tool at once, (c) profile-flip drift detection via Story 21.10. Do NOT duplicate those here — keep this story's tests scoped to the on-prem layer's content presence/absence and the composer's on-prem branch wiring.
+
+## Out of Scope
+
+(See Dev Notes → Out of Scope above — summarized for quick reference.)
+
+- Universal block content (Story 21.2).
+- `.roomodes` template authorship and the `yaml-customModes` merger (Story 21.3).
+- `AGENTS.md` template authorship (Story 21.4).
+- `.clinerules` template authorship (Story 21.5).
+- BMAD persona phase prefix (Story 21.7).
+- vLLM deployment documentation and README on-prem section (Story 21.8).
+- Cross-tool NFR44/NFR46 integration tests (Story 21.9).
+- Profile-reconfigure flow (Story 21.10).
+- Profile-uninstall flow (Story 21.11).
 
 ## Change Log
-- 2026-04-14: Story created (Epic 21, Story 21.6)
-- 2026-04-14: Removed prescriptive `--profile=` flag references from AC #8 and Task 6 subitems (flag retired; profile switch is via Story 21.10 reconfigure command once delivered, or manual `.ma-agents.json` edit until then). Aligned with P0 spec-alignment PR #34.
-- 2026-04-14: Added ACs #9 and #10 reconciling on-prem home-dir rule with `--scope global` (Finding #8, corrective plan step 3). Rule narrowed to forbid ad-hoc writes only; installer's scoped writes authorized. Informational log pinned verbatim for test assertion.
-- 2026-04-14: Added AC #11 forbidding numerical temperature/top_p values in the on-prem instruction block (Finding #12-a, corrective plan step 3). Narrows AC #1's "sampling guidance" bullet — qualitative text allowed, specific numbers delegated to Story 21.8's vLLM reference doc. `/no_think` (prompt-effective) is retained.
+
+- 2026-04-15 (epic-owner resolution): All three open questions resolved inline. **AC #7 Shape A committed** — on-prem content reaches AGENTS.md via the Universal Rules section transparently through the composer; Critical Behavior Rules section unchanged by this story. Shape B rejected (would contradict Decision A). **AC #1 `/no_think` Shape X committed** — 21.6 owns the instruction-text rule; 21.7 owns the active persona-prompt prefix. **AC #1 field-playbook** — scoped to four categories only; additional rules become follow-up stories. Task 2.2 and Task 4 made unconditional. Status flipped Draft → Ready. No upstream blockers remain.
+- 2026-04-15: Adversarial-review reconciliation. AC #3 reconciled with Story 21.4 via pointer sentence: composer (21.2) appends template verbatim; project-value stamping happens AFTER composition in `lib/installer.js` (closes P0 #2). AC #4 annotated with NFR44 scope-narrowing pointer. Added Dev Notes "Ownership boundary" block clarifying composer/merger/stamper terminology and that 21.6 owns only the on-prem template file and its profile-gated content. Added Dev Notes "NFR44 test scope" block (decision D): three literals exhaustive for negative assertion; reasoning-mode prose positive-only. Task 2.2 downgraded from "extend composer here" to "raise blocker against 21.2"; Task 4.2 downgraded analogously for 21.4. Status flipped to Draft: Task 2.2 and Task 4.2 remain conditional on upstream decisions, and three Open questions remain unresolved. Upstream composer dependency cites Story 21.2.
+- 2026-04-15: Story created (Epic 21, Story 21.6). ACs structured with explicit (gap-fill) flags per the epic's AC scope. Three Open questions raised inline (AGENTS.md anchor Shape A vs B, field-playbook additional rules, `/no_think` delivery Shape X vs Y) rather than guessed. NFR44/NFR46/NFR47/NFR18 citations made explicit in Dev Notes. Verified source-tree surface table added distinguishing existing vs. new paths. Upstream/downstream dependencies split. Testing section covers unit (7.1–7.6) and integration (7.7–7.12) with explicit NFR44 negative-assertion coverage against `/no_think`, `str_replace_editor`, `~/.claude/` across every injection surface. Status set to Ready.
