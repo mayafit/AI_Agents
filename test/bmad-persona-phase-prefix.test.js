@@ -14,7 +14,9 @@
  *   7.9  On-prem deploy: ALL pre-existing critical_actions entries preserved in order
  *   7.10 Idempotency: two consecutive on-prem deploys produce byte-identical deployed bmm-pm
  *   7.11 bmm-analyst.customize.yaml exists and has phase: planning
- *   7.12 bmm-quick-flow-solo-dev.customize.yaml exists and has phase: implementation
+ *
+ * Note: Former test 7.12 (bmm-quick-flow-solo-dev) was retired in Story 22.3
+ * as part of the BMAD v6.3.0 persona consolidation (Barry merged into Amelia).
  */
 'use strict';
 
@@ -246,12 +248,14 @@ async function runAll() {
     assert.strictEqual(doc.phase, 'planning', 'bmm-analyst must have phase: planning');
   });
 
-  // 7.12 — bmm-quick-flow-solo-dev.customize.yaml exists and has phase: implementation
-  await test('7.12 bmm-quick-flow-solo-dev.customize.yaml exists and has phase: implementation', () => {
+  // Story 22.3: Former test 7.12 (bmm-quick-flow-solo-dev) retired — Barry
+  // was consolidated into the Amelia Developer agent in BMAD v6.3.0
+  // (upstream PR #2177). The customize yaml no longer exists, so we now
+  // assert the inverse: the retired persona file must not be present.
+  await test('7.12r bmm-quick-flow-solo-dev.customize.yaml is retired (Story 22.3)', () => {
     const filePath = path.join(CUSTOMIZE_SOURCE, 'bmm-quick-flow-solo-dev.customize.yaml');
-    assert.ok(fs.existsSync(filePath), 'bmm-quick-flow-solo-dev.customize.yaml must exist in lib/bmad-customize/');
-    const doc = jsYaml.load(fs.readFileSync(filePath, 'utf8'));
-    assert.strictEqual(doc.phase, 'implementation', 'bmm-quick-flow-solo-dev must have phase: implementation');
+    assert.ok(!fs.existsSync(filePath),
+      'bmm-quick-flow-solo-dev.customize.yaml should not exist (retired in Story 22.3)');
   });
 
   // Summary
