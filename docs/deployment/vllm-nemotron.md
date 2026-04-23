@@ -82,7 +82,9 @@ The `ma-agents` on-prem installer delivers `/no_think` in two places:
 
 ### Retaining Reasoning for Implementation Personas
 
-Reasoning mode is intentionally **left ON** for implementation personas (`bmm-dev`, `bmm-quick-flow-solo-dev`). The extended chain-of-thought improves code generation quality, catches edge cases, and produces more careful reasoning about algorithmic choices. The higher token cost is accepted for implementation tasks.
+Reasoning mode is intentionally **left ON** for the implementation persona (`bmm-dev` — Amelia). The extended chain-of-thought improves code generation quality, catches edge cases, and produces more careful reasoning about algorithmic choices. The higher token cost is accepted for implementation tasks.
+
+> **Note (Story 22.3, BMAD v6.3.0):** The former `bmm-quick-flow-solo-dev` (Barry) persona was consolidated into Amelia upstream (PR #2177) and is no longer a distinct implementation persona.
 
 ---
 
@@ -93,7 +95,7 @@ Sampling parameters are set client-side on each request (not in the `vllm serve`
 | Phase | Temperature | top_p | Notes |
 |---|---|---|---|
 | Planning (PM, Architect, SM, Analyst, Tech Writer, UX, QA) | 0.0 | 1.0 | Deterministic — avoids hallucinated artifacts; use with `/no_think` |
-| Implementation (Dev, Quick-Flow-Solo-Dev) | 0.6 | 0.95 | Allows creative solutions; reasoning ON |
+| Implementation (Dev) | 0.6 | 0.95 | Allows creative solutions; reasoning ON |
 
 > **Why `temperature=0.0` for planning?** Planning artifacts (PRDs, architecture docs, stories) must be reproducible across re-runs. Non-deterministic output at planning phase leads to artifact drift between sessions, which breaks BMAD-METHOD's assumption that prior context documents are stable. Setting `temperature=0.0` makes the model greedy and fully deterministic given the same prompt.
 

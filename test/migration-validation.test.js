@@ -438,10 +438,15 @@ test('6.2: bmad.js applyCustomizations is exported', () => {
   assert.ok(typeof bmad.applyCustomizations === 'function', 'applyCustomizations must be exported');
 });
 
-test('6.3: lib/bmad-customize/ has exactly 10 built-in agent files', () => {
+test('6.3: lib/bmad-customize/ has exactly 9 built-in agent files', () => {
+  // Story 22.3 (BMAD v6.3.0): bmm-quick-flow-solo-dev.customize.yaml was
+  // retired when Barry was consolidated into Amelia (upstream PR #2177).
+  // Count dropped from 10 → 9.
   assert.ok(fs.existsSync(CUSTOMIZE_DIR), 'lib/bmad-customize/ must exist');
   const files = fs.readdirSync(CUSTOMIZE_DIR).filter(f => f.endsWith('.customize.yaml'));
-  assert.strictEqual(files.length, 10, `Expected 10 built-in agent files, found ${files.length}`);
+  assert.strictEqual(files.length, 9, `Expected 9 built-in agent files, found ${files.length}`);
+  assert.ok(!files.includes('bmm-quick-flow-solo-dev.customize.yaml'),
+    'bmm-quick-flow-solo-dev.customize.yaml must be retired (Story 22.3)');
 });
 
 const BUILTIN_AGENTS = [

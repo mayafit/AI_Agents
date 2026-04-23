@@ -83,9 +83,14 @@ const builtinAgents = [
   'bmm-sm', 'bmm-tech-writer', 'bmm-ux-designer', 'bmm-bmad-master'
 ];
 
-test('2.2: lib/bmad-customize/ contains exactly 10 .customize.yaml files', () => {
+test('2.2: lib/bmad-customize/ contains exactly 9 .customize.yaml files', () => {
+  // Story 22.3: bmm-quick-flow-solo-dev.customize.yaml was retired (Barry
+  // consolidated into Amelia in BMAD v6.3.0 — upstream PR #2177). Count
+  // dropped from 10 → 9.
   const files = fs.readdirSync(customizeDir).filter(f => f.endsWith('.customize.yaml'));
-  assert.strictEqual(files.length, 10, `Expected 10 .customize.yaml files, found ${files.length}`);
+  assert.strictEqual(files.length, 9, `Expected 9 .customize.yaml files, found ${files.length}`);
+  assert.ok(!files.includes('bmm-quick-flow-solo-dev.customize.yaml'),
+    'bmm-quick-flow-solo-dev.customize.yaml must NOT be present (retired in Story 22.3)');
 });
 
 for (const agentId of builtinAgents) {
