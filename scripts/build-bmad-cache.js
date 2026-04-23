@@ -95,8 +95,10 @@ function parseModulesYaml(content) {
 
     if (!inModules) continue;
 
-    // Detect a new module key (1-4 spaces of indent, no value — just "key:")
-    const moduleKeyMatch = trimmed.match(/^\s{1,4}([a-zA-Z0-9_-]+):\s*$/);
+    // Detect a new module key (1-6 spaces of indent, no value — just "key:").
+    // Widened from {1,4} to tolerate minor upstream reformatting without
+    // silently dropping entries.
+    const moduleKeyMatch = trimmed.match(/^\s{1,6}([a-zA-Z0-9_-]+):\s*$/);
     if (moduleKeyMatch) {
       if (currentModule) modules.push(currentModule);
       currentModule = { key: moduleKeyMatch[1] };
@@ -134,12 +136,27 @@ function parseModulesYaml(content) {
  * - Defaults `branch` to `main` when absent (v6.3.0 schema omits it).
  * - Passes the URL through verbatim (git accepts both `repo` and `repo.git`).
  */
+// Values that YAML may use to express a truthy boolean. bmad-method uses
+// canonical `true`, but be generous so a future registry that emits `yes`/
+// `on`/`1` cannot accidentally cache a built-in module as an external clone.
+const TRUTHY_STRINGS = new Set(['true', 'yes', 'on', '1', 'y']);
+
+// Module `code` values are used as directory names under lib/bmad-cache.
+// Reject anything that could escape the cache dir or inject shell characters;
+// registry data is trusted today, but this is cheap defense-in-depth.
+const MODULE_CODE_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
 function normalizeModules(raw) {
   return raw
     .filter(m => m.code && m.url)
     .filter(m => {
       const builtIn = String(m.built_in || '').toLowerCase();
-      return builtIn !== 'true';
+      return !TRUTHY_STRINGS.has(builtIn);
+    })
+    .filter(m => {
+      if (MODULE_CODE_PATTERN.test(m.code)) return true;
+      console.warn(`  ⚠  Skipping module with invalid code "${m.code}" (must match [a-zA-Z0-9_-]+)`);
+      return false;
     })
     .map(m => ({
       code: m.code,
@@ -231,6 +248,15 @@ function processModule(mod, manifest) {
     console.warn(`  ⚠  ${mod.code}: could not capture commit SHA`);
   }
 
+  // If the clone produced an empty repository (no commits yet), fail the
+  // module explicitly rather than storing a blank SHA in the manifest —
+  // blank SHAs would permanently defeat the incremental-update check on
+  // every subsequent run.
+  if (!commitSha) {
+    console.error(`  ❌ ${mod.code}: cloned repo has no HEAD SHA — skipping`);
+    return null;
+  }
+
   // Install production dependencies
   const pkgJsonPath = path.join(moduleDir, 'package.json');
   if (fs.existsSync(pkgJsonPath)) {
@@ -258,11 +284,19 @@ function processModule(mod, manifest) {
   // Rename .git → _git_preserved so it survives npm pack (npm always strips .git/).
   // prePopulateBmadCache() restores it and sets origin to a local file:// URL so that
   // bmad-method's "git fetch origin" succeeds without network access.
+  //
+  // Windows Defender / Explorer may briefly lock newly-created directories
+  // (EBUSY). Treat rename failures as non-fatal — the module still has its
+  // source files and the incremental-update check will re-clone next run.
   const gitDir = path.join(moduleDir, '.git');
   const preservedDir = path.join(moduleDir, '_git_preserved');
   if (fs.existsSync(gitDir)) {
-    fs.renameSync(gitDir, preservedDir);
-    console.log(`  📦 ${mod.code}: preserved .git as _git_preserved`);
+    try {
+      fs.renameSync(gitDir, preservedDir);
+      console.log(`  📦 ${mod.code}: preserved .git as _git_preserved`);
+    } catch (err) {
+      console.warn(`  ⚠  ${mod.code}: could not preserve .git — ${err.message} (offline-mode fetches may fail until next rebuild)`);
+    }
   }
 
   return {
@@ -287,17 +321,81 @@ function main() {
   }
   console.log(`Found ${modules.length} modules: ${modules.map(m => m.code).join(', ')}`);
 
-  // Handle --force flag
+  // Load the existing manifest FIRST so retention data survives a --force
+  // wipe. We identify retired-upstream modules up-front and stash their
+  // directory contents so AC #7 (no silent deletion of retired modules) is
+  // honored even under --force.
+  const existingManifest = loadManifest();
+  const currentCodes = new Set(modules.map(m => m.code));
+  const retentionStash = {};
+  if (existingManifest && existingManifest.modules) {
+    for (const oldCode of Object.keys(existingManifest.modules)) {
+      if (currentCodes.has(oldCode)) continue;
+      const oldDir = path.join(CACHE_DIR, oldCode);
+      let isRealDir = false;
+      try {
+        isRealDir = fs.existsSync(oldDir) && fs.statSync(oldDir).isDirectory();
+      } catch {
+        isRealDir = false;
+      }
+      if (isRealDir) {
+        retentionStash[oldCode] = {
+          dir: oldDir,
+          manifestEntry: existingManifest.modules[oldCode],
+        };
+      }
+    }
+  }
+
+  // Handle --force flag. When --force is set, move retained directories to
+  // a temp location so the wipe does not remove them — then restore after
+  // the cache dir is recreated. Treat stash-move failures as non-fatal
+  // (worst case: retention is skipped for that module, and the manifest
+  // entry is not re-added — identical to pre-AC-#7 behavior).
   if (force && fs.existsSync(CACHE_DIR)) {
+    const tempStashDir = path.join(path.dirname(CACHE_DIR), `.bmad-cache-stash-${Date.now()}`);
+    const stashedDirs = {};
+    if (Object.keys(retentionStash).length > 0) {
+      try {
+        fs.ensureDirSync(tempStashDir);
+        for (const [code, info] of Object.entries(retentionStash)) {
+          const stashedPath = path.join(tempStashDir, code);
+          try {
+            fs.moveSync(info.dir, stashedPath);
+            stashedDirs[code] = stashedPath;
+          } catch (err) {
+            console.warn(`  ⚠  Could not stash ${code} before --force wipe: ${err.message} (retention will be skipped for this module)`);
+          }
+        }
+      } catch (err) {
+        console.warn(`  ⚠  Could not create retention stash dir: ${err.message} (retention will be skipped)`);
+      }
+    }
+
     console.log('🔄 --force: removing existing cache directory');
     fs.removeSync(CACHE_DIR);
+    fs.ensureDirSync(CACHE_DIR);
+
+    // Restore stashed retained directories
+    for (const [code, stashedPath] of Object.entries(stashedDirs)) {
+      try {
+        fs.moveSync(stashedPath, path.join(CACHE_DIR, code));
+      } catch (err) {
+        console.warn(`  ⚠  Could not restore stashed ${code}: ${err.message}`);
+        // Remove from retentionStash so the retention loop below does not
+        // register a manifest entry for a directory that no longer exists.
+        delete retentionStash[code];
+      }
+    }
+    try {
+      fs.removeSync(tempStashDir);
+    } catch {
+      // Non-fatal cleanup
+    }
   }
 
   // Ensure cache directory exists
   fs.ensureDirSync(CACHE_DIR);
-
-  // Load existing manifest for incremental updates
-  const existingManifest = loadManifest();
 
   // Get bmad-method version
   let bmadMethodVersion = 'unknown';
@@ -341,42 +439,45 @@ function main() {
   // the manifest entry verbatim so downstream consumers keep working until a
   // maintainer explicitly confirms deletion. The retirement is documented in
   // the story's Dev Notes.
+  //
+  // `retentionStash` was built up-front (before any --force wipe) so the
+  // retention decision does not depend on whether the module directory
+  // survives the wipe. After --force restores the stashed directory, or when
+  // --force isn't set and the directory is still on disk, we re-verify
+  // existence as a final guard against restore failures.
   let retainedCount = 0;
-  if (existingManifest && existingManifest.modules) {
-    const currentCodes = new Set(modules.map(m => m.code));
-    for (const oldCode of Object.keys(existingManifest.modules)) {
-      if (!currentCodes.has(oldCode) && !manifestModules[oldCode]) {
-        const oldDir = path.join(CACHE_DIR, oldCode);
-        // Only retain if the cached module directory is actually a directory
-        // — guards against a stray file named after the module code spoofing
-        // retention and against a manifest entry pointing at a path that is
-        // no longer a valid module.
-        let isRealDir = false;
-        try {
-          isRealDir = fs.existsSync(oldDir) && fs.statSync(oldDir).isDirectory();
-        } catch {
-          isRealDir = false;
-        }
-        if (isRealDir) {
-          manifestModules[oldCode] = {
-            ...existingManifest.modules[oldCode],
-            retiredUpstream: true,
-          };
-          console.log(`  📌 ${oldCode}: retired upstream but retained (see AC #7 — remove only after maintainer confirmation)`);
-          retainedCount++;
-        }
-      }
+  for (const [oldCode, info] of Object.entries(retentionStash)) {
+    if (manifestModules[oldCode]) continue; // already emitted (shouldn't happen)
+    const oldDir = path.join(CACHE_DIR, oldCode);
+    let isRealDir = false;
+    try {
+      isRealDir = fs.existsSync(oldDir) && fs.statSync(oldDir).isDirectory();
+    } catch {
+      isRealDir = false;
+    }
+    if (isRealDir) {
+      manifestModules[oldCode] = {
+        ...info.manifestEntry,
+        retiredUpstream: true,
+      };
+      console.log(`  📌 ${oldCode}: retired upstream but retained (see AC #7 — remove only after maintainer confirmation)`);
+      retainedCount++;
     }
   }
 
-  // Write cache-manifest.json
+  // Write cache-manifest.json atomically — write to a sibling temp file
+  // then rename. A Ctrl-C or process crash mid-write leaves the previous
+  // manifest intact rather than a truncated JSON file that breaks
+  // subsequent incremental builds.
   const manifest = {
     generated: new Date().toISOString(),
     bmadMethodVersion,
     registrySchema: schema,
     modules: manifestModules,
   };
-  fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'utf8');
+  const manifestTmp = `${MANIFEST_PATH}.tmp`;
+  fs.writeFileSync(manifestTmp, JSON.stringify(manifest, null, 2), 'utf8');
+  fs.renameSync(manifestTmp, MANIFEST_PATH);
 
   // Summary
   console.log('\n' + '='.repeat(40));
