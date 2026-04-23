@@ -3,6 +3,9 @@ stepsCompleted: [1, 2, 3, 4, 'phase2-step-01', 'phase2-step-02', 'phase2-step-03
 workflowStatus: 'complete'
 completedDate: '2026-03-08'
 lastEdited: '2026-04-07'
+phase4EditHistory:
+  - date: '2026-04-13'
+    changes: 'Added Epic 22: BMAD v6.3.0 Plugin Migration (Phase 4). 10 stories (22.1–22.10) covering version bump + cache rebuild, skill namespace rename sweep, legacy skill retirement (bmad-init/Quinn/Bob/Barry), build-plugin script, .claude-plugin/marketplace.json + skills/module.yaml, lib/bmad.js stage-and-invoke replacement, config path migration to _bmad/bmm/config.yaml, gitignore stage dir, CI offline install gate, multi-tool smoke verification. Added Epic 23: Memory-Agent Conversion for Demerzel and Gad (Phase 4 — deferred follow-up). 2 stories (23.1, 23.2). Added FR182–FR195 and NFR50–NFR54 to Requirements Inventory and FR Coverage Map. Updated Epic List and Development Execution Order.'
 phase3EditHistory:
   - date: '2026-04-14'
     changes: 'Added Story 21.11: Profile Uninstall. Adds `ma-agents uninstall --profile-artifacts` to remove ma-agents-owned profile content while preserving user content and audit trails. Adds FR181 and NFR49. Closes adversarial-review Finding #17 (no uninstall / rollback). Execution order: 21.11 runs after 21.10 (both depend on full profile-dependent stamping from 21.6).'
@@ -4230,3 +4233,410 @@ So that I can cleanly reverse the install without hand-editing every generated f
 - **Roo Code agent registration (Epic 18) prerequisite — STATUS: satisfied.** Story 21.3 depends on Roo Code being registered in `lib/agents.js`. As of 2026-04-14, `lib/agents.js` already has the Roo Code entry (Story 18.1 was completed at the code level ahead of Epic 18's formal tracking). Story 21.3 is NOT blocked by Epic 18. The remaining Epic 18 stories (18.2-18.8) do not interact with Epic 21 and can proceed independently.
 - **Customize-loader (Epic 15) prerequisite — STATUS: clarified.** Story 21.7 was originally scoped as if ma-agents owned a customize-loader. On audit (2026-04-14), `lib/bmad-customize/` contains only `*.customize.yaml` artifacts — the loader itself lives upstream in BMAD. Per the project's durable policy of overriding BMAD built-ins via extension rather than upstream PRs, Story 21.7's `phase: mixed` enum extension (added in corrective-plan step 3) will be implemented via the extension pattern: the `*.customize.yaml` files gain the `phase` field and, if BMAD's upstream loader rejects unknown values, the ma-agents extension intercepts the YAML at install time and produces two variants (`*.customize.yaml` and `*.customize.on-prem.yaml`) with the installer choosing based on the persisted profile. See Story 21.7 Dev Notes "Notes on Customize-Loader Discovery" for the decision branches the implementing dev will resolve during Task 1.
 - **Knowledge graph (Epic 19) interaction:** None. Epic 21 does not emit graph nodes/edges.
+---
+
+## Epic 22: BMAD v6.3.0 Plugin Migration (Phase 4)
+
+**Goal:** Migrate ma-agents from BMAD-METHOD v6.2.2 to v6.3.0, replacing the post-install manifest-surgery pattern (`applyCustomizations()` in `lib/bmad.js:205-346`) with a pre-install local plugin staging flow that uses BMAD's PluginResolver (local-file strategy). The air-gapped self-containment guarantee is preserved end-to-end via bundled plugin assembly at build time and project-local staging at install time. Multi-tool routing (Claude Code, Copilot, Cline, Roo Code, KiloCode) is preserved.
+
+**Value:** Aligns ma-agents with the canonical BMAD v6.3.0 extension model, deletes ~140 lines of fragile manifest-parsing workarounds, vacates the upstream-reserved `bmad-*` skill prefix, and retires three persona skills (Quinn/Bob/Barry) that upstream consolidated into Amelia. Sets up the project to track future BMAD releases without re-implementing the same workarounds each time.
+
+**PRD Coverage:** FR182–FR192 (Phase 4, in scope), NFR50–NFR54 (Architecture Decision P4-1)
+
+**Out of scope:** FR193–FR195 (memory-agent conversion for Demerzel and Gad) — deferred to Epic 23.
+
+**Status:** Planned
+
+**Dependencies:**
+- Epic 5 (Bundled BMAD Installation) must be complete — Epic 22 modifies the same bundled-cache + invocation pipeline
+- Epic 15 (BMAD 6.2.0 Agent Architecture Migration) must be complete — Epic 22 builds on the v6.2.0 module/skill structure
+- Epic 17 (Sprint Management Model Rework) and Epic 20 (SQA Agent — Gad) recommended complete — Epic 22's rename sweep touches every skill in the extension module
+
+**Cross-epic touch:** `lib/bmad.js` is shared with Epic 5 (P2-6) and Epic 15 (P2-9). The replacement of `applyCustomizations()` in Story 22.6 supersedes those code paths — coordinate with any in-flight branches against `lib/bmad.js`.
+
+---
+
+### Story 22.1 — Bump bmad-method to 6.3.0 and Rebuild Cache
+
+**As a** ma-agents maintainer,
+**I want** the bundled bmad-method dependency upgraded from 6.2.2 to 6.3.0 and `lib/bmad-cache/` rebuilt against the new version,
+**so that** all downstream stories in Epic 22 can rely on v6.3.0 module structure and behavior.
+
+**Acceptance Criteria:**
+
+1. `package.json` declares `"bmad-method": "6.3.0"` (exact pin, no caret/tilde)
+2. `lib/bmad-cache/cache-manifest.json` records `bmadMethodVersion: 6.3.0`
+3. `npm run build:bmad-cache` (or equivalent) completes without errors and produces an updated `lib/bmad-cache/` containing v6.3.0 module sources for `bmb`, `cis`, `tea`, `gds`, `wds`
+4. `scripts/build-bmad-cache.js` is updated for any v6.3.0-only registry path changes (e.g., if `external-official-modules.yaml` moved location upstream)
+5. `npm install` and `npm test` both pass against the new dependency
+6. `_bmad/_config/manifest.yaml` (or wherever the runtime manifest lives) is regenerated and reflects 6.3.0 install metadata after running `npx ma-agents` against a scratch project
+
+**Technical Notes:**
+- This story does NOT yet wire up the plugin flow — Stories 22.4–22.6 do that. The intent here is to land the dependency bump cleanly with the existing (still-working in 6.3.0) `applyCustomizations()` path so subsequent stories have a stable baseline
+- Expect the existing `applyCustomizations()` to either still work or fail in known ways against 6.3.0 — diagnose and capture findings in the story's Dev Notes for use by Story 22.6
+- If 6.3.0 removes any cache module that ma-agents currently bundles, document the removal and confirm with the maintainer before deleting
+
+**PRD Traceability:** FR74 (bumped pin), NFR20 (version pin convention)
+
+---
+
+### Story 22.2 — Skill Namespace Rename Sweep (`bmad-ma-agent-*` → `ma-agent-*`)
+
+**As a** ma-agents maintainer,
+**I want** all extension skills renamed out of the upstream-reserved `bmad-*` prefix into a `ma-agent-*` / `ma-*` namespace,
+**so that** the extension module no longer collides with the BMAD Builder reserved namespace and the rename is complete before the plugin packaging story.
+
+**Acceptance Criteria:**
+
+1. The five custom-agent skill folders are renamed:
+   - `lib/bmad-extension/skills/bmad-ma-agent-cyber/` → `lib/bmad-extension/skills/ma-agent-cyber/`
+   - `lib/bmad-extension/skills/bmad-ma-agent-devops/` → `lib/bmad-extension/skills/ma-agent-devops/`
+   - `lib/bmad-extension/skills/bmad-ma-agent-sre/` → `lib/bmad-extension/skills/ma-agent-sre/`
+   - `lib/bmad-extension/skills/bmad-ma-agent-ml/` → `lib/bmad-extension/skills/ma-agent-ml/`
+   - `lib/bmad-extension/skills/bmad-ma-agent-sqa/` → `lib/bmad-extension/skills/ma-agent-sqa/`
+2. Each renamed `SKILL.md` updates its frontmatter `name` field and any internal trigger phrases that referenced the old name
+3. Each renamed `bmad-skill-manifest.yaml` updates its `name:` field
+4. `lib/bmad-extension/module-help.csv` is updated — every row referencing the old skill IDs now uses the new IDs; no row is dropped
+5. `.claude/skills/MANIFEST.yaml` (and any other MANIFEST.yaml the installer reads) lists the new IDs only
+6. All cross-references in other skills are swept: `Grep` for `bmad-ma-agent-` across the repo returns only doc/history mentions (PRD edit history, this epic file, retrospectives) — no live source references
+7. `.ma-agents.json` schema is updated if it stores skill IDs; existing installations are migrated by the installer on next run (idempotent name-change handling)
+8. `test/extension-module-restructure.test.js` `expectedAgentSkills` is updated to use new IDs and the test passes
+9. Documentation references in `README.md`, `docs/`, and `_bmad-output/` (other than historical edit-history entries) are swept and updated
+
+**Technical Notes:**
+- This is a mechanical rename that touches many files — use a scripted sweep (e.g., a one-off Node script or `git mv` + sed) to avoid manual errors, then verify with `grep`
+- Do NOT touch BMAD upstream skills that legitimately use the `bmad-` prefix (e.g., `bmad-init`, `bmad-create-prd`) — those are upstream-owned; only sweep our extension's `bmad-ma-agent-*` names
+- The historical edit-history entries in PRD/architecture/epics.md refer to the *old* names accurately at the time they were written — leave them intact; do not rewrite history
+
+**PRD Traceability:** FR183 (rename out of reserved namespace)
+
+---
+
+### Story 22.3 — Retire Legacy Skills (bmad-init, Quinn, Bob, Barry)
+
+**As a** ma-agents maintainer,
+**I want** the four upstream-removed/consolidated persona skills retired from the ma-agents catalog,
+**so that** the MANIFEST stops advertising skills that no longer exist in BMAD v6.3.0 and our agent set tracks the upstream Amelia consolidation.
+
+**Acceptance Criteria:**
+
+1. `.claude/skills/MANIFEST.yaml` no longer contains entries for: `bmad-init`, `bmad-agent-qa`, `bmad-agent-sm`, `bmad-agent-quick-flow-solo-dev`
+2. The corresponding skill source folders are removed from `lib/bmad-extension/skills/` and `skills/` (whichever pipelines they exist in)
+3. Any `module-help.csv` rows referencing the four retired skills are removed
+4. Any cross-references from other skills (e.g., a workflow that says "invoke bmad-agent-qa") are updated to invoke the BMAD Amelia Developer skill instead, or removed if the reference is no longer applicable
+5. `bmad-init` callers — any ma-agents skill that previously expected `bmad-init` to populate config — are updated to read `_bmad/bmm/config.yaml` directly (this is also covered by Story 22.7 for non-skill code paths)
+6. `README.md` and `docs/` references to Quinn (QA), Bob (SM), and Barry (quick-flow-solo-dev) are either rewritten to reference Amelia or removed
+7. `_bmad-output/planning-artifacts/project-context.md` is regenerated (or manually swept) so the agent roster section reflects the retirement
+8. Existing user installations: on next `npx ma-agents` run, the installer detects the retired skill IDs in `.ma-agents.json` and removes them cleanly (no orphaned files)
+
+**Technical Notes:**
+- Upstream consolidated Quinn (QA), Bob (Scrum Master), and Barry (quick-flow-solo-dev) into a single Amelia Developer agent in BMAD 6.3.0 (PRs #2177, #2179, #2186). Our retirement aligns the ma-agents catalog with that decision
+- `bmad-init` was removed because v6.3.0 agents read `_bmad/bmm/config.yaml` directly (PR #2159) — there is no longer a config-loading skill to invoke
+
+**PRD Traceability:** FR190 (retirement), FR191 (doc updates)
+
+---
+
+### Story 22.4 — Build Script for Plugin Assembly (`scripts/build-plugin.js`)
+
+**As a** ma-agents maintainer,
+**I want** a deterministic build script that assembles `lib/bmad-extension-plugin/` from `lib/bmad-extension/` source,
+**so that** the bundled plugin is reproducible, diff-able, and ready to be staged at install time without per-install assembly logic.
+
+**Acceptance Criteria:**
+
+1. `scripts/build-plugin.js` exists and is invokable via `npm run build:plugin`
+2. Running the script with no arguments produces `lib/bmad-extension-plugin/` containing:
+   - `.claude-plugin/marketplace.json` (generated from `lib/bmad-extension/module.yaml` + a template; story 22.5 defines the schema)
+   - `skills/module.yaml` (BMAD Builder canonical module-definition location)
+   - `skills/module-help.csv` (copied from source)
+   - One subfolder per skill in `lib/bmad-extension/skills/`, with `SKILL.md`, `bmad-skill-manifest.yaml`, and any `resources/`/`prompts/`/`templates/`/`scripts/` content preserved
+3. Re-running the script is idempotent: byte-identical output for byte-identical input. Verified by computing a SHA-256 of the output tree before and after a second run
+4. The script fails fast with a non-zero exit code if any required source file is missing (e.g., `lib/bmad-extension/module.yaml` absent)
+5. The script does not write outside `lib/bmad-extension-plugin/` and does not modify any source file
+6. `lib/bmad-extension-plugin/` is committed to the repo (so it ships in the npm tarball and is diff-able in PRs); the build step is run as part of `npm run prepare` (or equivalent prepublish hook) so a fresh clone produces a current bundle
+7. `npm pack` (dry-run) shows `lib/bmad-extension-plugin/` included in the tarball file list
+
+**Technical Notes:**
+- Source-of-truth split: hand-edited content lives in `lib/bmad-extension/`; the plugin directory is generated. PRs that touch source must regenerate and commit the plugin, otherwise CI flags drift (Story 22.9 covers the CI check)
+- Use only Node.js built-ins (no new dependencies) — keep the build step lightweight and offline-safe
+- The marketplace.json content is defined in Story 22.5; this story builds the *plumbing* and emits a placeholder if 22.5 hasn't merged yet
+
+**PRD Traceability:** FR184 (build-time bundling), NFR51 (deterministic staging)
+
+---
+
+### Story 22.5 — Plugin Manifests: `.claude-plugin/marketplace.json` and `skills/module.yaml`
+
+**As a** BMAD installer,
+**I want** the ma-agents extension to ship as a BMAD-Builder-compliant plugin with the canonical manifest files,
+**so that** I can resolve and install it via `--custom-source <local-path>` using the PluginResolver local-file strategy.
+
+**Acceptance Criteria:**
+
+1. `lib/bmad-extension/.claude-plugin/marketplace.json.template` (source) defines the marketplace manifest fields per BMAD Builder spec: plugin name, version, description, author, modules array (with the ma-skills module entry pointing at `skills/module.yaml`), and any required compatibility fields (BMAD min version, target tools)
+2. The template is NOT Claude-specific in content — it includes a `compatible_tools` array enumerating `claude-code, copilot, cline, roo-code, kilocode` (the wrapper filename `.claude-plugin/` is a shared BMAD convention, the contents are tool-agnostic)
+3. `lib/bmad-extension/skills/module.yaml` (source) replaces the previous `lib/bmad-extension/module.yaml` location (BMAD 6.2.2+ moved module definitions to `skills/module.yaml`) and contains: `code: ma-skills`, `description`, `module_version`, and any required v6.3.0 schema fields
+4. The build script (Story 22.4) reads both source files and emits the resolved files into `lib/bmad-extension-plugin/`
+5. Running `npx bmad-method install --custom-source ./lib/bmad-extension-plugin --tools claude-code --yes --directory <scratch-dir>` against a clean scratch project successfully installs the plugin and produces a `.claude/skills/` directory containing the ma-agents skills
+6. The same command with `--tools copilot` produces `.github/copilot/skills/` with the same skills (multi-tool parity smoke test — full coverage in Story 22.10)
+7. `module_version` is bumped on every release that ships a structural change to skills
+
+**Technical Notes:**
+- The `.claude-plugin/marketplace.json` filename is BMAD-Builder convention (Anthropic's plugin spec was adopted as the open shared format) — per BMAD docs: "this format works for any skills-capable platform, not just Claude". Document this in the file's top-level comment so future maintainers don't assume it's Claude-only
+- BMAD 6.2.2 moved the module definition from `src/module.yaml` to `skills/module.yaml`. v6.3.0 keeps that location
+
+**PRD Traceability:** FR182 (plugin packaging), FR183 (skills/module.yaml location), FR192 (multi-tool coverage)
+
+---
+
+### Story 22.6 — Replace `applyCustomizations()` with Stage-and-Invoke
+
+**As a** ma-agents installer,
+**I want** the post-install manifest-surgery code path replaced with a pre-install local plugin staging flow,
+**so that** ma-agents stops parsing BMAD's internal manifests and instead delegates placement to BMAD's own installer via `--custom-source`.
+
+**Acceptance Criteria:**
+
+1. The following code is REMOVED from `lib/bmad.js`:
+   - All manifest.yaml / files-manifest.csv hand-parsing logic (`fields[2]` indexing, hardcoded module-name filters like `["custom", "bmb"]`)
+   - All custom-agent YAML staging into `_bmad/_config/custom/agents/`
+   - The `applyCustomizations()` function and its callers
+   - Net deletion target: ≥ 100 lines (architecture P4-1 estimates ~140 lines)
+2. A new helper (≤ ~50 lines) in `lib/bmad.js` (or `lib/installer.js`) implements the staging flow:
+   - Stage `lib/bmad-extension-plugin/` → `<project>/.ma-agents-plugin-stage/` via a directory copy
+   - Invoke `bmad-method install` with `--custom-source <stage-path> --tools <selected> --modules <selected> --yes`
+   - On success: remove the stage directory
+   - On failure: log the stage path and leave the directory in place for diagnostics
+3. The stage copy is a fresh copy on every install (not a symlink) — `<project>/.ma-agents-plugin-stage/` is byte-identical to `lib/bmad-extension-plugin/` after the copy
+4. `npx ma-agents install --yes --force` against a scratch project completes successfully and produces a `_bmad/` tree that contains the ma-agents skills in the correct module location, with no remaining custom-agent YAML in `_bmad/_config/custom/agents/`
+5. The installer logs: which plugin path was staged, which `--tools` were passed to bmad-method, and (on success) confirmation that the stage directory was cleaned up
+6. Existing manifest-cleanup tests (if any) are removed or rewritten to match the new flow
+
+**Technical Notes:**
+- Coordinate with any in-flight branches against `lib/bmad.js` — this is the largest code-touching story in the epic
+- The stage directory location is project-local on purpose (NFR53): it keeps every install self-contained inside the target project, makes diagnostic inspection easy, and doesn't leave artifacts under user-home
+- Failure mode: if bmad-method exits non-zero, leave the stage in place and surface the path to the user — they can re-run or report a bug with a reproducible stage
+
+**PRD Traceability:** FR185, FR186, FR187 (staging flow + cleanup + surgery removal), NFR54 (air-gapped guarantee preserved)
+
+---
+
+### Story 22.7 — Migrate Config Reads to `_bmad/bmm/config.yaml`
+
+**As a** ma-agents installer and skill,
+**I want** every read of BMAD-canonical config redirected from `_bmad/_config/*` to `_bmad/bmm/config.yaml`,
+**so that** ma-agents aligns with the v6.3.0 canonical config location and the removed `bmad-init` skill is no longer required.
+
+**Acceptance Criteria:**
+
+1. All ma-agents code that previously read `_bmad/_config/manifest.yaml` for canonical BMAD config values now reads `_bmad/bmm/config.yaml`
+2. All ma-agents skills in `lib/bmad-extension/skills/` (and `skills/`) that previously declared a dependency on `bmad-init` or assumed config was loaded externally now read `_bmad/bmm/config.yaml` directly at the start of their workflow
+3. Path resolution helpers (e.g., resolving `output_folder`, `story_location`) read from the new location
+4. ma-agents-owned files that are NOT BMAD-canonical (`.ma-agents.json`, `_bmad-output/project-context.md`) are unaffected — those paths are unchanged
+5. A grep for `_bmad/_config/` across the repo returns only references that are intentional (e.g., a backward-compatibility check or a comment explaining the move)
+6. Backward compatibility: if `_bmad/bmm/config.yaml` does not exist but `_bmad/_config/manifest.yaml` does (an older install upgrading), the installer either migrates the old file in-place or invokes bmad-method to regenerate the new layout — never reads from the old path silently
+7. Test coverage: at least one test asserts the new path is read and the old path is not
+
+**Technical Notes:**
+- This story is mostly grep-and-replace plus one migration shim. The grep target is small — only a few code paths and a dozen skills referenced the old location
+- Gad's `sqa-audit` and `sqa-ieee12207` skills already read config — make sure they hit the new path post-migration
+
+**PRD Traceability:** FR188 (config path migration)
+
+---
+
+### Story 22.8 — Gitignore the Stage Directory
+
+**As a** developer using ma-agents,
+**I want** `.ma-agents-plugin-stage/` ignored by git automatically,
+**so that** transient install artifacts never get committed accidentally.
+
+**Acceptance Criteria:**
+
+1. The ma-agents installer ensures `.ma-agents-plugin-stage/` is listed in the target project's `.gitignore` — appended idempotently if not already present, never duplicated on re-run
+2. If `.gitignore` does not exist in the target project, the installer creates one with the single entry
+3. The installer never modifies any unrelated `.gitignore` line — append-only
+4. The ma-agents repo's own `.gitignore` also lists `.ma-agents-plugin-stage/` (so dev-local test installs don't accidentally commit it)
+5. Test: a scratch project with an existing `.gitignore` retains all original entries and gains exactly one new line for `.ma-agents-plugin-stage/`
+
+**Technical Notes:**
+- Use the same idempotent-append pattern as the existing `_bmad-output` gitignore-policy code (FR58/FR59) — add to the registry of patterns the installer manages, do not rewrite the whole file
+- Keep this story tiny — it has a small surface area but is essential for NFR53 compliance
+
+**PRD Traceability:** NFR53 (stage dir not persisted, gitignored)
+
+---
+
+### Story 22.9 — CI Offline Install Gate
+
+**As a** release manager,
+**I want** every release candidate verified by an install run with all outbound network egress blocked,
+**so that** the air-gapped guarantee (NFR54) cannot regress without CI catching it.
+
+**Acceptance Criteria:**
+
+1. A new CI job (e.g., `.github/workflows/offline-install.yml`) runs on every PR and on every release tag
+2. The job:
+   - Builds the npm tarball via `npm pack`
+   - Spins up a fresh container (or VM) with all outbound network egress blocked (firewall / iptables DROP / `--network none` Docker, depending on runner)
+   - Extracts the tarball into the container
+   - Runs `npx ma-agents install --yes --force --tools claude-code` in the container against a scratch project
+   - Asserts: the install completes with exit code 0, the staged plugin was placed correctly, and no outbound connection was attempted (verified via firewall logs or a deny-all rule that fails the run on egress attempts)
+3. The job fails (non-zero exit) on any of: install failure, egress attempt, missing skill in the resulting `_bmad/` tree
+4. The job runs in under 5 minutes wall-clock
+5. Documentation in `CONTRIBUTING.md` (or equivalent) describes how to reproduce the offline install locally (firewall command + `npm pack` + run instructions)
+6. The job is required for merge to `main` (branch protection rule update)
+
+**Technical Notes:**
+- Egress-block strategies vary by CI runner — for GitHub Actions, `--network none` on a Docker step is the cleanest. For self-hosted runners, iptables is more portable
+- This story does NOT cover multi-tool parity (Story 22.10) — keep this job focused on the egress-block dimension; multi-tool runs in a separate matrix
+
+**PRD Traceability:** NFR50 (offline install gate), NFR54 (air-gapped preservation)
+
+---
+
+### Story 22.10 — Multi-Tool Smoke Verification
+
+**As a** release manager,
+**I want** the plugin install flow smoke-verified against multiple `--tools` targets,
+**so that** a regression in one tool's skill-directory routing is caught before release rather than by an end user.
+
+**Acceptance Criteria:**
+
+1. A CI matrix job runs the plugin install against (at minimum) `--tools claude-code`, `--tools copilot`, and `--tools cline`. Recommended extension: also `roo-code` and `kilocode` to cover the disconnected-friendly IDE set
+2. For each target, the job asserts:
+   - `npx ma-agents install --yes --force --tools <target>` completes with exit code 0
+   - The target's expected skills directory exists and contains at least one ma-agents skill (e.g., `ma-agent-cyber/SKILL.md`)
+   - The MANIFEST file at the target location includes ma-agents skill IDs
+3. The matrix runs as part of release verification (release tag) and on PRs that touch `lib/bmad.js`, `lib/agents.js`, `lib/bmad-extension/`, or `lib/bmad-extension-plugin/`
+4. Job fails on any single tool's failure (no silent skip)
+5. Documentation lists the target tools and the exact assertion per tool
+
+**Technical Notes:**
+- The expected skill paths per tool come from `lib/agents.js`:
+  - claude-code → `.claude/skills/`
+  - copilot → `.github/copilot/skills/`
+  - cline → `.cline/skills/`
+  - roo-code → `.roo/skills/`
+  - kilocode → `.kilocode/skills/`
+- This job validates FR192 (multi-tool smoke) and NFR52 (multi-tool parity with the same bundled plugin)
+- Combine with Story 22.9 if practical: a matrix that crosses (egress blocked × tool) is a stronger gate than two independent jobs, but split into two if the runtime cost is too high
+
+**PRD Traceability:** FR192, NFR52
+
+---
+
+### Epic 22 — Cross-Epic Notes
+
+**Relationship to Epic 5 (Bundled BMAD Installation):**
+Epic 5 established the bundled-cache + npm-tarball self-containment pattern. Epic 22 extends that pattern to a second bundled artifact (`lib/bmad-extension-plugin/`) and replaces the post-install code path that Epic 5 left in `lib/bmad.js`. Coordinate any in-flight Epic 5 stories (5.5, 5.6 are in review) before Story 22.6 lands.
+
+**Relationship to Epic 15 (BMAD 6.2.0 Agent Architecture Migration):**
+Epic 15 produced the v6.2.0 skill-folder agent structure that Epic 22 now repackages as a plugin. Epic 15 must be complete; Story 22.5 builds directly on the `module.yaml` schema introduced in Epic 15.
+
+**Relationship to Epic 17 / Epic 20 (skill catalog growth):**
+Story 22.2 (rename sweep) touches every custom skill in the extension module. Land Epic 17 and Epic 20 stories first to avoid rebasing the rename across in-flight branches.
+
+**Source-of-truth split introduced:**
+- Hand-edited source: `lib/bmad-extension/`
+- Generated bundle: `lib/bmad-extension-plugin/` (committed for diff-ability and tarball inclusion)
+- Build glue: `scripts/build-plugin.js` (Story 22.4)
+
+**File outputs produced by this epic:**
+```
+lib/
+├── bmad-extension/                               (existing — source of truth, sweeps in 22.2/22.5/22.7)
+│   ├── module.yaml                               (REMOVED — moves to skills/module.yaml in 22.5)
+│   ├── module-help.csv                           (UPDATED — entries renamed in 22.2, removed in 22.3)
+│   ├── .claude-plugin/marketplace.json.template  (NEW — 22.5)
+│   └── skills/
+│       ├── module.yaml                           (NEW — 22.5)
+│       ├── ma-agent-cyber/                       (RENAMED from bmad-ma-agent-cyber in 22.2)
+│       ├── ma-agent-devops/                      (RENAMED in 22.2)
+│       ├── ma-agent-sre/                         (RENAMED in 22.2)
+│       ├── ma-agent-ml/                          (RENAMED in 22.2)
+│       └── ma-agent-sqa/                         (RENAMED in 22.2)
+├── bmad-extension-plugin/                        (NEW — generated by 22.4, committed)
+│   ├── .claude-plugin/marketplace.json
+│   ├── skills/module.yaml
+│   ├── skills/module-help.csv
+│   └── skills/ma-agent-*/                        (one per skill)
+└── bmad.js                                       (UPDATED — 22.6 deletes ~140 lines, adds ~30)
+
+scripts/
+├── build-plugin.js                               (NEW — 22.4)
+└── build-bmad-cache.js                           (UPDATED — 22.1)
+
+.github/workflows/
+├── offline-install.yml                           (NEW — 22.9)
+└── multi-tool-smoke.yml                          (NEW — 22.10)
+```
+
+**Development Execution Order:**
+1. Story 22.1 (version bump + cache rebuild) — must be first; everything else builds on a working 6.3.0 baseline
+2. Story 22.3 (retire legacy skills) — small, low-risk, can land in parallel with 22.1
+3. Story 22.2 (rename sweep) — must land before 22.4/22.5 since the plugin bundles renamed paths; avoid concurrent in-flight branches against extension skills
+4. Story 22.5 (plugin manifests) — defines the manifest contract
+5. Story 22.4 (build-plugin script) — emits the bundle from source per 22.5
+6. Story 22.6 (stage-and-invoke replacement) — the main installer change; depends on 22.4 producing a bundled plugin
+7. Story 22.7 (config path migration) — can run in parallel with 22.6
+8. Story 22.8 (gitignore stage dir) — small follow-up, lands with or after 22.6
+9. Story 22.9 (CI offline gate) — gating job, lands once the install flow is stable (after 22.6)
+10. Story 22.10 (multi-tool smoke) — final verification, lands after 22.9
+
+**Worktree-per-story:** Each story is small enough to execute in its own worktree per the git-workflow-skill mandatory policy. Stories 22.1, 22.3, 22.7, 22.8 are particularly suitable for parallel agents.
+
+---
+
+## Epic 23: Memory-Agent Conversion for Demerzel and Gad (Phase 4 — Deferred Follow-up)
+
+**Goal:** Convert the Demerzel (ML Scientist) and Gad (SQA) personas from stateless agents to BMAD Builder Memory-agents, with persistent memory files at `_bmad/memory/<agent>/` and lean ~30-line bootloader `SKILL.md` files. Yael (Cyber), Amit (DevOps), and Alex (SRE) explicitly remain stateless.
+
+**Value:** Demerzel's `ml-advise` workflow already requires cross-session memory of past experiments and retrospectives — making it a Memory-agent eliminates the workaround. Gad benefits from accumulated audit findings and IEEE 12207 compliance history across sessions. The other three agents have task-scoped workloads where Memory format adds maintenance cost without workflow benefit.
+
+**PRD Coverage:** FR193, FR194, FR195
+
+**Status:** Deferred — to start after Epic 22 lands and the v6.3.0 baseline is stable. Not in the current development sequence.
+
+**Dependencies:**
+- Epic 22 must be fully complete and merged
+
+---
+
+### Story 23.1 — Convert Demerzel (ma-agent-ml) to Memory-Agent
+
+**Acceptance Criteria (high-level):**
+1. `lib/bmad-extension/skills/ma-agent-ml/SKILL.md` is reduced to a ~30-line bootloader that loads memory files at activation
+2. Memory files are created at `_bmad/memory/ma-agent-ml/`: `PERSONA.md`, `CREED.md`, `BOND.md`, `MEMORY.md`, `CAPABILITIES.md`, `INDEX.md`
+3. The `ml-advise` workflow reads from `MEMORY.md` for cross-session context retrieval
+4. All existing Demerzel workflows continue to function with no regression
+5. Memory file content is initialized from the current monolithic SKILL.md content (no information loss)
+
+**Status:** To be detailed when Epic 23 is activated
+
+---
+
+### Story 23.2 — Convert Gad (ma-agent-sqa) to Memory-Agent
+
+**Acceptance Criteria (high-level):**
+1. `lib/bmad-extension/skills/ma-agent-sqa/SKILL.md` is reduced to a ~30-line bootloader
+2. Memory files are created at `_bmad/memory/ma-agent-sqa/`: same six-file structure as 23.1
+3. Audit findings and IEEE 12207 compliance evaluations accumulate into `MEMORY.md` across sessions
+4. Existing `sqa-audit` and `sqa-ieee12207` workflows continue to function with no regression
+5. Memory file content is initialized from current monolithic SKILL.md content
+
+**Status:** To be detailed when Epic 23 is activated
+
+---
+
+### Epic 23 — Cross-Epic Notes
+
+**Why deferred:** v6.3.0 fully supports stateless agents. Memory-agent conversion is an authoring improvement, not a compatibility requirement. Splitting it from Epic 22 keeps Epic 22's scope focused on the migration itself.
+
+**Why only Demerzel and Gad:**
+- Demerzel: `ml-advise` skill explicitly requires search across past experiments, retrospectives, and TechSpecs — Memory format is the canonical fit
+- Gad: SQA workflows accumulate findings (bug patterns, compliance history) across sessions — Memory format reduces re-discovery cost
+- Yael, Amit, Alex: each invocation is task-scoped (run a scan, scaffold infra, check deployment) — no cross-session state requirement, conversion is pure overhead
+
+**FR195 explicitly documents that Yael, Amit, and Alex remain stateless — this is an architectural decision, not a backlog deferral.**
