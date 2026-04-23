@@ -276,6 +276,81 @@ async function runAll() {
     );
   });
 
+  // 22.3-t8 — Edge case: manifest exists but .skills is null / undefined / non-object.
+  // readManifest can parse malformed manifests that still produce a valid JSON object;
+  // the migration must tolerate a manifest whose skills field is missing.
+  await test('22.3-t8 Malformed manifest with skills:null does not crash', async () => {
+    const tmp = mktemp();
+    try {
+      const installPath = path.join(tmp, '.claude', 'skills');
+      fs.ensureDirSync(installPath);
+      fs.writeFileSync(
+        path.join(installPath, '.ma-agents.json'),
+        JSON.stringify({ manifestVersion: '1.2.0', agents: ['claude-code'], skills: null }, null, 2),
+        'utf-8'
+      );
+      // Seed an orphan retired dir too — must still be cleaned up.
+      const staleDir = path.join(installPath, 'bmad-init');
+      fs.ensureDirSync(staleDir);
+
+      const results = await migrateRetiredSkills({ scope: 'project', customPath: installPath });
+
+      assert.ok(!fs.existsSync(staleDir),
+        'Orphan retired directory must be removed even with a null skills manifest');
+      assert.strictEqual(results[0].error, null,
+        'Per-path error slot should remain null when the only work is a successful orphan cleanup');
+    } finally {
+      cleanup(tmp);
+    }
+  });
+
+  // 22.3-t9 — Edge case: corrupted .ma-agents.json (invalid JSON).
+  // readManifest swallows the parse error and returns null. migrateRetiredSkills
+  // should still handle orphan directories without crashing.
+  await test('22.3-t9 Corrupted .ma-agents.json (invalid JSON) is handled gracefully', async () => {
+    const tmp = mktemp();
+    try {
+      const installPath = path.join(tmp, '.claude', 'skills');
+      fs.ensureDirSync(installPath);
+      fs.writeFileSync(path.join(installPath, '.ma-agents.json'), '{this is not valid json', 'utf-8');
+      const staleDir = path.join(installPath, 'bmad-agent-sm');
+      fs.ensureDirSync(staleDir);
+
+      const results = await migrateRetiredSkills({ scope: 'project', customPath: installPath });
+
+      assert.ok(!fs.existsSync(staleDir),
+        'Orphan dir must be cleaned up even if the manifest JSON is unparseable');
+      // Corrupted manifest is left in place — the installer will rewrite it
+      // on the next successful install. We do not silently delete user data.
+      assert.ok(fs.existsSync(path.join(installPath, '.ma-agents.json')),
+        'Corrupted manifest file is preserved, not deleted');
+      assert.strictEqual(results[0].error, null,
+        'A corrupted manifest should not surface as a per-path error');
+    } finally {
+      cleanup(tmp);
+    }
+  });
+
+  // 22.3-t10 — Edge case: customPath resolves to a non-existent directory.
+  // migrateRetiredSkills should treat this as "nothing to do" and return a
+  // single empty result for that path — not crash with ENOENT.
+  await test('22.3-t10 Non-existent customPath returns empty result without crashing', async () => {
+    const tmp = mktemp();
+    try {
+      const installPath = path.join(tmp, 'does', 'not', 'exist', '.claude', 'skills');
+      // deliberately NOT creating the dir
+      const results = await migrateRetiredSkills({ scope: 'project', customPath: installPath });
+
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual(results[0].removedIds.length, 0);
+      assert.strictEqual(results[0].filesRemoved, 0);
+      assert.strictEqual(results[0].manifestMutated, false);
+      assert.strictEqual(results[0].error, null);
+    } finally {
+      cleanup(tmp);
+    }
+  });
+
   // Summary
   console.log(`\n  ${passed} passed, ${failed} failed\n`);
   if (failed > 0) {
