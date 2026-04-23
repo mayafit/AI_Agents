@@ -62,10 +62,12 @@ Think of BMGD as your senior game dev colleague—not a replacement for your ent
 BMGD is installed as a module during BMad Method setup:
 
 ```bash
-npx bmad-method@alpha install
+npx bmad-method install
 ```
 
-Select **Game Dev Studio** from the modules list.
+Select **Game Dev Studio** from the modules list. 
+
+*Just a heads-up: if you’re only using Game Dev Studio (GDS), you don’t need to install the main BMM module. GDS runs on its own, but BMM gets updated more often, so you might want to use its workflows—they work together nicely!*
 
 ## Quick Start
 
@@ -113,7 +115,7 @@ BMGD: Great choice! Here's what I recommend...
 
 ## Support BMad
 
-BMad is free for everyone and always will be. Star this repo, [buy me a coffee](https://buymeacoffee.com/bmad), or email contact@bmadcode.com for corporate sponsorship.
+BMad is free for everyone and always will be. Star this repo, [buy me a coffee](https://buymeacoffee.com/bmad), or email <contact@bmadcode.com> for corporate sponsorship.
 
 ## License
 
