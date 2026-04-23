@@ -173,10 +173,18 @@ test('each cached module has a commit SHA in manifest', () => {
   }
 });
 
-test('all v6.3.0 cached modules have _git_preserved directory', () => {
+test('all non-retired cached modules have _git_preserved directory', () => {
+  // Read module codes from the manifest rather than hardcoding so the test
+  // adapts automatically when upstream adds or renames modules. Exclude
+  // entries flagged retiredUpstream — those are preserved as-is and may lag
+  // behind a current rebuild.
   const cacheDir = path.join(projectRoot, 'lib', 'bmad-cache');
-  const expected = ['bmb', 'cis', 'gds', 'tea'];
-  for (const mod of expected) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(cacheDir, 'cache-manifest.json'), 'utf8'));
+  const liveModules = Object.entries(manifest.modules || {})
+    .filter(([, info]) => !info.retiredUpstream)
+    .map(([code]) => code);
+  assert.ok(liveModules.length > 0, 'Manifest has no non-retired modules — did the cache build fail?');
+  for (const mod of liveModules) {
     const preserved = path.join(cacheDir, mod, '_git_preserved');
     assert.ok(fs.existsSync(preserved), `${mod} missing _git_preserved at ${preserved}`);
   }

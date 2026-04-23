@@ -132,9 +132,7 @@ function parseModulesYaml(content) {
  *   test `'built_in' filter` under "Task 2" in bmad-version-bump.test.js pins
  *   this invariant.
  * - Defaults `branch` to `main` when absent (v6.3.0 schema omits it).
- * - Strips the `.git` suffix from URLs for ls-remote consistency — git
- *   accepts it, but some mirrors normalize it away and we want stable
- *   manifest-level identifiers.
+ * - Passes the URL through verbatim (git accepts both `repo` and `repo.git`).
  */
 function normalizeModules(raw) {
   return raw
@@ -349,7 +347,17 @@ function main() {
     for (const oldCode of Object.keys(existingManifest.modules)) {
       if (!currentCodes.has(oldCode) && !manifestModules[oldCode]) {
         const oldDir = path.join(CACHE_DIR, oldCode);
-        if (fs.existsSync(oldDir)) {
+        // Only retain if the cached module directory is actually a directory
+        // — guards against a stray file named after the module code spoofing
+        // retention and against a manifest entry pointing at a path that is
+        // no longer a valid module.
+        let isRealDir = false;
+        try {
+          isRealDir = fs.existsSync(oldDir) && fs.statSync(oldDir).isDirectory();
+        } catch {
+          isRealDir = false;
+        }
+        if (isRealDir) {
           manifestModules[oldCode] = {
             ...existingManifest.modules[oldCode],
             retiredUpstream: true,
