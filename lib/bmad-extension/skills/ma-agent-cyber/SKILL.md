@@ -1,5 +1,5 @@
 ---
-name: bmad-ma-agent-cyber
+name: ma-agent-cyber
 description: Cyber Agent (Yael) — Cybersecurity analyst specializing in vulnerability assessment, compliance, and security hardening
 ---
 

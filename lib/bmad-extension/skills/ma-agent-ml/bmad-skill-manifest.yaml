@@ -1,5 +1,5 @@
 type: agent
-name: bmad-ma-agent-ml
+name: ma-agent-ml
 displayName: Demerzel
 title: ML Scientist
 icon: "\U0001F9EA"

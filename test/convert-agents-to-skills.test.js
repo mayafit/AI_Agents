@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
  * Tests for Story 15-3: Convert 5 Custom Agents to BMAD 6.2.0 Skill Folders
+ * (Updated by Story 22.2 — skill IDs renamed from `bmad-ma-agent-*` to `ma-agent-*`
+ *  to vacate the upstream-reserved `bmad-*` namespace.)
  *
  * Verifies:
  * - Each agent has SKILL.md and bmad-skill-manifest.yaml
@@ -36,8 +38,8 @@ function test(name, fn) {
 // ─── Agent definitions ───────────────────────────────────────────────────────
 const AGENTS = [
   {
-    folder: 'bmad-ma-agent-sre',
-    name: 'bmad-ma-agent-sre',
+    folder: 'ma-agent-sre',
+    name: 'ma-agent-sre',
     displayName: 'Alex',
     title: 'SRE Agent',
     skillNames: ['sre-health-check', 'sre-fix-deployments', 'sre-performance-opt'],
@@ -46,8 +48,8 @@ const AGENTS = [
     menuItemCount: 6 // MH, CH, HC, FD, PO, DA
   },
   {
-    folder: 'bmad-ma-agent-devops',
-    name: 'bmad-ma-agent-devops',
+    folder: 'ma-agent-devops',
+    name: 'ma-agent-devops',
     displayName: 'Amit',
     title: 'DevOps Agent',
     skillNames: ['devops-configure-infrastructure', 'devops-optimize-pipelines', 'devops-manage-helm'],
@@ -56,8 +58,8 @@ const AGENTS = [
     menuItemCount: 6 // MH, CH, CO, PL, MH(helm), DA
   },
   {
-    folder: 'bmad-ma-agent-cyber',
-    name: 'bmad-ma-agent-cyber',
+    folder: 'ma-agent-cyber',
+    name: 'ma-agent-cyber',
     displayName: 'Yael',
     title: 'Cyber Analyst',
     skillNames: ['cyber-vulnerability-scan', 'cyber-security-audit', 'cyber-threat-modeling'],
@@ -66,8 +68,8 @@ const AGENTS = [
     menuItemCount: 6 // MH, CH, VS, SA, TM, DA
   },
   {
-    folder: 'bmad-ma-agent-sqa',
-    name: 'bmad-ma-agent-sqa',
+    folder: 'ma-agent-sqa',
+    name: 'ma-agent-sqa',
     displayName: 'Gad',
     title: 'Software Quality Assurance & Standards Expert',
     skillNames: ['sqa-audit', 'sqa-ieee12207', 'sqa-requirements-quality'],
@@ -76,8 +78,8 @@ const AGENTS = [
     menuItemCount: 14 // MH, CH, AU, IC, RQ, GS, GD, GP, GO, SS, GT, SD, MR, DA
   },
   {
-    folder: 'bmad-ma-agent-ml',
-    name: 'bmad-ma-agent-ml',
+    folder: 'ma-agent-ml',
+    name: 'ma-agent-ml',
     displayName: 'Demerzel',
     title: 'ML Scientist',
     skillNames: ['ml-ideation', 'ml-eda', 'ml-architecture', 'ml-detailed-design', 'ml-techspec', 'ml-infra', 'ml-experiment', 'ml-analysis', 'ml-hparam', 'ml-revision', 'ml-advise', 'ml-retrospective'],
