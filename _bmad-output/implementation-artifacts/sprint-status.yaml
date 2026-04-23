@@ -137,3 +137,27 @@ development_status:
   14-4-implement-jira-backend: backlog
   14-5-implement-confluence-backend: backlog
   epic-14-retrospective: optional
+
+  # Epic 22: BMAD v6.3.0 Plugin Migration (Phase 4)
+  # Dependencies: Epic 5 (bundled installation), Epic 15 (6.2.0 agent migration), Epic 17 + Epic 20 (skill catalog growth — coordinate rename sweep)
+  # Execution order: 22.1 → 22.3 (parallel with 22.1) → 22.2 → 22.5 → 22.4 → 22.6 → 22.7 (parallel with 22.6) → 22.8 → 22.9 → 22.10
+  epic-22: backlog
+  22-1-bump-bmad-method-and-rebuild-cache: backlog
+  22-2-skill-namespace-rename-sweep: backlog
+  22-3-retire-legacy-skills: backlog
+  22-4-build-plugin-script: backlog
+  22-5-plugin-manifests: backlog
+  22-6-replace-applycustomizations-with-stage-and-invoke: backlog
+  22-7-migrate-config-reads-to-bmm-config-yaml: backlog
+  22-8-gitignore-stage-directory: backlog
+  22-9-ci-offline-install-gate: backlog
+  22-10-multi-tool-smoke-verification: backlog
+  epic-22-retrospective: optional
+
+  # Epic 23: Memory-Agent Conversion for Demerzel and Gad (Phase 4 — Deferred Follow-up)
+  # Dependencies: Epic 22 must be fully complete and merged
+  # Stories 23.1 and 23.2 are stubs — to be detailed when Epic 23 is activated
+  epic-23: backlog
+  23-1-convert-demerzel-to-memory-agent: backlog
+  23-2-convert-gad-to-memory-agent: backlog
+  epic-23-retrospective: optional

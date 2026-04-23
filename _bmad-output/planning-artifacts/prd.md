@@ -12,6 +12,8 @@ editHistory:
     changes: 'Spec correction: removed `--profile=` CLI flag from FR173 and NFR45. Profile is user-facing (install-time prompt, persisted) or team-facing (committed `.ma-agents.json`) — not per-invocation. On-prem CI/CD served by committing the persisted `.ma-agents.json`, not a flag.'
   - date: '2026-04-13'
     changes: 'Added F19: Local-LLM / On-Prem Agent Tuning capability area (Planned). Added FR172–FR179: install-time profile prompt (on-prem vs standard) with persistence in `.ma-agents.json`; universal per-tool guardrail templates shipped to all profiles (.roomodes with BMAD-mode file-regex restrictions, expanded AGENTS.md/.clinerules/CLAUDE.md injection enforcing text-vs-file discipline and BMAD phase boundaries); on-prem-only layered guardrails (no-home-dir-writes, no str_replace_editor, /no_think planning prefix, reasoning-mode guidance); BMAD persona phase-aware prompt prefixes when profile=on-prem; reference deployment doc for vLLM serving (tool-call-parser, max-model-len, quantization). Added NFR44–NFR47: profile isolation (standard install unchanged), CI/CD compatibility via --yes defaulting to standard, idempotent per-tool template stamping, application-layer phase enforcement via .roomodes file-regex (not solely prompt-based).'
+  - date: '2026-04-13'
+    changes: 'Added F20: BMAD 6.3.0 Plugin Migration capability area (Planned). Added FR182–FR192 covering plugin-based extension packaging via .claude-plugin/marketplace.json, PluginResolver local-file strategy for air-gapped installs, replacement of post-install manifest surgery with pre-install local plugin staging, skill renames (bmad-ma-agent-* → ma-agent-*), retirement of bmad-init / bmad-agent-qa (Quinn) / bmad-agent-sm (Bob) / bmad-agent-quick-flow-solo-dev (Barry) in alignment with upstream consolidation into Amelia, config path move to _bmad/bmm/config.yaml, spec-wip.md → spec-{slug}.md awareness, and multi-tool verification against non-Claude install targets (Copilot, Cline). Added FR193–FR195 for a deferred follow-up epic converting Demerzel and Gad to Memory-agent format while keeping Yael/Amit/Alex stateless. Added NFR50–NFR54: offline install gate with egress blocking, pre-install plugin staging determinism, multi-tool install parity, non-persistence of plugin stage directory, retention of air-gapped self-containment guarantee. Bumped bmad-method pin from 6.2.0 to 6.3.0 in FR74 and NFR20. Executive Summary updated: BMAD-native extension bullet expanded to note v6.3.0 plugin packaging.'
   - date: '2026-04-08'
     changes: 'Added F18: Software Quality Assurance (SQA) capability area (Planned). Added SQA agent (Gad) to Executive Summary specialized agents bullet. Added Test Engineer (Oren) journey reference to SQA workflows. Extended Specialized Agent Personas FR35 to include SQA. Added FR158–FR171: SQA agent persona and menu, Project Audit workflow (full/partial scope selection, 5 audit dimensions: code-to-story traceability, stories-to-architecture/PRD alignment, process compliance, sprint health, release state, written report output), IEEE/ISO/IEC 12207 compliance workflow (full/partial scope selection, 23 process areas across 4 groups, COMPLIANT/PARTIAL/NON-COMPLIANT/NOT-APPLICABLE/ORGANIZATION-SCOPE ratings, compliance matrix report, gap-driven backlog story creation). Added NFR42–NFR43: audit report reproducibility, air-gapped IEEE 12207 workflow.'
   - date: '2026-04-07'
@@ -73,7 +75,7 @@ The core insight is convergence: AI agents need governance, and engineering meth
 - **Bug management** — Agents autonomously detect problems in delivered code and propose bug issues. BMAD extension workflows generate structured bug stories. Bugs live in the backlog section of `sprint-status.yaml` alongside stories for unified sprint planning
 - **Unified sprint-status management** — All sprint, backlog, and epic data consolidated into a single `sprint-status.yaml` file with movement semantics (items move between backlog and sprints, never duplicated), done archival (completed items removed and archived), sprint close lifecycle, and Jira adapter readiness. Sprints defined by capacity, flat backlogs containing both stories and bugs, multi-criteria prioritization, and workflows to add/modify/close/remove-from sprints
 - **Agent activity visibility** — Real-time dashboard showing all active AI agents: type, assigned story, worktree, branch, and status, auto-refreshing every 30 seconds from existing project file structures
-- **BMAD-native extension architecture** — All BMAD-facing enhancements use official BMAD Builder extension points. With 6.2.0 migration, the extension module adopts the native `module.yaml` identity pattern (`code`, `description`, `module_version`) with setup skill and `module-help.csv` capability registration. Zero bmad-method core modifications. Extensions survive BMAD updates via the anti-zombie config pattern
+- **BMAD-native extension architecture** — All BMAD-facing enhancements use official BMAD Builder extension points. With 6.2.0 migration, the extension module adopts the native `module.yaml` identity pattern (`code`, `description`, `module_version`) with setup skill and `module-help.csv` capability registration. With 6.3.0 migration, the extension ships as a Claude-Plugin-compatible package (`.claude-plugin/marketplace.json`) and is installed via BMAD's PluginResolver using a local file path — preserving the air-gapped guarantee while replacing post-install manifest surgery with pre-install plugin staging. Zero bmad-method core modifications. Extensions survive BMAD updates via the anti-zombie config pattern
 - **Environment agnostic** — supports on-prem, public cloud, and air-gapped deployments through universal skill format and multi-agent targeting
 - **Multi-repository project layout** — Supports enterprise project structures where planning knowledge, sprint management, and code live in separate repositories. The installer discovers repository locations (local or remote), clones as needed, and stamps paths into project-context.md so agents resolve artifact reads/writes to the correct repository without manual path management
 - **Non-hierarchical knowledge graph** — All BMAD-generated artifacts form a living any-to-any knowledge graph. An acceptance criterion in a story may reference the epic that scoped it, the architecture decision that constrained it, and the UX design that shaped it — simultaneously, with no assumption of hierarchy. A central files table maps short file IDs to arbitrary file pointers (relative paths, absolute paths, Confluence URLs, any document reference), so nodes can address any artifact regardless of where it lives. Maintained automatically by skills, stored as LLM-friendly JSON, and visualized as an interactive graph in VSCode. Every edge carries full provenance: creator name, AI agent identifier, and date
@@ -406,7 +408,7 @@ ma-agents does not integrate as an IDE extension. Instead, it injects skill cont
 
 ### Bundled Installation
 
-- FR74: The ma-agents npm package bundles bmad-method v6.2.0 as a direct dependency — no `npx` download at install time
+- FR74: The ma-agents npm package bundles bmad-method v6.3.0 as a direct dependency — no `npx` download at install time
 - FR75: The ma-agents npm package bundles pre-cloned BMAD external modules (bmb, cis, tea, gds, wds) under `lib/bmad-cache/` — no git clone at install time
 - FR76: Before invoking bmad-method install, the installer pre-populates `~/.bmad/cache/external-modules/` from the bundled cache so bmad-method finds modules locally
 - FR123: The ma-agents installer collects all BMAD-relevant configuration during its own interactive wizard — selected platforms/agents, user name, project path, module selections — and passes them to bmad-method as explicit CLI flags (`--tools`, `--modules`, `--directory`, `--user-name`, `--communication-language`, `--document-output-language`, `--output-folder`, `--custom-content`), replacing the current silent install approach
@@ -448,6 +450,40 @@ ma-agents does not integrate as an IDE extension. Instead, it injects skill cont
 - FR108: During migration, the installer preserves user customizations applied to agent personas, menu items, or workflow parameters by extracting customization values from existing files and applying them to the new SKILL.md-based structure
 - FR109: After successful migration, the installer removes legacy artifacts: old `.customize.yaml` files in `lib/bmad-customizations/` and `lib/bmad-extension/agents/`, XML agent definitions in `_bmad/custom/agents/`, YAML workflow files in `lib/bmad-workflows/mil498/`, and the `_bmad-custom-backup-temp/` directory
 - FR110: For fresh installations (no existing BMAD), the installer deploys directly in 6.2.0 skill-based format — no legacy artifacts are created
+
+### BMAD 6.3.0 Plugin Migration
+
+#### Plugin Packaging
+
+- FR182: The ma-agents extension module is repackaged as a BMAD-Builder-compliant plugin with a `.claude-plugin/marketplace.json` manifest at the bundle root. The marketplace wrapper is format-convention only — the plugin content is tool-agnostic and routes to any `--tools` target supported by the BMAD installer (Claude Code, Copilot, Cline, Roo Code, KiloCode, and future additions)
+- FR183: Module definitions move to `skills/module.yaml` (aligned with BMAD 6.2.2+) and the extension is renamed out of the reserved `bmad-*` namespace — all skills previously named `bmad-ma-agent-*` are renamed to `ma-agent-*` and the module code is updated accordingly. Skill IDs in `MANIFEST.yaml`, registration CSVs, and internal references are swept to match
+- FR184: The bundled plugin is assembled at build time into `lib/bmad-extension-plugin/` by a build script, and is distributed inside the ma-agents npm tarball alongside `lib/bmad-cache/` — the end user's installation never fetches the plugin from a network source
+
+#### Plugin Staging & Installation Flow
+
+- FR185: During `npx ma-agents install`, the installer stages the bundled plugin to a project-local directory (`<project>/.ma-agents-plugin-stage/`) before invoking bmad-method, then passes that local path to bmad-method via `--custom-source <local-path>` — exercising BMAD's PluginResolver local-file strategy with no network access required
+- FR186: The plugin stage directory is removed after successful bmad-method installation — it is not persisted in the project tree and is not committed to version control. A partial/failed install leaves the stage intact for diagnostic inspection
+- FR187: The installer ceases post-install manifest surgery (`applyCustomizations()` in `lib/bmad.js`) — the code path that parses `_bmad/_config/manifest.yaml` and `files-manifest.csv`, filters for hardcoded module names, and injects custom agent YAML into `_bmad/_config/custom/agents/` is removed. BMAD's own installer handles all placement via the plugin manifest
+
+#### Config & Path Updates
+
+- FR188: All ma-agents reads of BMAD configuration are redirected from `_bmad/_config/*` to the canonical v6.3.0 path `_bmad/bmm/config.yaml`, matching the removal of the `bmad-init` skill and BMAD's shift to direct file reads by agents
+- FR189: Any ma-agents tooling or skill that previously referenced the singleton `spec-wip.md` is updated to enumerate `spec-{slug}.md` files and filter by the new `status` frontmatter field (aligning with upstream #2214)
+
+#### Upstream Persona Consolidation
+
+- FR190: The `bmad-init`, `bmad-agent-qa` (Quinn), `bmad-agent-sm` (Bob), and `bmad-agent-quick-flow-solo-dev` (Barry) skills are retired from the ma-agents MANIFEST — `bmad-init` because the upstream skill was removed, the three persona skills because they merged into the unified Amelia Developer agent in BMAD 6.3.0. Retirement includes MANIFEST.yaml entries, skill source files, and any agent-catalog references
+- FR191: Documentation and training materials are updated to reflect the Amelia-unified Developer persona — references to Quinn, Bob, and Barry in user-facing docs are either rewritten to reference Amelia or removed
+
+#### Multi-Tool Verification
+
+- FR192: The plugin install flow is smoke-tested against at least two non-Claude `--tools` targets during release verification (minimum: Copilot + Cline; recommended: also Roo Code and KiloCode to exercise the disconnected-friendly IDE set) — each target must produce a functional skill installation with no tool-specific plugin repackaging
+
+#### Deferred Memory-Agent Conversion (follow-up epic)
+
+- FR193: In a follow-up epic after 6.3.0 lands, the Demerzel (ML Scientist) persona is restructured as a BMAD Builder Memory-agent with memory files at `_bmad/memory/ma-agent-ml/` (PERSONA.md, CREED.md, BOND.md, MEMORY.md, CAPABILITIES.md, INDEX.md) and a lean bootloader `SKILL.md` — driven by the explicit cross-session memory requirement in `ml-advise` (search past experiments, retrospectives, TechSpecs)
+- FR194: In the same follow-up epic, the Gad (SQA Engineer) persona is restructured as a Memory-agent at `_bmad/memory/ma-agent-sqa/` to accumulate audit findings, IEEE 12207 compliance history, and bug-pattern observations across sessions
+- FR195: Yael (Cyber), Amit (DevOps), and Alex (SRE) remain stateless agents — each invocation is task-scoped with no persistent cross-session memory requirement. Converting them would add maintenance cost with no workflow benefit
 
 ### Specialized Agent Personas (MIL-STD-498 / SRE / DevOps / Cyber)
 
@@ -754,7 +790,7 @@ sprints:
 
 ### Bundled Installation
 
-- NFR20: The bundled BMAD cache must be version-pinned (v6.2.0 current) — upgrading the bundled version is a deliberate, tested release operation, not an automatic fetch
+- NFR20: The bundled BMAD cache must be version-pinned (v6.3.0 current) — upgrading the bundled version is a deliberate, tested release operation, not an automatic fetch
 - NFR21: The bundled installation produces deterministic `_bmad/` output from the included cache. The resulting directory structure is reproducible given the same ma-agents package version.
 
 ### Sprint Management
@@ -781,6 +817,14 @@ sprints:
 - NFR31: Migrated agent skill folders must conform to BMAD Builder's lint gate standards — `scan-path-standards.py` (path conventions, no `{skill-root}`, proper prefixes) and `scan-scripts.py` (portability, agentic design) pass without critical violations
 - NFR32: All 23 converted workflows (11 MIL-498 + 9 SRE + 6 DevOps + 8 Cyber = 34 total; corrected: 11+9+6+8=34) produce identical output artifacts as their pre-migration equivalents — same document structure, same section headers, same template variables, verified by diff comparison of generated outputs
 - NFR33: The module setup skill's anti-zombie cleanup must be idempotent — running `npx ma-agents` multiple times produces the same `config.yaml`, `config.user.yaml`, and `module-help.csv` state regardless of prior runs
+
+### BMAD 6.3.0 Migration
+
+- NFR50: The bundled plugin install flow must complete successfully with all outbound network egress blocked — verified by running `npx ma-agents install` inside a container or VM with egress firewall rules blocking all destinations, or equivalent CI job with network disabled, on every release candidate. Zero network calls are permitted during the install path, including optional telemetry, update checks, or marketplace registry probes
+- NFR51: The pre-install plugin staging step must be deterministic — given the same ma-agents package version, the staged `<project>/.ma-agents-plugin-stage/` directory contents are byte-identical across runs and across machines, enabling reproducible-build verification
+- NFR52: Multi-tool install parity — the same bundled plugin, without tool-specific repackaging or variant bundles, must produce a functional skill installation when bmad-method is invoked with `--tools claude-code`, `--tools copilot`, `--tools cline`, `--tools roo-code`, and `--tools kilocode`. Verified via smoke install against each target during release verification (FR192)
+- NFR53: The plugin stage directory (`<project>/.ma-agents-plugin-stage/`) is not part of the delivered installation — it exists only during the install pipeline and is removed on success. It must be listed in the ma-agents-generated `.gitignore` entries for projects that do not already ignore it, to prevent accidental commit of transient artifacts
+- NFR54: The 6.3.0 migration must preserve the air-gapped self-containment guarantee end-to-end — the ma-agents npm tarball must contain all plugin assets, all BMAD cache modules (including any new 6.3.0 bundled modules), and all dependencies sufficient for offline install. No code path in the installer may require access to `github.com`, `marketplace.bmad-method.org`, npm registry, or any external host after the tarball is on disk
 
 ### BMAD Knowledge Graph
 

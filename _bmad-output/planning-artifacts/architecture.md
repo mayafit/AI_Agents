@@ -4,6 +4,9 @@ phase2StepsCompleted: ['step-02-context', 'step-04-decisions', 'step-05-patterns
 phase2CompletedAt: '2026-03-11'
 phase2cStepsCompleted: ['step-02-context', 'step-04-decisions', 'step-06-structure', 'step-07-validation', 'step-08-complete']
 phase2cCompletedAt: '2026-03-26'
+phase4EditHistory:
+  - date: '2026-04-13'
+    changes: 'Added Phase 4 Architectural Decisions section with Decision P4-1: BMAD v6.3.0 Plugin Migration (FR182-FR195, NFR50-NFR54). Captures the architectural inversion from post-install manifest surgery (current applyCustomizations in lib/bmad.js:205-346) to pre-install local plugin staging: ma-agents assembles a BMAD-Builder-compliant plugin (.claude-plugin/marketplace.json + skills/module.yaml) into lib/bmad-extension-plugin/ at build time, bundles it in the npm tarball, and on install stages it to <project>/.ma-agents-plugin-stage/ before invoking bmad-method with --custom-source <local-path>. Air-gapped guarantee preserved via PluginResolver local-file strategy. Multi-tool routing preserved via BMAD installer (--tools claude-code/copilot/cline/roo-code/kilocode). Skill namespace rename bmad-ma-agent-* → ma-agent-* to vacate reserved prefix. Removal of legacy skills (bmad-init, bmad-agent-qa Quinn, bmad-agent-sm Bob, bmad-agent-quick-flow-solo-dev Barry) following upstream persona consolidation into Amelia. Config read path moved from _bmad/_config/ to _bmad/bmm/config.yaml. Deferred follow-up: Demerzel and Gad converted to Memory-agent format; Yael/Amit/Alex remain stateless. Technology stack bumped from bmad-method v6.2.0 to v6.3.0.'
 phase3EditHistory:
   - date: '2026-04-07'
     changes: 'Added Decision P3-1: BMAD Knowledge Graph (FR141-FR157, NFR38-NFR41). Three-layer design: (1) knowledge-graph.json with meta/files/nodes/edges structure — files table maps short file-ids to arbitrary pointers (relative path, absolute path, URL), nodes use file-id#anchor identity, edges carry 6 typed relationships including informed-by for non-hierarchical influence, full provenance (created_by, agent, created_at). (2) BMAD skill emission via read-modify-write emitToGraph() pattern — additive-only, 7 emitting skills tabulated with their edge types, heading-to-anchor slug algorithm documented, LLM-writability contract defined. (3) open-graph skill as new extension module skill — VSCode env detection, self-contained HTML renderer with inlined JS/CSS and embedded JSON data, SVG-based visualization, color-coded nodes, edge tooltips, filter controls, neighbor highlight, URL navigation for external files. Updated project structure tree (knowledge-graph.json/html in _bmad-output/, open-graph/ in extension module skills), skill count 44→45, requirements coverage tables, validation section.'
@@ -1937,11 +1940,112 @@ The inference-server tuning (vLLM flags, quantization, context length) is docume
 
 ---
 
+### Phase 4 Architectural Decisions (2026-04-13)
+
+#### Decision P4-1: BMAD v6.3.0 Plugin Migration (FR182–FR195, NFR50–NFR54)
+
+**Context.** BMAD-METHOD v6.3.0 ships four breaking changes and a new authoring model:
+1. Custom-content install removed (#2227) — replaced by marketplace/plugin installation via PluginResolver
+2. `bmad-init` skill removed (#2159) — agents read `_bmad/bmm/config.yaml` directly
+3. `spec-wip.md` singleton removed (#2214) — replaced by `spec-{slug}.md` with status field
+4. Persona consolidation (#2177/#2179/#2186) — Barry, Quinn, Bob merged into unified Amelia
+
+BMAD Builder adds a plugin packaging model: `.claude-plugin/marketplace.json` is a shared convention (documented as "works for any skills-capable platform, not just Claude"). PluginResolver supports five resolution strategies, including local file paths — which is the load-bearing fact for our air-gapped requirement.
+
+**Decision.** Invert the current installer architecture from *post-install manifest surgery* to *pre-install local plugin staging*.
+
+**Current flow (to be replaced, `lib/bmad.js:205-346`):**
+1. Invoke `bmad-method install` with flags
+2. Read `_bmad/_config/manifest.yaml` and `files-manifest.csv`
+3. Filter manifest entries by hardcoded module-name whitelist (`["custom", "bmb"]`)
+4. Parse CSV by column index, rewrite entries, remove stale ones
+5. Inject custom agent YAML into `_bmad/_config/custom/agents/`
+6. Stage workflow YAMLs
+
+**New flow:**
+1. Build time: assemble `lib/bmad-extension-plugin/` from `lib/bmad-extension/` sources via a build script — output contains `.claude-plugin/marketplace.json`, `skills/module.yaml`, `module-help.csv`, and all skill folders
+2. Package publish: both `lib/bmad-cache/` and `lib/bmad-extension-plugin/` ship inside the ma-agents npm tarball (no network access at install time)
+3. Install time: `bin/cli.js` → new staging helper copies `lib/bmad-extension-plugin/` → `<project>/.ma-agents-plugin-stage/`
+4. Invoke `npx bmad-method install --custom-source <stage-path> --tools <selected> --modules <selected> --yes`
+5. BMAD's own PluginResolver (local-file strategy) places content into the target tool's skill directory
+6. On success, remove the stage directory; on failure, leave it for diagnostic inspection
+
+**Module structure (new):**
+
+```
+lib/bmad-extension-plugin/                        — BUILD OUTPUT (generated)
+├── .claude-plugin/
+│   └── marketplace.json                          — plugin manifest (format-convention only)
+├── skills/
+│   ├── module.yaml                               — module identity (code, description, module_version)
+│   ├── module-help.csv                           — capability registry
+│   ├── ma-agent-cyber/                           — Yael (renamed from bmad-ma-agent-cyber)
+│   │   ├── SKILL.md
+│   │   ├── bmad-skill-manifest.yaml
+│   │   └── resources/
+│   ├── ma-agent-devops/                          — Amit
+│   ├── ma-agent-sre/                             — Alex
+│   ├── ma-agent-ml/                              — Demerzel (stateless in v6.3; memory-agent in follow-up)
+│   ├── ma-agent-sqa/                             — Gad (stateless in v6.3; memory-agent in follow-up)
+│   └── ...workflow skills (mil498-*, sre-*, cyber-*, devops-*, ml-*)...
+```
+
+**Source of truth.** Hand-edited source remains at `lib/bmad-extension/`. The plugin directory is generated — a new script `scripts/build-plugin.js` produces `lib/bmad-extension-plugin/` from source. Both the source and generated directories are committed to the repo (the generated dir ships in the tarball; committing it makes the build reproducible and diffable).
+
+**Code paths deleted (`lib/bmad.js`):**
+- Lines ~205-283 — manifest.yaml / files-manifest.csv hand-parsing and filtering (the `["custom", "bmb"]` whitelist, `fields[2]` CSV indexing)
+- Lines ~296-346 — custom agent YAML staging into `_bmad/_config/custom/agents/`
+
+Net deletion: ~140 lines. Replacement: ~30 lines for stage-and-invoke.
+
+**Config read path.** Any code that currently reads `_bmad/_config/*` for BMAD-canonical values is redirected to `_bmad/bmm/config.yaml`. ma-agents-owned config (`.ma-agents.json`, `project-context.md`) is unaffected.
+
+**Skill namespace rename.** All skills currently prefixed `bmad-ma-agent-*` are renamed to `ma-agent-*` to vacate the reserved `bmad-*` prefix. Sweep required in: `MANIFEST.yaml`, `lib/bmad-extension/skills/*/SKILL.md` trigger phrases, `module-help.csv`, `.ma-agents.json`, and all doc references.
+
+**Legacy skill retirement.** Drop from MANIFEST.yaml and source tree:
+- `bmad-init` — upstream removed
+- `bmad-agent-qa` (Quinn) — merged into Amelia
+- `bmad-agent-sm` (Bob) — merged into Amelia
+- `bmad-agent-quick-flow-solo-dev` (Barry) — merged into Amelia
+
+**Multi-tool routing.** No change to `lib/agents.js` registry. BMAD's own installer routes plugin content to the right skills directory based on `--tools` (`.github/copilot/skills/`, `.cline/skills/`, `.roo/skills/`, `.kilocode/skills/`, `.claude/skills/`). The `.claude-plugin/marketplace.json` name is a BMAD Builder convention, not a Claude-only binding (per BMAD Builder docs).
+
+**Offline verification gate.** Add a CI job that runs `npm pack`, extracts the tarball into a clean container with egress blocked, and runs the installer end-to-end. Smoke-assert: plugin stages, bmad-method install completes, no outbound connections attempted. Gate every release candidate (NFR50).
+
+**Deferred follow-up (not in this epic).** Convert Demerzel and Gad to Memory-agent format at `_bmad/memory/<agent>/` after 6.3.0 lands. Stateless format is valid for v6.3 — conversion is an authoring improvement, not a compat requirement.
+
+**Rationale.**
+- Deletes ~140 lines of fragile manifest-surgery code whose underlying mechanism no longer exists upstream
+- Uses BMAD's own installer for placement — removes the ma-agents/BMAD coupling on manifest internals
+- PluginResolver's local-file strategy is purpose-built for disconnected deployments — the air-gapped guarantee is preserved, not weakened
+- Skill rename aligns with the reserved-prefix convention, avoiding future upstream collisions
+- Legacy skill retirement tracks upstream consolidation — our catalog stops drifting from BMAD's canonical persona set
+
+**Affects:**
+- `package.json` (bmad-method 6.2.2 → 6.3.0)
+- `lib/bmad.js` (~140 lines deleted, ~30 lines added)
+- `lib/bmad-extension/` (source rename sweep)
+- `lib/bmad-extension-plugin/` (new generated directory)
+- `scripts/build-plugin.js` (new)
+- `scripts/build-bmad-cache.js` (retarget to 6.3.0 module registry location)
+- `lib/bmad-cache/` (rebuilt against 6.3.0)
+- `MANIFEST.yaml` (4 skill removals, mass rename)
+- `bin/cli.js` (stage-and-cleanup around bmad-method invocation)
+- `.gitignore` (add `.ma-agents-plugin-stage/`)
+- CI workflow (new offline install job)
+
+**Out of scope (deferred):**
+- Memory-agent conversion for Demerzel and Gad (FR193, FR194 — follow-up epic)
+- Restructure of stateless agent SKILL.md bodies into BMAD Builder "Stateless Agent" conventions if it changes anything beyond frontmatter
+
+---
+
 ### Implementation Readiness Validation
 
 **Decision Completeness:** HIGH
 - 11 Phase 2 decisions documented (P2-1 through P2-11, with P2-3 superseded by P2-9)
 - 2 Phase 3 decisions documented (P3-1: BMAD Knowledge Graph — FR141-FR157, NFR38-NFR41; P3-2: SQA Agent — FR158-FR171, NFR42-NFR43)
+- 1 Phase 4 decision documented (P4-1: BMAD v6.3.0 Plugin Migration — FR182-FR195, NFR50-NFR54)
 - P2-6 rev includes code example with full parameter mapping table
 - P2-9 includes verified module structure from CIS, manifest examples, migration detection code
 - P2-10 includes wizard flow, config storage format, cross-reference file schema
@@ -1983,7 +2087,7 @@ The inference-server tuning (vLLM flags, quantization, context length) is docume
 
 **Architectural Decisions**
 - [x] Critical decisions documented with rationale (P2-1 through P2-10)
-- [x] Technology stack fully specified (Node.js, bmad-method v6.2.0)
+- [x] Technology stack fully specified (Node.js, bmad-method v6.3.0)
 - [x] Pipeline architectures defined (5-stage install, 6-stage BMAD, 14-step Phase 2 implementation)
 - [x] Extensibility model formalized (config-driven agents, directory-scanned skills, BMAD module pattern)
 - [x] Module architecture verified against BMAD 6.2.0 source (CIS module reference)
