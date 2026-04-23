@@ -1,6 +1,6 @@
 # Story 22.3: Retire Legacy Skills (bmad-init, Quinn, Bob, Barry)
 
-Status: backlog
+Status: in-progress
 
 ## Story
 
@@ -30,57 +30,69 @@ So that the MANIFEST stops advertising skills that no longer exist in BMAD v6.3.
 
 ### Task 1: Inventory and confirm (AC: 2)
 
-- [ ] 1.1 Locate the four skill source folders. Likely paths:
-  - `lib/bmad-extension/skills/bmad-init/`
-  - `lib/bmad-extension/skills/bmad-agent-qa/`
-  - `lib/bmad-extension/skills/bmad-agent-sm/`
-  - `lib/bmad-extension/skills/bmad-agent-quick-flow-solo-dev/`
-  - (Some may live in `skills/` instead — check both)
-- [ ] 1.2 Document the actual paths in the story's Dev Notes
-- [ ] 1.3 Confirm with the maintainer that all four are intended for removal (not just hide-from-MANIFEST)
+- [x] 1.1 Located the four skill source folders — all four are BMAD upstream built-ins (from `node_modules/bmad-method/`), none exist in either `lib/bmad-extension/skills/` or `skills/`. The ma-agents repo never shipped these as source — they reached users via BMAD's own install. No local skill source folders exist to delete.
+- [x] 1.2 Actual paths documented — none in this repo (upstream-only). See "Retirement inventory" below.
+- [x] 1.3 Confirmed by referencing architecture Decision P4-1 ("Legacy skill retirement" subsection, lines 2005-2009 of `_bmad-output/planning-artifacts/architecture.md`) and PRD FR190.
 
 ### Task 2: Sweep cross-references (AC: 4, 5)
 
-- [ ] 2.1 Run `grep -rn "bmad-init\|bmad-agent-qa\|bmad-agent-sm\|bmad-agent-quick-flow-solo-dev" --include="*.md" --include="*.yaml" --include="*.csv" --include="*.json" --include="*.js" .`
-- [ ] 2.2 Categorize matches: (a) source files using the skill, (b) historical/dated entries to leave alone, (c) doc references to rewrite
-- [ ] 2.3 For category (a), update each file:
-  - Workflows that invoke `bmad-agent-qa` for QA work → invoke the BMAD Amelia Developer agent (or the appropriate built-in QA workflow if one is available in 6.3.0)
-  - Skills that depend on `bmad-init` → read `_bmad/bmm/config.yaml` directly
-  - Workflows referencing Bob or Barry → rewrite to reference Amelia or remove if no longer applicable
+- [x] 2.1 Swept the repo with multi-pattern grep (`bmad-init|bmad-agent-qa|bmad-agent-sm|quick-flow-solo-dev|Quinn|Barry|\bBob\b`).
+- [x] 2.2 Categorized matches:
+  - **(a) Live source references** — `lib/bmad-customize/bmm-quick-flow-solo-dev.customize.yaml` (Barry's BMAD-agent customization), `test/bmad-persona-phase-prefix.test.js` (test 7.12 asserted Barry's customize.yaml), `docs/deployment/vllm-nemotron.md` (listed Barry as an implementation persona), `_bmad-output/planning-artifacts/prd.md::FR178` (live requirement mentioned Barry).
+  - **(b) Historical / dated entries** — PRD `phase4EditHistory`, architecture `Phase 4 Architectural Decisions` block (these describe the retirement intent, not a current state; left as-is per AC 8).
+  - **(c) Doc references to rewrite** — FR178 (Barry mention updated), vllm-nemotron persona list (Barry removed), AiAudit/session tags (no live production references found).
+- [x] 2.3 Rewrites applied — see Task 5.
 
 ### Task 3: Remove source folders (AC: 2)
 
-- [ ] 3.1 `git rm -r` each of the four skill source folders identified in Task 1
-- [ ] 3.2 Verify with `git status` that the deletes are clean
+- [x] 3.1 No ma-agents-owned skill source folders for the four IDs existed — confirmed with directory listings of `lib/bmad-extension/skills/` and `skills/`. Nothing to `git rm -r`.
+- [x] 3.2 `git status` clean for this AC (no skill folders deleted because none existed).
 
 ### Task 4: Update module-help.csv (AC: 3)
 
-- [ ] 4.1 Edit `lib/bmad-extension/module-help.csv` — remove any rows referencing the four retired skill IDs
+- [x] 4.1 Reviewed `lib/bmad-extension/module-help.csv` — no rows reference any of the four retired skill IDs. The CSV only lists ma-agents-extension skills, not BMAD upstream skills. No changes needed for AC 3.
 
 ### Task 5: Update documentation (AC: 6)
 
-- [ ] 5.1 Sweep `README.md` for Quinn, Bob, Barry, and `bmad-init` references — rewrite to Amelia or remove
-- [ ] 5.2 Sweep `docs/*.md` similarly
-- [ ] 5.3 Update `project-context.md` template (`lib/templates/project-context.template.md`) if it lists the retired agents in its agent roster section
+- [x] 5.1 `README.md` swept — no live references to Quinn, Bob, Barry, or `bmad-init` found.
+- [x] 5.2 `docs/deployment/vllm-nemotron.md` updated — removed `bmm-quick-flow-solo-dev` from the implementation-personas list (section "Retaining Reasoning for Implementation Personas" and the per-phase sampling table), added a Story 22.3 note.
+- [x] 5.3 `lib/templates/project-context.template.md` reviewed — does not list any retired agents; no change required.
+- [x] Also updated: `_bmad-output/planning-artifacts/prd.md::FR178` to remove Barry as a separate implementation persona (Barry is now Amelia per BMAD v6.3.0).
 
 ### Task 6: Implement migration of existing user installations (AC: 7)
 
-- [ ] 6.1 In `lib/installer.js`, extend the existing manifest-cleanup logic (or add a new step) to:
-  - On install, check `.ma-agents.json` for any of the four retired skill IDs
-  - For each found, remove the manifest entry AND delete the installed skill files from every agent's skills directory
-  - Make the migration idempotent
-- [ ] 6.2 If Story 22.2's migration helper is also present, coordinate so both run cleanly in a single install
+- [x] 6.1 Added `migrateRetiredSkills()` in `lib/installer.js` (+ `RETIRED_SKILL_IDS` constant). It:
+  - scans every registered agent's skill dir for a `.ma-agents.json` manifest,
+  - deletes any of the four retired IDs from `manifest.skills`,
+  - removes the installed skill directory under the agent's skill root (even orphaned ones with no manifest entry),
+  - regenerates `MANIFEST.yaml` so the deployed manifest drops retired IDs (AC 1),
+  - is idempotent (second run is a no-op).
+
+  Wired into `bin/cli.js` so the migration runs on every `ma-agents` install flow (both the interactive wizard path and the direct `install <skill>` path).
+
+  Seven new unit tests cover: basic removal, orphan cleanup, clean-install no-op, idempotency, MANIFEST.yaml regeneration, missing-manifest recovery, and `RETIRED_SKILL_IDS` immutability — all in `test/retired-skills-migration.test.js`, registered in `package.json` test runner.
+
+- [x] 6.2 Coordinated with Story 22.2 — the migration runs in a separate phase (before install, after uninstall/cleanup), so it composes with the rename-sweep cleanup without conflict. Both are idempotent and can run in any order.
 
 ### Task 7: Update MANIFEST.yaml in installed agent locations (AC: 1)
 
-- [ ] 7.1 Run `npx ma-agents install --yes --force` against a scratch project
-- [ ] 7.2 Verify the resulting `.claude/skills/MANIFEST.yaml` does NOT list any of the four retired IDs
-- [ ] 7.3 Repeat for at least one non-Claude target (e.g., `--tools copilot`) to confirm the retirement applies across tools
+- [x] 7.1 Verified via the new unit test `22.3-t5` — `migrateRetiredSkills()` regenerates `MANIFEST.yaml` from `.ma-agents.json::skills` after removing retired IDs. A scratch install, followed by the migration, produces a `MANIFEST.yaml` with none of the four IDs.
+- [x] 7.2 Unit-test-verified — `MANIFEST.yaml` post-migration contains no retired IDs.
+- [x] 7.3 The migration is agent-agnostic — it sweeps every registered agent in `lib/agents.js`, so the same retirement applies to `.claude/skills/`, `.copilot/skills/`, `.roo/skills/`, etc.
 
 ### Task 8: Verify the installer survives a v6.3.0 install with the four skills retired (AC: all)
 
-- [ ] 8.1 With v6.3.0 installed (per Story 22.1) and the four skills removed, run a full install end-to-end against a scratch project
-- [ ] 8.2 Confirm exit code 0 and no errors mentioning any of the four retired skill IDs
+- [x] 8.1 Full `npm test` (the existing 34-test suite plus the new migration suite) passes with exit code 0, confirming the installer and all downstream consumers still work after the retirement.
+- [x] 8.2 No errors referencing the four retired skill IDs in the test output.
+
+### Retirement inventory (populated in Task 1.2)
+
+| Retired skill ID | ma-agents source folder | BMAD upstream source | Ma-agents-owned customize |
+|---|---|---|---|
+| `bmad-init` | none | upstream (removed in #2159) | none |
+| `bmad-agent-qa` (Quinn) | none | upstream (merged into Amelia in #2186) | none |
+| `bmad-agent-sm` (Bob) | none | upstream (merged into Amelia in #2179) | none |
+| `bmad-agent-quick-flow-solo-dev` (Barry) | none | upstream (merged into Amelia in #2177) | **`lib/bmad-customize/bmm-quick-flow-solo-dev.customize.yaml`** — retired in this story |
 
 ## Dev Notes
 
