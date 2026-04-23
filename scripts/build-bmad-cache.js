@@ -9,33 +9,71 @@ const CACHE_DIR = path.join(__dirname, '..', 'lib', 'bmad-cache');
 const MANIFEST_PATH = path.join(CACHE_DIR, 'cache-manifest.json');
 const force = process.argv.includes('--force');
 
+// bmad-method 6.3.0 replaced `tools/cli/external-official-modules.yaml` with
+// `tools/installer/modules/registry-fallback.yaml` (the bundled fallback that
+// mirrors the upstream marketplace `registry/official.yaml`). We read the
+// fallback because (a) it is deterministic across offline builds and (b) it
+// matches what bmad-method itself loads when the network registry is
+// unreachable. The new schema uses map keys with properties — crucially, it
+// no longer carries a `branch` field, and non-external `built_in: true`
+// modules (like `core` and `bmm`) are shipped inside bmad-method itself and
+// must not be cached as separate git clones.
+const REGISTRY_CANDIDATES = [
+  // v6.3.0+
+  ['tools', 'installer', 'modules', 'registry-fallback.yaml'],
+  // legacy v6.2.x fallback (kept so a partial downgrade doesn't explode)
+  ['tools', 'cli', 'external-official-modules.yaml'],
+];
+
 /**
- * Locate and parse external-official-modules.yaml from bmad-method.
- * Uses a simple line-by-line parser to avoid adding js-yaml dependency.
+ * Locate the bmad-method package on disk. Abort cleanly if missing so the
+ * caller gets an actionable "run npm install" message instead of a MODULE_NOT_FOUND
+ * stack trace from deep inside require.resolve.
  */
-function loadModuleDefinitions() {
-  // Locate bmad-method package
-  let bmadMethodDir;
+function locateBmadMethodDir() {
   try {
-    bmadMethodDir = path.dirname(require.resolve('bmad-method/package.json'));
+    return path.dirname(require.resolve('bmad-method/package.json'));
   } catch {
     console.error('Error: bmad-method package not found. Run "npm install" first.');
     process.exit(1);
   }
-
-  const yamlPath = path.join(bmadMethodDir, 'tools', 'cli', 'external-official-modules.yaml');
-  if (!fs.existsSync(yamlPath)) {
-    console.error(`Error: external-official-modules.yaml not found at ${yamlPath}`);
-    process.exit(1);
-  }
-
-  const content = fs.readFileSync(yamlPath, 'utf8');
-  return parseModulesYaml(content);
 }
 
 /**
- * Simple YAML parser for the external-official-modules.yaml structure.
- * Parses top-level module keys under "modules:" and their properties.
+ * Locate the first registry YAML that exists on disk.
+ * Returns { yamlPath, schema } where schema is 'v63' (new map format) or
+ * 'legacy' (the pre-6.3 top-level map with `url`/`branch` fields).
+ */
+function locateRegistry(bmadMethodDir) {
+  for (let i = 0; i < REGISTRY_CANDIDATES.length; i++) {
+    const parts = REGISTRY_CANDIDATES[i];
+    const candidate = path.join(bmadMethodDir, ...parts);
+    if (fs.existsSync(candidate)) {
+      return { yamlPath: candidate, schema: i === 0 ? 'v63' : 'legacy' };
+    }
+  }
+  console.error('Error: no module registry YAML found in bmad-method.');
+  console.error(`  Searched: ${REGISTRY_CANDIDATES.map(p => p.join('/')).join(', ')}`);
+  process.exit(1);
+}
+
+/**
+ * Parse the bundled module registry YAML.
+ *
+ * Both the v6.3.0 (`registry-fallback.yaml`) and legacy
+ * (`external-official-modules.yaml`) schemas use the same shape:
+ *
+ *     modules:
+ *       <module-key>:
+ *         url: "..."
+ *         code: "..."
+ *         name: "..."
+ *         [branch: "..."]            # legacy only
+ *         [built_in: true]           # v6.3.0 only — filter these out
+ *         [module-definition: "..."] # v6.3.0 only — informational
+ *
+ * We keep a minimal line-by-line parser (no js-yaml dep) since the file is
+ * flat and well-formed.
  */
 function parseModulesYaml(content) {
   const modules = [];
@@ -57,8 +95,10 @@ function parseModulesYaml(content) {
 
     if (!inModules) continue;
 
-    // Detect a new module key (indented, no value — just "key:")
-    const moduleKeyMatch = trimmed.match(/^\s{1,4}([a-zA-Z0-9_-]+):\s*$/);
+    // Detect a new module key (1-6 spaces of indent, no value — just "key:").
+    // Widened from {1,4} to tolerate minor upstream reformatting without
+    // silently dropping entries.
+    const moduleKeyMatch = trimmed.match(/^\s{1,6}([a-zA-Z0-9_-]+):\s*$/);
     if (moduleKeyMatch) {
       if (currentModule) modules.push(currentModule);
       currentModule = { key: moduleKeyMatch[1] };
@@ -80,13 +120,58 @@ function parseModulesYaml(content) {
   }
   if (currentModule) modules.push(currentModule);
 
-  // Validate we got the required fields
-  return modules.filter(m => m.code && m.url).map(m => ({
-    code: m.code,
-    url: m.url,
-    name: m.name || m.key,
-    branch: m.branch || 'main'
-  }));
+  return modules;
+}
+
+/**
+ * Normalize parsed module entries into a uniform cache-ready shape:
+ *   { code, url, name, branch }
+ *
+ * - Requires both `code` and `url`.
+ * - Drops entries flagged `built_in: true` / `built_in: "true"` — those are
+ *   first-party bmad-method modules (e.g. `core`, `bmm`) that live inside the
+ *   npm package itself and must not be cached as external git clones. The
+ *   test `'built_in' filter` under "Task 2" in bmad-version-bump.test.js pins
+ *   this invariant.
+ * - Defaults `branch` to `main` when absent (v6.3.0 schema omits it).
+ * - Passes the URL through verbatim (git accepts both `repo` and `repo.git`).
+ */
+// Values that YAML may use to express a truthy boolean. bmad-method uses
+// canonical `true`, but be generous so a future registry that emits `yes`/
+// `on`/`1` cannot accidentally cache a built-in module as an external clone.
+const TRUTHY_STRINGS = new Set(['true', 'yes', 'on', '1', 'y']);
+
+// Module `code` values are used as directory names under lib/bmad-cache.
+// Reject anything that could escape the cache dir or inject shell characters;
+// registry data is trusted today, but this is cheap defense-in-depth.
+const MODULE_CODE_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+function normalizeModules(raw) {
+  return raw
+    .filter(m => m.code && m.url)
+    .filter(m => {
+      const builtIn = String(m.built_in || '').toLowerCase();
+      return !TRUTHY_STRINGS.has(builtIn);
+    })
+    .filter(m => {
+      if (MODULE_CODE_PATTERN.test(m.code)) return true;
+      console.warn(`  ⚠  Skipping module with invalid code "${m.code}" (must match [a-zA-Z0-9_-]+)`);
+      return false;
+    })
+    .map(m => ({
+      code: m.code,
+      url: m.url,
+      name: m.name || m.key,
+      branch: m.branch || 'main',
+    }));
+}
+
+function loadModuleDefinitions() {
+  const bmadMethodDir = locateBmadMethodDir();
+  const { yamlPath, schema } = locateRegistry(bmadMethodDir);
+  console.log(`  Registry: ${path.relative(bmadMethodDir, yamlPath)} (${schema})`);
+  const content = fs.readFileSync(yamlPath, 'utf8');
+  return { modules: normalizeModules(parseModulesYaml(content)), schema };
 }
 
 /**
@@ -117,12 +202,12 @@ function getRemoteHead(url, branch) {
 }
 
 /**
- * Clone, capture SHA, install deps, remove .git for a single module.
+ * Clone, capture SHA, install deps, preserve .git for a single module.
  */
 function processModule(mod, manifest) {
   const moduleDir = path.join(CACHE_DIR, mod.code);
 
-  // Incremental update check (AC #6)
+  // Incremental update check
   if (!force && fs.existsSync(moduleDir) && manifest) {
     const cachedInfo = manifest.modules && manifest.modules[mod.code];
     if (cachedInfo && cachedInfo.commitSha) {
@@ -142,20 +227,20 @@ function processModule(mod, manifest) {
     fs.removeSync(moduleDir);
   }
 
-  // Clone (AC #1)
+  // Clone
   console.log(`  📥 ${mod.code}: cloning from ${mod.url} (branch: ${mod.branch})`);
   try {
     execFileSync('git', ['clone', '--depth', '1', '--branch', mod.branch, mod.url, moduleDir], {
       encoding: 'utf8',
       stdio: 'pipe',
-      timeout: 120000
+      timeout: 120000,
     });
   } catch (err) {
     console.error(`  ❌ ${mod.code}: clone failed - ${err.message}`);
     return null;
   }
 
-  // Capture commit SHA BEFORE removing .git (AC #4 - order matters)
+  // Capture commit SHA BEFORE renaming .git (order matters — rev-parse needs .git in place)
   let commitSha = '';
   try {
     commitSha = execFileSync('git', ['-C', moduleDir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
@@ -163,7 +248,16 @@ function processModule(mod, manifest) {
     console.warn(`  ⚠  ${mod.code}: could not capture commit SHA`);
   }
 
-  // Install production dependencies (AC #2)
+  // If the clone produced an empty repository (no commits yet), fail the
+  // module explicitly rather than storing a blank SHA in the manifest —
+  // blank SHAs would permanently defeat the incremental-update check on
+  // every subsequent run.
+  if (!commitSha) {
+    console.error(`  ❌ ${mod.code}: cloned repo has no HEAD SHA — skipping`);
+    return null;
+  }
+
+  // Install production dependencies
   const pkgJsonPath = path.join(moduleDir, 'package.json');
   if (fs.existsSync(pkgJsonPath)) {
     try {
@@ -175,7 +269,7 @@ function processModule(mod, manifest) {
           encoding: 'utf8',
           stdio: 'pipe',
           timeout: 120000,
-          shell: process.platform === 'win32'
+          shell: process.platform === 'win32',
         });
       } else {
         console.log(`  📦 ${mod.code}: no production dependencies, skipping npm install`);
@@ -190,18 +284,26 @@ function processModule(mod, manifest) {
   // Rename .git → _git_preserved so it survives npm pack (npm always strips .git/).
   // prePopulateBmadCache() restores it and sets origin to a local file:// URL so that
   // bmad-method's "git fetch origin" succeeds without network access.
+  //
+  // Windows Defender / Explorer may briefly lock newly-created directories
+  // (EBUSY). Treat rename failures as non-fatal — the module still has its
+  // source files and the incremental-update check will re-clone next run.
   const gitDir = path.join(moduleDir, '.git');
   const preservedDir = path.join(moduleDir, '_git_preserved');
   if (fs.existsSync(gitDir)) {
-    fs.renameSync(gitDir, preservedDir);
-    console.log(`  📦 ${mod.code}: preserved .git as _git_preserved`);
+    try {
+      fs.renameSync(gitDir, preservedDir);
+      console.log(`  📦 ${mod.code}: preserved .git as _git_preserved`);
+    } catch (err) {
+      console.warn(`  ⚠  ${mod.code}: could not preserve .git — ${err.message} (offline-mode fetches may fail until next rebuild)`);
+    }
   }
 
   return {
     url: mod.url,
     branch: mod.branch,
     commitSha,
-    clonedAt: new Date().toISOString()
+    clonedAt: new Date().toISOString(),
   };
 }
 
@@ -212,25 +314,88 @@ function main() {
   console.log('🔨 BMAD Cache Build Script');
   console.log('='.repeat(40));
 
-  // Load module definitions (Task 2)
-  const modules = loadModuleDefinitions();
+  const { modules, schema } = loadModuleDefinitions();
   if (modules.length === 0) {
-    console.error('Error: No modules found in external-official-modules.yaml');
+    console.error('Error: No modules found in registry YAML');
     process.exit(1);
   }
   console.log(`Found ${modules.length} modules: ${modules.map(m => m.code).join(', ')}`);
 
-  // Handle --force flag (AC #5 / Task 6)
+  // Load the existing manifest FIRST so retention data survives a --force
+  // wipe. We identify retired-upstream modules up-front and stash their
+  // directory contents so AC #7 (no silent deletion of retired modules) is
+  // honored even under --force.
+  const existingManifest = loadManifest();
+  const currentCodes = new Set(modules.map(m => m.code));
+  const retentionStash = {};
+  if (existingManifest && existingManifest.modules) {
+    for (const oldCode of Object.keys(existingManifest.modules)) {
+      if (currentCodes.has(oldCode)) continue;
+      const oldDir = path.join(CACHE_DIR, oldCode);
+      let isRealDir = false;
+      try {
+        isRealDir = fs.existsSync(oldDir) && fs.statSync(oldDir).isDirectory();
+      } catch {
+        isRealDir = false;
+      }
+      if (isRealDir) {
+        retentionStash[oldCode] = {
+          dir: oldDir,
+          manifestEntry: existingManifest.modules[oldCode],
+        };
+      }
+    }
+  }
+
+  // Handle --force flag. When --force is set, move retained directories to
+  // a temp location so the wipe does not remove them — then restore after
+  // the cache dir is recreated. Treat stash-move failures as non-fatal
+  // (worst case: retention is skipped for that module, and the manifest
+  // entry is not re-added — identical to pre-AC-#7 behavior).
   if (force && fs.existsSync(CACHE_DIR)) {
+    const tempStashDir = path.join(path.dirname(CACHE_DIR), `.bmad-cache-stash-${Date.now()}`);
+    const stashedDirs = {};
+    if (Object.keys(retentionStash).length > 0) {
+      try {
+        fs.ensureDirSync(tempStashDir);
+        for (const [code, info] of Object.entries(retentionStash)) {
+          const stashedPath = path.join(tempStashDir, code);
+          try {
+            fs.moveSync(info.dir, stashedPath);
+            stashedDirs[code] = stashedPath;
+          } catch (err) {
+            console.warn(`  ⚠  Could not stash ${code} before --force wipe: ${err.message} (retention will be skipped for this module)`);
+          }
+        }
+      } catch (err) {
+        console.warn(`  ⚠  Could not create retention stash dir: ${err.message} (retention will be skipped)`);
+      }
+    }
+
     console.log('🔄 --force: removing existing cache directory');
     fs.removeSync(CACHE_DIR);
+    fs.ensureDirSync(CACHE_DIR);
+
+    // Restore stashed retained directories
+    for (const [code, stashedPath] of Object.entries(stashedDirs)) {
+      try {
+        fs.moveSync(stashedPath, path.join(CACHE_DIR, code));
+      } catch (err) {
+        console.warn(`  ⚠  Could not restore stashed ${code}: ${err.message}`);
+        // Remove from retentionStash so the retention loop below does not
+        // register a manifest entry for a directory that no longer exists.
+        delete retentionStash[code];
+      }
+    }
+    try {
+      fs.removeSync(tempStashDir);
+    } catch {
+      // Non-fatal cleanup
+    }
   }
 
   // Ensure cache directory exists
   fs.ensureDirSync(CACHE_DIR);
-
-  // Load existing manifest for incremental updates (Task 7)
-  const existingManifest = loadManifest();
 
   // Get bmad-method version
   let bmadMethodVersion = 'unknown';
@@ -242,7 +407,7 @@ function main() {
     // continue with unknown version
   }
 
-  // Process each module (Tasks 3, 4, 5)
+  // Process each module from the registry
   console.log('\nProcessing modules:');
   const manifestModules = {};
   let successCount = 0;
@@ -260,7 +425,8 @@ function main() {
         successCount++;
       }
     } else {
-      // Preserve existing manifest entry for failed modules (M2 fix)
+      // Preserve existing manifest entry for failed modules so a transient
+      // clone failure does not corrupt the manifest on re-run.
       if (existingManifest && existingManifest.modules && existingManifest.modules[mod.code]) {
         manifestModules[mod.code] = existingManifest.modules[mod.code];
       }
@@ -268,18 +434,55 @@ function main() {
     }
   }
 
-  // Write cache-manifest.json (AC #4 / Task 5)
+  // AC #7 gate: preserve existing cached modules that are no longer in the
+  // upstream registry (e.g. v6.3.0 retired `wds`). We keep the directory and
+  // the manifest entry verbatim so downstream consumers keep working until a
+  // maintainer explicitly confirms deletion. The retirement is documented in
+  // the story's Dev Notes.
+  //
+  // `retentionStash` was built up-front (before any --force wipe) so the
+  // retention decision does not depend on whether the module directory
+  // survives the wipe. After --force restores the stashed directory, or when
+  // --force isn't set and the directory is still on disk, we re-verify
+  // existence as a final guard against restore failures.
+  let retainedCount = 0;
+  for (const [oldCode, info] of Object.entries(retentionStash)) {
+    if (manifestModules[oldCode]) continue; // already emitted (shouldn't happen)
+    const oldDir = path.join(CACHE_DIR, oldCode);
+    let isRealDir = false;
+    try {
+      isRealDir = fs.existsSync(oldDir) && fs.statSync(oldDir).isDirectory();
+    } catch {
+      isRealDir = false;
+    }
+    if (isRealDir) {
+      manifestModules[oldCode] = {
+        ...info.manifestEntry,
+        retiredUpstream: true,
+      };
+      console.log(`  📌 ${oldCode}: retired upstream but retained (see AC #7 — remove only after maintainer confirmation)`);
+      retainedCount++;
+    }
+  }
+
+  // Write cache-manifest.json atomically — write to a sibling temp file
+  // then rename. A Ctrl-C or process crash mid-write leaves the previous
+  // manifest intact rather than a truncated JSON file that breaks
+  // subsequent incremental builds.
   const manifest = {
     generated: new Date().toISOString(),
     bmadMethodVersion,
-    modules: manifestModules
+    registrySchema: schema,
+    modules: manifestModules,
   };
-  fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'utf8');
+  const manifestTmp = `${MANIFEST_PATH}.tmp`;
+  fs.writeFileSync(manifestTmp, JSON.stringify(manifest, null, 2), 'utf8');
+  fs.renameSync(manifestTmp, MANIFEST_PATH);
 
   // Summary
   console.log('\n' + '='.repeat(40));
   console.log('✅ BMAD Cache Build Complete');
-  console.log(`   Cloned: ${successCount}, Skipped: ${skipCount}, Failed: ${failCount}`);
+  console.log(`   Cloned: ${successCount}, Skipped: ${skipCount}, Retained: ${retainedCount}, Failed: ${failCount}`);
   console.log(`   Cache: ${CACHE_DIR}`);
   console.log(`   Manifest: ${MANIFEST_PATH}`);
 

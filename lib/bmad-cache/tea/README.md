@@ -28,26 +28,28 @@ BMad is a small **agent + workflow engine**. There is no external orchestrator �
 
 ### Building Blocks
 
-Each workflow directory contains these files, and each has a specific job:
+TEA has two layers of files, and each has a specific job:
 
-| File              | What it does                                                                                                        | When it loads                                                             |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `SKILL.md`        | Expert persona — identity, principles, critical actions, capabilities table                                         | First — always in context                                                 |
-| `workflow.yaml`   | Machine-readable metadata — config variables, required tools, tags                                                  | Second — resolves `{project-root}`, `{config_source}`, `{test_artifacts}` |
-| `workflow.md`     | Human-readable entry point — goals, mode menu (Create/Edit/Validate), routes to first step                          | Second — presents mode choice                                             |
-| `instructions.md` | Workflow-specific rules and context (optional, supplements workflow.md)                                             | On demand                                                                 |
-| `steps-c/*.md`    | **Create** steps — primary execution, 5-9 sequential files                                                          | One at a time (just-in-time)                                              |
-| `steps-e/*.md`    | **Edit** steps — always 2 files: assess target, apply edit                                                          | One at a time                                                             |
-| `steps-v/*.md`    | **Validate** steps — always 1 file: evaluate against checklist                                                      | On demand                                                                 |
-| `checklist.md`    | Validation criteria — what "done" looks like for this workflow                                                      | Read by steps-v                                                           |
-| `*-template.md`   | Output skeleton with `{PLACEHOLDER}` vars — steps fill these in to produce the final artifact                       | Read by steps-c when generating output                                    |
-| `tea-index.csv`   | Knowledge fragment index — id, name, tags, tier (core/extended/specialized), file path                              | Read by step-01 to decide which fragments to load                         |
-| `knowledge/*.md`  | 40 reusable fragments — standards, patterns, API references (e.g., `data-factories.md`, `pactjs-utils-overview.md`) | Selectively read into context based on tier + config flags                |
+| File / Scope                                       | What it does                                                                                         | When it loads                                           |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `src/agents/bmad-tea/SKILL.md`                     | Murat's persona — identity, principles, critical actions, capabilities table                         | First — activates the TEA agent                         |
+| `src/agents/bmad-tea/customize.toml`               | Agent customization surface — menu items, persistent facts, activation hooks                         | During agent activation                                 |
+| `src/workflows/testarch/<workflow>/SKILL.md`       | Workflow entrypoint — resolves workflow customization, picks mode, routes to the first step          | When a TEA workflow is invoked                          |
+| `src/workflows/testarch/<workflow>/customize.toml` | Workflow customization surface — activation hooks, persistent facts, optional `on_complete` behavior | During workflow activation                              |
+| `src/workflows/testarch/<workflow>/workflow.yaml`  | Machine-readable workflow metadata — descriptions, defaults, tool hints, output paths                | Used by installer/tooling and workflow metadata lookups |
+| `instructions.md`                                  | Workflow-specific summary and operator notes                                                         | On demand                                               |
+| `steps-c/*.md`                                     | **Create** steps — primary execution, 5-9 sequential files                                           | One at a time (just-in-time)                            |
+| `steps-e/*.md`                                     | **Edit** steps — always 2 files: assess target, apply edit                                           | One at a time                                           |
+| `steps-v/*.md`                                     | **Validate** steps — always 1 file: evaluate against checklist                                       | On demand                                               |
+| `checklist.md`                                     | Validation criteria — what "done" looks like for this workflow                                       | Read by steps-v                                         |
+| `*-template.md`                                    | Output skeleton with `{PLACEHOLDER}` vars — steps fill these in to produce the final artifact        | Read by steps-c when generating output                  |
+| `src/agents/bmad-tea/resources/tea-index.csv`      | Knowledge fragment index — id, name, tags, tier (core/extended/specialized), file path               | Read to decide which shared TEA fragments to load       |
+| `resources/knowledge/*.md`                         | Reusable fragments — standards, patterns, API references                                             | Selectively read into context based on tier + config    |
 
 ```mermaid
 flowchart LR
   U[User] --> A[Agent Persona]
-  A --> W[Workflow Entry: workflow.md]
+  A --> W[Workflow Entry: workflow SKILL.md]
   W --> S[Step Files: steps-c / steps-e / steps-v]
   S --> K[Knowledge Fragments<br/>tea-index.csv → knowledge/*.md]
   S --> T[Templates & Checklists<br/>*-template.md, checklist.md]
@@ -59,8 +61,8 @@ flowchart LR
 
 1. **Trigger** — Direct commands are `/bmad:tea:automate` (Claude/Cursor/Windsurf) and `$bmad-tea-testarch-automate` (Codex). Load the conversational TEA menu with `$bmad-tea` in Codex. `TA` is an agent-menu trigger available only after TEA is activated; the capabilities table in `SKILL.md` maps `TA` to the `bmad-testarch-automate` skill.
 2. **Agent loads** — `SKILL.md` injects the persona (identity, principles, critical actions) into the context window.
-3. **Workflow loads** — `workflow.yaml` resolves config variables and `workflow.md` presents the mode menu (Create / Edit / Validate), then routes to the first step file.
-4. **Step-by-step execution** — Only the current step file is in context (just-in-time loading). Each step explicitly names the next one (`nextStepFile: './step-02-...'`). The LLM reads, executes, saves output, then loads the next step. No future steps are ever preloaded.
+3. **Workflow loads** — The workflow's `SKILL.md` becomes the entrypoint. It resolves the workflow block from `customize.toml`, loads persistent facts and config, decides the mode (Create / Edit / Validate), then routes to the first step file.
+4. **Step-by-step execution** — Only the current step file is in context (just-in-time loading). Each step explicitly names the next one with a `{skill-root}`-anchored path. The LLM reads, executes, saves output, then loads the next step. No future steps are ever preloaded.
 5. **Knowledge injection** — Step-01 reads `tea-index.csv` and selectively loads fragments by **tier** (core = always, extended = on-demand, specialized = only when relevant) and **config flags** (e.g., `tea_use_pactjs_utils`). This is deliberate context engineering: a backend project loads ~1,800 lines of fragments; a fullstack project loads ~4,500 lines. Conditional loading cuts context usage by 40-50%.
 6. **Templates** — When a step produces output (e.g., a traceability matrix or test review report), it reads the `*-template.md` file and fills in the `{PLACEHOLDER}` values with computed results. The template provides consistent structure; the step provides the content.
 7. **Subagent isolation** — Heavy workflows (e.g., `automate`) spawn parallel subagents that each run in an isolated context. Subagents write structured JSON to temp files. An aggregation step reads the JSON outputs — only the results enter the main context, not the full subagent history.
@@ -84,12 +86,12 @@ BMad workflows and Claude Code Skills solve different problems at different scal
 
 The key insight is that there is **no external runtime engine** — the LLM _is_ the engine. BMad workflows are structured markdown that the LLM follows as instructions: "read this file, execute it completely, save your output, load the next file." Skills are a single tool in a toolbox; BMad workflows are a workshop with a process manual.
 
-**How workflows become commands.** When you run `npx bmad-method install`, the installer generates tool-specific artifacts for your runtime (for example, Claude Code uses `.claude/commands/`, while Codex uses `.agents/skills/`). In Claude Code, `bmad-tea-testarch-automate.md` tells the LLM: "load the core workflow engine (`workflow.xml`), pass it this workflow config (`automate/workflow.yaml`), follow the instructions exactly." That launcher artifact is the bridge — it triggers the workflow entry point; the multi-step engine takes over from there.
+**How workflows become commands.** When you run `npx bmad-method install`, the installer generates tool-specific artifacts for your runtime (for example, Claude Code uses `.claude/commands/`, while Codex uses `.agents/skills/`). Those launchers bridge into the installed TEA agent or workflow package. Once invoked, the workflow's `SKILL.md` is the conversational entrypoint, and the step-file process takes over from there.
 
 ```text
 .claude/commands/                         # Generated by installer
 ├── bmad-tea.md                           # /tea → loads agent persona + menu
-├── bmad-tea-testarch-automate.md         # /automate → loads workflow.xml + workflow.yaml
+├── bmad-tea-testarch-automate.md         # /automate → invokes the automate workflow package
 ├── bmad-tea-testarch-test-design.md      # /test-design → ...
 ├── bmad-bmm-create-prd.md               # /create-prd → BMM workflow
 └── ... (61 commands total across all installed modules)
@@ -174,7 +176,12 @@ Workflows load only the fragments required for the current task to stay focused 
 src/
 ├── module.yaml
 ├── agents/
-│   └── bmad-tea/              # Native skill: SKILL.md + bmad-skill-manifest.yaml
+│   └── bmad-tea/
+│       ├── SKILL.md
+│       ├── customize.toml
+│       └── resources/
+│           ├── tea-index.csv
+│           └── knowledge/
 ├── workflows/
 │   └── testarch/
 │       ├── bmad-teach-me-testing/
@@ -186,11 +193,6 @@ src/
 │       ├── bmad-testarch-test-design/
 │       ├── bmad-testarch-test-review/
 │       └── bmad-testarch-trace/
-└── agents/
-    └── bmad-tea/
-        └── resources/
-            ├── tea-index.csv
-            └── knowledge/
 ```
 
 ## Extending TEA
@@ -214,7 +216,7 @@ See `CONTRIBUTING.md` for guidelines.
 
 ## Publishing TEA to NPM
 
-TEA uses an automated release workflow that handles versioning, tagging, NPM publishing, and GitHub releases.
+TEA uses an automated release workflow that handles versioning, metadata sync, tagging, NPM publishing, and GitHub releases.
 
 ### Prerequisites (One-Time Setup)
 
@@ -229,13 +231,18 @@ TEA uses an automated release workflow that handles versioning, tagging, NPM pub
    # Check package.json settings
    cat package.json | grep -A 3 "publishConfig"
    # Should show: "access": "public"
+   if grep -Eq '"private"[[:space:]]*:[[:space:]]*true' package.json; then
+     echo '❌ package.json must not set "private": true'
+   else
+     echo '✅ package.json is publishable ("private": true not present)'
+   fi
    ```
 
 ### Release Process
 
 #### Option 1: Using npm Scripts (Recommended)
 
-From your local terminal after merging to `main`:
+From your local terminal after merging to the release branch you want to publish, typically `main`:
 
 ```bash
 # Beta release (first release or testing)
@@ -259,46 +266,47 @@ npm run release:major
 1. Go to **Actions** tab in GitHub
 2. Click **"Manual Release"** workflow
 3. Click **"Run workflow"**
-4. Select version bump type (alpha, beta, patch, minor, major)
-5. Click **"Run workflow"**
+4. Choose the branch to release, typically `main`
+5. Select version bump type (alpha, beta, patch, minor, major)
+6. Click **"Run workflow"**
 
 ### What Happens Automatically
 
 The workflow performs these steps:
 
-1. ✅ **Validation**: Runs all tests, linting, and format checks
-2. ✅ **Version Bump**: Updates `package.json` version
-   - `beta`: 0.1.0 → 0.1.1-beta.0
-   - `alpha`: 0.1.0 → 0.1.1-alpha.0
-   - `patch`: 0.1.0 → 0.1.1
-   - `minor`: 0.1.0 → 0.2.0
-   - `major`: 0.1.0 → 1.0.0
+1. ✅ **Validation**: Runs the full `npm test` suite, including schema checks, install tests, knowledge checks, linting, markdown linting, formatting, and release metadata validation
+2. ✅ **Version Bump**: Updates `package.json`, `package-lock.json`, and `.claude-plugin/marketplace.json`
+   - `beta`: 1.12.3 → 1.12.4-beta.0
+   - `alpha`: 1.12.3 → 1.12.4-alpha.0
+   - `patch`: 1.12.3 → 1.12.4
+   - `minor`: 1.12.3 → 1.13.0
+   - `major`: 1.12.3 → 2.0.0
 3. ✅ **Commit**: Creates version bump commit
-4. ✅ **Tag**: Creates git tag (e.g., v0.1.1-beta.0)
-5. ✅ **Push**: Pushes tag to GitHub
-6. ✅ **Publish**: Publishes to NPM registry
-   - Alpha → `npm install --tag alpha`
-   - Beta → `npm install` (tagged as `latest`)
-   - Stable → `npm install` (tagged as `latest`)
+4. ✅ **Tag**: Creates git tag (e.g., v1.12.4-beta.0)
+5. ✅ **Publish**: Publishes to NPM registry
+   - Alpha → dist-tag `alpha` (`npm install bmad-method-test-architecture-enterprise@alpha`)
+   - Beta → dist-tag `beta` (`npm install bmad-method-test-architecture-enterprise@beta`)
+   - Stable → dist-tag `latest` (`npm install bmad-method-test-architecture-enterprise`)
+6. ✅ **Push**: Pushes the version bump commit back to the selected branch when permitted, and always pushes the tag
 7. ✅ **GitHub Release**: Creates release with auto-generated notes
-8. ✅ **Summary**: Displays installation instructions
+8. ✅ **Summary**: Displays installation instructions and distribution links
 
 ### Version Bump Strategy
 
 **For TEA Module:**
 
-- **Beta (0.1.x-beta.x)**: Pre-1.0 testing, used for initial releases
-- **Alpha (0.1.x-alpha.x)**: Early development, experimental features
-- **Patch (0.1.x)**: Bug fixes, no new features
-- **Minor (0.x.0)**: New features, backwards compatible
-- **Major (x.0.0)**: Breaking changes (e.g., 1.0.0 release)
+- **Beta (`1.12.x-beta.x`)**: Release candidate testing on the next patch line
+- **Alpha (`1.12.x-alpha.x`)**: Early development and experimental validation
+- **Patch (`1.12.x`)**: Bug fixes, no breaking changes
+- **Minor (`1.x.0`)**: New features, backwards compatible
+- **Major (`x.0.0`)**: Breaking changes
 
 **Recommended Release Path:**
 
-1. `0.1.0` → `0.1.1-beta.0` (first beta)
+1. `1.12.3` → `1.12.4-beta.0` (first beta)
 2. Test beta with early adopters
-3. `0.1.1-beta.0` → `0.1.1-beta.1` (fixes)
-4. When stable: `0.1.1-beta.1` → `1.0.0` (official release)
+3. `1.12.4-beta.0` → `1.12.4-beta.1` (fixes)
+4. When stable: `1.12.4-beta.1` → `1.12.4`
 
 ### Verify Publication
 
@@ -329,10 +337,10 @@ If you need to unpublish a version:
 
 ```bash
 # Unpublish specific version (within 72 hours)
-npm unpublish bmad-method-test-architecture-enterprise@0.1.1-beta.0
+npm unpublish bmad-method-test-architecture-enterprise@1.12.4-beta.0
 
 # Deprecate version (preferred for older releases)
-npm deprecate bmad-method-test-architecture-enterprise@0.1.1-beta.0 "Use version X.Y.Z instead"
+npm deprecate bmad-method-test-architecture-enterprise@1.12.4-beta.0 "Use version X.Y.Z instead"
 ```
 
 ### Troubleshooting
@@ -354,7 +362,7 @@ npm deprecate bmad-method-test-architecture-enterprise@0.1.1-beta.0 "Use version
 
 **"Git push failed (protected branch)":**
 
-- This is expected for protected `main` branch
+- This is expected for a protected release branch
 - The tag and version bump are still created
 - You may need to manually merge the version bump commit
 

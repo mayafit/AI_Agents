@@ -218,7 +218,7 @@ test('buildBmadArgs quotes path with spaces in --directory', () => {
   assert.ok(result.includes('--directory "D:\\My Projects\\test project"'), `Expected quoted path in: ${result}`);
 });
 
-test('buildBmadArgs includes --custom-content on fresh install when extension exists', () => {
+test('buildBmadArgs includes a custom-module flag on fresh install when extension exists', () => {
   const fs = require('fs');
   const extensionPath = path.join(__dirname, '..', 'lib', 'bmad-extension');
   // This test requires lib/bmad-extension/ to exist (it does in this repo)
@@ -230,18 +230,22 @@ test('buildBmadArgs includes --custom-content on fresh install when extension ex
     tools: [],
     action: 'install',
   });
-  assert.ok(result.includes('--custom-content'), `Expected --custom-content in: ${result}`);
+  // bmad-method 6.3.0 renamed --custom-content to --custom-source. Accept
+  // either so the test survives downgrades during bisects.
+  const hasFlag = result.includes('--custom-source') || result.includes('--custom-content');
+  assert.ok(hasFlag, `Expected --custom-source or --custom-content in: ${result}`);
   assert.ok(result.includes(`"${extensionPath}"`), `Expected quoted extension path in: ${result}`);
 });
 
-test('buildBmadArgs includes --custom-content on update for bmad-method 6.2.2 compatibility', () => {
+test('buildBmadArgs includes a custom-module flag on update for bmad-method compatibility', () => {
   const result = bmad.buildBmadArgs({
     projectRoot: '/test',
     modules: ['bmm'],
     tools: [],
     action: 'update',
   });
-  assert.ok(result.includes('--custom-content'), `Expected --custom-content on update for 6.2.2 compat, got: ${result}`);
+  const hasFlag = result.includes('--custom-source') || result.includes('--custom-content');
+  assert.ok(hasFlag, `Expected --custom-source or --custom-content on update, got: ${result}`);
 });
 
 test('buildBmadArgs includes all params in correct combined command', () => {
@@ -267,7 +271,10 @@ test('buildBmadArgs includes all params in correct combined command', () => {
   assert.ok(result.includes('--action update'), 'Expected --action update');
 });
 
-test('buildBmadArgs starts with node and bmad-npx-wrapper path', () => {
+test('buildBmadArgs starts with node and bmad-method CLI entry path', () => {
+  // bmad-method 6.3.0 renamed the entry point from tools/bmad-npx-wrapper.js
+  // to tools/installer/bmad-cli.js. Accept either so the test survives local
+  // downgrades to 6.2.x during bisects.
   const result = bmad.buildBmadArgs({
     projectRoot: '/test',
     modules: ['bmm'],
@@ -275,23 +282,28 @@ test('buildBmadArgs starts with node and bmad-npx-wrapper path', () => {
     action: 'install',
   });
   assert.ok(result.startsWith('node "'), `Expected command to start with 'node "': ${result}`);
-  assert.ok(result.includes('bmad-npx-wrapper.js'), `Expected bmad-npx-wrapper.js in: ${result}`);
+  const hasEntry = result.includes('bmad-cli.js') || result.includes('bmad-npx-wrapper.js');
+  assert.ok(hasEntry, `Expected bmad-cli.js or bmad-npx-wrapper.js in: ${result}`);
 });
 
-// ---- M4: --custom-content conditional tests ----
+// ---- M4: custom-module flag conditional tests ----
 
 console.log('\nCode review fixes: edge cases');
 
-test('buildBmadArgs includes exactly one --custom-content on fresh install', () => {
+test('buildBmadArgs includes exactly one custom-module flag on fresh install', () => {
   const result = bmad.buildBmadArgs({
     projectRoot: '/test',
     modules: ['bmm'],
     tools: [],
     action: 'install',
   });
-  // Count occurrences of --custom-content — should be exactly 1 (since dir exists in this repo)
-  const matches = result.match(/--custom-content/g);
-  assert.strictEqual(matches ? matches.length : 0, 1, 'Expected exactly one --custom-content flag');
+  // Count occurrences of either flag name — should be exactly 1 total
+  // (since lib/bmad-extension/ exists in this repo).
+  const sourceMatches = result.match(/--custom-source/g) || [];
+  const contentMatches = result.match(/--custom-content/g) || [];
+  const totalFlagCount = sourceMatches.length + contentMatches.length;
+  assert.strictEqual(totalFlagCount, 1,
+    `Expected exactly one custom-module flag, got source=${sourceMatches.length} content=${contentMatches.length}`);
 });
 
 // ---- M5: Input validation ----
