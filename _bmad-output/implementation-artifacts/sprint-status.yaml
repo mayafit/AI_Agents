@@ -5,6 +5,7 @@
 # updated: 2026-04-14 — Epic 21 corrective plan: added Epic 18 tracking block to sprint-status (Story 18.1 already delivered at code level; remaining stories backlog). Fixes adversarial review Finding #16.
 # updated: 2026-04-07 — All Epic 17 stories (17.9-17.24) implemented and marked done. Epic 19 (BMAD Knowledge Graph) added to backlog.
 # updated: 2026-04-23 — Reconciled statuses against git ground truth: Epic 21 (on-prem) shipped in 3.6.0/3.6.1, marked done (all 21.1-21.11). Epic 18 (Roo Code) mostly shipped via PRs #5/#7 + Epic 21 corrective work: 18.2/18.3/18.4/18.7/18.8 done, 18.5/18.6 remain backlog. Airgapped recompile bug shipped via PR #42, marked done. ExperimentalWarning bug shipped via PR #41, marked done. Fixed yaml indent on epic-14.
+# updated: 2026-04-23 — Archived Epic 17 (Sprint Management Model Rework, 16 stories 17.9-17.24) and Epic 21 (On-Prem / Local-LLM Tuning, 11 stories 21.1-21.11). Archived 2 bug stories (experimentalwarning, airgapped-recompile). Story files moved to implementation-artifacts/done/; removed from active sprint-status.yaml.
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,11 +18,12 @@
 # Retrospective: optional → done
 #
 # Done epics archived (2026-04-03): 1, 2, 3, 6, 8, 9, 10, 11, 12, 13, 15, 16
+# Done epics archived (2026-04-23): 17, 21 (plus 2 standalone bug stories)
 # Done stories for Epic 5 (5.1-5.4) also archived; 5.5-5.6 remain (in review).
 # Old Epic 17 stories (17.1-17.8) archived; replaced by 17.9-17.24.
 
 generated: 2026-03-15
-last_updated: 2026-04-23 — Reconciled against git ground truth (Epic 21 done, Epic 18 mostly done, 2 bugs done). Epic 22 (BMAD v6.3.0 Plugin Migration) and Epic 23 (Memory-Agent Conversion) added to backlog.
+last_updated: 2026-04-23 — Archived Epic 17 (16 stories), Epic 21 (11 stories), and 2 bug stories. Active file now reflects open work only.
 project: agents
 project_key: NOKEY
 tracking_system: file-system
@@ -30,8 +32,7 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   # ─── ACTIVE BUGS ──────────────────────────────────────────────────────────────
   # Standalone bug stories — discoverable via glob: _bmad-output/implementation-artifacts/bug-*.md
-  bug-experimentalwarning-about-commonjs-loading-es-module-during-install: done
-  bug-bmad-recompile-fails-on-airgapped-network: done
+  # (no active bugs — previously tracked bugs archived 2026-04-23)
 
   # ─── IN PROGRESS ──────────────────────────────────────────────────────────────
 
@@ -40,28 +41,6 @@ development_status:
   5-5-explicit-parameter-passing: review
   5-6-fix-space-in-path-bug: review
   epic-5-retrospective: optional
-
-  # Epic 17: Sprint Management Model Rework — Unified sprint-status.yaml
-  # Redesigned 2026-04-03: 16 new stories (17.9-17.24) replacing old 17.1-17.8.
-  # Execution order: 17.9 → 17.15 → 17.10 → 17.16 → 17.11 → 17.12 → 17.13 → 17.14 → 17.17 → 17.18 → 17.19 → 17.20 → 17.24 → 17.21 → 17.22 → 17.23
-  epic-17: done
-  17-9-unified-sprint-status-schema: done
-  17-10-rework-generate-backlog: done
-  17-11-rework-add-to-sprint: done
-  17-12-rework-remove-from-sprint: done
-  17-13-rework-sprint-status-view: done
-  17-14-rework-cleanup-done: done
-  17-15-rework-bmad-sprint-planning: done
-  17-16-rework-add-sprint: done
-  17-17-rework-modify-sprint: done
-  17-18-rework-bmad-dev-story: done
-  17-19-rework-story-status-lookup: done
-  17-20-rework-bmad-sprint-status: done
-  17-21-new-close-sprint: done
-  17-22-jira-adapter-pattern: done
-  17-23-migration-deprecation-old-files: done
-  17-24-rework-prioritize-backlog: done
-  epic-17-retrospective: optional
 
   # ─── ON HOLD ──────────────────────────────────────────────────────────────────
 
@@ -108,24 +87,6 @@ development_status:
   18-7-cline-to-roo-code-migration: done
   18-8-end-to-end-validation-test-coverage: done
   epic-18-retrospective: optional
-
-  # Epic 21: On-Prem / Local-LLM Tuning (Phase 3) — SHIPPED in 3.6.0 / 3.6.1
-  # Dependencies: Epics 9 (OpenCode JSON-merge), 13 (project-context template stamping pattern), 15 (customize-loader), 18 (Roo Code agent registration)
-  # Architecture: Decision P3-3 in _bmad-output/planning-artifacts/architecture.md
-  # 2026-04-23 reconciliation: all stories shipped (21.1 PR #34, 21.2 PR #44, 21.3 PR #46, 21.4 PR #45, 21.5 PR #47, 21.6 PR #48, 21.7 PR #50, 21.8 PR #51, 21.9 PR #52, 21.10 PR #49, 21.11 PR #53). Release bumps: 3.6.0 (c72ea58), 3.6.1 (9a2e37c). Candidate for archival via cleanup-done.
-  epic-21: done
-  21-1-install-time-profile-prompt: done
-  21-2-universal-instruction-block-expansion: done
-  21-3-roomodes-template-bmad-modes: done
-  21-4-agents-md-template-opencode: done
-  21-5-clinerules-template-extension: done
-  21-6-onprem-layered-guardrails: done
-  21-7-bmad-persona-phase-prefix: done
-  21-8-vllm-reference-doc-readme: done
-  21-9-tests-validation: done
-  21-10-profile-reconfigure: done
-  21-11-profile-uninstall: done
-  epic-21-retrospective: optional
 
   # Epic 14: External Tooling Integration
   # Dependencies: Epic 12, Epic 10, Epic 13 | Analyst + Architect required
