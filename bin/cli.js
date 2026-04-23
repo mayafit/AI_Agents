@@ -33,7 +33,7 @@ const chalk = require('chalk');
 const path = require('path');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
-const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout } = require('../lib/installer');
+const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout, migrateRetiredSkills } = require('../lib/installer');
 const { getProfile, setProfile, resolveProfile } = require('../lib/profile');
 const { reconfigure: runReconfigure, ReconfigureYesRejectedError, ManifestNotFoundError, RoomodesSlugDivergenceError } = require('../lib/reconfigure');
 const { uninstallProfileArtifacts } = require('../lib/uninstall');
@@ -1099,6 +1099,17 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     }
   }
 
+  // Story 22.3 — Legacy skill retirement migration (AC 7).
+  // Sweep every agent install path and remove any of the four retired skill IDs
+  // (bmad-init, bmad-agent-qa, bmad-agent-sm, bmad-agent-quick-flow-solo-dev)
+  // from the manifest and the installed skill directories. Idempotent — safe
+  // to run on fresh installs where nothing is retired.
+  try {
+    await migrateRetiredSkills({ scope: installScope, customPath: installPath });
+  } catch (err) {
+    console.log(chalk.yellow(`\n Retired-skill migration skipped: ${err.message}`));
+  }
+
   // Install requested skills
   const batchState = {};
   if (yesFlag) {
@@ -1203,6 +1214,22 @@ async function handleInstall(args) {
 
   // Full args → direct install (Task 3.5)
   const targetAgents = agentFlag ? [agentFlag] : agentIds;
+
+  // Story 22.3 (AC 7) — sweep retired legacy skills before installing.
+  // Only runs for the agents being targeted in this invocation.
+  try {
+    if (customPath) {
+      await migrateRetiredSkills({ scope, customPath });
+    } else {
+      for (const agentId of targetAgents) {
+        await migrateRetiredSkills({ scope, customPath: '' });
+        break; // migrateRetiredSkills already sweeps all registered agents when no customPath
+      }
+    }
+  } catch (err) {
+    console.log(chalk.yellow(`\n Retired-skill migration skipped: ${err.message}`));
+  }
+
   try {
     await installSkill(skillId, targetAgents, customPath, scope, { force: forceFlag, yes: yesFlag });
     console.log(chalk.bold.green('\n Installation complete!\n'));
