@@ -1216,16 +1216,12 @@ async function handleInstall(args) {
   const targetAgents = agentFlag ? [agentFlag] : agentIds;
 
   // Story 22.3 (AC 7) — sweep retired legacy skills before installing.
-  // Only runs for the agents being targeted in this invocation.
+  // When a customPath is given we narrow the sweep to that single path;
+  // otherwise migrateRetiredSkills sweeps every registered agent under the
+  // current scope (the retirement is agent-agnostic, so broader sweep is
+  // the intended behavior even when --agent restricts the install to one).
   try {
-    if (customPath) {
-      await migrateRetiredSkills({ scope, customPath });
-    } else {
-      for (const agentId of targetAgents) {
-        await migrateRetiredSkills({ scope, customPath: '' });
-        break; // migrateRetiredSkills already sweeps all registered agents when no customPath
-      }
-    }
+    await migrateRetiredSkills({ scope, customPath: customPath || '' });
   } catch (err) {
     console.log(chalk.yellow(`\n Retired-skill migration skipped: ${err.message}`));
   }
