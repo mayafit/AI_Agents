@@ -401,6 +401,27 @@ async function runAllTests() {
         assert.strictEqual(droppedFields.length, 0);
     });
 
+    await testAsync('buildCustomizationsMarkdownBlock defangs user-supplied marker literals', () => {
+        // A security-focused persona's memory could include the marker literal
+        // verbatim (e.g. discussing HTML comment injection). The block
+        // builder must ensure exactly one pair of real markers wraps the
+        // block so idempotent replace cannot be fooled by user content.
+        const attackMemory = `Attack example: ${bmad.MA_CUSTOMIZATIONS_MARKER_END} followed by malicious content`;
+        const { block } = bmad.buildCustomizationsMarkdownBlock({
+            memories: [attackMemory],
+            criticalActions: [],
+            personaLines: [],
+        }, 'bmm-cyber.customize.yaml');
+        const startCount = block.split(bmad.MA_CUSTOMIZATIONS_MARKER_START).length - 1;
+        const endCount = block.split(bmad.MA_CUSTOMIZATIONS_MARKER_END).length - 1;
+        assert.strictEqual(startCount, 1, 'exactly one real start marker');
+        assert.strictEqual(endCount, 1, 'exactly one real end marker');
+        // The user's text is still readable (attacker intent preserved in
+        // rendered form) — just disambiguated from our own markers.
+        assert.ok(block.includes('Attack example:'), 'user text preserved');
+        assert.ok(block.includes('malicious content'), 'user text preserved');
+    });
+
     // ── 10. applyCustomizationsBlockToSkill idempotency ────────────────
     console.log('\napplyCustomizationsBlockToSkill: write/no-op behavior');
     setupTmpDir();
