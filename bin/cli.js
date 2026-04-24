@@ -967,6 +967,10 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     }
 
     const bmadInstalled = bmad.isBmadInstalled();
+    // Story 22.6 — ma-agents customizations are now packaged as a BMAD plugin
+    // and installed by bmad-method itself via --custom-source. The separate
+    // `applyCustomizations()` call has been removed; installBmad()/updateBmad()
+    // stage the plugin and invoke the installer in one pass.
     if (!bmadInstalled) {
       if (yesFlag) {
         console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
@@ -974,8 +978,6 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
         const success = await bmad.installBmad(['bmm'], bmadTools);
         if (success) {
           console.log(chalk.green(' BMAD-METHOD installed successfully!'));
-          console.log(chalk.cyan(' Applying ma-agents customizations...'));
-          await bmad.applyCustomizations(process.cwd(), ['bmm'], bmadTools, selectedAgentIds);
         }
       } else {
         const { installBmad } = await prompts({
@@ -991,8 +993,6 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
           const success = await bmad.installBmad(['bmm'], bmadTools);
           if (success) {
             console.log(chalk.green(' BMAD-METHOD installed successfully!'));
-            console.log(chalk.cyan(' Applying ma-agents customizations...'));
-            await bmad.applyCustomizations(process.cwd(), ['bmm'], bmadTools, selectedAgentIds);
           }
         }
       }
@@ -1003,8 +1003,6 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
         const success = await bmad.updateBmad(['bmm'], bmadTools);
         if (success) {
           console.log(chalk.green(' BMAD-METHOD updated successfully!'));
-          console.log(chalk.cyan(' Re-applying ma-agents customizations...'));
-          await bmad.applyCustomizations(process.cwd(), ['bmm'], bmadTools, selectedAgentIds);
         }
       } else {
         const { updateBmad } = await prompts({
@@ -1020,8 +1018,6 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
           const success = await bmad.updateBmad(['bmm'], bmadTools);
           if (success) {
             console.log(chalk.green(' BMAD-METHOD updated successfully!'));
-            console.log(chalk.cyan(' Re-applying ma-agents customizations...'));
-            await bmad.applyCustomizations(process.cwd(), ['bmm'], bmadTools, selectedAgentIds);
           }
         }
       }
