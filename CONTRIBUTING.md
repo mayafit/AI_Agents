@@ -60,6 +60,64 @@ Before submitting:
 3. Verify all paths work on your OS
 4. Check that new skills appear in the list
 
+## Reproducing the offline install locally
+
+The `Offline Install Gate` CI workflow
+(`.github/workflows/offline-install.yml`) verifies that `ma-agents` can
+install into an air-gapped project with all outbound network egress
+blocked — this protects the NFR50/NFR54 guarantee that no customer's
+air-gapped install ever phones home.
+
+To reproduce the gate locally (Linux/macOS with Docker installed):
+
+```bash
+# 1. From the repo root, install deps and build the tarball
+npm ci
+npm pack
+
+# 2. Capture the tarball filename (it contains the current version)
+TARBALL=$(ls -t ma-agents-*.tgz | head -1)
+
+# 3. Run the install inside a container with NO network
+docker run --rm \
+  --network none \
+  -v "$PWD:/workspace:ro" \
+  -e TARBALL="$TARBALL" \
+  node:20.18.1-bookworm \
+  bash /workspace/.github/scripts/offline-install-verify.sh
+```
+
+A zero exit code means the air-gapped guarantee still holds. Any
+outbound connection attempt — telemetry, `check-for-updates`, a peer
+dependency install fetching from the registry — will fail inside the
+`--network none` namespace and cause the verifier to exit non-zero.
+
+If the verifier fails, read its step-by-step output (numbered `[1/5]` …
+`[5/5]`) to localise the regression: egress block misconfigured,
+tarball extraction, offline dep resolution, install invocation, or a
+post-install invariant (`_bmad/` present, `.ma-agents-plugin-stage`
+cleaned up, `.gitignore` contains the stage entry, etc.).
+
+### A lighter-weight sanity check (no Docker required)
+
+If Docker is unavailable, you can at least confirm the CLI command
+sequence works end-to-end — but this does NOT verify the air-gap:
+
+```bash
+npm pack
+TARBALL=$(ls -t ma-agents-*.tgz | head -1)
+mkdir -p /tmp/ma-agents-offline-smoke
+cd /tmp/ma-agents-offline-smoke
+git init -q
+npm install --no-save "$OLDPWD/$TARBALL"
+npx ma-agents install --yes --force
+ls _bmad/                                            # should exist
+test ! -d _bmad/_config/custom/agents && echo "OK"   # no legacy dir
+grep -E '^/?\.ma-agents-plugin-stage/?' .gitignore   # ignore entry
+```
+
+For actual air-gap verification, use the Docker recipe above.
+
 ## Submitting Changes
 
 1. Fork the repository

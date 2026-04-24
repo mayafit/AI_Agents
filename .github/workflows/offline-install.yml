@@ -1,0 +1,128 @@
+name: Offline Install Gate
+
+# Story 22.9 — Air-gapped install verification (NFR50, NFR54).
+#
+# This workflow guarantees that `npx ma-agents install` works with ALL
+# outbound network egress blocked. Any regression that introduces a
+# silent network call (telemetry probe, "check for updates", etc.) will
+# fail this gate.
+#
+# Strategy: build the tarball on the online host, then run the install
+# inside a Docker container with `--network none`. The kernel-level
+# network namespace isolation is stronger than iptables rules and works
+# on stock GitHub-hosted runners without elevated privileges.
+
+on:
+  pull_request:
+  push:
+    tags: ['v*']
+
+# Cancel in-flight runs on the same ref when a newer commit arrives.
+concurrency:
+  group: offline-install-${{ github.ref }}
+  cancel-in-progress: true
+
+# Harden default permissions to read-only (we do not need to write issues,
+# deployments, or push packages from this workflow).
+permissions:
+  contents: read
+
+jobs:
+  offline-install:
+    name: Air-gapped install (claude-code)
+    runs-on: ubuntu-latest
+    # AC 4: total wall-clock < 5 min. Hard cap at 8 min so a hang fails fast.
+    timeout-minutes: 8
+
+    env:
+      # Pin to a specific minor-patch tag. Maintainer should replace the
+      # `:` tag with an `@sha256:<digest>` reference once the repo admin
+      # has a preferred digest policy. Until then, the explicit version
+      # keeps reproducibility within the same tag.
+      #
+      # IMPORTANT: use the full `bookworm` variant (not `-slim`). bmad.js
+      # shells out to `git` during its offline-install path (e.g. to set
+      # the local file:// origin at lib/bmad.js:1633). The slim variant
+      # omits git, and since we are inside `--network none`, we cannot
+      # `apt-get install` it at runtime.
+      OFFLINE_NODE_IMAGE: node:20.18.1-bookworm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # No registry cache — we want `npm install` to succeed locally,
+          # but the OFFLINE step below must not rely on any cache.
+          cache: 'npm'
+
+      - name: Install deps (online, host)
+        run: npm ci --no-audit --no-fund
+
+      # Pre-pull the offline image while the host still has network.
+      # Inside the offline container we have `--network none`, so any
+      # pull attempt would fail.
+      - name: Pre-pull offline container image
+        run: docker pull "$OFFLINE_NODE_IMAGE"
+
+      - name: Build tarball
+        id: pack
+        run: |
+          set -euo pipefail
+          # Use --json to capture the exact tarball filename regardless
+          # of version bump — hardcoding ma-agents-*.tgz works but this
+          # is defensive for future version-bump scenarios. Pipe via
+          # stdin to avoid argv-quoting pitfalls on multi-line JSON.
+          tarball=$(npm pack --json \
+            | node -e "
+              let chunks=''; process.stdin.on('data',c=>chunks+=c);
+              process.stdin.on('end',()=>{
+                const arr=JSON.parse(chunks);
+                process.stdout.write(arr[0].filename);
+              });
+            ")
+          size_bytes=$(stat -c '%s' "$tarball")
+          size_kb=$((size_bytes / 1024))
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+          echo "size_kb=$size_kb" >> "$GITHUB_OUTPUT"
+          echo "Tarball: $tarball (${size_kb} KiB)"
+
+      - name: Run install with no network
+        id: offline_install
+        env:
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+
+          # Mount the repo read-only into the container. Inside the
+          # container, /workspace is the tarball source, /scratch is a
+          # writable scratch project where the install runs.
+          docker run --rm \
+            --network none \
+            -v "$PWD:/workspace:ro" \
+            -e TARBALL="$TARBALL" \
+            "$OFFLINE_NODE_IMAGE" \
+            bash /workspace/.github/scripts/offline-install-verify.sh
+
+          end=$(date +%s)
+          echo "duration_sec=$((end - start))" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Offline Install Gate"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|---|---|"
+            echo "| Tarball | \`${{ steps.pack.outputs.tarball }}\` |"
+            echo "| Tarball size | ${{ steps.pack.outputs.size_kb }} KiB |"
+            echo "| Container image | \`${OFFLINE_NODE_IMAGE}\` |"
+            echo "| Install duration | ${{ steps.offline_install.outputs.duration_sec || 'n/a' }} s |"
+            echo ""
+            echo "Egress-block strategy: Docker \`--network none\` (kernel network namespace)."
+          } >> "$GITHUB_STEP_SUMMARY"
