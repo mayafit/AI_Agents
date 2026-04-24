@@ -29,3 +29,6 @@ _bmad-output/methodology/
 .kilocode/
 .opencode/
 opencode.json
+# Story 22.8 — transient plugin stage produced by lib/bmad.js#stagePlugin during
+# dev-local test installs. Never commit.
+.ma-agents-plugin-stage/
