@@ -45,6 +45,18 @@ log() { printf '==> %s\n' "$*"; }
 err() { printf 'ERROR: %s\n' "$*" >&2; }
 
 # ---------------------------------------------------------------------------
+# Canonical ma-agents persona skill IDs. Single source of truth used by both
+# the MANIFEST grep (Invariant C) and the persona filesystem check
+# (Invariant D). When adding/removing a persona, update ONLY this list.
+# ---------------------------------------------------------------------------
+PERSONAS="ma-agent-cyber ma-agent-devops ma-agent-sre ma-agent-sqa ma-agent-ml"
+
+# Always-on skills shipped from ma-agents/skills/ that land in every tool's
+# skills dir even when the plugin-routed personas do not. Used by
+# Invariant C as the lenient fallback shortlist.
+ALWAYS_ON_SKILLS="code-review commit-message git-workflow-skill skill-creator"
+
+# ---------------------------------------------------------------------------
 # Environment validation. Fail fast if the caller forgot to set a variable;
 # partial runs waste CI minutes and produce confusing logs.
 # ---------------------------------------------------------------------------
@@ -67,9 +79,14 @@ fi
 # Ensure scratch is pristine. Caller should have created it empty, but a
 # belt-and-braces wipe guarantees no contamination from a rerun.
 if [ -d "$SCRATCH_ROOT" ]; then
-  # Defensive: never rm something unexpected like /, /home, etc.
+  # Defensive: never rm something unexpected like /, /home, etc. The
+  # RUNNER_TEMP placeholder expands to /dev/null when the env var is
+  # unset — /dev/null/* cannot match any real path, so the case arm is
+  # effectively unreachable in that mode (forces the local-dev caller
+  # to use /tmp or /var/tmp, which are the other whitelisted prefixes).
+  RUNNER_TEMP_SAFE="${RUNNER_TEMP:-/dev/null}"
   case "$SCRATCH_ROOT" in
-    /tmp/*|/home/*|/var/tmp/*|"$RUNNER_TEMP"/*)
+    /tmp/*|/home/*|/var/tmp/*|"${RUNNER_TEMP_SAFE}"/*)
       rm -rf "$SCRATCH_ROOT"
       ;;
     *)
@@ -189,12 +206,18 @@ fi
 # not emit a MANIFEST (AC intentionally tolerates this).
 MANIFEST_FILE="$FULL_SKILLS_DIR/MANIFEST.yaml"
 if [ -f "$MANIFEST_FILE" ]; then
-  # Match any `id: <skill>` line where <skill> is one of the ma-agents
-  # canonical skill IDs. The shortlist below covers both plugin-routed
-  # ma-agent-* personas AND the always-on skills from the ma-agents
-  # skills/ directory, so a tool that only gets the non-plugin path still
-  # passes this invariant.
-  if grep -qE '^[[:space:]]*-?[[:space:]]*id:[[:space:]]*(ma-agent-(cyber|devops|sre|sqa|ml)|code-review|commit-message|git-workflow-skill|skill-creator)[[:space:]]*$' "$MANIFEST_FILE"; then
+  # Build an alternation regex from PERSONAS + ALWAYS_ON_SKILLS. The grep
+  # matches any `id: <skill>` line (with optional leading `-` and optional
+  # surrounding quotes) where <skill> is a canonical ma-agents ID. Covers
+  # both plugin-routed personas AND the always-on skills from the
+  # ma-agents skills/ directory, so a tool that only gets the non-plugin
+  # path still passes this invariant.
+  alt=""
+  for sk in $PERSONAS $ALWAYS_ON_SKILLS; do
+    alt="${alt:+$alt|}$sk"
+  done
+  # Pattern allows: `id: foo`, `- id: foo`, `id: "foo"`, `id: 'foo'`, etc.
+  if grep -qE "^[[:space:]]*-?[[:space:]]*id:[[:space:]]*[\"']?($alt)[\"']?[[:space:]]*$" "$MANIFEST_FILE"; then
     log "  OK:   MANIFEST.yaml lists at least one canonical ma-agents skill id"
   else
     err "  FAIL: MANIFEST.yaml does not list any ma-agents skill id"
@@ -223,7 +246,7 @@ fi
 # routing regression is fixed (separate follow-up ticket), this
 # special-case should be removed and copilot promoted to strict parity.
 persona_found=""
-for persona in ma-agent-cyber ma-agent-devops ma-agent-sre ma-agent-sqa ma-agent-ml; do
+for persona in $PERSONAS; do
   if [ -f "$FULL_SKILLS_DIR/$persona/SKILL.md" ]; then
     persona_found="$persona"
     break
