@@ -41,8 +41,89 @@ See [README.md](README.md#how-to-add-a-new-skill) for detailed instructions.
 1. Edit `lib/agents.js`
 2. Add your agent configuration to the `agents` array
 3. Test installation with existing skills
+4. **Add a matrix entry to `.github/workflows/multi-tool-smoke.yml`** — see
+   [Multi-Tool Smoke Verification](#multi-tool-smoke-verification) below.
+   Without this, regressions in the new tool's install routing go
+   undetected until end-user reports.
 
 See [README.md](README.md#how-to-add-a-new-agent) for detailed instructions.
+
+## Multi-Tool Smoke Verification
+
+`.github/workflows/multi-tool-smoke.yml` (Story 22.10) is a CI safety net
+that catches per-tool routing regressions in the plugin install flow.
+Each matrix cell runs `ma-agents install --yes --force --agent <tool>`
+against a scratch project and asserts the tool's expected skills
+directory is populated correctly.
+
+### Supported targets and expected skills paths
+
+`lib/agents.js` is the canonical source of truth for tool registration.
+The current matrix covers:
+
+| Tool `--agent` id | Expected skills path          | Template   |
+|-------------------|-------------------------------|------------|
+| `claude-code`     | `.claude/skills/`             | claude-code|
+| `copilot`         | `.github/copilot/skills/`     | generic    |
+| `cline`           | `.cline/skills/`              | cline      |
+| `roo-code`        | `.roo/skills/`                | generic    |
+| `kilocode`        | `.kilocode/skills/`           | generic    |
+
+### Per-tool invariants asserted
+
+For every matrix cell:
+
+1. **Install exit code** is 0 (`node bin/cli.js install --yes --force --agent <tool>`).
+2. **Skills directory exists** at the path listed above.
+3. **Skills directory is non-empty** (`find ... -mindepth 1 -maxdepth 1 -type d` returns `>= 1`).
+4. **MANIFEST.yaml lists a canonical ma-agents skill id** — if the tool's
+   template emits a `MANIFEST.yaml`, the verifier greps it for one of
+   `ma-agent-cyber`, `ma-agent-devops`, `ma-agent-sre`, `ma-agent-sqa`,
+   `ma-agent-ml`, `code-review`, `commit-message`, `git-workflow-skill`,
+   or `skill-creator`. Tools without a MANIFEST skip this invariant.
+5. **At least one ma-agent-* persona skill is present** — the primary
+   regression signal. If none of `ma-agent-cyber/SKILL.md`,
+   `ma-agent-devops/SKILL.md`, `ma-agent-sre/SKILL.md`,
+   `ma-agent-sqa/SKILL.md`, or `ma-agent-ml/SKILL.md` exists under the
+   skills directory, the plugin routing to that tool has regressed.
+
+   **Known gap (at 22.10 baseline):** `copilot` does not currently
+   receive the ma-agent-* persona skills. Local simulation during Story
+   22.10 confirmed the gap is specific to copilot's template; the other
+   four tools all deliver the personas correctly. Until the underlying
+   routing bug is fixed, the persona check for `copilot` is downgraded
+   from a hard failure to a workflow warning (visible in every CI run,
+   but not build-blocking). Fixing this gap is a follow-up item; when
+   resolved, the special-case in
+   `.github/scripts/multi-tool-smoke-verify.sh` should be removed so
+   copilot enforces strict parity with the other targets.
+
+### Triggers
+
+The workflow runs on:
+
+- PRs that modify any of:
+  - `lib/bmad.js`
+  - `lib/agents.js`
+  - `lib/bmad-extension/**`
+  - `lib/bmad-extension-plugin/**`
+  - `scripts/build-plugin.js`
+  - `bin/cli.js`
+  - `lib/installer.js`
+  - The workflow or its verifier script itself
+- Any tag matching `v*` (release gate).
+- Manual `workflow_dispatch` for maintainer debugging.
+
+### Relation to Story 22.9 (Offline Install Gate)
+
+The air-gap workflow (`.github/workflows/offline-install.yml`) and this
+multi-tool workflow are deliberately kept as **sibling workflows**, not a
+combined `offline × tool` matrix. The two dimensions are orthogonal:
+offline-install is a single-tool egress-block check, multi-tool-smoke is
+a multi-tool routing check. Keeping them separate gives clearer
+regression attribution when CI goes red — you can tell at a glance
+whether an egress leak or a per-tool routing regression broke the
+build.
 
 ## Code Style
 

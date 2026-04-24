@@ -1,0 +1,159 @@
+name: Multi-Tool Smoke
+
+# Story 22.10 — Multi-tool install verification (FR192, NFR52).
+#
+# Sibling workflow to offline-install.yml (Story 22.9). The dimensions are
+# orthogonal:
+#   - offline-install.yml  = air-gap gate (ONE tool, NO network)
+#   - multi-tool-smoke.yml = tool-routing gate (FIVE tools, WITH network)
+#
+# Keeping them separate gives cleaner regression attribution when CI goes
+# red (you instantly know whether an egress leak or a per-tool routing
+# regression broke the build).
+
+on:
+  # Run on PRs that touch any file involved in the plugin install flow.
+  # The path filter keeps noise down on docs-only or skill-content-only
+  # PRs where multi-tool routing cannot have regressed.
+  pull_request:
+    paths:
+      - 'lib/bmad.js'
+      - 'lib/agents.js'
+      - 'lib/bmad-extension/**'
+      - 'lib/bmad-extension-plugin/**'
+      - 'scripts/build-plugin.js'
+      - 'bin/cli.js'
+      - 'lib/installer.js'
+      - '.github/workflows/multi-tool-smoke.yml'
+      - '.github/scripts/multi-tool-smoke-verify.sh'
+  # Always run on release tags — the pre-release gate.
+  push:
+    tags: ['v*']
+  # Allow maintainers to trigger a manual run when debugging.
+  workflow_dispatch:
+
+# Cancel in-flight runs on the same ref when a newer commit arrives. This
+# prevents matrix jobs from piling up when a PR receives rapid pushes.
+concurrency:
+  group: multi-tool-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+# Harden default permissions to read-only. The workflow does not need to
+# write issues, deployments, or push packages.
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    # Matrix job: one cell per tool target. fail-fast:false means every
+    # cell runs to completion even if one fails, so the PR author sees
+    # ALL tool failures in a single cycle rather than playing whack-a-mole
+    # across successive pushes.
+    name: Install smoke — ${{ matrix.tool.name }}
+    runs-on: ubuntu-latest
+    # Each matrix cell should finish well under 3 minutes (local
+    # measurement: ~25s install + overhead). 6 minutes is a generous
+    # hang-detector cap without masking real performance regressions.
+    timeout-minutes: 6
+
+    strategy:
+      fail-fast: false
+      matrix:
+        tool:
+          # Minimum set per Story AC 1.
+          - { name: claude-code, skills_dir: .claude/skills }
+          - { name: copilot,     skills_dir: .github/copilot/skills }
+          - { name: cline,       skills_dir: .cline/skills }
+          # Extended set per Story AC 2 — the disconnected-friendly IDEs
+          # most likely to be used by ma-agents end users.
+          - { name: roo-code,    skills_dir: .roo/skills }
+          - { name: kilocode,    skills_dir: .kilocode/skills }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        # Depth 1 is fine — the prepare hook reads the committed
+        # lib/bmad-extension-plugin/ bundle, which is tracked in the repo
+        # (not generated from history). Matches Story 22.9.
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        # `npm ci` runs the `prepare` lifecycle hook which rebuilds the
+        # plugin bundle under lib/bmad-extension-plugin/. Required before
+        # `npm pack` so the tarball embeds a fresh plugin.
+        run: npm ci --no-audit --no-fund
+
+      - name: Build tarball
+        id: pack
+        run: |
+          set -euo pipefail
+          # Capture the tarball filename from npm pack's JSON output so a
+          # future version bump does not break this step. Pipe via stdin
+          # to dodge argv-quoting pitfalls on multi-line JSON. Matches
+          # Story 22.9's approach.
+          tarball=$(npm pack --json \
+            | node -e "
+              let chunks=''; process.stdin.on('data',c=>chunks+=c);
+              process.stdin.on('end',()=>{
+                const arr=JSON.parse(chunks);
+                process.stdout.write(arr[0].filename);
+              });
+            ")
+          tarball_path="$GITHUB_WORKSPACE/$tarball"
+          size_kb=$(( $(stat -c '%s' "$tarball_path") / 1024 ))
+          echo "tarball_path=$tarball_path" >> "$GITHUB_OUTPUT"
+          echo "size_kb=$size_kb" >> "$GITHUB_OUTPUT"
+          echo "Tarball: $tarball_path (${size_kb} KiB)"
+
+      - name: Seed summary table header
+        # Runs exactly once per matrix cell. Each cell contributes one row
+        # to $GITHUB_STEP_SUMMARY via the verifier script (Step 5 of that
+        # script). The table header is seeded here so the final summary
+        # is a well-formed markdown table regardless of cell execution
+        # order. GitHub merges step-summary files across the matrix.
+        run: |
+          {
+            echo "## Multi-Tool Smoke — ${{ matrix.tool.name }}"
+            echo ""
+            echo "| Tool | Skills Dir | Skill Count | Verdict |"
+            echo "|---|---|---:|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke verify ${{ matrix.tool.name }}
+        id: smoke
+        env:
+          TOOL: ${{ matrix.tool.name }}
+          SKILLS_DIR: ${{ matrix.tool.skills_dir }}
+          TARBALL_PATH: ${{ steps.pack.outputs.tarball_path }}
+          # One scratch dir per tool so concurrent matrix cells that end up
+          # on the same runner (rare but possible with cache hits) never
+          # collide. $RUNNER_TEMP is auto-cleaned between jobs.
+          SCRATCH_ROOT: ${{ runner.temp }}/ma-agents-smoke-${{ matrix.tool.name }}
+        run: |
+          chmod +x "$GITHUB_WORKSPACE/.github/scripts/multi-tool-smoke-verify.sh"
+          bash "$GITHUB_WORKSPACE/.github/scripts/multi-tool-smoke-verify.sh"
+
+      - name: Failure diagnostics
+        # Runs only when the verifier step failed — emits extra context
+        # (skills-dir listing, MANIFEST excerpt) to help the PR author
+        # diagnose a regression without rerunning locally.
+        if: failure()
+        env:
+          TOOL: ${{ matrix.tool.name }}
+          SKILLS_DIR: ${{ matrix.tool.skills_dir }}
+          SCRATCH_ROOT: ${{ runner.temp }}/ma-agents-smoke-${{ matrix.tool.name }}
+        run: |
+          echo "::group::Scratch dir listing"
+          ls -la "$SCRATCH_ROOT/project" 2>/dev/null || echo "(no project dir)"
+          echo "::endgroup::"
+          echo "::group::Skills dir listing"
+          ls -la "$SCRATCH_ROOT/project/$SKILLS_DIR" 2>/dev/null || echo "(no skills dir)"
+          echo "::endgroup::"
+          echo "::group::MANIFEST.yaml excerpt"
+          head -80 "$SCRATCH_ROOT/project/$SKILLS_DIR/MANIFEST.yaml" 2>/dev/null || echo "(no MANIFEST)"
+          echo "::endgroup::"
