@@ -344,6 +344,30 @@ async function runAll() {
         } finally { cleanup(projectRoot); }
     });
 
+    // 10b. SKILL.md with CRLF frontmatter — block still inserted correctly.
+    await test('SKILL.md with CRLF frontmatter: block inserted after frontmatter (no corruption)', async () => {
+        const { projectRoot, customizeSrc } = buildFixture({ tools: ['.claude/skills'] });
+        try {
+            const skillPath = path.join(projectRoot, '.claude/skills/bmad-agent-pm/SKILL.md');
+            const crlfContent = '---\r\nname: bmad-agent-pm\r\ndescription: CRLF test\r\n---\r\n\r\n# PM\r\nBody.\r\n';
+            fs.writeFileSync(skillPath, crlfContent, 'utf8');
+            await applyOnPremPhasePrefixToDeployedSkills(
+                projectRoot, 'on-prem', customizeSrc,
+            );
+            const updated = fs.readFileSync(skillPath, 'utf8');
+            assert.ok(updated.includes(ON_PREM_PREFIX_MARKER_BEGIN),
+                'block must be injected into CRLF file');
+            assert.ok(updated.includes('# PM\r\nBody.'),
+                'CRLF body must be preserved');
+            // Block must come AFTER the closing frontmatter delimiter.
+            const fmClose = updated.indexOf('---\r\n', 4);
+            assert.ok(fmClose !== -1, 'closing frontmatter delimiter preserved');
+            const markerPos = updated.indexOf(ON_PREM_PREFIX_MARKER_BEGIN);
+            assert.ok(markerPos > fmClose,
+                `block must appear after closing frontmatter (marker at ${markerPos}, close at ${fmClose})`);
+        } finally { cleanup(projectRoot); }
+    });
+
     // 11. buildOnPremPrefixBlock produces a stable shape.
     await test('buildOnPremPrefixBlock: stable shape with markers and section header', () => {
         const out = buildOnPremPrefixBlock('test prefix text');
