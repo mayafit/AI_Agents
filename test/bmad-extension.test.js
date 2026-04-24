@@ -162,8 +162,15 @@ test('3.4: bmad.js no longer exports applyCustomizations', () => {
 test('3.5: bmad.js no longer hand-parses manifest.yaml or files-manifest.csv', () => {
   const bmadSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
   // These patterns were the core of the legacy manifest-surgery code path.
-  assert.ok(!bmadSrc.includes('manifest.yaml'),
-    'bmad.js must NOT reference manifest.yaml (legacy manifest surgery, Story 22.6)');
+  // NOTE: Story 22.7 legitimately references _bmad/_config/manifest.yaml as
+  // LEGACY_MANIFEST_REL (a detection marker for migration-shim purposes —
+  // never read as a value source). We don't forbid the string "manifest.yaml"
+  // as a whole; we forbid the specific write/parse patterns that belonged to
+  // the retired surgery block.
+  assert.ok(!bmadSrc.includes('yaml.parse(yamlContent)'),
+    'bmad.js must NOT parse manifest.yaml content into modules (retired surgery, Story 22.6)');
+  assert.ok(!bmadSrc.includes('yaml.stringify(manifest)'),
+    'bmad.js must NOT write a modified manifest.yaml (retired surgery, Story 22.6)');
   assert.ok(!bmadSrc.includes('files-manifest.csv'),
     'bmad.js must NOT reference files-manifest.csv (legacy manifest surgery, Story 22.6)');
   assert.ok(!bmadSrc.includes("['custom', 'bmb']") && !bmadSrc.includes('["custom", "bmb"]'),
@@ -282,6 +289,45 @@ async function runIntegrationTests() {
     cleanupStage(''); // empty-string guard
     cleanupStage(null); // null guard
     assert.ok(true, 'cleanupStage must tolerate missing/empty paths without throwing');
+  });
+
+  await asyncTest('INT-7: stagePlugin throws a clear error when projectRoot does not exist', async () => {
+    const ghostRoot = path.join(os.tmpdir(), `bmad-stage-ghost-${Date.now()}-${process.pid}`);
+    // deliberately NOT creating ghostRoot
+    assert.throws(
+      () => stagePlugin(ghostRoot),
+      /projectRoot does not exist/,
+      'stagePlugin must reject a non-existent projectRoot with a clear message'
+    );
+  });
+
+  await asyncTest('INT-8: stagePlugin refuses to operate when the stage path is a symlink (security)', async () => {
+    // Windows often disallows unprivileged symlink creation — skip on win32
+    // so the test suite remains green for non-admin developer runs.
+    if (process.platform === 'win32') {
+      originalLog('    SKIP (win32): symlink creation requires SeCreateSymbolicLinkPrivilege');
+      return;
+    }
+    const symRoot = path.join(os.tmpdir(), `bmad-stage-sym-${Date.now()}-${process.pid}`);
+    await fsExtra.ensureDir(symRoot);
+    const attackTarget = path.join(os.tmpdir(), `bmad-stage-attack-${Date.now()}-${process.pid}`);
+    await fsExtra.ensureDir(attackTarget);
+    const symPath = path.join(symRoot, PLUGIN_STAGE_DIR_NAME);
+    fs.symlinkSync(attackTarget, symPath, 'dir');
+    try {
+      assert.throws(
+        () => stagePlugin(symRoot),
+        /symbolic link/,
+        'stagePlugin must refuse to operate when the stage path is a symlink'
+      );
+      assert.ok(fs.existsSync(attackTarget),
+        'attack target directory must still exist — symlink must NOT have been followed');
+    } finally {
+      // Best-effort cleanup; swallow because tmp is OS-cleaned.
+      try { fs.unlinkSync(symPath); } catch { /* noop */ }
+      try { await fsExtra.remove(symRoot); } catch { /* noop */ }
+      try { await fsExtra.remove(attackTarget); } catch { /* noop */ }
+    }
   });
 
   // Cleanup
