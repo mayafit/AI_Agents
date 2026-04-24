@@ -20,6 +20,7 @@
 const assert = require('assert');
 const path = require('path');
 const fs = require('fs');
+const yaml = require('js-yaml');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EXTENSION_DIR = path.join(PROJECT_ROOT, 'lib', 'bmad-extension');
@@ -28,6 +29,7 @@ const PLUGIN_DIR = path.join(EXTENSION_DIR, '.claude-plugin');
 const TEMPLATE_PATH = path.join(PLUGIN_DIR, 'marketplace.json.template');
 const MODULE_YAML_PATH = path.join(SKILLS_DIR, 'module.yaml');
 const MODULE_CSV_PATH = path.join(SKILLS_DIR, 'module-help.csv');
+const PACKAGE_JSON_PATH = path.join(PROJECT_ROOT, 'package.json');
 
 let passed = 0;
 let failed = 0;
@@ -43,21 +45,27 @@ function test(name, fn) {
   }
 }
 
-function parseSimpleYaml(content) {
-  const result = {};
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const colonIdx = trimmed.indexOf(':');
-    if (colonIdx === -1) continue;
-    const key = trimmed.slice(0, colonIdx).trim();
-    let val = trimmed.slice(colonIdx + 1).trim();
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-      val = val.slice(1, -1);
-    }
-    result[key] = val;
+// Edge-case-hunter finding 1: the previous line-based parser broke on multi-line
+// strings and quoted colons. Delegate to js-yaml for full-spec coverage.
+function parseYaml(content) {
+  const doc = yaml.load(content);
+  if (doc === null || doc === undefined) return {};
+  if (typeof doc !== 'object') {
+    throw new Error(`module.yaml must parse to an object, got ${typeof doc}`);
   }
-  return result;
+  return doc;
+}
+
+// Semver compare: returns negative/zero/positive. Only MAJOR.MINOR.PATCH; pre-release ignored.
+function semverCompare(a, b) {
+  const pa = String(a).split('-')[0].split('.').map((n) => parseInt(n, 10));
+  const pb = String(b).split('-')[0].split('.').map((n) => parseInt(n, 10));
+  for (let i = 0; i < 3; i++) {
+    const da = pa[i] || 0;
+    const db = pb[i] || 0;
+    if (da !== db) return da - db;
+  }
+  return 0;
 }
 
 console.log('\n=== Story 22.5: Plugin Manifests ===');
@@ -129,12 +137,27 @@ test('template includes a top-of-file _comment documenting the shared-convention
   // AC 2: document that .claude-plugin/ is NOT Claude-specific.
   assert.ok(Object.prototype.hasOwnProperty.call(template, '_comment'),
     'template must have a _comment field documenting the shared convention');
+  // Edge-case-hunter finding 8: guard against _comment being a non-array/non-string value.
+  assert.ok(Array.isArray(template._comment) || typeof template._comment === 'string',
+    `_comment must be an array of strings or a single string, got ${typeof template._comment}`);
   const commentText = Array.isArray(template._comment)
     ? template._comment.join(' ')
     : String(template._comment);
   assert.ok(
     /not.*claude-only|not.*claude-specific|skills-capable platform|shared.*convention/i.test(commentText),
     '_comment must document that .claude-plugin/ is a shared BMAD convention, not Claude-specific'
+  );
+});
+
+test('_comment documents that plugins[].source "./" is relative to .claude-plugin/ parent (finding 7 hand-off for 22.4)', () => {
+  // Edge-case-hunter finding 7 (deferred to 22.4): the "./" source string is ambiguous.
+  // To avoid 22.4 interpreting it wrong, the template itself must declare the convention.
+  const commentText = Array.isArray(template._comment)
+    ? template._comment.join(' ')
+    : String(template._comment);
+  assert.ok(
+    /source\s*[:"\s]*\.\/.*relative|relative.*\.claude-plugin|directory containing \.claude-plugin/i.test(commentText),
+    '_comment must clarify that source "./" resolves relative to the directory containing .claude-plugin/'
   );
 });
 
@@ -148,10 +171,15 @@ test('skills/module.yaml exists (v6.3.0 canonical location)', () => {
 let moduleYaml;
 test('skills/module.yaml parses and has required fields', () => {
   const content = fs.readFileSync(MODULE_YAML_PATH, 'utf8');
-  moduleYaml = parseSimpleYaml(content);
+  moduleYaml = parseYaml(content);
   assert.strictEqual(moduleYaml.code, 'ma-skills', 'code must be ma-skills');
   assert.ok(moduleYaml.description, 'description must be present');
   assert.ok(moduleYaml.module_version, 'module_version must be present (v6.3.0)');
+});
+
+test('skills/module.yaml has a non-empty name (edge-case-hunter finding 9)', () => {
+  assert.ok(typeof moduleYaml.name === 'string' && moduleYaml.name.trim().length > 0,
+    'module.yaml must declare a non-empty name');
 });
 
 test('skills/module.yaml module_version is a valid semver', () => {
@@ -164,6 +192,37 @@ test('legacy lib/bmad-extension/module.yaml is removed (AC 3)', () => {
   const legacy = path.join(EXTENSION_DIR, 'module.yaml');
   assert.ok(!fs.existsSync(legacy),
     'legacy module.yaml must be removed; v6.3.0 uses skills/module.yaml');
+});
+
+test('module.yaml exists ONLY at skills/ location — half-done-migration guard (finding 3)', () => {
+  // Edge-case-hunter finding 3: if both the legacy and canonical module.yaml exist,
+  // PluginResolver Strategy 1 is ambiguous and the install silently uses the wrong one.
+  const legacy = path.join(EXTENSION_DIR, 'module.yaml');
+  const canonical = MODULE_YAML_PATH;
+  const legacyExists = fs.existsSync(legacy);
+  const canonicalExists = fs.existsSync(canonical);
+  assert.ok(!(legacyExists && canonicalExists),
+    'both legacy (lib/bmad-extension/module.yaml) and canonical (skills/module.yaml) ' +
+    'module.yaml exist — half-done migration. Remove the legacy file.');
+});
+
+test('extends-module parent is resolvable in node_modules/bmad-method (finding 4)', () => {
+  // Edge-case-hunter finding 4: if module.yaml's `extends-module: bmm` points to
+  // a module that does not exist at install time, installs fail opaquely. Verify
+  // the parent's module.yaml is present under bmad-method's src/ tree.
+  const parent = moduleYaml['extends-module'];
+  if (!parent) return; // extends-module is optional
+  const parentYamlPath = path.join(
+    PROJECT_ROOT,
+    'node_modules',
+    'bmad-method',
+    'src',
+    `${parent}-skills`,
+    'module.yaml',
+  );
+  assert.ok(fs.existsSync(parentYamlPath),
+    `extends-module "${parent}" not resolvable: expected ${parentYamlPath} to exist. ` +
+    'If bmad-method v6.3.0 reorganized its module layout, update this assertion.');
 });
 
 test('skills/module-help.csv exists alongside module.yaml (PluginResolver Strategy 1)', () => {
@@ -236,6 +295,43 @@ test('bmad_min_version is declared (edge-case: min-version compat)', () => {
     'bmad_min_version must be declared so installers can reject incompatible BMAD versions');
   assert.ok(/^\d+\.\d+\.\d+$/.test(template.bmad_min_version),
     `bmad_min_version "${template.bmad_min_version}" must be MAJOR.MINOR.PATCH`);
+});
+
+test('bmad_min_version <= pinned bmad-method dependency (finding 2: drift guard)', () => {
+  // Edge-case-hunter finding 2: if we pin bmad-method@X but declare a higher
+  // bmad_min_version, the plugin claims a floor the project itself cannot satisfy.
+  // Forward-compat assumes upstream stays additive; breaking upstream changes
+  // require a matching bump here + the _comment note.
+  const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf8'));
+  const bmadPin = (pkg.dependencies && pkg.dependencies['bmad-method']) || '';
+  const pinned = bmadPin.replace(/^[^\d]*/, ''); // strip ^, ~, etc.
+  assert.ok(/^\d+\.\d+\.\d+$/.test(pinned),
+    `bmad-method dependency "${bmadPin}" must resolve to an exact MAJOR.MINOR.PATCH`);
+  assert.ok(semverCompare(template.bmad_min_version, pinned) <= 0,
+    `bmad_min_version (${template.bmad_min_version}) must be <= pinned bmad-method (${pinned}). ` +
+    'Either lower the floor or bump the pin.');
+});
+
+test('template _comment explains forward-compat assumption for bmad_min_version (finding 2)', () => {
+  const commentText = Array.isArray(template._comment)
+    ? template._comment.join(' ')
+    : String(template._comment);
+  assert.ok(
+    /forward.?compat|additive.*upstream|upstream.*additive/i.test(commentText),
+    '_comment must note that forward-compat assumes upstream bmad-method changes remain additive'
+  );
+});
+
+test('every template-listed skill has a SKILL.md file (finding 5)', () => {
+  // Edge-case-hunter finding 5: a dir may exist but the skill payload (SKILL.md) is missing,
+  // leaving the install silently broken. Assert it is present for each listed skill.
+  for (const rel of plugin.skills) {
+    const normalized = rel.replace(/^\.\//, '');
+    const abs = path.join(EXTENSION_DIR, normalized);
+    const skillMd = path.join(abs, 'SKILL.md');
+    assert.ok(fs.existsSync(skillMd),
+      `SKILL.md missing for template-listed skill: ${rel} (expected ${skillMd})`);
+  }
 });
 
 // ─── Summary ───────────────────────────────────────────────────────────────

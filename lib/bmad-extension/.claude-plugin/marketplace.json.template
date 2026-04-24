@@ -3,7 +3,9 @@
     "BMAD Builder convention: the wrapper directory '.claude-plugin/' is a SHARED convention used by skills-capable platforms — it is NOT a Claude-only binding. BMAD adopted Anthropic's published plugin layout because it was the closest thing to an open standard at the time; multi-tool routing (claude-code, copilot, cline, roo-code, kilocode, cursor) is handled by BMAD's own installer based on the --tools flag. See https://bmad-builder-docs.bmad-method.org/how-to/distribute-your-module/ and https://bmad-builder-docs.bmad-method.org/explanation/.",
     "This is a TEMPLATE file consumed by scripts/build-plugin.js (Story 22.4). Tokens of the form ${var} are replaced at build time; the resolved manifest lands at lib/bmad-extension-plugin/.claude-plugin/marketplace.json. Do NOT hand-edit the generated file.",
     "Fields follow the v6.3.0 schema read by tools/installer/modules/custom-module-manager.js (top-level: name, owner, description, license, homepage, repository, keywords; per-plugin: name, source, description, version, author, skills[]).",
-    "compatible_tools is an informational, BMAD-wide convention (not read by the installer) used to signal multi-tool parity with downstream consumers. The authoritative list of supported tools is the --tools flag accepted by the BMAD installer."
+    "plugins[].source interpretation: a value of \"./\" means 'the directory containing .claude-plugin/' — i.e. the plugin output root (lib/bmad-extension-plugin/). Skill paths (\"./skills/<name>\") are resolved relative to that same root. Story 22.4's build script MUST honor this convention.",
+    "compatible_tools is an informational, BMAD-wide convention (not read by the installer) used to signal multi-tool parity with downstream consumers. The authoritative list of supported tools is the --tools flag accepted by the BMAD installer.",
+    "bmad_min_version forward-compat policy: this floor assumes upstream bmad-method changes remain additive (new fields / new optional schema). Any breaking upstream change requires bumping bmad_min_version in lockstep with the pinned bmad-method dependency in package.json."
   ],
   "name": "ma-agents",
   "owner": {
