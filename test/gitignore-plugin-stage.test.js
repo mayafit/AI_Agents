@@ -1,0 +1,170 @@
+// Story 22.8 — ensurePluginStageIgnored() behaviour tests
+//
+// Verifies that the installer appends `.ma-agents-plugin-stage/` to the target
+// project's `.gitignore` idempotently, preserves all pre-existing entries
+// verbatim, and creates the file when absent.
+
+const assert = require('assert');
+const { test } = require('node:test');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+
+const { ensurePluginStageIgnored } = require('../lib/installer');
+const { PLUGIN_STAGE_DIR_NAME } = require('../lib/bmad');
+
+const CANONICAL_ENTRY = `${PLUGIN_STAGE_DIR_NAME}/`;
+
+function makeProject(gitignoreContent) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-22-8-'));
+  if (gitignoreContent !== null) {
+    fs.writeFileSync(path.join(dir, '.gitignore'), gitignoreContent, 'utf-8');
+  }
+  return dir;
+}
+
+// ─── AC 1: entry appended to existing .gitignore ─────────────────────────────
+test('AC1 — appends .ma-agents-plugin-stage/ when .gitignore exists without it', () => {
+  const dir = makeProject('node_modules/\ndist/\n');
+  ensurePluginStageIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  assert.ok(written.includes(CANONICAL_ENTRY), 'entry must be appended');
+  assert.ok(written.includes('node_modules/'), 'existing node_modules/ preserved');
+  assert.ok(written.includes('dist/'), 'existing dist/ preserved');
+});
+
+// ─── AC 2: file created when absent ──────────────────────────────────────────
+test('AC2 — creates .gitignore with single entry when absent', () => {
+  const dir = makeProject(null);
+  assert.ok(!fs.existsSync(path.join(dir, '.gitignore')), 'precondition: no .gitignore');
+  ensurePluginStageIgnored(dir);
+  assert.ok(fs.existsSync(path.join(dir, '.gitignore')), '.gitignore must be created');
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  assert.strictEqual(
+    written.trim().split(/\r?\n/).filter(Boolean).length,
+    1,
+    'newly-created .gitignore must have exactly one non-blank line'
+  );
+  assert.ok(written.includes(CANONICAL_ENTRY), 'entry must be the canonical form');
+  assert.ok(written.endsWith('\n'), 'file must end with trailing newline');
+});
+
+// ─── AC 3: append-only — pre-existing lines preserved verbatim ───────────────
+test('AC3 — pre-existing lines preserved verbatim (byte-identical prefix)', () => {
+  const original = 'node_modules/\n.env\n# a comment\nbuild/\n';
+  const dir = makeProject(original);
+  ensurePluginStageIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  assert.ok(
+    written.startsWith(original),
+    'all original lines (including comments) must remain as a verbatim prefix'
+  );
+});
+
+// ─── AC 4: idempotent — re-run produces no duplicate ─────────────────────────
+test('AC4 — re-running the installer does not duplicate the entry', () => {
+  const dir = makeProject('node_modules/\n');
+  ensurePluginStageIgnored(dir);                                     // append
+  const after1 = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const mtime1 = fs.statSync(path.join(dir, '.gitignore')).mtimeMs;
+
+  ensurePluginStageIgnored(dir);                                     // no-op
+  const after2 = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const mtime2 = fs.statSync(path.join(dir, '.gitignore')).mtimeMs;
+
+  assert.strictEqual(after1, after2, 'second run must leave file content unchanged');
+  assert.strictEqual(mtime1, mtime2, 'second run must not rewrite the file');
+
+  // Count occurrences across all pattern variants.
+  const count = after2
+    .split(/\r?\n/)
+    .filter(l => {
+      const trimmed = l.trim();
+      if (!trimmed || trimmed.startsWith('#')) return false;
+      return [
+        PLUGIN_STAGE_DIR_NAME,
+        `${PLUGIN_STAGE_DIR_NAME}/`,
+        `/${PLUGIN_STAGE_DIR_NAME}`,
+        `/${PLUGIN_STAGE_DIR_NAME}/`,
+      ].includes(trimmed);
+    }).length;
+  assert.strictEqual(count, 1, 'entry must appear exactly once after re-run');
+});
+
+// ─── AC 5: ma-agents own .gitignore lists the entry ──────────────────────────
+test('AC5 — ma-agents repo own .gitignore contains .ma-agents-plugin-stage/', () => {
+  const gitignore = fs.readFileSync(path.join(__dirname, '..', '.gitignore'), 'utf-8');
+  const active = gitignore.split(/\r?\n/).filter(l => !l.trim().startsWith('#'));
+  assert.ok(
+    active.some(l => l.trim() === CANONICAL_ENTRY || l.trim() === PLUGIN_STAGE_DIR_NAME),
+    'own .gitignore must list the plugin-stage directory'
+  );
+});
+
+// ─── Edge case: pre-existing bare entry (no trailing /) → no duplicate ───────
+test('edge — pre-existing bare .ma-agents-plugin-stage is treated as equivalent', () => {
+  const dir = makeProject(`node_modules/\n${PLUGIN_STAGE_DIR_NAME}\n`);
+  ensurePluginStageIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  // Must NOT have added the canonical form on top of the bare form.
+  const canonicalCount = (written.match(new RegExp(`^${CANONICAL_ENTRY.replace('.', '\\.')}$`, 'gm')) || []).length;
+  assert.strictEqual(canonicalCount, 0, 'must not add canonical form when bare form already present');
+});
+
+// ─── Edge case: leading-slash variant already present → no duplicate ─────────
+test('edge — leading-slash variant /.ma-agents-plugin-stage/ is recognized', () => {
+  const dir = makeProject(`node_modules/\n/${PLUGIN_STAGE_DIR_NAME}/\n`);
+  ensurePluginStageIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const canonicalCount = (written.match(new RegExp(`^${CANONICAL_ENTRY.replace('.', '\\.')}$`, 'gm')) || []).length;
+  assert.strictEqual(canonicalCount, 0, 'must not duplicate when leading-slash form present');
+});
+
+// ─── Edge case: file lacks trailing newline → append lands on its own line ──
+test('edge — file without trailing newline gets a newline before the append', () => {
+  const dir = makeProject('node_modules/'); // no trailing \n
+  ensurePluginStageIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  assert.ok(
+    written.includes(`node_modules/\n${CANONICAL_ENTRY}`),
+    'append must not concatenate to the previous line'
+  );
+});
+
+// ─── Edge case: commented-out entry does not satisfy the policy ──────────────
+test('edge — commented-out entry is ignored; active entry is appended', () => {
+  const dir = makeProject(`# ${CANONICAL_ENTRY}\nnode_modules/\n`);
+  ensurePluginStageIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const active = written.split(/\r?\n/).filter(l => l.trim() === CANONICAL_ENTRY);
+  assert.strictEqual(active.length, 1, 'exactly one active entry must be present');
+  assert.ok(written.includes(`# ${CANONICAL_ENTRY}`), 'original commented line must be preserved');
+});
+
+// ─── Edge case: CRLF line endings preserved on append ────────────────────────
+test('edge — CRLF file retains CRLF endings after append', () => {
+  const dir = makeProject('node_modules/\r\ndist/\r\n');
+  ensurePluginStageIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  assert.ok(written.includes('\r\n'), 'CRLF file must keep CRLF endings');
+  assert.ok(written.includes(`${CANONICAL_ENTRY}\r\n`), 'appended entry must use CRLF');
+  assert.ok(written.startsWith('node_modules/\r\ndist/\r\n'), 'existing CRLF lines preserved');
+});
+
+// ─── Smoke scenario matching story AC 5 ──────────────────────────────────────
+test('smoke — scratch project retains originals and gains exactly one new line', () => {
+  const dir = makeProject('node_modules/\n.env\n');
+  ensurePluginStageIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const lines = written.split(/\r?\n/).filter(Boolean);
+  assert.ok(lines.includes('node_modules/'), 'node_modules/ preserved');
+  assert.ok(lines.includes('.env'), '.env preserved');
+  assert.ok(lines.includes(CANONICAL_ENTRY), 'canonical entry appended');
+  assert.strictEqual(lines.length, 3, 'exactly three non-blank lines');
+
+  // Re-run — no duplicate
+  ensurePluginStageIgnored(dir);
+  const rerun = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const rerunCanonical = rerun.split(/\r?\n/).filter(l => l === CANONICAL_ENTRY).length;
+  assert.strictEqual(rerunCanonical, 1, 'exactly one canonical entry after re-run');
+});
