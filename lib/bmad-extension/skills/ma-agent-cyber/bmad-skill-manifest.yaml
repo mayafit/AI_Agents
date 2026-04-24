@@ -1,5 +1,5 @@
 type: agent
-name: bmad-ma-agent-cyber
+name: ma-agent-cyber
 displayName: Yael
 title: Cyber Analyst
 icon: "\U0001F6E1\uFE0F"

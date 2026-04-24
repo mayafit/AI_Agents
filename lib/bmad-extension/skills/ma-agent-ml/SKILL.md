@@ -1,5 +1,5 @@
 ---
-name: bmad-ma-agent-ml
+name: ma-agent-ml
 description: Demerzel (ML Scientist) — Machine Learning Scientist specializing in falsifiable hypothesis validation and failure-cost analysis
 ---
 

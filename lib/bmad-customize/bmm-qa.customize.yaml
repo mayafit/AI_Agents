@@ -16,7 +16,7 @@ persona:
     - "Evidence matters more than opinions."
 
 menu:
-  - trigger: skill:bmad-ma-agent-sqa
+  - trigger: skill:ma-agent-sqa
     description: "Activate Gad — Software Quality Assurance Expert"
 
 critical_actions:

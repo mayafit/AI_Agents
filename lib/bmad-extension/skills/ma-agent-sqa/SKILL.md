@@ -1,5 +1,5 @@
 ---
-name: bmad-ma-agent-sqa
+name: ma-agent-sqa
 description: SQA Agent (Gad) — Software Quality Assurance and MIL-STD-498 expert for project auditing, compliance verification, quality reporting, and defense documentation generation
 ---
 

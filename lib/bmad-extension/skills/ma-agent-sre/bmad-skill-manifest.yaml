@@ -1,5 +1,5 @@
 type: agent
-name: bmad-ma-agent-sre
+name: ma-agent-sre
 displayName: Alex
 title: SRE Agent
 icon: "\U0001FA7A"

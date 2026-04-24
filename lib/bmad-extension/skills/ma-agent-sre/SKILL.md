@@ -1,5 +1,5 @@
 ---
-name: bmad-ma-agent-sre
+name: ma-agent-sre
 description: SRE Agent (Alex) — Site Reliability Engineer specializing in system availability, reliability, and performance optimization
 ---
 

@@ -135,12 +135,13 @@ test('skills/ directory exists', () => {
 
 // Expected skill directories based on ACTUAL file inventory
 const expectedAgentSkills = [
-  'bmad-ma-agent-sre',
-  'bmad-ma-agent-devops',
-  'bmad-ma-agent-cyber',
-  'bmad-ma-agent-ml',
-  'bmad-ma-agent-sqa',
-  // Note: bmad-ma-agent-mil498 retired — MIL-STD-498 workflows absorbed into Gad (bmad-ma-agent-sqa)
+  'ma-agent-sre',
+  'ma-agent-devops',
+  'ma-agent-cyber',
+  'ma-agent-ml',
+  'ma-agent-sqa',
+  // Note: ma-agent-mil498 retired in Epic 16 — MIL-STD-498 workflows absorbed into Gad (ma-agent-sqa)
+  // Story 22.2 renamed the bmad-ma-agent-* namespace to ma-agent-* to vacate the upstream-reserved bmad-* prefix.
 ];
 
 const expectedSqaSkills = [

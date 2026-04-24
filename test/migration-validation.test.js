@@ -45,28 +45,28 @@ console.log('\nTask 1: Validate custom agent personas (AC #1)\n');
 
 const AGENTS = [
   {
-    id: 'sre', folder: 'bmad-ma-agent-sre', name: 'Alex',
+    id: 'sre', folder: 'ma-agent-sre', name: 'Alex',
     role: 'Site Reliability Engineer',
     identity: 'Seasoned SRE with expertise in Kubernetes',
     style: 'Calm, data-driven, and systematic',
     principles: ['Automation over manual effort', 'Monitor everything that matters', 'Blame-free post-mortems']
   },
   {
-    id: 'devops', folder: 'bmad-ma-agent-devops', name: 'Amit',
+    id: 'devops', folder: 'ma-agent-devops', name: 'Amit',
     role: 'DevOps Engineer',
     identity: 'DevOps veteran with extensive experience in cloud-native technologies',
     style: 'Collaborative, efficiency-minded, and tech-forward',
     principles: ['Version control everything', 'Immutable infrastructure is better', 'Continuous improvement of the feedback loop']
   },
   {
-    id: 'cyber', folder: 'bmad-ma-agent-cyber', name: 'Yael',
+    id: 'cyber', folder: 'ma-agent-cyber', name: 'Yael',
     role: 'Cyber Security Analyst',
     identity: 'Cyber security expert with deep knowledge of OWASP Top 10',
     style: 'Analytical, precise, and cautious',
     principles: ['Security is a process, not a product', 'Favor Defense in Depth', 'Prioritize mitigations based on risk']
   },
   {
-    id: 'sqa', folder: 'bmad-ma-agent-sqa', name: 'Gad',
+    id: 'sqa', folder: 'ma-agent-sqa', name: 'Gad',
     role: 'Software Quality Assurance Engineer and Defense Standards Expert',
     identity: 'Experienced quality professional with deep expertise in SQA auditing',
     style: 'Clear, precise, and structured for SQA work',
@@ -124,7 +124,7 @@ for (const agent of AGENTS) {
 console.log('\nTask 2: Validate agent menu routing (AC #2)\n');
 
 const AGENT_MENUS = {
-  'bmad-ma-agent-sre': {
+  'ma-agent-sre': {
     agent: 'SRE/Alex',
     items: [
       { cmd: 'HC', skill: 'sre-health-check', exists: false, note: 'pre-existing: workflow never implemented in source' },
@@ -132,7 +132,7 @@ const AGENT_MENUS = {
       { cmd: 'PO', skill: 'sre-performance-opt', exists: false, note: 'pre-existing: workflow never implemented in source' },
     ]
   },
-  'bmad-ma-agent-devops': {
+  'ma-agent-devops': {
     agent: 'DevOps/Amit',
     items: [
       { cmd: 'CO', skill: 'devops-configure-infrastructure', exists: true },
@@ -140,7 +140,7 @@ const AGENT_MENUS = {
       { cmd: 'MH', skill: 'devops-manage-helm', exists: true },
     ]
   },
-  'bmad-ma-agent-cyber': {
+  'ma-agent-cyber': {
     agent: 'Cyber/Yael',
     items: [
       { cmd: 'VS', skill: 'cyber-vulnerability-scan', exists: true },
@@ -148,7 +148,7 @@ const AGENT_MENUS = {
       { cmd: 'TM', skill: 'cyber-threat-modeling', exists: false, note: 'pre-existing: workflow never implemented in source' },
     ]
   },
-  'bmad-ma-agent-sqa': {
+  'ma-agent-sqa': {
     agent: 'SQA+MIL-498/Gad',
     items: [
       { cmd: 'AU', skill: 'sqa-audit', exists: true },
@@ -398,14 +398,14 @@ test('5.8: skill folder breakdown: 5 agents + 8 mil498 + 7 sre + 5 devops + 7 cy
   const folders = fs.readdirSync(SKILLS_DIR).filter(f =>
     fs.statSync(path.join(SKILLS_DIR, f)).isDirectory());
 
-  const agents = folders.filter(f => f.startsWith('bmad-ma-agent-'));
+  const agents = folders.filter(f => f.startsWith('ma-agent-'));
   const mil498 = folders.filter(f => f.startsWith('mil498-'));
   const sre = folders.filter(f => f.startsWith('sre-'));
   const devops = folders.filter(f => f.startsWith('devops-'));
   const cyber = folders.filter(f => f.startsWith('cyber-'));
   const ml = folders.filter(f => f.startsWith('ml-'));
   const ext = folders.filter(f =>
-    !f.startsWith('bmad-ma-agent-') && !f.startsWith('mil498-') &&
+    !f.startsWith('ma-agent-') && !f.startsWith('mil498-') &&
     !f.startsWith('sre-') && !f.startsWith('devops-') && !f.startsWith('cyber-') &&
     !f.startsWith('ml-'));
 

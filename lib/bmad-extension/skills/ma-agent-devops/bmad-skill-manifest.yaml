@@ -1,5 +1,5 @@
 type: agent
-name: bmad-ma-agent-devops
+name: ma-agent-devops
 displayName: Amit
 title: DevOps Agent
 icon: "\U0001F3D7\uFE0F"

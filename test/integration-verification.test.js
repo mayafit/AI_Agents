@@ -225,7 +225,7 @@ console.log('\nTask 1 — End-to-end IDE agent test');
       // After Epic 15, custom agent files were removed from bmad-customizations/ and
       // their personas/menus moved to SKILL.md in skill folders.
       const skillMd = await fs.readFile(
-        path.join(__dirname, '..', 'lib', 'bmad-extension', 'skills', 'bmad-ma-agent-sre', 'SKILL.md'),
+        path.join(__dirname, '..', 'lib', 'bmad-extension', 'skills', 'ma-agent-sre', 'SKILL.md'),
         'utf-8'
       );
       assert.ok(skillMd.includes('Site Reliability Engineer'),

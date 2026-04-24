@@ -1,5 +1,5 @@
 ---
-name: bmad-ma-agent-devops
+name: ma-agent-devops
 description: DevOps Agent (Amit) — DevOps engineer specializing in CI/CD pipelines, infrastructure automation, and container orchestration
 ---
 
