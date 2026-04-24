@@ -241,7 +241,16 @@ function copyDirRecursive(srcDir, destDir) {
       // Preserving the symlink itself would tie the bundle to the build
       // machine's filesystem layout — the whole point of this build step is
       // to produce a flat, portable bundle.
+      //
+      // Safety: refuse to follow symlinks whose target escapes the source
+      // tree. A stray link to /etc/shadow or C:\Users\x\.ssh would silently
+      // inject external content into the published npm tarball.
       const real = fs.realpathSync(srcPath);
+      const srcRoot = fs.realpathSync(SRC_DIR);
+      const relFromSrc = path.relative(srcRoot, real);
+      if (relFromSrc.startsWith('..') || path.isAbsolute(relFromSrc)) {
+        fail('symlink target escapes source tree', `${srcPath} → ${real}`);
+      }
       if (fs.statSync(real).isDirectory()) {
         copyDirRecursive(real, destPath);
       } else {

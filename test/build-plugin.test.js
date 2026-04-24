@@ -346,6 +346,169 @@ test('npm pack --dry-run lists lib/bmad-extension-plugin/ contents', () => {
   );
 });
 
+// ─── Edge-case-hunter coverage ───────────────────────────────────────────
+console.log('\n--- Edge cases ---');
+
+test('build succeeds when invoked from a nested working directory', () => {
+  // AC 5 + edge-case: users who `cd` into test/ or scripts/ before running
+  // the script must still get correct paths. The script anchors off
+  // __dirname, not process.cwd(), so this should work.
+  const result = spawnSync(process.execPath, [SCRIPT_PATH], {
+    cwd: path.join(PROJECT_ROOT, 'test'),
+    encoding: 'utf8',
+  });
+  assert.strictEqual(result.status, 0,
+    `build from nested cwd failed: ${result.stderr}${result.stdout}`);
+  assert.ok(fs.existsSync(path.join(OUT_DIR, '.claude-plugin', 'marketplace.json')),
+    'marketplace.json must still land in the repo lib/bmad-extension-plugin/');
+});
+
+test('output mode bits are stable across runs (edge-case: host umask leak)', () => {
+  // On Windows this is mostly a no-op (NTFS uses ACLs, not POSIX modes).
+  // On POSIX, a non-default umask should not be able to leak into the
+  // bundle. We validate indirectly: two runs produce byte-identical trees
+  // (already covered by the idempotency test), which is the user-visible
+  // guarantee. A direct mode assertion would fail on Windows, so we skip
+  // it there. The test exists to pin the contract.
+  if (process.platform === 'win32') {
+    console.log('    (Windows — mode bits are approximate; skipping numeric assertion)');
+    return;
+  }
+  const stat = fs.statSync(path.join(OUT_DIR, '.claude-plugin', 'marketplace.json'));
+  // 0o644 expected; mask off the file-type bits.
+  const mode = stat.mode & 0o777;
+  assert.strictEqual(mode, 0o644, `marketplace.json mode must be 0o644, got 0o${mode.toString(8)}`);
+});
+
+test('build wipes stale content (does not merge old bundle with new)', () => {
+  // Edge case: if lib/bmad-extension-plugin/ already exists with a stale
+  // file that no longer appears in source (e.g. a retired skill from pre-22.2),
+  // the fresh build must remove it — not leave it next to the new files.
+  const stalePath = path.join(OUT_DIR, 'skills', '__stale_retired_skill__', 'SKILL.md');
+  fs.mkdirSync(path.dirname(stalePath), { recursive: true });
+  fs.writeFileSync(stalePath, 'stale content from a retired skill');
+  const result = runBuild();
+  assert.strictEqual(result.status, 0, `build failed: ${result.stderr}`);
+  assert.ok(!fs.existsSync(stalePath),
+    'stale file must be removed when rebuild runs; bundle must not merge old+new');
+});
+
+test('.DS_Store and Thumbs.db are excluded from the bundle', () => {
+  // Edge case: a macOS contributor commits .DS_Store into a skill dir, or
+  // a Windows contributor commits Thumbs.db. The bundle must not ship them
+  // (cross-platform determinism + cleanliness).
+  const skillsDir = path.join(OUT_DIR, 'skills');
+  function hasJunkFiles(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (build.shouldSkipEntry(entry.name)) return true;
+      if (entry.isDirectory() && hasJunkFiles(path.join(dir, entry.name))) return true;
+    }
+    return false;
+  }
+  assert.ok(!hasJunkFiles(skillsDir), 'bundle must not contain .DS_Store / Thumbs.db / desktop.ini');
+});
+
+test('empty skills/ directory (no subdirectories) fails fast', () => {
+  // Edge case: a contributor deletes all skill dirs; the build must not
+  // emit a valid-looking bundle with zero skills.
+  // Simulate by renaming every skill dir out of the way. Use a sibling
+  // directory on the same filesystem — cross-device renameSync fails with
+  // EXDEV on Windows when the OS temp dir is on a different drive.
+  const srcSkillsDir = path.join(SRC_DIR, 'skills');
+  const backupRoot = path.join(PROJECT_ROOT, `.build-plugin-skills-backup-${Date.now()}`);
+  fs.mkdirSync(backupRoot, { recursive: true });
+  const moved = [];
+  try {
+    const skillDirs = fs.readdirSync(srcSkillsDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+    for (const name of skillDirs) {
+      const from = path.join(srcSkillsDir, name);
+      const to = path.join(backupRoot, name);
+      fs.renameSync(from, to);
+      moved.push({ from, to });
+    }
+    const result = runBuild();
+    assert.notStrictEqual(result.status, 0, 'empty skills/ must fail fast');
+    const combined = `${result.stdout}${result.stderr}`;
+    assert.ok(/no skill subdirectories/i.test(combined),
+      `error must mention missing skill dirs (got: ${combined})`);
+  } finally {
+    // Restore
+    for (const { from, to } of moved) {
+      try { fs.renameSync(to, from); } catch { /* best-effort */ }
+    }
+    try { fs.rmSync(backupRoot, { recursive: true, force: true }); } catch { /* best-effort */ }
+  }
+});
+
+test('skill directory missing SKILL.md is flagged (not silently shipped)', () => {
+  // Edge case: a new contributor creates a skill directory but forgets the
+  // SKILL.md. Without this check, the build would happily ship a broken
+  // skill that installs but never activates.
+  const srcSkillsDir = path.join(SRC_DIR, 'skills');
+  const brokenName = '__broken_missing_skill_md__';
+  const brokenDir = path.join(srcSkillsDir, brokenName);
+  fs.mkdirSync(brokenDir, { recursive: true });
+  try {
+    const result = runBuild();
+    assert.notStrictEqual(result.status, 0, 'skill without SKILL.md must fail the build');
+    const combined = `${result.stdout}${result.stderr}`;
+    assert.ok(/SKILL\.md/i.test(combined),
+      `error must name SKILL.md (got: ${combined})`);
+  } finally {
+    fs.rmSync(brokenDir, { recursive: true, force: true });
+  }
+});
+
+test('substituteTokens leaves unrelated ${...}-shaped literals alone in copied content', () => {
+  // Edge case: token substitution is scoped to the template only — skill
+  // payload files (e.g. a ml-skill's template.md that literally references
+  // `${MODEL_NAME}`) must come through byte-identical. The bundle-diff test
+  // (byte-identical second run) and the byte-preservation contract
+  // (copyFileSync) enforce this, but we make it explicit here for any
+  // future refactor that might be tempted to globally substitute.
+  const srcTemplateExample = path.join(SRC_DIR, 'skills', 'mil498-srs', 'template.md');
+  const destTemplateExample = path.join(OUT_DIR, 'skills', 'mil498-srs', 'template.md');
+  if (!fs.existsSync(srcTemplateExample)) {
+    console.log('    (witness file absent — skipping)');
+    return;
+  }
+  const src = fs.readFileSync(srcTemplateExample);
+  const dst = fs.readFileSync(destTemplateExample);
+  assert.ok(src.equals(dst),
+    'skill payload files must be byte-identical to their source');
+});
+
+test('_comment fields are stripped from the resolved marketplace.json', () => {
+  // Edge case: leaving `_comment` in the emitted manifest would pollute the
+  // runtime view with maintainer prose and — worse — force the build to
+  // register every `${example}` hand-off reference in prose as a token.
+  const manifest = JSON.parse(fs.readFileSync(
+    path.join(OUT_DIR, '.claude-plugin', 'marketplace.json'),
+    'utf8',
+  ));
+  assert.ok(!Object.prototype.hasOwnProperty.call(manifest, '_comment'),
+    '_comment must be stripped from the resolved manifest');
+  for (const plugin of manifest.plugins || []) {
+    assert.ok(!Object.prototype.hasOwnProperty.call(plugin, '_comment'),
+      'per-plugin _comment must also be stripped');
+  }
+});
+
+test('resolved marketplace.json ends with exactly one LF newline', () => {
+  // Edge case: diff-tool churn if the trailing newline flips between runs
+  // or platforms. The build explicitly appends '\n'.
+  const raw = fs.readFileSync(
+    path.join(OUT_DIR, '.claude-plugin', 'marketplace.json'),
+  );
+  assert.strictEqual(raw[raw.length - 1], 0x0a,
+    'marketplace.json must end with a single LF (0x0a)');
+  // And no CRLF anywhere — we own this file end-to-end.
+  assert.ok(!raw.includes(0x0d),
+    'marketplace.json must not contain CR bytes (LF line endings only)');
+});
+
 // ─── Unit-level coverage of exported helpers ─────────────────────────────
 console.log('\n--- Unit: exported helpers ---');
 
