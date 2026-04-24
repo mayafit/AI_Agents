@@ -358,6 +358,65 @@ async function runAllTests() {
 
     cleanupTmpDir();
 
+    // ── 7b. Unknown top-level keys (EC19) ─────────────────────────────
+    console.log('\nUnknown top-level keys: warn + preserve');
+    setupTmpDir();
+
+    await testAsync('legacy file with unknown top-level key triggers warn + preserve', async () => {
+        const projectRoot = buildMockPostInstall('unknown-key-1', {
+            backupFiles: {
+                'bmm-cyber.customize.yaml': [
+                    'memories:',
+                    '  - "Known content"',
+                    'extra_config:',
+                    '  custom_field: "value"',
+                    'risk_profile: "high"',
+                ].join('\n') + '\n',
+            },
+            skills: ['ma-agent-cyber'],
+        });
+
+        const result = await bmad.translateUserCustomizations(projectRoot);
+        assert.strictEqual(result.translated.length, 1);
+        const unknownWarn = result.warnings.find(w => w.includes('unknown top-level'));
+        assert.ok(unknownWarn, `expected unknown-key warning; got ${JSON.stringify(result.warnings)}`);
+        assert.ok(unknownWarn.includes('extra_config'));
+        assert.ok(unknownWarn.includes('risk_profile'));
+        const preserved = path.join(
+            projectRoot, bmad.LEGACY_CUSTOMIZATIONS_DIR, 'bmm-cyber.customize.yaml'
+        );
+        assert.ok(fs.existsSync(preserved), 'legacy file preserved for manual re-apply');
+    });
+
+    cleanupTmpDir();
+
+    // ── 7c. Non-file entries in backup dir (EC20) ─────────────────────
+    console.log('\nNon-file entries in backup dir: skipped silently');
+    setupTmpDir();
+
+    await testAsync('directory named *.customize.yaml in backup is skipped without warning', async () => {
+        const projectRoot = buildMockPostInstall('non-file-1', {
+            backupFiles: {
+                'valid.customize.yaml': 'memories:\n  - "valid"\n',
+            },
+            skills: ['ma-agent-cyber'],
+        });
+        // Create a directory that shares the suffix — common developer
+        // mistake when unpacking an archive on top of a project.
+        const badDir = path.join(
+            projectRoot, '_bmad', '_config', 'agents',
+            '.backup-pre-migration', 'trap.customize.yaml'
+        );
+        fs.ensureDirSync(badDir);
+
+        const result = await bmad.translateUserCustomizations(projectRoot);
+        // No malformed-file warning for the trap dir; valid neighbor passes.
+        const trapWarn = result.warnings.find(w => w.includes('trap.customize.yaml'));
+        assert.ok(!trapWarn, `directory should not trigger malformed warning; got ${JSON.stringify(result.warnings)}`);
+    });
+
+    cleanupTmpDir();
+
     // ── 8. No backup at all ────────────────────────────────────────────
     console.log('\nNo-op path: no backup dir → empty result');
     setupTmpDir();
