@@ -5,7 +5,10 @@
  * Task 1: buildBmadArgs() function
  * Task 2: installBmad() uses buildBmadArgs()
  * Task 3: updateBmad() uses buildBmadArgs()
- * Task 4: applyCustomizations() recompile uses buildBmadArgs()
+ * Task 4: (historical) applyCustomizations recompile used buildBmadArgs().
+ *         Story 22.6 removed applyCustomizations entirely — installBmad/
+ *         updateBmad now pass `customSource` directly to buildBmadArgs and
+ *         let bmad-method's PluginResolver handle placement.
  * Task 5: Function signatures accept install context params
  */
 'use strict';
@@ -218,31 +221,32 @@ test('buildBmadArgs quotes path with spaces in --directory', () => {
   assert.ok(result.includes('--directory "D:\\My Projects\\test project"'), `Expected quoted path in: ${result}`);
 });
 
-test('buildBmadArgs includes a custom-module flag on fresh install when extension exists', () => {
-  const fs = require('fs');
-  const extensionPath = path.join(__dirname, '..', 'lib', 'bmad-extension');
-  // This test requires lib/bmad-extension/ to exist (it does in this repo)
-  assert.ok(fs.existsSync(extensionPath), `Precondition: lib/bmad-extension/ must exist at ${extensionPath}`);
-
+test('buildBmadArgs includes a custom-module flag on fresh install when customSource passed (Story 22.6)', () => {
+  // Story 22.6: the custom-module flag is no longer auto-derived from
+  // lib/bmad-extension/ — callers pass the staged bundle path explicitly.
+  const stagePath = '/test/.ma-agents-plugin-stage';
   const result = bmad.buildBmadArgs({
     projectRoot: '/test',
     modules: ['bmm'],
     tools: [],
     action: 'install',
+    customSource: stagePath,
   });
   // bmad-method 6.3.0 renamed --custom-content to --custom-source. Accept
   // either so the test survives downgrades during bisects.
   const hasFlag = result.includes('--custom-source') || result.includes('--custom-content');
   assert.ok(hasFlag, `Expected --custom-source or --custom-content in: ${result}`);
-  assert.ok(result.includes(`"${extensionPath}"`), `Expected quoted extension path in: ${result}`);
+  assert.ok(result.includes(`"${stagePath}"`), `Expected quoted stage path in: ${result}`);
 });
 
-test('buildBmadArgs includes a custom-module flag on update for bmad-method compatibility', () => {
+test('buildBmadArgs includes a custom-module flag on update when customSource passed (Story 22.6)', () => {
+  const stagePath = '/test/.ma-agents-plugin-stage';
   const result = bmad.buildBmadArgs({
     projectRoot: '/test',
     modules: ['bmm'],
     tools: [],
     action: 'update',
+    customSource: stagePath,
   });
   const hasFlag = result.includes('--custom-source') || result.includes('--custom-content');
   assert.ok(hasFlag, `Expected --custom-source or --custom-content on update, got: ${result}`);
@@ -290,15 +294,15 @@ test('buildBmadArgs starts with node and bmad-method CLI entry path', () => {
 
 console.log('\nCode review fixes: edge cases');
 
-test('buildBmadArgs includes exactly one custom-module flag on fresh install', () => {
+test('buildBmadArgs includes exactly one custom-module flag when customSource is passed (Story 22.6)', () => {
   const result = bmad.buildBmadArgs({
     projectRoot: '/test',
     modules: ['bmm'],
     tools: [],
     action: 'install',
+    customSource: '/test/.ma-agents-plugin-stage',
   });
-  // Count occurrences of either flag name — should be exactly 1 total
-  // (since lib/bmad-extension/ exists in this repo).
+  // Count occurrences of either flag name — should be exactly 1 total.
   const sourceMatches = result.match(/--custom-source/g) || [];
   const contentMatches = result.match(/--custom-content/g) || [];
   const totalFlagCount = sourceMatches.length + contentMatches.length;
@@ -362,9 +366,45 @@ test('updateBmad accepts options object with new params', () => {
   assert.ok(bmad.updateBmad.length <= 5, 'updateBmad should accept up to 5 params');
 });
 
-test('applyCustomizations accepts options object with new params', () => {
-  assert.strictEqual(typeof bmad.applyCustomizations, 'function');
-  assert.ok(bmad.applyCustomizations.length <= 6, 'applyCustomizations should accept up to 6 params');
+// Story 22.6: applyCustomizations was removed; stage-and-invoke replaces it.
+// Verify the replacement helpers are exported and typed as expected.
+test('stagePlugin and cleanupStage are exported (Story 22.6)', () => {
+  assert.strictEqual(typeof bmad.stagePlugin, 'function',
+    'stagePlugin must be exported by lib/bmad');
+  assert.strictEqual(typeof bmad.cleanupStage, 'function',
+    'cleanupStage must be exported by lib/bmad');
+  assert.strictEqual(typeof bmad.applyCustomizations, 'undefined',
+    'applyCustomizations must NOT be exported (removed in Story 22.6)');
+});
+
+test('buildBmadArgs accepts customSource and appends --custom-source flag (Story 22.6)', () => {
+  const cmd = bmad.buildBmadArgs({
+    projectRoot: '/tmp/scratch',
+    modules: ['bmm'],
+    tools: ['claude-code'],
+    action: 'install',
+    customSource: '/tmp/scratch/.ma-agents-plugin-stage',
+  });
+  // --custom-source is resolved by resolveCustomContentFlag to either the
+  // v6.3.0 name or the legacy --custom-content; both acceptable here.
+  assert.ok(
+    cmd.includes('--custom-source "/tmp/scratch/.ma-agents-plugin-stage"') ||
+    cmd.includes('--custom-content "/tmp/scratch/.ma-agents-plugin-stage"'),
+    `Expected custom-source flag in: ${cmd}`
+  );
+});
+
+test('buildBmadArgs without customSource does NOT append any extension flag (Story 22.6)', () => {
+  const cmd = bmad.buildBmadArgs({
+    projectRoot: '/tmp/scratch',
+    modules: ['bmm'],
+    tools: ['claude-code'],
+    action: 'install',
+  });
+  assert.ok(!cmd.includes('--custom-source'),
+    'buildBmadArgs must not add --custom-source when customSource is omitted');
+  assert.ok(!cmd.includes('--custom-content'),
+    'buildBmadArgs must not add --custom-content when customSource is omitted');
 });
 
 // ---- Summary ----

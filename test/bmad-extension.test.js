@@ -52,17 +52,17 @@ test('1.2: lib/bmad-extension/agents/ has no .customize.yaml files (Story 15.6)'
   // If directory doesn't exist, that's also correct
 });
 
-test('1.3: module.yaml exists with extends-module: bmm', () => {
-  const filePath = path.join(extDir, 'module.yaml');
-  assert.ok(fs.existsSync(filePath), 'module.yaml must exist');
+test('1.3: skills/module.yaml exists with extends-module: bmm (Story 22.5 moved it under skills/)', () => {
+  const filePath = path.join(extDir, 'skills', 'module.yaml');
+  assert.ok(fs.existsSync(filePath), 'skills/module.yaml must exist');
   const content = fs.readFileSync(filePath, 'utf-8');
   assert.ok(content.includes('extends-module: bmm'), 'module.yaml must declare extends-module: bmm');
   assert.ok(content.includes('name: "MA-Agents Skills & Agents"'), 'module.yaml must have name: "MA-Agents Skills & Agents"');
 });
 
-test('1.4: module-help.csv exists', () => {
-  const filePath = path.join(extDir, 'module-help.csv');
-  assert.ok(fs.existsSync(filePath), 'module-help.csv must exist');
+test('1.4: skills/module-help.csv exists (Story 22.5 moved it under skills/)', () => {
+  const filePath = path.join(extDir, 'skills', 'module-help.csv');
+  assert.ok(fs.existsSync(filePath), 'skills/module-help.csv must exist');
 });
 
 test('1.5: workflows/ directory exists in extension module', () => {
@@ -125,57 +125,59 @@ for (const agentId of builtinAgents) {
   });
 }
 
-// ─── AC #3: bmad.js has extension and customize deployment stages ─────────
+// ─── AC #3: bmad.js has extension source tree (post Story 22.6 stage-and-invoke) ──
 
-console.log('\nAC #3 — bmad.js deployment logic');
+console.log('\nAC #3 — bmad.js stage-and-invoke references');
 
-test('3.1: bmad.js contains extension deployment code', () => {
+test('3.1: bmad.js references the plugin stage dir constant', () => {
   const bmadSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
-  assert.ok(bmadSrc.includes("'bmad-extension'"), 'bmad.js must reference bmad-extension source dir');
-  assert.ok(bmadSrc.includes("'extensions'"), 'bmad.js must reference extensions target dir');
-  assert.ok(bmadSrc.includes("'ma-agents-skills'"), 'bmad.js must reference ma-agents-skills');
+  // Story 22.6 replaced ad-hoc extension staging with stage-and-invoke against
+  // the committed plugin bundle. The source must reference the stage constant.
+  assert.ok(bmadSrc.includes("PLUGIN_STAGE_DIR_NAME = '.ma-agents-plugin-stage'"),
+    'bmad.js must declare PLUGIN_STAGE_DIR_NAME constant');
 });
 
-test('3.2: bmad.js contains customize deployment code', () => {
+test('3.2: bmad.js references the plugin bundle via scripts/build-plugin OUT_DIR', () => {
   const bmadSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
-  assert.ok(bmadSrc.includes("'bmad-customize'"), 'bmad.js must reference bmad-customize source dir');
-  assert.ok(bmadSrc.includes('Applied built-in customization'), 'bmad.js must log built-in customization deployment');
+  assert.ok(bmadSrc.includes("require('../scripts/build-plugin')"),
+    'bmad.js must require the build-plugin module to resolve OUT_DIR');
+  assert.ok(bmadSrc.includes('OUT_DIR: pluginBundlePath'),
+    'bmad.js must rename OUT_DIR to pluginBundlePath on import');
 });
 
-test('3.3: extension deployment uses path.join for all paths', () => {
-  const bmadSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
-  assert.ok(bmadSrc.includes("path.join(__dirname, 'bmad-extension')"),
-    'extensionSource must use path.join');
-  assert.ok(bmadSrc.includes("path.join(projectRoot, BMAD_DIR, 'extensions', 'ma-agents-skills')"),
-    'extensionTarget must use path.join');
+test('3.3: bmad.js exports stagePlugin and cleanupStage', () => {
+  const bmad = require('../lib/bmad');
+  assert.strictEqual(typeof bmad.stagePlugin, 'function',
+    'stagePlugin must be exported');
+  assert.strictEqual(typeof bmad.cleanupStage, 'function',
+    'cleanupStage must be exported');
 });
 
-test('3.4: customize deployment uses path.join for source', () => {
-  const bmadSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
-  assert.ok(bmadSrc.includes("path.join(__dirname, 'bmad-customize')"),
-    'customizeSource must use path.join');
+test('3.4: bmad.js no longer exports applyCustomizations', () => {
+  const bmad = require('../lib/bmad');
+  assert.strictEqual(typeof bmad.applyCustomizations, 'undefined',
+    'applyCustomizations must NOT be exported — replaced by stage-and-invoke (Story 22.6)');
 });
 
-test('3.5: deployment order is RECOMPILE > EXTENSION > CUSTOMIZE > WORKFLOWS', () => {
+test('3.5: bmad.js no longer hand-parses manifest.yaml or files-manifest.csv', () => {
   const bmadSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
-  const recompileIdx = bmadSrc.indexOf('STAGE:RECOMPILE');
-  const extensionIdx = bmadSrc.indexOf('STAGE:EXTENSION');
-  const customizeIdx = bmadSrc.indexOf('STAGE:CUSTOMIZE');
-  const workflowIdx = bmadSrc.indexOf('STAGE:WORKFLOWS');
-
-  assert.ok(recompileIdx > 0, 'STAGE:RECOMPILE marker must exist');
-  assert.ok(extensionIdx > 0, 'STAGE:EXTENSION marker must exist');
-  assert.ok(customizeIdx > 0, 'STAGE:CUSTOMIZE marker must exist');
-  assert.ok(workflowIdx > 0, 'STAGE:WORKFLOWS marker must exist');
-  assert.ok(extensionIdx > recompileIdx, 'extension deployment must come after recompile');
-  assert.ok(customizeIdx > extensionIdx, 'customize deployment must come after extension');
-  assert.ok(customizeIdx < workflowIdx, 'customize deployment must come before workflows');
+  // These patterns were the core of the legacy manifest-surgery code path.
+  assert.ok(!bmadSrc.includes('manifest.yaml'),
+    'bmad.js must NOT reference manifest.yaml (legacy manifest surgery, Story 22.6)');
+  assert.ok(!bmadSrc.includes('files-manifest.csv'),
+    'bmad.js must NOT reference files-manifest.csv (legacy manifest surgery, Story 22.6)');
+  assert.ok(!bmadSrc.includes("['custom', 'bmb']") && !bmadSrc.includes('["custom", "bmb"]'),
+    'bmad.js must NOT contain the hardcoded staleModules whitelist (Story 22.6)');
+  assert.ok(!bmadSrc.includes('fields[2]'),
+    'bmad.js must NOT CSV-index by fields[2] (Story 22.6)');
 });
 
-test('3.6: extension deployment logs with chalk.cyan', () => {
+test('3.6: bmad.js does NOT stage custom agent YAMLs into _bmad/_config/custom/agents/', () => {
   const bmadSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
-  assert.ok(bmadSrc.includes("chalk.cyan('    + Deployed BMAD extension module: ma-agents-skills')"),
-    'must log deployment with chalk.cyan');
+  // Plugin flow routes skill content via bmad-method's PluginResolver; the
+  // legacy _bmad/_config/custom/agents/ staging path must be gone.
+  assert.ok(!bmadSrc.includes("'_config', 'custom', 'agents'"),
+    'bmad.js must NOT contain _config/custom/agents/ staging (Story 22.6)');
 });
 
 test('3.7: bmad-customizations retains platform and generic files (agent files removed in Epic 15)', () => {
@@ -194,13 +196,15 @@ test('3.7: bmad-customizations retains platform and generic files (agent files r
   }
 });
 
-// ─── Integration tests — actual fs.copy deployment ───────────────────────
+// ─── Integration tests — stagePlugin() / cleanupStage() (Story 22.6) ─────
 
-console.log('\nIntegration — applyCustomizations() deployment');
+console.log('\nIntegration — stagePlugin() / cleanupStage() lifecycle');
 
 const fsExtra = require('fs-extra');
 const os = require('os');
-const { applyCustomizations } = require('../lib/bmad');
+const crypto = require('crypto');
+const { stagePlugin, cleanupStage, PLUGIN_STAGE_DIR_NAME } = require('../lib/bmad');
+const { OUT_DIR: PLUGIN_BUNDLE_DIR, computeTreeDigest } = require('../scripts/build-plugin');
 
 async function asyncTest(name, fn) {
   try {
@@ -215,54 +219,69 @@ async function asyncTest(name, fn) {
 }
 
 async function runIntegrationTests() {
-  const tmpDir = path.join(os.tmpdir(), `bmad-ext-test-${Date.now()}`);
+  const tmpDir = path.join(os.tmpdir(), `bmad-stage-test-${Date.now()}-${process.pid}`);
 
-  await asyncTest('INT-1: applyCustomizations deploys extension module to target directory', async () => {
-    // Set up minimal BMAD structure so applyCustomizations doesn't fail on missing dirs
-    await fsExtra.ensureDir(path.join(tmpDir, '_bmad', '_config', 'agents'));
-    await fsExtra.ensureDir(path.join(tmpDir, '_bmad', 'custom', 'agents'));
-    await fsExtra.ensureDir(path.join(tmpDir, '_bmad', 'bmm', 'agents'));
-
-    // Run applyCustomizations — recompile will fail (no BMAD installed in temp) but
-    // extension deployment happens after recompile regardless of recompile outcome
-    await applyCustomizations(tmpDir, ['bmm'], [], []);
-
-    // Verify extension was deployed
-    const deployedModule = path.join(tmpDir, '_bmad', 'extensions', 'ma-agents-skills', 'module.yaml');
-    assert.ok(fsExtra.existsSync(deployedModule),
-      `module.yaml must exist at ${deployedModule}`);
-
-    const content = fsExtra.readFileSync(deployedModule, 'utf-8');
-    assert.ok(content.includes('extends-module: bmm'),
-      'deployed module.yaml must contain extends-module: bmm');
+  await asyncTest('INT-1: stagePlugin copies bmad-extension-plugin to <project>/.ma-agents-plugin-stage/', async () => {
+    await fsExtra.ensureDir(tmpDir);
+    const result = stagePlugin(tmpDir);
+    // Contract: stagePlugin returns { stagePath, customSourceArg } — the
+    // absolute path for filesystem work, and a BMAD-safe relative path for
+    // --custom-source (see _parseLocalPath bug with Windows absolute paths).
+    assert.strictEqual(typeof result, 'object',
+      'stagePlugin must return an object');
+    assert.strictEqual(result.stagePath, path.join(tmpDir, PLUGIN_STAGE_DIR_NAME),
+      `stagePlugin.stagePath must equal <projectRoot>/${PLUGIN_STAGE_DIR_NAME}`);
+    assert.strictEqual(result.customSourceArg, `./${PLUGIN_STAGE_DIR_NAME}`,
+      'stagePlugin.customSourceArg must be a BMAD-parseable relative path (./dir)');
+    assert.ok(fs.existsSync(result.stagePath), 'stage directory must exist after stagePlugin()');
+    // Sanity: the staged tree contains the marketplace manifest and skills dir
+    assert.ok(fs.existsSync(path.join(result.stagePath, '.claude-plugin', 'marketplace.json')),
+      'stage must contain .claude-plugin/marketplace.json');
+    assert.ok(fs.existsSync(path.join(result.stagePath, 'skills')),
+      'stage must contain skills/');
   });
 
-  await asyncTest('INT-2: applyCustomizations deploys built-in customizations to _bmad/_config/agents/', async () => {
-    // Verify built-in customizations were deployed to config dir
-    const configAgentsDir = path.join(tmpDir, '_bmad', '_config', 'agents');
-
-    for (const agentId of builtinAgents) {
-      const deployedFile = path.join(configAgentsDir, `${agentId}.customize.yaml`);
-      assert.ok(fsExtra.existsSync(deployedFile),
-        `${agentId}.customize.yaml must be deployed to _bmad/_config/agents/`);
-
-      const content = fsExtra.readFileSync(deployedFile, 'utf-8');
-      assert.ok(content.includes('critical_actions:'),
-        `deployed ${agentId}.customize.yaml must contain critical_actions`);
-      assert.ok(content.includes('skills/MANIFEST.yaml'),
-        `deployed ${agentId}.customize.yaml must reference skills/MANIFEST.yaml`);
-    }
+  await asyncTest('INT-2: staged copy is byte-identical to the source plugin bundle (AC 3)', async () => {
+    const stagePath = path.join(tmpDir, PLUGIN_STAGE_DIR_NAME);
+    const sourceDigest = computeTreeDigest(PLUGIN_BUNDLE_DIR);
+    const stageDigest = computeTreeDigest(stagePath);
+    assert.strictEqual(stageDigest, sourceDigest,
+      'SHA-256 tree digest of stage must equal source bundle (fresh copy, no drift)');
   });
 
-  await asyncTest('INT-3: deployed customizations use array syntax not numbered keys', async () => {
-    const configAgentsDir = path.join(tmpDir, '_bmad', '_config', 'agents');
+  await asyncTest('INT-3: stagePlugin copies a real file, not a symlink', async () => {
+    const stagePath = path.join(tmpDir, PLUGIN_STAGE_DIR_NAME);
+    const marketplace = path.join(stagePath, '.claude-plugin', 'marketplace.json');
+    const stat = fs.lstatSync(marketplace);
+    assert.ok(!stat.isSymbolicLink(),
+      'staged files must be regular files, not symlinks (AC 3)');
+  });
 
-    for (const agentId of builtinAgents) {
-      const deployedFile = path.join(configAgentsDir, `${agentId}.customize.yaml`);
-      const content = fsExtra.readFileSync(deployedFile, 'utf-8');
-      assert.ok(content.includes('  - "'), `deployed ${agentId} must use array syntax`);
-      assert.ok(!content.match(/^\s+\d+:/m), `deployed ${agentId} must NOT use numbered keys`);
-    }
+  await asyncTest('INT-4: stagePlugin wipes a pre-existing stage before copying (edge case)', async () => {
+    const stagePath = path.join(tmpDir, PLUGIN_STAGE_DIR_NAME);
+    // Pretend a prior failed install left an orphan file behind.
+    const orphan = path.join(stagePath, '_orphan-from-prior-run.txt');
+    fs.writeFileSync(orphan, 'stale content that must be wiped');
+    // Re-stage — the orphan must be gone.
+    stagePlugin(tmpDir);
+    assert.ok(!fs.existsSync(orphan),
+      'orphan file from previous run must be removed by stagePlugin wipe-before-copy');
+  });
+
+  await asyncTest('INT-5: cleanupStage removes the directory', async () => {
+    const stagePath = path.join(tmpDir, PLUGIN_STAGE_DIR_NAME);
+    cleanupStage(stagePath);
+    assert.ok(!fs.existsSync(stagePath),
+      'stage directory must not exist after cleanupStage()');
+  });
+
+  await asyncTest('INT-6: cleanupStage is idempotent — second call on a missing path is a no-op', async () => {
+    const stagePath = path.join(tmpDir, PLUGIN_STAGE_DIR_NAME);
+    // Already removed by INT-5 — calling again must not throw.
+    cleanupStage(stagePath);
+    cleanupStage(''); // empty-string guard
+    cleanupStage(null); // null guard
+    assert.ok(true, 'cleanupStage must tolerate missing/empty paths without throwing');
   });
 
   // Cleanup
@@ -271,9 +290,21 @@ async function runIntegrationTests() {
   printSummary();
 }
 
-function printSummary() {
-// ─── Summary ────────────────────────────────────────────────────────────────
+// Silence the stagePlugin "Staged plugin:" logs during test runs — they add
+// noise to the per-test output without adding signal. Node doesn't provide a
+// per-console.log mute so we redirect the chalk.gray log into a sink.
+const originalLog = console.log;
+console.log = (...args) => {
+  const first = args[0];
+  if (typeof first === 'string' && (first.includes('Staged plugin:') || first.includes('Removed plugin stage directory:'))) {
+    return; // swallow — stagePlugin/cleanupStage diagnostic only
+  }
+  originalLog.apply(console, args);
+};
 
+function printSummary() {
+  // ─── Summary ────────────────────────────────────────────────────────────
+  console.log = originalLog;
   console.log(`\n${'─'.repeat(60)}`);
   console.log(`Results: ${passed} passed, ${failed} failed`);
   if (errors.length > 0) {

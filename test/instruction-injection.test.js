@@ -264,7 +264,7 @@ function createMockAgent(instructionFiles, opts = {}) {
   await asyncTest('4.5: BMAD agent with existing file — receives top-insert same as IDE agents', async () => {
     await withTempDir(async (tmpDir) => {
       const filePath = path.join(tmpDir, 'bmad-agent.md');
-      // BMAD file exists (deployed by applyCustomizations), so it should get injection
+      // BMAD file exists (deployed by bmad-method via --custom-source, Story 22.6), so it should get injection
       await fs.writeFile(filePath, '---\nname: SRE Agent\n---\n# Agent Definition\nContent.\n');
       const agent = createMockAgent(['bmad-agent.md'], {
         category: 'bmad',

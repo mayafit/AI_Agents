@@ -193,12 +193,15 @@ console.log('\nTask 1 — End-to-end IDE agent test');
 
     // Task 2.2 (continued): Verify deployment via fs.copy
 
-    await asyncTest('2.2: applyCustomizations deploys extension to _bmad/extensions/ma-agents-skills/', async () => {
+    await asyncTest('2.2: extension source remains copyable to _bmad/extensions/ma-agents-skills/ (Story 22.6: deployment is now BMAD-driven)', async () => {
       const projectRoot = path.join(tmpDir, 'bmad-deploy-test');
       const extSource = path.join(__dirname, '..', 'lib', 'bmad-extension');
       const extTarget = path.join(projectRoot, '_bmad', 'extensions', 'ma-agents-skills');
 
-      // Simulate the deployment step from bmad.js applyCustomizations() STAGE:EXTENSION
+      // Story 22.6 removed the in-process applyCustomizations() deployment —
+      // BMAD's PluginResolver now places content via --custom-source against
+      // the staged plugin bundle. This test still verifies the SOURCE tree is
+      // well-formed (module.yaml, module-help.csv) by simulating a copy.
       await fs.ensureDir(extTarget);
       await fs.copy(extSource, extTarget);
 

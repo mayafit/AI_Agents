@@ -435,9 +435,12 @@ test('6.1: bmad.js exports migration detection functions', () => {
   assert.ok(typeof bmad.cleanupLegacyArtifacts === 'function', 'cleanupLegacyArtifacts must be exported');
 });
 
-test('6.2: bmad.js applyCustomizations is exported', () => {
+test('6.2: bmad.js stage-and-invoke helpers are exported (Story 22.6 — replaces applyCustomizations)', () => {
   const bmad = require('../lib/bmad');
-  assert.ok(typeof bmad.applyCustomizations === 'function', 'applyCustomizations must be exported');
+  assert.ok(typeof bmad.stagePlugin === 'function', 'stagePlugin must be exported');
+  assert.ok(typeof bmad.cleanupStage === 'function', 'cleanupStage must be exported');
+  assert.strictEqual(typeof bmad.applyCustomizations, 'undefined',
+    'applyCustomizations must NOT be exported — replaced by stage-and-invoke');
 });
 
 test('6.3: lib/bmad-customize/ has exactly 9 built-in agent files', () => {
@@ -471,23 +474,32 @@ test('6.5: built-in agent customize.yaml files have critical_actions', () => {
   }
 });
 
-test('6.6: bmad.js has extension deployment stage markers in correct order', () => {
+test('6.6: bmad.js stages the bundled plugin and invokes bmad-method with --custom-source (Story 22.6)', () => {
   const bmadSrc = fs.readFileSync(path.join(ROOT, 'lib', 'bmad.js'), 'utf-8');
-  const recompileIdx = bmadSrc.indexOf('STAGE:RECOMPILE');
-  const extensionIdx = bmadSrc.indexOf('STAGE:EXTENSION');
-  const workflowIdx = bmadSrc.indexOf('STAGE:WORKFLOWS');
-
-  assert.ok(recompileIdx > 0, 'STAGE:RECOMPILE marker must exist');
-  assert.ok(extensionIdx > 0, 'STAGE:EXTENSION marker must exist');
-  assert.ok(workflowIdx > 0, 'STAGE:WORKFLOWS marker must exist');
-  assert.ok(extensionIdx > recompileIdx, 'extension must come after recompile');
-  assert.ok(extensionIdx < workflowIdx, 'extension must come before workflows');
+  // Legacy STAGE:RECOMPILE / STAGE:EXTENSION / STAGE:WORKFLOWS markers were
+  // retired in Story 22.6 along with applyCustomizations(). The replacement
+  // contract is: stage the plugin bundle, then hand the stage path to
+  // bmad-method via --custom-source.
+  assert.ok(bmadSrc.includes('function stagePlugin'),
+    'bmad.js must define stagePlugin()');
+  assert.ok(bmadSrc.includes('function cleanupStage'),
+    'bmad.js must define cleanupStage()');
+  // The install flow must hand the staged path through buildBmadArgs via a
+  // `customSource:` property. The actual value passed is `customSourceArg`
+  // (a BMAD-parseable relative form — see stagePlugin() contract), not the
+  // absolute `stagePath`, so accept either token.
+  assert.ok(
+    bmadSrc.includes('customSource: customSourceArg') ||
+    bmadSrc.includes('customSource: stagePath'),
+    'bmad.js must pass the staged path as customSource to buildBmadArgs');
 });
 
-test('6.7: bmad.js references bmad-extension source dir', () => {
+test('6.7: bmad.js references the bundled plugin bundle via scripts/build-plugin OUT_DIR (Story 22.6)', () => {
   const bmadSrc = fs.readFileSync(path.join(ROOT, 'lib', 'bmad.js'), 'utf-8');
-  assert.ok(bmadSrc.includes("'bmad-extension'"), 'must reference bmad-extension');
-  assert.ok(bmadSrc.includes("'ma-agents-skills'"), 'must reference ma-agents-skills');
+  assert.ok(bmadSrc.includes("require('../scripts/build-plugin')"),
+    'must require scripts/build-plugin to resolve OUT_DIR (canonical bundle path)');
+  assert.ok(bmadSrc.includes("PLUGIN_STAGE_DIR_NAME = '.ma-agents-plugin-stage'"),
+    'must declare the stage dir constant');
 });
 
 test('6.8: detectMigrationNeed returns correct results for fresh install', () => {
