@@ -342,14 +342,16 @@ for (const wf of EXT_WORKFLOWS) {
 
 console.log('\nTask 5: Validate module structure (AC #6)\n');
 
-test('5.1: module.yaml has code: ma-skills', () => {
-  const content = fs.readFileSync(path.join(EXT_DIR, 'module.yaml'), 'utf-8');
-  assert.ok(content.includes('code: ma-skills'), 'module.yaml must have code: ma-skills');
+// Story 22.5 moved module.yaml and module-help.csv from lib/bmad-extension/
+// to lib/bmad-extension/skills/ per BMAD v6.3.0 canonical location.
+test('5.1: skills/module.yaml has code: ma-skills', () => {
+  const content = fs.readFileSync(path.join(SKILLS_DIR, 'module.yaml'), 'utf-8');
+  assert.ok(content.includes('code: ma-skills'), 'skills/module.yaml must have code: ma-skills');
 });
 
-test('5.2: module.yaml has extends-module: bmm', () => {
-  const content = fs.readFileSync(path.join(EXT_DIR, 'module.yaml'), 'utf-8');
-  assert.ok(content.includes('extends-module: bmm'), 'module.yaml must declare extends-module: bmm');
+test('5.2: skills/module.yaml has extends-module: bmm', () => {
+  const content = fs.readFileSync(path.join(SKILLS_DIR, 'module.yaml'), 'utf-8');
+  assert.ok(content.includes('extends-module: bmm'), 'skills/module.yaml must declare extends-module: bmm');
 });
 
 test('5.3: skills/ contains exactly 61 skill folders', () => {
@@ -377,16 +379,16 @@ test('5.5: every skill folder has bmad-skill-manifest.yaml', () => {
   }
 });
 
-test('5.6: module-help.csv exists and lists all 61 skills', () => {
-  const csv = fs.readFileSync(path.join(EXT_DIR, 'module-help.csv'), 'utf-8');
+test('5.6: skills/module-help.csv exists and lists all 61 skills', () => {
+  const csv = fs.readFileSync(path.join(SKILLS_DIR, 'module-help.csv'), 'utf-8');
   const lines = csv.split('\n').filter(l => l.trim() && !l.startsWith('module,'));
   // Should have a line for each of the 61 skills (header excluded)
   assert.strictEqual(lines.length, 61,
     `Expected 61 data rows in module-help.csv, found ${lines.length}`);
 });
 
-test('5.7: module-help.csv references module code ma-skills', () => {
-  const csv = fs.readFileSync(path.join(EXT_DIR, 'module-help.csv'), 'utf-8');
+test('5.7: skills/module-help.csv references module code ma-skills', () => {
+  const csv = fs.readFileSync(path.join(SKILLS_DIR, 'module-help.csv'), 'utf-8');
   const dataLines = csv.split('\n').filter(l => l.trim() && !l.startsWith('module,'));
   for (const line of dataLines) {
     assert.ok(line.startsWith('ma-skills,'),

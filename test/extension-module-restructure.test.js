@@ -16,6 +16,7 @@ const fs = require('fs');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EXTENSION_DIR = path.join(PROJECT_ROOT, 'lib', 'bmad-extension');
+const SKILLS_DIR = path.join(EXTENSION_DIR, 'skills');
 
 let passed = 0;
 let failed = 0;
@@ -81,12 +82,23 @@ function parseCsv(content) {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Task 1: module.yaml validation
 // ═══════════════════════════════════════════════════════════════════════════════
-console.log('\n--- Task 1: module.yaml ---');
+console.log('\n--- Task 1: skills/module.yaml ---');
 
-const moduleYamlPath = path.join(EXTENSION_DIR, 'module.yaml');
+// Story 22.5 moved module.yaml from lib/bmad-extension/ to lib/bmad-extension/skills/
+// per BMAD v6.3.0 canonical location (PluginResolver Strategy 1 reads from the
+// common parent of all skill paths).
+const moduleYamlPath = path.join(SKILLS_DIR, 'module.yaml');
+const legacyModuleYamlPath = path.join(EXTENSION_DIR, 'module.yaml');
 
-test('module.yaml file exists', () => {
-  assert.ok(fs.existsSync(moduleYamlPath), 'module.yaml must exist');
+test('skills/module.yaml file exists (v6.3.0 canonical location)', () => {
+  assert.ok(fs.existsSync(moduleYamlPath), 'skills/module.yaml must exist');
+});
+
+test('legacy lib/bmad-extension/module.yaml is removed (Story 22.5)', () => {
+  assert.ok(
+    !fs.existsSync(legacyModuleYamlPath),
+    'legacy module.yaml must be removed — v6.3.0 uses skills/module.yaml'
+  );
 });
 
 let moduleYaml = {};
@@ -269,12 +281,23 @@ test('every skill directory contains a .gitkeep file', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Task 3: module-help.csv validation
 // ═══════════════════════════════════════════════════════════════════════════════
-console.log('\n--- Task 3: module-help.csv ---');
+console.log('\n--- Task 3: skills/module-help.csv ---');
 
-const csvPath = path.join(EXTENSION_DIR, 'module-help.csv');
+// Story 22.5 moved module-help.csv from lib/bmad-extension/ to lib/bmad-extension/skills/
+// PluginResolver Strategy 1 requires module.yaml AND module-help.csv to live at
+// the common parent of all skill directories.
+const csvPath = path.join(SKILLS_DIR, 'module-help.csv');
+const legacyCsvPath = path.join(EXTENSION_DIR, 'module-help.csv');
 
-test('module-help.csv exists', () => {
-  assert.ok(fs.existsSync(csvPath), 'module-help.csv must exist');
+test('skills/module-help.csv exists (v6.3.0 canonical location)', () => {
+  assert.ok(fs.existsSync(csvPath), 'skills/module-help.csv must exist');
+});
+
+test('legacy lib/bmad-extension/module-help.csv is removed (Story 22.5)', () => {
+  assert.ok(
+    !fs.existsSync(legacyCsvPath),
+    'legacy module-help.csv must be removed — v6.3.0 uses skills/module-help.csv'
+  );
 });
 
 let csvData = { headers: [], rows: [] };

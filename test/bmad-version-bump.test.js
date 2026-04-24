@@ -330,7 +330,7 @@ test('module.yaml custom-content format is still referenced by 6.3.0 installer',
   // tools/installer/modules/custom-module-manager.js (the legacy
   // tools/cli/installers/lib/custom/handler.js was removed). Verify the
   // new entry point still references module.yaml so the extension ma-agents
-  // ships (lib/bmad-extension/module.yaml) is still a valid custom module
+  // ships (lib/bmad-extension/skills/module.yaml) is still a valid custom module
   // payload.
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const candidates = [

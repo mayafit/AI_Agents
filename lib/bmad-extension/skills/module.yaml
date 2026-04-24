@@ -1,0 +1,20 @@
+# ma-skills module manifest (BMAD v6.3.0 schema)
+#
+# Canonical location: `skills/module.yaml` (BMAD 6.2.2+ / 6.3.0). The previous
+# location `lib/bmad-extension/module.yaml` was moved here during Story 22.5.
+# PluginResolver (tools/installer/modules/plugin-resolver.js) discovers this
+# file as the "common parent of all skills" under Strategy 1.
+#
+# module_version policy (Story 22.5 / AC 7):
+#   - Patch: bug fixes within existing skills
+#   - Minor: skill added, additive change
+#   - Major: skill removed, renamed, or breaking change to skill behavior
+# Bump this whenever marketplace.json.template's skills[] list or any
+# bmad-skill-manifest.yaml is modified.
+
+code: ma-skills
+name: "MA-Agents Skills & Agents"
+description: "Enterprise methodology enforcement, specialized agents, and operational workflows"
+module_version: "3.6.2"
+extends-module: bmm
+default_selected: false
