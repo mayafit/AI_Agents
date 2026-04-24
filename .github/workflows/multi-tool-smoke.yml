@@ -59,6 +59,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Matrix tool ids MUST be ASCII kebab-case with no shell
+        # metacharacters (`/`, spaces, quotes). `matrix.tool.name` is
+        # interpolated into SCRATCH_ROOT and used as an `--agent` arg;
+        # an unsafe id would enable path-traversal or arg injection.
+        # Today all five entries are safe; keep the constraint in mind
+        # when adding a new tool to lib/agents.js.
         tool:
           # Minimum set per Story AC 1.
           - { name: claude-code, skills_dir: .claude/skills }
@@ -96,7 +102,11 @@ jobs:
           # future version bump does not break this step. Pipe via stdin
           # to dodge argv-quoting pitfalls on multi-line JSON. Matches
           # Story 22.9's approach.
-          tarball=$(npm pack --json \
+          #
+          # --loglevel=error suppresses npm's default "notice" lines on
+          # stdout that would otherwise confuse the JSON parser when a
+          # verbose loglevel is leaked via env (NPM_CONFIG_LOGLEVEL, etc.).
+          tarball=$(npm pack --json --loglevel=error \
             | node -e "
               let chunks=''; process.stdin.on('data',c=>chunks+=c);
               process.stdin.on('end',()=>{
@@ -111,11 +121,12 @@ jobs:
           echo "Tarball: $tarball_path (${size_kb} KiB)"
 
       - name: Seed summary table header
-        # Runs exactly once per matrix cell. Each cell contributes one row
-        # to $GITHUB_STEP_SUMMARY via the verifier script (Step 5 of that
-        # script). The table header is seeded here so the final summary
-        # is a well-formed markdown table regardless of cell execution
-        # order. GitHub merges step-summary files across the matrix.
+        # Runs only if the tarball build succeeded — otherwise the
+        # verifier step is skipped and the header would sit alone (empty
+        # table). Each matrix cell contributes one row to
+        # $GITHUB_STEP_SUMMARY via the verifier script (Step 5 of that
+        # script). GitHub merges step-summary files across the matrix.
+        if: success()
         run: |
           {
             echo "## Multi-Tool Smoke — ${{ matrix.tool.name }}"
