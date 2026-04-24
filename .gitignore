@@ -26,6 +26,14 @@ _bmad-output/methodology/
 .roorules
 .gemini/
 .github/
+# Story 22.9 — un-ignore CI workflow files. `.github/` is ignored at the
+# top level because ma-agents generates `.github/copilot/` content for
+# GitHub Copilot users; our own CI lives under `.github/workflows/` and
+# must be checked in.
+!.github/workflows/
+!.github/workflows/**
+!.github/scripts/
+!.github/scripts/**
 .kilocode/
 .opencode/
 opencode.json
