@@ -83,7 +83,7 @@ docker run --rm \
   --network none \
   -v "$PWD:/workspace:ro" \
   -e TARBALL="$TARBALL" \
-  node:20.18.1-bookworm-slim \
+  node:20.18.1-bookworm \
   bash /workspace/.github/scripts/offline-install-verify.sh
 ```
 
