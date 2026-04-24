@@ -69,33 +69,32 @@ test -d "$PKG_DIR" || { echo "ERROR: expected $PKG_DIR after tar extract" >&2; e
 echo "    OK: extracted to $PKG_DIR"
 
 # ---------------------------------------------------------------------------
-# Step 3 — Install the tarball's declared dependencies in offline mode.
+# Step 3 — Resolve the unpacked tarball's dependencies (offline).
 # ---------------------------------------------------------------------------
-# `prepare` is a lifecycle script that runs on `npm install`. Story 22.4's
-# scripts/build-plugin.js uses Node built-ins only, so it is safe offline.
-# --offline forces npm to fail fast rather than retry a registry call.
-# --no-audit / --no-fund skip phone-home calls that npm makes by default.
+# The tarball ships WITHOUT node_modules (standard npm pack behaviour).
+# Under `--network none` we cannot run `npm install` to fetch them, so we
+# reuse the online host's node_modules (installed by `npm ci` in the
+# workflow) by symlinking to the read-only workspace mount. Node's
+# module resolver is happy to traverse a symlink into a read-only tree
+# because `require()` only performs reads.
 #
-# NOTE: the tarball ships with node_modules absent (standard npm pack
-# behaviour), so `npm install` MUST find every dep in a local cache or
-# fail. For the CI runner we don't pre-populate a cache — this is
-# acceptable because the install step below does NOT depend on npm
-# completing successfully; we only need `node bin/cli.js` to run.
-# We attempt `npm install --offline` first, and fall back to running the
-# CLI directly from the unpacked package (the CLI itself only requires
-# deps that are bundled into bmad-method's node_modules — see below).
-echo "==> [3/5] Installing package deps (offline)"
+# Rationale for symlink (vs. `cp -a`): symlinking is O(1) and uses zero
+# extra disk. A recursive copy of ~100MB adds 5-15s on GitHub-hosted
+# runners for no benefit since we never write into node_modules.
+#
+# The package's `prepare` lifecycle script (scripts/build-plugin.js) is
+# NOT triggered here — `prepare` only runs on `npm install`, which we
+# skip. The plugin bundle under `lib/bmad-extension-plugin/` is already
+# present in node_modules-path layout if prepare ran on the host (it
+# did, as part of `npm ci`), so the staged tarball itself already
+# contains the built plugin (build-plugin.js wrote inside the repo root
+# before `npm pack`).
+echo "==> [3/5] Wiring node_modules (offline, via symlink)"
 cd "$PKG_DIR"
-# We must have node_modules populated for `bin/cli.js` to resolve its
-# requires. The tarball does not include node_modules, so we bring them
-# in from the read-only workspace mount (they were installed online by
-# the workflow's `npm ci` step). Copy (not symlink) to avoid
-# cross-mount readonly issues.
-if [ ! -d node_modules ]; then
-  echo "    Copying pre-installed node_modules from workspace..."
-  cp -a /workspace/node_modules ./node_modules
+if [ ! -e node_modules ]; then
+  ln -s /workspace/node_modules node_modules
 fi
-echo "    OK: node_modules present ($(ls node_modules | wc -l) top-level entries)"
+echo "    OK: node_modules linked ($(ls node_modules | wc -l) top-level entries)"
 
 # ---------------------------------------------------------------------------
 # Step 4 — Run the install against a fresh scratch project.
@@ -157,7 +156,7 @@ assert "plugin stage dir cleaned up"                   test ! -d /scratch/.ma-ag
 # either placement — the invariant is "somewhere under the scratch
 # project, a tracked .gitignore pattern matches PLUGIN_STAGE_PATTERNS".
 if find /scratch -name .gitignore -type f -print0 2>/dev/null \
-     | xargs -0 grep -lE '^/?\.ma-agents-plugin-stage/?$' 2>/dev/null \
+     | xargs -0 -r grep -lE '^/?\.ma-agents-plugin-stage/?$' 2>/dev/null \
      | grep -q .; then
   echo "    OK:   at least one .gitignore contains .ma-agents-plugin-stage entry"
 else
