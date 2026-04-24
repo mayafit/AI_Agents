@@ -64,7 +64,6 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const os = require('os');
 
 // ──────────────────────────────────────────────────────────────────────────
 // Paths — always anchored to the repo root, NOT process.cwd(), so the script
@@ -163,15 +162,6 @@ function ensureOutputRootSafety() {
   if (rel.startsWith('..') || path.isAbsolute(rel)) {
     fail('output path escapes repo root', normalized);
   }
-}
-
-function wipeOutputDir() {
-  if (fs.existsSync(OUT_DIR)) {
-    // Node 14.14+ exposes fs.rmSync; we require Node >=16 per package.json
-    // engines field, so this is always available.
-    fs.rmSync(OUT_DIR, { recursive: true, force: true });
-  }
-  fs.mkdirSync(OUT_DIR, { recursive: true, mode: DIR_MODE });
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -289,18 +279,18 @@ function loadPackageJson() {
  */
 function substituteTokens(source, tokens) {
   const re = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
-  const missing = new Set();
+  const unknown = new Set();
   const replaced = source.replace(re, (match, key) => {
     if (Object.prototype.hasOwnProperty.call(tokens, key)) {
       return String(tokens[key]);
     }
-    missing.add(key);
+    unknown.add(key);
     return match;
   });
-  if (missing.size > 0) {
+  if (unknown.size > 0) {
     fail(
       'unknown template token(s) in marketplace.json.template',
-      `missing: ${[...missing].sort().join(', ')} — add to substitution map or remove from template`,
+      `unresolved: ${[...unknown].sort().join(', ')} — add to substitution map or remove from template`,
     );
   }
   return replaced;
@@ -513,8 +503,5 @@ module.exports = {
     assertRequiredSources,
     writeResolvedMarketplaceJson,
     copySkillsTree,
-    wipeOutputDir,
   },
 };
-// Silence lint for imported-but-unused `os` if a future refactor removes it.
-void os;
