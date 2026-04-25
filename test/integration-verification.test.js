@@ -221,6 +221,11 @@ console.log('\nTask 1 — End-to-end IDE agent test');
       }
 
       const deployedFiles = (await fs.readdir(configAgentsDir)).filter(f => f.endsWith('.customize.yaml'));
+      // Edge-case-hunter E14: deployed count must match source count exactly.
+      // The previous '>= 8' bound silently passed if a file was dropped from
+      // bmad-customize/ during a refactor, masking a real regression.
+      assert.strictEqual(deployedFiles.length, customizeFiles.length,
+        `deployed customize.yaml count (${deployedFiles.length}) must equal source count (${customizeFiles.length})`);
       assert.ok(deployedFiles.length >= 8, `_config/agents/ must have at least 8 built-in .customize.yaml files, found ${deployedFiles.length}`);
     });
 
@@ -300,6 +305,10 @@ console.log('\nTask 1 — End-to-end IDE agent test');
       }
 
       const deployedFiles = (await fs.readdir(configAgentsDir)).filter(f => f.endsWith('.customize.yaml'));
+      // Edge-case-hunter E14: deployed count must match source count exactly
+      // (see test 2.2 above). >= 8 silently passed if a file was dropped.
+      assert.strictEqual(deployedFiles.length, customizeFiles.length,
+        `re-deployed customize.yaml count (${deployedFiles.length}) must equal source count (${customizeFiles.length})`);
       assert.ok(deployedFiles.length >= 8, `Must have at least 8 built-in .customize.yaml files after re-deploy, found ${deployedFiles.length}`);
     });
 

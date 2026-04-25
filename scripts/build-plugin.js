@@ -483,7 +483,17 @@ function computeTreeDigest(rootDir) {
     for (const entry of readDirSorted(dir)) {
       const full = path.join(dir, entry.name);
       const rel = path.relative(rootDir, full).split(path.sep).join('/');
-      const stat = fs.lstatSync(full);
+      // Edge-case-hunter E4: an entry returned by readdir may be removed
+      // before lstatSync runs (concurrent build, race with cleanup). Skip
+      // gracefully on ENOENT so the digest reflects the tree as it stably
+      // exists; any other error bubbles up.
+      let stat;
+      try {
+        stat = fs.lstatSync(full);
+      } catch (err) {
+        if (err.code === 'ENOENT') continue;
+        throw err;
+      }
       // Mask to the POSIX permission bits (low 9 bits). Higher bits (file-type
       // bits, setuid/setgid/sticky) are excluded — they would cause divergence
       // between platforms that report file types differently.

@@ -328,6 +328,13 @@ test('bmad_min_version EQUALS pinned bmad-method (template — F3 #4: stricter t
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf8'));
   const bmadPin = (pkg.dependencies && pkg.dependencies['bmad-method']) || '';
   const pinned = bmadPin.replace(/^[^\d]*/, ''); // strip ^, ~, etc.
+  // Edge-case-hunter E12: skip with a clear hint when the pin is not a
+  // plain semver (file: / git+: / npm:alias:). The strictEqual assertion
+  // assumes a semver value; cryptic failures mask the real config state.
+  if (!/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(pinned)) {
+    console.log(`    (skip: bmad-method pinned to non-semver "${bmadPin}" — strict-equality test does not apply)`);
+    return;
+  }
   assert.strictEqual(template.bmad_min_version, pinned,
     `marketplace template bmad_min_version (${template.bmad_min_version}) ` +
     `must equal pinned bmad-method (${pinned}). ` +
@@ -351,10 +358,29 @@ test('bmad_min_version EQUALS pinned bmad-method (rendered bundle — F3 #4)', (
     console.log('    (skip: rendered marketplace.json not present — run `npm run build:plugin`)');
     return;
   }
-  const rendered = JSON.parse(fs.readFileSync(renderedPath, 'utf8'));
+  // Edge-case-hunter E11: a mid-build crash can leave a half-written
+  // marketplace.json on disk. JSON.parse would throw a generic SyntaxError;
+  // we re-throw with an actionable hint.
+  let rendered;
+  try {
+    rendered = JSON.parse(fs.readFileSync(renderedPath, 'utf8'));
+  } catch (err) {
+    throw new Error(
+      `rendered marketplace.json at ${renderedPath} is malformed JSON — ` +
+      `likely a crashed/partial build. Re-run \`npm run build:plugin\`. ` +
+      `Original parse error: ${err.message}`
+    );
+  }
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf8'));
   const bmadPin = (pkg.dependencies && pkg.dependencies['bmad-method']) || '';
   const pinned = bmadPin.replace(/^[^\d]*/, '');
+  // Edge-case-hunter E12: skip with a clear hint when the pin is not a
+  // plain semver (file: / git+: / npm:alias:). The strictEqual assertion
+  // assumes a semver value; cryptic failures mask the real config state.
+  if (!/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(pinned)) {
+    console.log(`    (skip: bmad-method pinned to non-semver "${bmadPin}" — strict-equality test does not apply)`);
+    return;
+  }
   assert.strictEqual(rendered.bmad_min_version, pinned,
     `rendered marketplace.json bmad_min_version (${rendered.bmad_min_version}) ` +
     `must equal pinned bmad-method (${pinned}). Re-run \`npm run build:plugin\`.`);
