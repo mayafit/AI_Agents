@@ -170,8 +170,10 @@ else
   # Count active (non-comment, non-blank) lines that match any of the four
   # PLUGIN_STAGE_PATTERNS variants — see lib/installer.js. Anchored so a
   # substring like "node_modules/.ma-agents-plugin-stage" cannot satisfy
-  # the assertion.
-  ROOT_MATCHES=$(grep -cE '^/?\.ma-agents-plugin-stage/?$' "$ROOT_GITIGNORE" || true)
+  # the assertion. `tr -d '\r'` handles CRLF-checked-out files (the
+  # installer preserves the file's existing line-ending style); without
+  # the strip, a trailing `\r` would break the `$` anchor on Linux runners.
+  ROOT_MATCHES=$(tr -d '\r' < "$ROOT_GITIGNORE" | grep -cE '^/?\.ma-agents-plugin-stage/?$' || true)
   if [ "$ROOT_MATCHES" -eq 1 ]; then
     echo "    OK:   $ROOT_GITIGNORE contains exactly one .ma-agents-plugin-stage entry"
   elif [ "$ROOT_MATCHES" -eq 0 ]; then
@@ -197,7 +199,10 @@ PER_SKILL_DIRS=(
 stray_found=0
 for d in "${PER_SKILL_DIRS[@]}"; do
   stray="$d/.gitignore"
-  if [ -e "$stray" ]; then
+  # `-e` returns false for broken symlinks; `-L` catches them too. A
+  # broken-symlink `.gitignore` would still indicate the bug regressed
+  # (something tried to write to that path), so we fail on either.
+  if [ -e "$stray" ] || [ -L "$stray" ]; then
     echo "    FAIL: per-skill-dir .gitignore must not exist: $stray (stage-dir policy regressed)" >&2
     stray_found=1
     fail=$((fail + 1))
