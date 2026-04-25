@@ -283,7 +283,55 @@ test(
 );
 
 test(
-  "4.3: multi-tool-smoke.yml matrix skills_dir for each flagship matches lib/agents.js",
+  "4.3: lib/bmad.js TOOL_SKILL_DIRS matches lib/agents.js skillsDir " +
+    '(F1a prefix pass walks the right tree)',
+  () => {
+    const bmadJsPath = path.join(PROJECT_ROOT, 'lib', 'bmad.js');
+    const text = fs.readFileSync(bmadJsPath, 'utf-8');
+    // Match both POSIX and Windows-flavored path.join calls inside the
+    // TOOL_SKILL_DIRS array. lib/bmad.js uses `path.join('.foo', 'skills')`
+    // form; we extract the literal segments and reconstruct the
+    // forward-slash dir for the comparison.
+    const blockMatch = text.match(/TOOL_SKILL_DIRS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/);
+    if (!blockMatch) {
+      throw new Error('could not locate TOOL_SKILL_DIRS in lib/bmad.js');
+    }
+    const block = blockMatch[1];
+    const joinRe = /path\.join\(([^)]+)\)/g;
+    const bmadDirs = [];
+    let jm;
+    while ((jm = joinRe.exec(block)) !== null) {
+      const segments = jm[1]
+        .split(',')
+        .map((s) => s.trim().replace(/^['"]|['"]$/g, ''));
+      bmadDirs.push(segments.join('/'));
+    }
+    if (bmadDirs.length === 0) {
+      throw new Error('could not parse any path.join entries from TOOL_SKILL_DIRS');
+    }
+    // Every flagship tool's skillsDir should be present in TOOL_SKILL_DIRS
+    // (the on-prem prefix pass walks every IDE tree to inject the prefix).
+    const bmadSet = new Set(bmadDirs);
+    const drift = [];
+    for (const id of FLAGSHIP_TOOL_IDS) {
+      const declared = getAgent(id).skillsDir.replace(/\\/g, '/');
+      if (!bmadSet.has(declared)) {
+        drift.push(
+          `${id}: lib/agents.js skillsDir='${declared}' is not in lib/bmad.js TOOL_SKILL_DIRS [${bmadDirs.join(', ')}]`
+        );
+      }
+    }
+    if (drift.length > 0) {
+      throw new Error(
+        'lib/bmad.js TOOL_SKILL_DIRS drift — F1a prefix pass will skip these tools:\n  ' +
+          drift.join('\n  ')
+      );
+    }
+  }
+);
+
+test(
+  "4.4: multi-tool-smoke.yml matrix skills_dir for each flagship matches lib/agents.js",
   () => {
     const workflowPath = path.join(
       PROJECT_ROOT,
