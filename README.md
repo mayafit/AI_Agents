@@ -127,7 +127,7 @@ To remove all on-prem profile artifacts: `npx ma-agents uninstall --profile-arti
 | `AGENTS.md` | Same block for OpenCode |
 | `opencode.json` | Additive entry in `instructions[]` array |
 | `.roomodes` | 4 BMAD planning modes with `fileRegex` phase enforcement |
-| `_bmad/_config/agents/bmm-*.customize.yaml` | Per-persona phase prefix: planning personas get `/no_think` prefix; dev personas get careful-coding prefix |
+| Deployed `bmad-agent-*/SKILL.md` (across `.claude/skills/`, `.cline/skills/`, `.github/skills/`, `.roo/skills/`, `.kilocode/skills/`) | Per-persona phase prefix injected via marker block: planning personas get `/no_think`; dev personas get careful-coding prefix |
 
 The standard profile stamps the universal block only (no `/no_think`, no `str_replace_editor` prohibition, no home-dir restriction).
 
@@ -143,7 +143,7 @@ Skills can be installed into any of these AI coding agents:
 |------|-------------|----------|------------------|
 | Claude Code | `.claude/skills/` | `claude-code` | `.claude/CLAUDE.md` |
 | Google Gemini | `.gemini/skills/` | `generic` | `.gemini/gemini.md` |
-| GitHub Copilot | `.github/copilot/skills/` | `generic` | `.github/copilot/copilot.md` |
+| GitHub Copilot | `.github/skills/` | `generic` | `.github/copilot/copilot.md` |
 | Cursor | `.cursor/skills/` | `generic` | `.cursor/cursor.md` |
 | Kilocode | `.kilocode/skills/` | `generic` | `.kilocode/kilocode.md` |
 | Cline | `.cline/skills/` | `cline` | `.cline/clinerules.md` |
@@ -292,12 +292,13 @@ Running `ma-agents` on a project where skills are already installed triggers the
    - Updates BMAD-METHOD personas and workflows to the latest versions if detected.
 
 ### BMAD-METHOD Integration
-`ma-agents` bundles [BMAD-METHOD](https://docs.bmad-method.org/) **v6.2.2** to provide advanced orchestration and specialized personas.
+`ma-agents` bundles [BMAD-METHOD](https://docs.bmad-method.org/) **v6.3.0** to provide advanced orchestration and specialized personas.
 
 #### Core Features
 - **Auto-Detection**: Recognizes existing BMAD installations and prompts for silent updates.
 - **Silent Setup**: Non-interactive installation/update of BMAD tailored to your project's agents.
-- **Customization Engine**: Injects project-specific `.customize.yaml` templates to align agents with your workflow.
+- **Plugin Staging**: A pre-built plugin bundle (`lib/bmad-extension-plugin/`) is staged into `<project>/.ma-agents-plugin-stage/` and installed via `bmad-method --custom-source`, replacing the legacy post-install manifest-surgery flow.
+- **Persona Overlays**: On-prem phase prefixes and user customizations are injected as marker-delimited blocks into the deployed `bmad-agent-*/SKILL.md` files across every supported tool's skills directory — idempotent on re-runs.
 - **Advanced Agent Templates**: Deploys full XML-structured agent definitions directly into the BMAD system.
 
 #### Bundled & Offline Installation (v2.20+)
@@ -306,8 +307,9 @@ Running `ma-agents` on a project where skills are already installed triggers the
 
 - **`bmad-method` is a direct npm dependency** — no runtime `npx bmad-method` fetch required. The correct version is pinned and bundled inside `node_modules/` when you `npm install ma-agents`.
 - **External modules pre-bundled** — `lib/bmad-cache/` ships the 4 optional BMAD modules (`bmb`, `cis`, `gds`, `tea`) inside the package itself. They are pre-populated to `~/.bmad/cache/external-modules/` before any install runs, so BMAD never needs to clone them from GitHub.
-- **Deterministic installs** — same `ma-agents` version always produces the same `_bmad/` output, regardless of network conditions (NFR21).
-- **Air-gapped friendly** — install from a tarball (`npm install ./ma-agents-x.y.z.tgz`) and run `npx ma-agents install` completely offline.
+- **Plugin bundle pre-built** — `lib/bmad-extension-plugin/` ships as a deterministic, byte-stable bundle (built from `lib/bmad-extension/` via `scripts/build-plugin.js`). At install time it is staged into `<project>/.ma-agents-plugin-stage/` and consumed by `bmad-method install --custom-source`, so the install never touches the network for plugin assembly.
+- **Deterministic installs** — same `ma-agents` version always produces the same `_bmad/` output, regardless of network conditions (NFR21). Bundle reproducibility is gated by a CI drift check.
+- **Air-gapped friendly** — install from a tarball (`npm install ./ma-agents-x.y.z.tgz`) and run `npx ma-agents install` completely offline. Every PR runs an offline-install gate (`--network none` Docker) to enforce this guarantee (NFR54).
 
 ```
 npm install ma-agents          # bundles bmad-method + 4 external modules
@@ -622,14 +624,16 @@ ma-agents/
 │   │   ├── agents-md.template.md                     # AGENTS.md for OpenCode
 │   │   ├── clinerules.template.md                    # .clinerules expansion for Cline
 │   │   └── project-context.template.md               # project-context.md generation template
-│   ├── bmad-customize/         # Per-persona customize.yaml with phase: + on_prem_phase_prefix:
+│   ├── bmad-customize/         # Source-of-truth: per-persona phase / on_prem_phase_prefix YAML (consumed by the post-install marker-block injector)
 │   ├── bmad-cache/             # Pre-bundled BMAD external modules (bmb, cis, gds, tea)
 │   ├── bmad-customizations/    # BMAD persona templates (.md) and YAML configs
-│   ├── bmad-extension/         # Extension module: sprint management, bug tracking, agent skills
+│   ├── bmad-extension/         # Extension source: sprint management, bug tracking, agent skills (hand-edited)
+│   ├── bmad-extension-plugin/  # Generated plugin bundle (deterministic; built from bmad-extension/ via scripts/build-plugin.js)
 │   ├── bmad-workflows/         # Specialized BMAD playbooks (SRE, Cyber, etc.)
 │   └── mil498-templates/       # MIL-STD-498 DID library (SRS, SSS, SSDD, etc.)
 ├── scripts/
-│   └── build-bmad-cache.js     # Rebuilds lib/bmad-cache/ from upstream repos
+│   ├── build-bmad-cache.js     # Rebuilds lib/bmad-cache/ from upstream repos
+│   └── build-plugin.js         # Rebuilds lib/bmad-extension-plugin/ from lib/bmad-extension/ (run on `npm run build:plugin` and via the prepare hook)
 ├── skills/
 │   ├── code-review/            # 27 bundled skills across 5 domains
 │   ├── commit-message/
