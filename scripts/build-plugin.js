@@ -439,23 +439,57 @@ function copySkillsTree(stagingDir) {
 
 // ──────────────────────────────────────────────────────────────────────────
 // Optional verification pass (AC 3 / Task 3.4).
-// Walks the output tree and emits a SHA-256 digest over (relative-path, size,
-// sha256-of-content) triples. The digest is stable across runs given
-// byte-identical input. Used by CI / manual smoke-tests to confirm NFR51.
+// Walks the output tree and emits a SHA-256 digest over each entry. The
+// digest covers:
+//   - relative path (POSIX-normalized so Windows and Linux agree)
+//   - entry kind ('f' for file, 'd' for directory) so an empty directory
+//     cannot be silently dropped from the reproducibility claim
+//   - file mode (low 9 bits — POSIX permission set, masked so Windows's
+//     synthesized "0o666" mode does not collide with POSIX's true 0o644)
+//   - file byte length and content sha256 (files only)
+//
+// F3 Section 5 — NFR51 stricter: digest now covers modes + empty dirs.
+// Previously only (path, size, content-sha) was covered, which meant:
+//   - An empty directory added to source was invisible to the digest.
+//   - A mode change (e.g. accidental +x on a .md file) produced an
+//     identical digest, masking a real reproducibility regression.
+//
+// Mode portability: Windows reports modes as 0o666 / 0o777 (the fs layer
+// has no real POSIX permission concept). Masking with 0o777 keeps the
+// low 9 bits — the same bits the build forces to 0o644 / 0o755 — so a
+// Linux runner and a Windows runner produce the same digest as long as
+// the build script's chmod step ran consistently.
+//
+// The digest is stable across runs given byte-identical input. Used by
+// CI / manual smoke-tests to confirm NFR51.
 // ──────────────────────────────────────────────────────────────────────────
 function computeTreeDigest(rootDir) {
   const hash = crypto.createHash('sha256');
   const walk = (dir) => {
     for (const entry of readDirSorted(dir)) {
       const full = path.join(dir, entry.name);
+      const rel = path.relative(rootDir, full).split(path.sep).join('/');
+      const stat = fs.lstatSync(full);
+      // Mask to the POSIX permission bits (low 9 bits). Higher bits (file-type
+      // bits, setuid/setgid/sticky) are excluded — they would cause divergence
+      // between platforms that report file types differently.
+      const mode = (stat.mode & 0o777).toString(8).padStart(3, '0');
       if (entry.isDirectory()) {
+        // Record the directory itself BEFORE descending so empty directories
+        // contribute exactly one digest line. This makes the addition of an
+        // empty directory to source produce a digest delta — the previous
+        // implementation silently dropped empty dirs.
+        hash.update(`d\u0000${rel}\u0000${mode}\n`);
         walk(full);
       } else if (entry.isFile()) {
-        const rel = path.relative(rootDir, full).split(path.sep).join('/');
         const content = fs.readFileSync(full);
         const fileHash = crypto.createHash('sha256').update(content).digest('hex');
-        hash.update(`${rel}\u0000${content.length}\u0000${fileHash}\n`);
+        hash.update(`f\u0000${rel}\u0000${mode}\u0000${content.length}\u0000${fileHash}\n`);
       }
+      // Symlinks and other special entries are intentionally NOT digested —
+      // the build script copies symlink targets as regular files, so the
+      // bundle should never contain a real symlink. If it did, it would be a
+      // build-script bug worth surfacing separately.
     }
   };
   walk(rootDir);

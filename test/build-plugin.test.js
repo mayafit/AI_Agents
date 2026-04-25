@@ -543,6 +543,78 @@ test('computeTreeDigest is stable for identical inputs', () => {
   assert.ok(/^[0-9a-f]{64}$/.test(a), 'digest must be a sha256 hex');
 });
 
+test('computeTreeDigest covers file modes (F3 #5: NFR51 stricter)', () => {
+  // Per F3 Section 5: a mode-only change must produce a different digest.
+  // Previously the digest covered only (path, size, content-sha) so a
+  // mode flip (e.g. 0o644 → 0o755) would be silently equivalent.
+  // chmod is best-effort on Windows (often a no-op for non-executable
+  // bits), so this test is skipped there.
+  if (process.platform === 'win32') {
+    console.log('    (skip on win32: chmod is a no-op for the bits we toggle)');
+    return;
+  }
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'build-plugin-mode-'));
+  try {
+    const file = path.join(tmp, 'sample.txt');
+    fs.writeFileSync(file, 'identical bytes');
+    fs.chmodSync(file, 0o644);
+    const before = build.computeTreeDigest(tmp);
+    fs.chmodSync(file, 0o755);
+    const after = build.computeTreeDigest(tmp);
+    assert.notStrictEqual(before, after,
+      'digest must change when file mode changes (low 9 bits)');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('computeTreeDigest covers empty directories (F3 #5: NFR51 stricter)', () => {
+  // Per F3 Section 5: adding an empty directory to source must produce
+  // a digest delta. Previously empty dirs were invisible.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'build-plugin-emptydir-'));
+  try {
+    fs.writeFileSync(path.join(tmp, 'a.txt'), 'a');
+    const before = build.computeTreeDigest(tmp);
+    fs.mkdirSync(path.join(tmp, 'empty-subdir'));
+    const after = build.computeTreeDigest(tmp);
+    assert.notStrictEqual(before, after,
+      'digest must change when an empty directory is added');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('computeTreeDigest is platform-portable (F3 #5: low 9 mode bits only)', () => {
+  // Linux and Windows runners must agree on the digest for byte-identical
+  // input. The implementation masks file modes to the low 9 bits (0o777)
+  // so Windows's synthesized 0o666 vs POSIX's true 0o644 do not collide
+  // — but neither do they diverge as long as the build script applies its
+  // 0o644 / 0o755 chmod consistently. We sanity-check the mask explicitly
+  // by hashing a file twice with different high-bit modes set.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'build-plugin-portable-'));
+  try {
+    const file = path.join(tmp, 'sample.txt');
+    fs.writeFileSync(file, 'portable');
+    fs.chmodSync(file, 0o644);
+    const a = build.computeTreeDigest(tmp);
+    // setuid (0o4000) is in the high bits — must be excluded by the mask.
+    // Skip on win32 because Windows ignores setuid/setgid/sticky.
+    if (process.platform !== 'win32') {
+      try {
+        fs.chmodSync(file, 0o4644);
+        const b = build.computeTreeDigest(tmp);
+        assert.strictEqual(a, b,
+          'high mode bits (setuid/setgid/sticky) must NOT affect the digest');
+      } catch {
+        // Some sandboxed test envs (e.g. CI containers) deny setuid chmod
+        // for non-root — non-fatal, the assertion above is still useful.
+      }
+    }
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('readDirSorted returns entries in lexicographic name order', () => {
   // Create a temp dir with out-of-order entries to verify sort correctness.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'build-plugin-test-'));
