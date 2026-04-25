@@ -78,7 +78,10 @@ function buildMockPostInstall(subdir, opts = {}) {
     const tools = opts.tools || [
         '.claude/skills',
         '.cline/skills',
-        '.github/copilot/skills',
+        // F2b — copilot's skill directory now matches bmad-method 6.3.0's
+        // `github-copilot` target_dir of `.github/skills` (was previously
+        // `.github/copilot/skills`).
+        '.github/skills',
         '.roo/skills',
         '.kilocode/skills',
     ];
