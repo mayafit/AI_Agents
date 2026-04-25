@@ -68,7 +68,13 @@ jobs:
         tool:
           # Minimum set per Story AC 1.
           - { name: claude-code, skills_dir: .claude/skills }
-          - { name: copilot,     skills_dir: .github/copilot/skills }
+          # F2b — copilot's skills directory was realigned to `.github/skills`
+          # to match bmad-method 6.3.0's `github-copilot` platform target_dir.
+          # Before the realignment ma-agents wrote 44 legacy skills to
+          # `.github/copilot/skills/` while BMAD wrote 99 plugin skills
+          # (including the five `ma-agent-*` personas) to `.github/skills/` —
+          # so this matrix entry was checking the wrong tree.
+          - { name: copilot,     skills_dir: .github/skills }
           - { name: cline,       skills_dir: .cline/skills }
           # Extended set per Story AC 2 — the disconnected-friendly IDEs
           # most likely to be used by ma-agents end users.

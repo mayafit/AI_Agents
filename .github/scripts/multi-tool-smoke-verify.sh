@@ -232,19 +232,21 @@ fi
 # routing bug that drops ma-agent persona agents for a specific tool
 # target. We check all five persona IDs; only one needs to land.
 #
-# KNOWN GAP (Story 22.10 baseline): `copilot` currently does NOT receive
-# the ma-agent-* persona skills. Local simulation across all 5 tools in
-# the Story 22.10 PR confirmed claude-code, cline, roo-code, kilocode all
-# deliver the personas; only copilot's template does not. The underlying
-# routing bug is pre-existing (introduced somewhere during Epic 22's
-# plugin migration) and fixing it is out of scope for 22.10 — 22.10's
-# job is precisely to build the safety net that surfaces such gaps.
+# F2b — strict parity. The copilot warning-downgrade that 22.10 shipped
+# while the routing bug was being diagnosed has been removed: the gap
+# was traced to `lib/agents.js` declaring copilot's `skillsDir` as
+# `.github/copilot/skills` while bmad-method 6.3.0 writes `github-copilot`
+# plugin skills (including the ma-agent-* personas) to `.github/skills`.
+# Copilot's matrix entry now points at `.github/skills` and the persona
+# check is a hard failure for ALL tools — no per-tool special-case.
 #
-# To keep the 22.10 baseline CI green while still keeping the signal
-# visible, the persona check is a hard failure for every tool EXCEPT
-# copilot, where it is downgraded to a workflow WARNING. Once the copilot
-# routing regression is fixed (separate follow-up ticket), this
-# special-case should be removed and copilot promoted to strict parity.
+# Documented escape hatch — F2b edge-case-hunter finding 2:
+#   SKIP_PERSONA_CHECK=1 downgrades Invariant D to a workflow warning
+#   for the duration of the run. Use this ONLY when adding a new tool
+#   whose underlying platform legitimately cannot host `type: agent`
+#   skills (e.g., a tool that only supports flat skill catalogs). In
+#   normal operation this env var must be unset; CI workflows must NOT
+#   set it without an accompanying engineering note.
 persona_found=""
 for persona in $PERSONAS; do
   if [ -f "$FULL_SKILLS_DIR/$persona/SKILL.md" ]; then
@@ -254,22 +256,15 @@ for persona in $PERSONAS; do
 done
 if [ -n "$persona_found" ]; then
   log "  OK:   persona skill present: $persona_found/SKILL.md"
+elif [ "${SKIP_PERSONA_CHECK:-}" = "1" ]; then
+  printf '::warning title=%s persona check skipped::SKIP_PERSONA_CHECK=1 — Invariant D downgraded to warning for tool=%s\n' \
+    "$TOOL" "$TOOL"
+  log "  WARN: persona check skipped (SKIP_PERSONA_CHECK=1) for $TOOL"
 else
-  case "$TOOL" in
-    copilot)
-      # Known gap — emit a GitHub workflow warning but do not fail the
-      # build. This keeps the 22.10 baseline green while flagging the
-      # real bug in every CI run so it cannot be silently forgotten.
-      printf '::warning title=%s persona routing gap::no ma-agent-* persona skill found under %s (known pre-existing gap — see Story 22.10 findings)\n' \
-        "$TOOL" "$SKILLS_DIR"
-      log "  WARN: no ma-agent-* persona skill found under $SKILLS_DIR (known copilot gap)"
-      ;;
-    *)
-      err "  FAIL: no ma-agent-* persona skill found under $SKILLS_DIR"
-      err "        (checked ma-agent-cyber/devops/sre/sqa/ml — plugin routing regression?)"
-      fail=$((fail + 1))
-      ;;
-  esac
+  err "  FAIL: no ma-agent-* persona skill found under $SKILLS_DIR"
+  err "        (checked ma-agent-cyber/devops/sre/sqa/ml — plugin routing regression?)"
+  err "        (override with SKIP_PERSONA_CHECK=1 ONLY for tools that cannot host type:agent skills)"
+  fail=$((fail + 1))
 fi
 
 # ---------------------------------------------------------------------------
