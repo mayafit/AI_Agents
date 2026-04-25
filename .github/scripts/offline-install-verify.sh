@@ -149,19 +149,67 @@ assert ".claude/skills/ma-agent-cyber present"         test -d /scratch/.claude/
 # invocation (it is ephemeral by design).
 assert "plugin stage dir cleaned up"                   test ! -d /scratch/.ma-agents-plugin-stage
 
-# Story 22.8: the staging dir path is listed in at least one .gitignore
-# under the project. Current 22.8 behavior writes `.gitignore` into each
-# agent's skills directory (e.g. .claude/skills/.gitignore) as well as
-# per-persona _bmad skill dirs, rather than the project root. Accept
-# either placement — the invariant is "somewhere under the scratch
-# project, a tracked .gitignore pattern matches PLUGIN_STAGE_PATTERNS".
-if find /scratch -name .gitignore -type f -print0 2>/dev/null \
-     | xargs -0 -r grep -lE '^/?\.ma-agents-plugin-stage/?$' 2>/dev/null \
-     | grep -q .; then
-  echo "    OK:   at least one .gitignore contains .ma-agents-plugin-stage entry"
-else
-  echo "    FAIL: no .gitignore under /scratch contains .ma-agents-plugin-stage entry" >&2
+# Story 22.8 (post-F2a): the project-root .gitignore must list the staging
+# dir, AND no per-skill-dir .gitignore may be produced by the stage-dir
+# policy. Pre-F2a the installer wrote `.gitignore` into each agent's
+# skills directory; that placement is now a defect signal.
+#
+# Strict assertion replaces the lenient `find /scratch -name .gitignore`
+# pattern that previously masked the bug. Two checks run independently
+# so both must pass:
+#   (a) Project-root /scratch/.gitignore contains exactly one active line
+#       matching one of the PLUGIN_STAGE_PATTERNS variants.
+#   (b) No `.gitignore` exists at any of the known per-agent skill dirs.
+
+# (a) Project-root .gitignore — must exist and contain the entry exactly once.
+ROOT_GITIGNORE="/scratch/.gitignore"
+if [ ! -f "$ROOT_GITIGNORE" ]; then
+  echo "    FAIL: $ROOT_GITIGNORE does not exist (installer must create or update it)" >&2
   fail=$((fail + 1))
+else
+  # Count active (non-comment, non-blank) lines that match any of the four
+  # PLUGIN_STAGE_PATTERNS variants — see lib/installer.js. Anchored so a
+  # substring like "node_modules/.ma-agents-plugin-stage" cannot satisfy
+  # the assertion. `tr -d '\r'` handles CRLF-checked-out files (the
+  # installer preserves the file's existing line-ending style); without
+  # the strip, a trailing `\r` would break the `$` anchor on Linux runners.
+  ROOT_MATCHES=$(tr -d '\r' < "$ROOT_GITIGNORE" | grep -cE '^/?\.ma-agents-plugin-stage/?$' || true)
+  if [ "$ROOT_MATCHES" -eq 1 ]; then
+    echo "    OK:   $ROOT_GITIGNORE contains exactly one .ma-agents-plugin-stage entry"
+  elif [ "$ROOT_MATCHES" -eq 0 ]; then
+    echo "    FAIL: $ROOT_GITIGNORE missing .ma-agents-plugin-stage entry" >&2
+    fail=$((fail + 1))
+  else
+    echo "    FAIL: $ROOT_GITIGNORE has $ROOT_MATCHES .ma-agents-plugin-stage entries — must be exactly 1 (idempotency)" >&2
+    fail=$((fail + 1))
+  fi
+fi
+
+# (b) No per-skill-dir .gitignore — these would only appear if the stage-dir
+# policy regressed. Iterate the canonical agent skill paths (matches what
+# the F2a regression test in test/gitignore-plugin-stage.test.js asserts at
+# the unit level).
+PER_SKILL_DIRS=(
+  "/scratch/.claude/skills"
+  "/scratch/.cline/skills"
+  "/scratch/.github/copilot/skills"
+  "/scratch/.roo/skills"
+  "/scratch/.kilocode/skills"
+)
+stray_found=0
+for d in "${PER_SKILL_DIRS[@]}"; do
+  stray="$d/.gitignore"
+  # `-e` returns false for broken symlinks; `-L` catches them too. A
+  # broken-symlink `.gitignore` would still indicate the bug regressed
+  # (something tried to write to that path), so we fail on either.
+  if [ -e "$stray" ] || [ -L "$stray" ]; then
+    echo "    FAIL: per-skill-dir .gitignore must not exist: $stray (stage-dir policy regressed)" >&2
+    stray_found=1
+    fail=$((fail + 1))
+  fi
+done
+if [ "$stray_found" -eq 0 ]; then
+  echo "    OK:   no per-skill-dir .gitignore from the stage-dir policy"
 fi
 
 if [ "$fail" -ne 0 ]; then

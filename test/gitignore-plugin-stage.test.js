@@ -1,8 +1,11 @@
 // Story 22.8 — ensurePluginStageIgnored() behaviour tests
+// F2a — fixed call site: project-root only (NOT per-agent skills directory).
 //
 // Verifies that the installer appends `.ma-agents-plugin-stage/` to the target
 // project's `.gitignore` idempotently, preserves all pre-existing entries
-// verbatim, and creates the file when absent.
+// verbatim, and creates the file when absent. The pre-F2a buggy behavior
+// (per-skill-dir `.gitignore` files) is asserted-against in the regression
+// suite at the bottom of this file.
 
 const assert = require('assert');
 const { test } = require('node:test');
@@ -11,7 +14,7 @@ const fs = require('fs');
 const os = require('os');
 
 const { ensurePluginStageIgnored } = require('../lib/installer');
-const { PLUGIN_STAGE_DIR_NAME } = require('../lib/bmad');
+const { PLUGIN_STAGE_DIR_NAME, ensurePluginStageGitignoredForProject } = require('../lib/bmad');
 
 const CANONICAL_ENTRY = `${PLUGIN_STAGE_DIR_NAME}/`;
 
@@ -167,4 +170,123 @@ test('smoke — scratch project retains originals and gains exactly one new line
   const rerun = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
   const rerunCanonical = rerun.split(/\r?\n/).filter(l => l === CANONICAL_ENTRY).length;
   assert.strictEqual(rerunCanonical, 1, 'exactly one canonical entry after re-run');
+});
+
+// ─── F2a — defensive guard: undefined/null projectRoot is a no-op ───────────
+test('F2a — undefined projectRoot is a no-op (does not write to cwd)', () => {
+  const before = fs.readdirSync(process.cwd());
+  // Intentionally pass an invalid argument — pre-F2a this would have produced
+  // `path.join(undefined, '.gitignore')` (throw) or written into cwd.
+  ensurePluginStageIgnored(undefined);
+  ensurePluginStageIgnored(null);
+  ensurePluginStageIgnored('');
+  const after = fs.readdirSync(process.cwd());
+  assert.deepStrictEqual(after.sort(), before.sort(),
+    'cwd contents must not change when projectRoot is invalid');
+});
+
+// ─── F2a — wrapper helper guards same way ───────────────────────────────────
+test('F2a — ensurePluginStageGitignoredForProject is a no-op for invalid input', () => {
+  // Should not throw and should not write anywhere.
+  ensurePluginStageGitignoredForProject(undefined);
+  ensurePluginStageGitignoredForProject(null);
+  ensurePluginStageGitignoredForProject('');
+});
+
+// ─── F2a regression — verifier-level invariant ──────────────────────────────
+//
+// The Story 22.9 offline-install CI verifier asserts that, after install, the
+// project-root `.gitignore` lists `.ma-agents-plugin-stage` and NO per-skill
+// dirs contain a `.gitignore` produced by the stage-dir policy. This test
+// mirrors that invariant in unit form: invoking the policy at project-root
+// must (a) write to the project root, (b) leave per-agent skills dirs
+// untouched.
+test('F2a regression — project-root only, no per-skill-dir .gitignore created', () => {
+  const dir = makeProject('node_modules/\n.env\n');
+
+  // Pre-create the agent-skill directory tree that the buggy 22.8 placement
+  // would have written into. The fix MUST NOT touch any of these dirs.
+  const perAgentSkillDirs = [
+    path.join(dir, '.claude', 'skills'),
+    path.join(dir, '.cline', 'skills'),
+    path.join(dir, '.github', 'copilot', 'skills'),
+    path.join(dir, '.roo', 'skills'),
+    path.join(dir, '.kilocode', 'skills'),
+  ];
+  for (const d of perAgentSkillDirs) fs.mkdirSync(d, { recursive: true });
+
+  // Invoke through the canonical wrapper used by the bmad orchestrators.
+  ensurePluginStageGitignoredForProject(dir);
+
+  // (a) Project-root .gitignore has the entry exactly once.
+  const rootContent = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const rootMatches = rootContent
+    .split(/\r?\n/)
+    .filter(l => {
+      const t = l.trim();
+      if (!t || t.startsWith('#')) return false;
+      return [
+        PLUGIN_STAGE_DIR_NAME,
+        `${PLUGIN_STAGE_DIR_NAME}/`,
+        `/${PLUGIN_STAGE_DIR_NAME}`,
+        `/${PLUGIN_STAGE_DIR_NAME}/`,
+      ].includes(t);
+    }).length;
+  assert.strictEqual(rootMatches, 1,
+    'project-root .gitignore must contain exactly one stage-dir entry');
+
+  // (b) NO .gitignore exists in any per-agent skill directory.
+  for (const d of perAgentSkillDirs) {
+    const stray = path.join(d, '.gitignore');
+    assert.ok(!fs.existsSync(stray),
+      `pre-F2a buggy file must not appear: ${stray}`);
+  }
+});
+
+// ─── F2a regression — re-run idempotency at project root ────────────────────
+test('F2a regression — re-running orchestrator wrapper does not duplicate the entry', () => {
+  const dir = makeProject('node_modules/\n');
+  // Three invocations to mirror the install/migrate/update orchestrators each
+  // calling the wrapper independently in the same install pipeline.
+  ensurePluginStageGitignoredForProject(dir);
+  ensurePluginStageGitignoredForProject(dir);
+  ensurePluginStageGitignoredForProject(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const matches = written
+    .split(/\r?\n/)
+    .filter(l => {
+      const t = l.trim();
+      if (!t || t.startsWith('#')) return false;
+      return [
+        PLUGIN_STAGE_DIR_NAME,
+        `${PLUGIN_STAGE_DIR_NAME}/`,
+        `/${PLUGIN_STAGE_DIR_NAME}`,
+        `/${PLUGIN_STAGE_DIR_NAME}/`,
+      ].includes(t);
+    }).length;
+  assert.strictEqual(matches, 1,
+    'three orchestrator-wrapper calls must produce exactly one entry');
+});
+
+// ─── F2a regression — wrapper survives non-fatal write failures ─────────────
+//
+// Edge case from review: project-root `.gitignore` may be read-only (e.g.,
+// CI cache symlink, locked by editor on Windows). The wrapper must log and
+// continue rather than abort the install pipeline.
+test('F2a regression — read-only .gitignore yields a warning, not a throw', () => {
+  const dir = makeProject('node_modules/\n');
+  const gi = path.join(dir, '.gitignore');
+  // Drop write permission. On Windows, fs.chmodSync(0o444) only sets read-only
+  // on the file's archive bit; the underlying NTFS ACL still allows writes for
+  // the owner, so this guard mostly exercises the POSIX path. The assertion
+  // is that the call DOES NOT THROW — write success on Windows is acceptable.
+  fs.chmodSync(gi, 0o444);
+  try {
+    assert.doesNotThrow(
+      () => ensurePluginStageGitignoredForProject(dir),
+      'wrapper must not propagate EACCES from read-only .gitignore'
+    );
+  } finally {
+    fs.chmodSync(gi, 0o644); // restore for test cleanup
+  }
 });
