@@ -21,6 +21,18 @@ name: Bundle Drift Guard
 
 on:
   pull_request:
+    # Path filter rationale:
+    # - lib/bmad-extension/**         source tree the bundle is built FROM
+    # - lib/bmad-extension-plugin/**  bundle itself — catches hand-edited
+    #                                 bundles that bypass the build
+    # - scripts/build-plugin.js       the build script — its behavior change
+    #                                 can flip the bundle output without any
+    #                                 source change
+    # - package.json / package-lock.json  the prepare hook + dep tree affect
+    #                                 the bundle (e.g. a new transitive dep
+    #                                 changes how the script reads inputs)
+    # Docs-only PRs that touch none of these paths skip the rebuild entirely
+    # — zero CI cost, zero false positives.
     paths:
       - 'lib/bmad-extension/**'
       - 'lib/bmad-extension-plugin/**'
@@ -28,8 +40,12 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/bundle-drift.yml'
-  push:
-    tags: ['v*']
+  # Code-review fix (Blind Hunter B2): push:tags removed. A drift on a
+  # tagged release cannot be "fixed" without re-tagging — making it a
+  # release-blocking failure here is more disruptive than informative. The
+  # PR-time gate above is the actual enforcement point. multi-tool-smoke.yml
+  # and offline-install.yml already run on tags and would surface a broken
+  # bundle indirectly via install failure, which IS recoverable (re-tag).
   # Allow manual triggers when investigating reproducibility issues.
   workflow_dispatch:
 

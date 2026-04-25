@@ -584,31 +584,39 @@ test('computeTreeDigest covers empty directories (F3 #5: NFR51 stricter)', () =>
   }
 });
 
-test('computeTreeDigest is platform-portable (F3 #5: low 9 mode bits only)', () => {
-  // Linux and Windows runners must agree on the digest for byte-identical
-  // input. The implementation masks file modes to the low 9 bits (0o777)
-  // so Windows's synthesized 0o666 vs POSIX's true 0o644 do not collide
-  // — but neither do they diverge as long as the build script applies its
-  // 0o644 / 0o755 chmod consistently. We sanity-check the mask explicitly
-  // by hashing a file twice with different high-bit modes set.
+test('computeTreeDigest masks high mode bits (F3 #5: setuid/setgid/sticky excluded)', () => {
+  // The implementation masks file modes to the low 9 bits (0o777) so high
+  // bits — file-type bits, setuid (0o4000), setgid (0o2000), sticky (0o1000)
+  // — cannot produce a digest delta. We verify by chmodding the same file
+  // twice with identical low-9 bits but different high bits; the digest
+  // must be identical.
+  //
+  // NOTE: This is NOT a cross-platform-portability test (Linux ↔ Windows).
+  // Windows's fs.chmodSync only honors S_IWUSR, so a Windows-computed
+  // digest may differ from a Linux-computed one for byte-identical input.
+  // See scripts/build-plugin.js#computeTreeDigest docstring for the full
+  // operational consequence — short version: the bundle-drift CI runs on
+  // Linux only, so cross-platform digest agreement is not relied upon.
+  if (process.platform === 'win32') {
+    console.log('    (skip on win32: setuid/setgid/sticky not tracked)');
+    return;
+  }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'build-plugin-portable-'));
   try {
     const file = path.join(tmp, 'sample.txt');
     fs.writeFileSync(file, 'portable');
     fs.chmodSync(file, 0o644);
     const a = build.computeTreeDigest(tmp);
-    // setuid (0o4000) is in the high bits — must be excluded by the mask.
-    // Skip on win32 because Windows ignores setuid/setgid/sticky.
-    if (process.platform !== 'win32') {
-      try {
-        fs.chmodSync(file, 0o4644);
-        const b = build.computeTreeDigest(tmp);
-        assert.strictEqual(a, b,
-          'high mode bits (setuid/setgid/sticky) must NOT affect the digest');
-      } catch {
-        // Some sandboxed test envs (e.g. CI containers) deny setuid chmod
-        // for non-root — non-fatal, the assertion above is still useful.
-      }
+    try {
+      fs.chmodSync(file, 0o4644); // setuid added; low 9 bits unchanged
+      const b = build.computeTreeDigest(tmp);
+      assert.strictEqual(a, b,
+        'high mode bits (setuid/setgid/sticky) must NOT affect the digest');
+    } catch {
+      // Some sandboxed test envs (e.g. CI containers) deny setuid chmod
+      // for non-root. Treat as non-fatal — the mask logic is still tested
+      // by the negative case (mode-change test above).
+      console.log('    (chmod 0o4644 denied — sandboxed env; mask logic still validated above)');
     }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

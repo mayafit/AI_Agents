@@ -317,38 +317,61 @@ const bmadSrc = fs.readFileSync(
   'utf-8'
 );
 
+/**
+ * Extract the body of a function declaration from `bmadSrc`, bounded by the
+ * function's start and the next top-level function declaration (or end of
+ * file). Earlier revisions used a fixed-size slice (e.g. 4000 chars), which
+ * could either run past the function and match a later one's body, or run
+ * short and miss the call site as the function grows.
+ *
+ * Code-review fix (Blind Hunter B10/B15) — bound the slice deterministically.
+ *
+ * @param {string} src - Full source of lib/bmad.js
+ * @param {RegExp} signatureRegex - Matches the function declaration line
+ *   (e.g. /async function installBmad\(/)
+ * @returns {string} The slice from the matched declaration to the next
+ *   top-level function declaration (or end of file).
+ * @throws {Error} when the signature is not found.
+ */
+function extractFunctionBody(src, signatureRegex) {
+  const match = signatureRegex.exec(src);
+  if (!match) {
+    throw new Error(`signature not found: ${signatureRegex}`);
+  }
+  const start = match.index;
+  // Find the next top-level function declaration AFTER the start. Top-level
+  // means a line that begins with 'function ' or 'async function ' — JSDoc
+  // comments and block strings won't match because the regex anchors the
+  // line via the leading newline.
+  const nextDecl = /\n(?:async )?function [A-Za-z_$][\w$]*\(/g;
+  nextDecl.lastIndex = start + match[0].length;
+  const next = nextDecl.exec(src);
+  const end = next ? next.index : src.length;
+  return src.slice(start, end);
+}
+
 test('lib/bmad.js declares preInstallHooks helper (F3 #6)', () => {
   assert.ok(/function preInstallHooks\(projectRoot\)/.test(bmadSrc),
     'lib/bmad.js must declare preInstallHooks(projectRoot) helper');
-  // The helper must call ensureCanonicalConfigLocation.
-  const helperBody = bmadSrc.slice(bmadSrc.indexOf('function preInstallHooks'));
-  const helperEnd = helperBody.indexOf('\n}');
-  const helperSlice = helperBody.slice(0, helperEnd);
+  const helperSlice = extractFunctionBody(bmadSrc, /function preInstallHooks\(projectRoot\)/);
   assert.ok(/ensureCanonicalConfigLocation\(projectRoot\)/.test(helperSlice),
     'preInstallHooks must invoke ensureCanonicalConfigLocation');
 });
 
 test('installBmad invokes preInstallHooks (F3 #6)', () => {
-  const fnStart = bmadSrc.indexOf('async function installBmad(');
-  assert.ok(fnStart > -1, 'installBmad must exist');
-  // Slice the next 60 lines — the call should be at the very top.
-  const slice = bmadSrc.slice(fnStart, fnStart + 4000);
+  const slice = extractFunctionBody(bmadSrc, /async function installBmad\(/);
   assert.ok(/preInstallHooks\(projectRoot\)/.test(slice),
     'installBmad must invoke preInstallHooks(projectRoot)');
 });
 
 test('updateBmad invokes preInstallHooks (F3 #6)', () => {
-  const fnStart = bmadSrc.indexOf('async function updateBmad(');
-  assert.ok(fnStart > -1, 'updateBmad must exist');
-  const slice = bmadSrc.slice(fnStart, fnStart + 4000);
+  const slice = extractFunctionBody(bmadSrc, /async function updateBmad\(/);
   assert.ok(/preInstallHooks\(projectRoot\)/.test(slice),
     'updateBmad must invoke preInstallHooks(projectRoot) — F3 Section 6');
 });
 
 test('runMigration invokes preInstallHooks (F3 #6)', () => {
-  const fnStart = bmadSrc.indexOf('async function runMigration(');
-  assert.ok(fnStart > -1, 'runMigration must exist');
-  const slice = bmadSrc.slice(fnStart, fnStart + 4000);
+  const slice = extractFunctionBody(bmadSrc, /async function runMigration\(/);
   assert.ok(/preInstallHooks\(projectRoot\)/.test(slice),
     'runMigration must invoke preInstallHooks(projectRoot) — F3 Section 6');
 });

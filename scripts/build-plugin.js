@@ -454,11 +454,25 @@ function copySkillsTree(stagingDir) {
 //   - A mode change (e.g. accidental +x on a .md file) produced an
 //     identical digest, masking a real reproducibility regression.
 //
-// Mode portability: Windows reports modes as 0o666 / 0o777 (the fs layer
-// has no real POSIX permission concept). Masking with 0o777 keeps the
-// low 9 bits — the same bits the build forces to 0o644 / 0o755 — so a
-// Linux runner and a Windows runner produce the same digest as long as
-// the build script's chmod step ran consistently.
+// Mode portability — PARTIAL guarantee:
+//   - The mask is 0o777 (low 9 bits only) so high bits (file-type,
+//     setuid/setgid/sticky) cannot cause spurious divergence.
+//   - On POSIX (Linux/macOS), `fs.chmodSync` honors all 9 bits, so two
+//     POSIX runners produce identical digests for byte-identical input.
+//   - On Windows, `fs.chmodSync` only sets the read-only attribute (S_IWUSR);
+//     group/other bits are not tracked. As a result, a digest computed on
+//     Windows for a byte-identical tree may differ from one computed on
+//     Linux: Windows typically reports 0o666 (read-write for all) for files
+//     and 0o777 for directories, regardless of what chmod was called with.
+//
+// Operational consequence: cross-platform digest CONSISTENCY (Linux
+// produces digest X, Windows produces digest X for byte-identical input)
+// is NOT guaranteed by this implementation. The digest IS guaranteed to:
+//   (a) be reproducible on the SAME platform (run on Linux twice = same).
+//   (b) detect a mode CHANGE on a single host (the contract NFR51 calls for).
+// The plugin bundle's reproducibility CI gate (.github/workflows/bundle-drift.yml)
+// runs exclusively on ubuntu-latest, so the cross-platform divergence is
+// not a release-gate concern in this repo.
 //
 // The digest is stable across runs given byte-identical input. Used by
 // CI / manual smoke-tests to confirm NFR51.
