@@ -312,6 +312,54 @@ test('bmad_min_version <= pinned bmad-method dependency (finding 2: drift guard)
     'Either lower the floor or bump the pin.');
 });
 
+test('bmad_min_version EQUALS pinned bmad-method (template — F3 #4: stricter than <=)', () => {
+  // F3 Section 4 — Adversarial review found the marketplace's bmad_min_version
+  // could legitimately drift below the pinned bmad-method (the <= test allows
+  // it). When the pin is bumped, the floor SHOULD bump in lockstep so the
+  // published marketplace.json reflects the exact tested-against version. This
+  // assertion is stricter and catches forgotten bumps.
+  //
+  // Bump procedure when bmad-method is updated:
+  //   1. Update package.json dependencies.bmad-method
+  //   2. Update lib/bmad-extension/.claude-plugin/marketplace.json.template
+  //      bmad_min_version to the same value
+  //   3. Re-run `npm run build:plugin` to regenerate the rendered manifest
+  //   4. This test guards step 2 against being forgotten
+  const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf8'));
+  const bmadPin = (pkg.dependencies && pkg.dependencies['bmad-method']) || '';
+  const pinned = bmadPin.replace(/^[^\d]*/, ''); // strip ^, ~, etc.
+  assert.strictEqual(template.bmad_min_version, pinned,
+    `marketplace template bmad_min_version (${template.bmad_min_version}) ` +
+    `must equal pinned bmad-method (${pinned}). ` +
+    'When bumping bmad-method, update marketplace.json.template in lockstep.');
+});
+
+test('bmad_min_version EQUALS pinned bmad-method (rendered bundle — F3 #4)', () => {
+  // The build script renders the template into the committed bundle. We also
+  // check the rendered output to catch a stale bundle (caught by Section 3's
+  // drift guard in CI, but the failure here is more actionable for local devs).
+  const renderedPath = path.join(
+    PROJECT_ROOT,
+    'lib',
+    'bmad-extension-plugin',
+    '.claude-plugin',
+    'marketplace.json'
+  );
+  if (!fs.existsSync(renderedPath)) {
+    // The bundle may legitimately be absent on a fresh checkout that never
+    // ran `npm install` — skip with a hint rather than failing opaquely.
+    console.log('    (skip: rendered marketplace.json not present — run `npm run build:plugin`)');
+    return;
+  }
+  const rendered = JSON.parse(fs.readFileSync(renderedPath, 'utf8'));
+  const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf8'));
+  const bmadPin = (pkg.dependencies && pkg.dependencies['bmad-method']) || '';
+  const pinned = bmadPin.replace(/^[^\d]*/, '');
+  assert.strictEqual(rendered.bmad_min_version, pinned,
+    `rendered marketplace.json bmad_min_version (${rendered.bmad_min_version}) ` +
+    `must equal pinned bmad-method (${pinned}). Re-run \`npm run build:plugin\`.`);
+});
+
 test('template _comment explains forward-compat assumption for bmad_min_version (finding 2)', () => {
   const commentText = Array.isArray(template._comment)
     ? template._comment.join(' ')
