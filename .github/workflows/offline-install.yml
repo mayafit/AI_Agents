@@ -35,17 +35,31 @@ jobs:
     timeout-minutes: 8
 
     env:
-      # Pin to a specific minor-patch tag. Maintainer should replace the
-      # `:` tag with an `@sha256:<digest>` reference once the repo admin
-      # has a preferred digest policy. Until then, the explicit version
-      # keeps reproducibility within the same tag.
+      # F3 Section 7 — pin by manifest-list digest (sha256) so a re-tag
+      # of node:20.18.1-bookworm upstream cannot silently change the
+      # base image we test against. The tag is kept as a human-readable
+      # comment for log clarity; the @sha256:... portion is what Docker
+      # actually resolves.
+      #
+      # Digest captured: 2026-04-23 (UTC) via:
+      #   docker pull node:20.18.1-bookworm
+      #   docker inspect --format='{{index .RepoDigests 0}}' node:20.18.1-bookworm
+      # Returned: node@sha256:968ca0550acc7589a8b1324401ec6e39ace53b2c82d2aed3a278e9ff491c2b1c
+      #
+      # Recovery procedure when this digest becomes unfetchable (e.g. the
+      # tag is retired or Docker Hub garbage-collects an old layer):
+      #   1. Find the next-best supported Node 20.x base — preferably the
+      #      smallest patch bump (20.18.2-bookworm, 20.19.0-bookworm, ...).
+      #   2. Re-run the two commands above against the new tag.
+      #   3. Update both the tag in the comment and the digest below.
+      #   4. Run the workflow on a PR to confirm the install still passes.
       #
       # IMPORTANT: use the full `bookworm` variant (not `-slim`). bmad.js
       # shells out to `git` during its offline-install path (e.g. to set
       # the local file:// origin at lib/bmad.js:1633). The slim variant
       # omits git, and since we are inside `--network none`, we cannot
       # `apt-get install` it at runtime.
-      OFFLINE_NODE_IMAGE: node:20.18.1-bookworm
+      OFFLINE_NODE_IMAGE: node:20.18.1-bookworm@sha256:968ca0550acc7589a8b1324401ec6e39ace53b2c82d2aed3a278e9ff491c2b1c
 
     steps:
       - name: Checkout
