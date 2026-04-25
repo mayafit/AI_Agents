@@ -192,7 +192,7 @@ fi
 PER_SKILL_DIRS=(
   "/scratch/.claude/skills"
   "/scratch/.cline/skills"
-  "/scratch/.github/copilot/skills"
+  "/scratch/.github/skills"
   "/scratch/.roo/skills"
   "/scratch/.kilocode/skills"
 )
