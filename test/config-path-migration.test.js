@@ -304,6 +304,55 @@ test('installer.resolveBmadOutputDirs does NOT read legacy manifest.yaml', () =>
   assert.strictEqual(dirs.stories, '_bmad-output/implementation-artifacts');
 });
 
+// ─── F3 Section 6: preInstallHooks invoked from all 3 entry points ──────────
+console.log('\nF3 Section 6 — preInstallHooks (ensureCanonicalConfigLocation) wiring');
+
+// Static-source assertions: we assert the call sites exist in lib/bmad.js
+// rather than running a full install (which requires bmad-method to be
+// network-installable and a writable workspace). The risk this guards
+// against is regression — a future refactor that removes the call from
+// updateBmad() or runMigration() must not silently land.
+const bmadSrc = fs.readFileSync(
+  path.join(__dirname, '..', 'lib', 'bmad.js'),
+  'utf-8'
+);
+
+test('lib/bmad.js declares preInstallHooks helper (F3 #6)', () => {
+  assert.ok(/function preInstallHooks\(projectRoot\)/.test(bmadSrc),
+    'lib/bmad.js must declare preInstallHooks(projectRoot) helper');
+  // The helper must call ensureCanonicalConfigLocation.
+  const helperBody = bmadSrc.slice(bmadSrc.indexOf('function preInstallHooks'));
+  const helperEnd = helperBody.indexOf('\n}');
+  const helperSlice = helperBody.slice(0, helperEnd);
+  assert.ok(/ensureCanonicalConfigLocation\(projectRoot\)/.test(helperSlice),
+    'preInstallHooks must invoke ensureCanonicalConfigLocation');
+});
+
+test('installBmad invokes preInstallHooks (F3 #6)', () => {
+  const fnStart = bmadSrc.indexOf('async function installBmad(');
+  assert.ok(fnStart > -1, 'installBmad must exist');
+  // Slice the next 60 lines — the call should be at the very top.
+  const slice = bmadSrc.slice(fnStart, fnStart + 4000);
+  assert.ok(/preInstallHooks\(projectRoot\)/.test(slice),
+    'installBmad must invoke preInstallHooks(projectRoot)');
+});
+
+test('updateBmad invokes preInstallHooks (F3 #6)', () => {
+  const fnStart = bmadSrc.indexOf('async function updateBmad(');
+  assert.ok(fnStart > -1, 'updateBmad must exist');
+  const slice = bmadSrc.slice(fnStart, fnStart + 4000);
+  assert.ok(/preInstallHooks\(projectRoot\)/.test(slice),
+    'updateBmad must invoke preInstallHooks(projectRoot) — F3 Section 6');
+});
+
+test('runMigration invokes preInstallHooks (F3 #6)', () => {
+  const fnStart = bmadSrc.indexOf('async function runMigration(');
+  assert.ok(fnStart > -1, 'runMigration must exist');
+  const slice = bmadSrc.slice(fnStart, fnStart + 4000);
+  assert.ok(/preInstallHooks\(projectRoot\)/.test(slice),
+    'runMigration must invoke preInstallHooks(projectRoot) — F3 Section 6');
+});
+
 // ─── Summary ────────────────────────────────────────────────────────────────
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
