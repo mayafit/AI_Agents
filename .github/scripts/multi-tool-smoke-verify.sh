@@ -239,6 +239,14 @@ fi
 # plugin skills (including the ma-agent-* personas) to `.github/skills`.
 # Copilot's matrix entry now points at `.github/skills` and the persona
 # check is a hard failure for ALL tools — no per-tool special-case.
+#
+# Documented escape hatch — F2b edge-case-hunter finding 2:
+#   SKIP_PERSONA_CHECK=1 downgrades Invariant D to a workflow warning
+#   for the duration of the run. Use this ONLY when adding a new tool
+#   whose underlying platform legitimately cannot host `type: agent`
+#   skills (e.g., a tool that only supports flat skill catalogs). In
+#   normal operation this env var must be unset; CI workflows must NOT
+#   set it without an accompanying engineering note.
 persona_found=""
 for persona in $PERSONAS; do
   if [ -f "$FULL_SKILLS_DIR/$persona/SKILL.md" ]; then
@@ -248,9 +256,14 @@ for persona in $PERSONAS; do
 done
 if [ -n "$persona_found" ]; then
   log "  OK:   persona skill present: $persona_found/SKILL.md"
+elif [ "${SKIP_PERSONA_CHECK:-}" = "1" ]; then
+  printf '::warning title=%s persona check skipped::SKIP_PERSONA_CHECK=1 — Invariant D downgraded to warning for tool=%s\n' \
+    "$TOOL" "$TOOL"
+  log "  WARN: persona check skipped (SKIP_PERSONA_CHECK=1) for $TOOL"
 else
   err "  FAIL: no ma-agent-* persona skill found under $SKILLS_DIR"
   err "        (checked ma-agent-cyber/devops/sre/sqa/ml — plugin routing regression?)"
+  err "        (override with SKIP_PERSONA_CHECK=1 ONLY for tools that cannot host type:agent skills)"
   fail=$((fail + 1))
 fi
 

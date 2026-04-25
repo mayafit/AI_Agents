@@ -125,6 +125,48 @@ test('1.1: every FLAGSHIP_TOOL_ID is registered in lib/agents.js', () => {
   }
 });
 
+// Edge-case-hunter finding 1: silent skip risk. Without this test, a new
+// IDE agent added to lib/agents.js whose resolved bmad-method platform
+// has a `target_dir` (i.e., BMAD's plugin pipeline routes personas there)
+// would be invisible to the parity safety net. The test fails loudly in
+// that case so the contributor is forced to either add the new tool to
+// FLAGSHIP_TOOL_IDS (and the workflow matrix) or set `nonFlagship: true`
+// on the registry entry to document the deliberate omission.
+//
+// We resolve the bmad platform code via getBmadPlatformCode() (which
+// falls back to agent.id), then check whether bmad-method declares
+// installer.target_dir for that platform. If yes, the tool should be
+// covered by the multi-tool smoke matrix.
+const { getAllAgents } = require('../lib/agents');
+test(
+  '1.2: every IDE agent routed by BMAD is in FLAGSHIP_TOOL_IDS ' +
+    '(or explicitly marked nonFlagship) — silent-skip guard for new tools',
+  () => {
+    const candidates = getAllAgents().filter((a) => {
+      if (!a || a.category !== 'ide' || a.nonFlagship) return false;
+      const platformCode = getBmadPlatformCode(a.id);
+      const platform = bmadPlatforms[platformCode];
+      // Only candidates that BMAD actually routes (have target_dir)
+      // belong on the parity safety net — tools without a BMAD route
+      // get only the legacy ma-agents catalog and have no personas to
+      // assert against in the first place.
+      return !!(platform && platform.installer && platform.installer.target_dir);
+    });
+    const flagshipSet = new Set(FLAGSHIP_TOOL_IDS);
+    const orphans = candidates
+      .map((a) => a.id)
+      .filter((id) => !flagshipSet.has(id));
+    if (orphans.length > 0) {
+      throw new Error(
+        'IDE agents routed by bmad-method but missing from FLAGSHIP_TOOL_IDS:\n  ' +
+          orphans.join(', ') +
+          '\n  Either add them to FLAGSHIP_TOOL_IDS + the workflow matrix, ' +
+          'or set `nonFlagship: true` on the registry entry.'
+      );
+    }
+  }
+);
+
 // ─── Test 2 — skillsDir parity with bmad-method's target_dir ───────────────
 
 test(
