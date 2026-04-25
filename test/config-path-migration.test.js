@@ -304,6 +304,78 @@ test('installer.resolveBmadOutputDirs does NOT read legacy manifest.yaml', () =>
   assert.strictEqual(dirs.stories, '_bmad-output/implementation-artifacts');
 });
 
+// ─── F3 Section 6: preInstallHooks invoked from all 3 entry points ──────────
+console.log('\nF3 Section 6 — preInstallHooks (ensureCanonicalConfigLocation) wiring');
+
+// Static-source assertions: we assert the call sites exist in lib/bmad.js
+// rather than running a full install (which requires bmad-method to be
+// network-installable and a writable workspace). The risk this guards
+// against is regression — a future refactor that removes the call from
+// updateBmad() or runMigration() must not silently land.
+const bmadSrc = fs.readFileSync(
+  path.join(__dirname, '..', 'lib', 'bmad.js'),
+  'utf-8'
+);
+
+/**
+ * Extract the body of a function declaration from `bmadSrc`, bounded by the
+ * function's start and the next top-level function declaration (or end of
+ * file). Earlier revisions used a fixed-size slice (e.g. 4000 chars), which
+ * could either run past the function and match a later one's body, or run
+ * short and miss the call site as the function grows.
+ *
+ * Code-review fix (Blind Hunter B10/B15) — bound the slice deterministically.
+ *
+ * @param {string} src - Full source of lib/bmad.js
+ * @param {RegExp} signatureRegex - Matches the function declaration line
+ *   (e.g. /async function installBmad\(/)
+ * @returns {string} The slice from the matched declaration to the next
+ *   top-level function declaration (or end of file).
+ * @throws {Error} when the signature is not found.
+ */
+function extractFunctionBody(src, signatureRegex) {
+  const match = signatureRegex.exec(src);
+  if (!match) {
+    throw new Error(`signature not found: ${signatureRegex}`);
+  }
+  const start = match.index;
+  // Find the next top-level function declaration AFTER the start. Top-level
+  // means a line that begins with 'function ' or 'async function ' — JSDoc
+  // comments and block strings won't match because the regex anchors the
+  // line via the leading newline.
+  const nextDecl = /\n(?:async )?function [A-Za-z_$][\w$]*\(/g;
+  nextDecl.lastIndex = start + match[0].length;
+  const next = nextDecl.exec(src);
+  const end = next ? next.index : src.length;
+  return src.slice(start, end);
+}
+
+test('lib/bmad.js declares preInstallHooks helper (F3 #6)', () => {
+  assert.ok(/function preInstallHooks\(projectRoot\)/.test(bmadSrc),
+    'lib/bmad.js must declare preInstallHooks(projectRoot) helper');
+  const helperSlice = extractFunctionBody(bmadSrc, /function preInstallHooks\(projectRoot\)/);
+  assert.ok(/ensureCanonicalConfigLocation\(projectRoot\)/.test(helperSlice),
+    'preInstallHooks must invoke ensureCanonicalConfigLocation');
+});
+
+test('installBmad invokes preInstallHooks (F3 #6)', () => {
+  const slice = extractFunctionBody(bmadSrc, /async function installBmad\(/);
+  assert.ok(/preInstallHooks\(projectRoot\)/.test(slice),
+    'installBmad must invoke preInstallHooks(projectRoot)');
+});
+
+test('updateBmad invokes preInstallHooks (F3 #6)', () => {
+  const slice = extractFunctionBody(bmadSrc, /async function updateBmad\(/);
+  assert.ok(/preInstallHooks\(projectRoot\)/.test(slice),
+    'updateBmad must invoke preInstallHooks(projectRoot) — F3 Section 6');
+});
+
+test('runMigration invokes preInstallHooks (F3 #6)', () => {
+  const slice = extractFunctionBody(bmadSrc, /async function runMigration\(/);
+  assert.ok(/preInstallHooks\(projectRoot\)/.test(slice),
+    'runMigration must invoke preInstallHooks(projectRoot) — F3 Section 6');
+});
+
 // ─── Summary ────────────────────────────────────────────────────────────────
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {

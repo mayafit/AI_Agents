@@ -1,0 +1,121 @@
+name: Bundle Drift Guard
+
+# F3 Section 3 — Reproducibility guard for the committed plugin bundle.
+#
+# The repo ships a pre-built plugin bundle at lib/bmad-extension-plugin/
+# that downstream consumer workflows (offline-install.yml,
+# multi-tool-smoke.yml) consume. The bundle is regenerated from
+# lib/bmad-extension/ by `npm run build:plugin` (and the `prepare` hook
+# during `npm ci`). If a contributor edits the source under
+# lib/bmad-extension/ without committing the regenerated bundle, the
+# downstream installs will silently disagree with the source — exactly
+# the class of drift NFR51 set out to eliminate.
+#
+# This workflow runs `npm run build:plugin` and fails the PR if the
+# resulting tree differs from what is committed. The failure message
+# instructs the contributor to run the rebuild and commit the result.
+#
+# Path filter: only triggers when the source tree, the build script,
+# or this workflow itself changes. Docs-only PRs skip the rebuild
+# entirely (no false positives, no wasted CI minutes).
+
+on:
+  pull_request:
+    # Path filter rationale:
+    # - lib/bmad-extension/**         source tree the bundle is built FROM
+    # - lib/bmad-extension-plugin/**  bundle itself — catches hand-edited
+    #                                 bundles that bypass the build
+    # - scripts/build-plugin.js       the build script — its behavior change
+    #                                 can flip the bundle output without any
+    #                                 source change
+    # - package.json / package-lock.json  the prepare hook + dep tree affect
+    #                                 the bundle (e.g. a new transitive dep
+    #                                 changes how the script reads inputs)
+    # Docs-only PRs that touch none of these paths skip the rebuild entirely
+    # — zero CI cost, zero false positives.
+    paths:
+      - 'lib/bmad-extension/**'
+      - 'lib/bmad-extension-plugin/**'
+      - 'scripts/build-plugin.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/bundle-drift.yml'
+  # Code-review fix (Blind Hunter B2): push:tags removed. A drift on a
+  # tagged release cannot be "fixed" without re-tagging — making it a
+  # release-blocking failure here is more disruptive than informative. The
+  # PR-time gate above is the actual enforcement point. multi-tool-smoke.yml
+  # and offline-install.yml already run on tags and would surface a broken
+  # bundle indirectly via install failure, which IS recoverable (re-tag).
+  # Allow manual triggers when investigating reproducibility issues.
+  workflow_dispatch:
+
+# Cancel in-flight runs on the same ref when a newer commit arrives.
+concurrency:
+  group: bundle-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  drift-check:
+    name: Verify lib/bmad-extension-plugin/ is regenerated
+    runs-on: ubuntu-latest
+    # The build script is pure-Node fs operations — finishes in seconds.
+    # 4 minutes is a generous hang-detector cap.
+    timeout-minutes: 4
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        # `--ignore-scripts` so the `prepare` hook does NOT run yet — we
+        # want to compare the committed bundle against a clean rebuild,
+        # not against whatever the prepare hook produced under the same
+        # commit (which would mask the drift).
+        run: npm ci --no-audit --no-fund --ignore-scripts
+
+      - name: Rebuild plugin bundle
+        run: npm run build:plugin
+
+      - name: Verify no drift
+        # `git diff --exit-code` returns 0 if working tree matches HEAD,
+        # 1 if it differs. Failure here means the contributor edited
+        # lib/bmad-extension/ but did not commit the regenerated bundle.
+        run: |
+          set -euo pipefail
+          if git diff --exit-code -- lib/bmad-extension-plugin/; then
+            echo "Plugin bundle is in sync with source."
+          else
+            echo "::error::Bundle drift detected — committed lib/bmad-extension-plugin/ does not match a fresh build from lib/bmad-extension/."
+            echo "::error::To fix: run 'npm run build:plugin' locally and commit the regenerated lib/bmad-extension-plugin/ directory."
+            exit 1
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Bundle Drift Guard"
+            echo ""
+            if [ "${{ job.status }}" = "success" ]; then
+              echo "Plugin bundle at \`lib/bmad-extension-plugin/\` matches a fresh \`npm run build:plugin\` from \`lib/bmad-extension/\`."
+            else
+              echo "Drift detected — the committed plugin bundle does NOT match a fresh build."
+              echo ""
+              echo "Run locally:"
+              echo ""
+              echo '```bash'
+              echo 'npm run build:plugin'
+              echo 'git add lib/bmad-extension-plugin/'
+              echo 'git commit -m "chore: regenerate plugin bundle"'
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

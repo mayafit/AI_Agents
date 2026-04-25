@@ -165,14 +165,15 @@ console.log('\nTask 1 — End-to-end IDE agent test');
 
     // Task 2.1 & 2.2: Verify extension module structure exists in source
 
-    await asyncTest('2.1/2.2: BMAD extension module source has module.yaml + 8 built-in customizations', async () => {
+    await asyncTest('2.1/2.2: BMAD extension module source has module.yaml + 9 built-in customizations', async () => {
       const extSource = path.join(__dirname, '..', 'lib', 'bmad-extension');
       assert.ok(await fs.pathExists(extSource), 'lib/bmad-extension/ must exist');
 
-      // module.yaml
-      const moduleYaml = await fs.readFile(path.join(extSource, 'module.yaml'), 'utf-8');
-      assert.ok(moduleYaml.includes('extends-module: bmm'), 'module.yaml must extend bmm');
-      assert.ok(moduleYaml.includes('name: "MA-Agents Skills & Agents"'), 'module.yaml must be named "MA-Agents Skills & Agents"');
+      // Story 22.5 moved module.yaml under skills/ to align with the plugin
+      // bundle layout. The new canonical path is lib/bmad-extension/skills/module.yaml.
+      const moduleYaml = await fs.readFile(path.join(extSource, 'skills', 'module.yaml'), 'utf-8');
+      assert.ok(moduleYaml.includes('extends-module: bmm'), 'skills/module.yaml must extend bmm');
+      assert.ok(moduleYaml.includes('name: "MA-Agents Skills & Agents"'), 'skills/module.yaml must be named "MA-Agents Skills & Agents"');
 
       // agents/ directory should not contain .customize.yaml files (Story 15.6 — built-ins
       // moved to lib/bmad-customize/). Note: bmad-method may recreate an empty agents/ dir
@@ -184,11 +185,11 @@ console.log('\nTask 1 — End-to-end IDE agent test');
           `lib/bmad-extension/agents/ must have 0 .customize.yaml files after Story 15.6, found ${agentFiles.length}`);
       }
 
-      // 10 built-in customize.yaml files now in lib/bmad-customize/
+      // Story 22.3 retired bmm-quick-flow-solo-dev → 9 built-ins remain in lib/bmad-customize/
       const customizeDir = path.join(__dirname, '..', 'lib', 'bmad-customize');
       assert.ok(await fs.pathExists(customizeDir), 'lib/bmad-customize/ must exist');
       const files = (await fs.readdir(customizeDir)).filter(f => f.endsWith('.customize.yaml'));
-      assert.strictEqual(files.length, 10, `Expected 10 .customize.yaml files in bmad-customize/, found ${files.length}`);
+      assert.strictEqual(files.length, 9, `Expected 9 .customize.yaml files in bmad-customize/, found ${files.length}`);
     });
 
     // Task 2.2 (continued): Verify deployment via fs.copy
@@ -201,13 +202,14 @@ console.log('\nTask 1 — End-to-end IDE agent test');
       // Story 22.6 removed the in-process applyCustomizations() deployment —
       // BMAD's PluginResolver now places content via --custom-source against
       // the staged plugin bundle. This test still verifies the SOURCE tree is
-      // well-formed (module.yaml, module-help.csv) by simulating a copy.
+      // well-formed (skills/module.yaml, skills/module-help.csv) by simulating a copy.
+      // Story 22.5 moved module.yaml + module-help.csv under skills/.
       await fs.ensureDir(extTarget);
       await fs.copy(extSource, extTarget);
 
       // Verify deployed structure
-      assert.ok(await fs.pathExists(path.join(extTarget, 'module.yaml')), 'Deployed module.yaml must exist');
-      assert.ok(await fs.pathExists(path.join(extTarget, 'module-help.csv')), 'Deployed module-help.csv must exist');
+      assert.ok(await fs.pathExists(path.join(extTarget, 'skills', 'module.yaml')), 'Deployed skills/module.yaml must exist');
+      assert.ok(await fs.pathExists(path.join(extTarget, 'skills', 'module-help.csv')), 'Deployed skills/module-help.csv must exist');
 
       // Simulate the STAGE:CUSTOMIZE deployment step
       const customizeSource = path.join(__dirname, '..', 'lib', 'bmad-customize');
@@ -219,6 +221,11 @@ console.log('\nTask 1 — End-to-end IDE agent test');
       }
 
       const deployedFiles = (await fs.readdir(configAgentsDir)).filter(f => f.endsWith('.customize.yaml'));
+      // Edge-case-hunter E14: deployed count must match source count exactly.
+      // The previous '>= 8' bound silently passed if a file was dropped from
+      // bmad-customize/ during a refactor, masking a real regression.
+      assert.strictEqual(deployedFiles.length, customizeFiles.length,
+        `deployed customize.yaml count (${deployedFiles.length}) must equal source count (${customizeFiles.length})`);
       assert.ok(deployedFiles.length >= 8, `_config/agents/ must have at least 8 built-in .customize.yaml files, found ${deployedFiles.length}`);
     });
 
@@ -283,9 +290,10 @@ console.log('\nTask 1 — End-to-end IDE agent test');
       await fs.copy(extSource, extTarget);
 
       // Verify extension structure is intact after re-deployment
-      assert.ok(await fs.pathExists(path.join(extTarget, 'module.yaml')), 'module.yaml must survive re-deploy');
-      const moduleYaml = await fs.readFile(path.join(extTarget, 'module.yaml'), 'utf-8');
-      assert.ok(moduleYaml.includes('MA-Agents Skills & Agents'), 'module.yaml content must be intact after re-deploy');
+      // Story 22.5 moved module.yaml under skills/ for plugin-bundle parity.
+      assert.ok(await fs.pathExists(path.join(extTarget, 'skills', 'module.yaml')), 'skills/module.yaml must survive re-deploy');
+      const moduleYaml = await fs.readFile(path.join(extTarget, 'skills', 'module.yaml'), 'utf-8');
+      assert.ok(moduleYaml.includes('MA-Agents Skills & Agents'), 'skills/module.yaml content must be intact after re-deploy');
 
       // Re-deploy built-in customizations (simulating STAGE:CUSTOMIZE)
       const customizeSource = path.join(__dirname, '..', 'lib', 'bmad-customize');
@@ -297,6 +305,10 @@ console.log('\nTask 1 — End-to-end IDE agent test');
       }
 
       const deployedFiles = (await fs.readdir(configAgentsDir)).filter(f => f.endsWith('.customize.yaml'));
+      // Edge-case-hunter E14: deployed count must match source count exactly
+      // (see test 2.2 above). >= 8 silently passed if a file was dropped.
+      assert.strictEqual(deployedFiles.length, customizeFiles.length,
+        `re-deployed customize.yaml count (${deployedFiles.length}) must equal source count (${customizeFiles.length})`);
       assert.ok(deployedFiles.length >= 8, `Must have at least 8 built-in .customize.yaml files after re-deploy, found ${deployedFiles.length}`);
     });
 
@@ -349,21 +361,29 @@ console.log('\nTask 1 — End-to-end IDE agent test');
 
     // Task 3.3: Verify bmad.js deploys extension module (Story 8.3 output)
 
-    await asyncTest('3.3: bmad.js has extension deployment stage with correct paths (Story 8.3)', async () => {
+    await asyncTest('3.3: bmad.js stages plugin via stage-and-invoke (Story 22.6 replaces STAGE:EXTENSION)', async () => {
       const bmadJs = await fs.readFile(path.join(__dirname, '..', 'lib', 'bmad.js'), 'utf-8');
 
-      // Verify STAGE:EXTENSION code exists
-      assert.ok(bmadJs.includes('STAGE:EXTENSION'), 'bmad.js must have STAGE:EXTENSION deployment');
-      assert.ok(bmadJs.includes('bmad-extension'), 'bmad.js must reference bmad-extension source');
-      assert.ok(bmadJs.includes("'extensions', 'ma-agents-skills'"),
-        'bmad.js must deploy to extensions/ma-agents-skills');
+      // Story 22.6 retired the legacy STAGE:EXTENSION deployment in favor of
+      // stage-and-invoke against the committed plugin bundle. The integration
+      // surface area is now: stagePlugin() copies the bundle into a project-
+      // local stage dir, bmad-method's PluginResolver picks it up via
+      // --custom-source, and cleanupStage() removes it on completion.
+      const bmad = require('../lib/bmad');
+      assert.strictEqual(typeof bmad.stagePlugin, 'function',
+        'bmad.js must export stagePlugin() (Story 22.6 stage-and-invoke entry)');
+      assert.strictEqual(typeof bmad.cleanupStage, 'function',
+        'bmad.js must export cleanupStage() (Story 22.6 stage-and-invoke teardown)');
 
-      // Verify extension deployment happens AFTER recompile
-      const recompileIdx = bmadJs.indexOf('STAGE:RECOMPILE');
-      const extensionIdx = bmadJs.indexOf('STAGE:EXTENSION');
-      assert.ok(recompileIdx > -1, 'STAGE:RECOMPILE must exist');
-      assert.ok(extensionIdx > recompileIdx,
-        'STAGE:EXTENSION must come AFTER STAGE:RECOMPILE in bmad.js');
+      // The legacy STAGE:EXTENSION marker must be gone.
+      assert.ok(!bmadJs.includes('STAGE:EXTENSION'),
+        'bmad.js must NOT reference STAGE:EXTENSION after Story 22.6');
+
+      // The new stage-and-invoke must reference the committed plugin bundle.
+      assert.ok(bmadJs.includes("require('../scripts/build-plugin')"),
+        'bmad.js must require build-plugin to resolve the plugin bundle dir');
+      assert.ok(bmadJs.includes("PLUGIN_STAGE_DIR_NAME = '.ma-agents-plugin-stage'"),
+        'bmad.js must declare PLUGIN_STAGE_DIR_NAME constant');
     });
 
     // Task 3.4: Document any issues found
