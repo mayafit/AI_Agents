@@ -36,6 +36,21 @@
     "js-yaml": "^4.1.1",
     "yaml": "^2.8.2"
   },
+  "files": [
+    "bin/",
+    "lib/",
+    "scripts/",
+    "skills/",
+    "docs/",
+    "examples/",
+    "mil498/",
+    "index.js",
+    "README.md",
+    "SKILLS_STRUCTURE.md",
+    "CONTRIBUTING.md",
+    "QUICK_START.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=16.0.0"
   }

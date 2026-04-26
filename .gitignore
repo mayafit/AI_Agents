@@ -40,3 +40,7 @@ opencode.json
 # Story 22.8 — transient plugin stage produced by lib/bmad.js#stagePlugin during
 # dev-local test installs. Never commit.
 .ma-agents-plugin-stage/
+
+# Root-level files that should not be committed (VS Code workspace, scratch output)
+agents.code-workspace
+out.txt
