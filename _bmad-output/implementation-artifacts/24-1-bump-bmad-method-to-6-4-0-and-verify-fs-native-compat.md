@@ -64,6 +64,10 @@ So that all downstream Epic 24 stories can rely on a v6.5.0 baseline and no runt
 
 ## Dev Notes
 
+### Note on story filename
+
+The filename `24-1-bump-bmad-method-to-6-4-0-and-verify-fs-native-compat.md` is a stale artifact from when the target was v6.4.0. The story content, ACs, and all tasks correctly target v6.5.0. Do not rename the file — sprint-status.yaml and any tooling reference the filename as-is.
+
 ### Why Medium, not Small
 
 BMAD v6.4.0 removed `fs-extra` (46 call sites across `lib/bmad.js` and `lib/installer.js`) and deleted 1,683 lines of installer code. The version bump requires an audit to confirm ma-agents' own fs-extra usage doesn't cross any changed boundary. The audit may find nothing to fix — but that conclusion requires the work to reach it.

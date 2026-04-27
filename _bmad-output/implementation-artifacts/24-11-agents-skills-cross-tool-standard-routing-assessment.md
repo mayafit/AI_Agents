@@ -73,7 +73,9 @@ Bug B1 (`--agent` flag not scoping the install) is a prerequisite for validating
 
 ### Prerequisite: Bug B2 must be merged before activating Task 5
 
-Bug B2 (`OBSOLETE_TOOL_SKILL_DIRS` registry pattern) must be merged before this story's Task 5 is written, because this story extends B2's pattern. If B2 is not yet merged when this story is activated, Task 5 must establish the registry itself (treat it as the B2 implementation).
+Bug B2 (`OBSOLETE_TOOL_SKILL_DIRS` registry pattern) must be merged before this story's Task 5 is activated, because this story extends B2's pattern. Check `git log --oneline` for a commit referencing Bug B2 or check that `OBSOLETE_TOOL_SKILL_DIRS` exists in `lib/installer.js` before proceeding with Task 5.
+
+**If B2 is not yet merged when this story reaches Task 5: STOP.** Do not re-implement the `OBSOLETE_TOOL_SKILL_DIRS` registry independently — doing so risks a naming or structural divergence from B2's implementation. Instead, pause this story, implement B2 first, merge it, then return to this story's Task 5. The execution order in sprint-status.yaml (B2 before 24.11) reflects this gate.
 
 ### Risk: skill duplication
 

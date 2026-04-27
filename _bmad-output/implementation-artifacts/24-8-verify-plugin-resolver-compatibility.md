@@ -63,6 +63,12 @@ So that the resolver path is validated, the air-gapped install guarantee is main
 
 ## Dev Notes
 
+### Prerequisites — do not begin until prior stories are merged
+
+This story validates the fully-integrated Epic 24 artifact. It must not begin until all of 24.1, 24.2, 24.3, 24.4, 24.6, and 24.7 are merged to the feature branch. Starting on a partial diff will produce false-positive resolver results and a bundle-drift check that immediately fails once later stories are merged.
+
+Story 24.11 runs in parallel with 24.8 — they are independent verification paths that both feed into 24.10.
+
 ### Two concerns merged into one story
 
 This story combines what were originally two stories (resolver compatibility verification + CI gate health) because they share the same execution context: both run after all other Epic 24 stories are merged, both validate the full integrated artifact, and the resolver check is a prerequisite to understanding whether CI passes for the right reasons.

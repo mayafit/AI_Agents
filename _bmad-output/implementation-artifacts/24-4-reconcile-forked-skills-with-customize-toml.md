@@ -58,6 +58,10 @@ So that ma-agents users benefit from upstream workflow improvements where they i
 
 ## Dev Notes
 
+### Prerequisite: Story 24.2 must be at done status before this story begins
+
+Story 24.4's Task 1 reads the absorb assessment table that Story 24.2 produces. This means Story 24.2 must be fully complete (status `done`) before this story is activated — not merely `in-progress`. Check Story 24.2's Dev Notes for the completed assessment table before proceeding past Task 1.1.
+
 ### Critical framing: these are NOT upstream forks
 
 The 4 ma-agents workflow skills (`bmad-sprint-planning`, `bmad-sprint-status`, `bmad-dev-story`, `bmad-code-review`) are entirely custom — they were written for ma-agents' sprint-status.yaml schema, AiAudit.md integration, and worktree-based development model. They have no upstream equivalent to "migrate away from." They are not touched in this story.

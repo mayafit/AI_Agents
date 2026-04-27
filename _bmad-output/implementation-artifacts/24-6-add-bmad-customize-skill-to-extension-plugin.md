@@ -68,9 +68,9 @@ The `bmad-customize` SKILL.md content is upstream-authoritative. Do not alter it
 - Does NOT modify the upstream SKILL.md content
 - Does NOT add any ma-agents-specific instructions to the skill
 
-### Prerequisite: Story 24.1 must be complete
+### Prerequisite: Story 24.1 must be at done status before this story begins
 
-This story depends on the v6.5.0 bump in Story 24.1. Do not activate 24.6 until 24.1 is merged. The most likely failure mode is that `bmad-customize` ships only in the BMAD GitHub repo (not in the npm package) — Task 0 is the gate that catches this. If the skill is absent from the npm package, this story closes as a no-op and the bmad-customize integration is deferred to a follow-up epic.
+This story depends on the v6.5.0 bump in Story 24.1. Do not activate 24.6 until 24.1 is merged (status `done`). Specifically, `node_modules/bmad-method` must already be at v6.5.0 (verify with `node -e "console.log(require('./node_modules/bmad-method/package.json').version)"`) before Task 0's search step has any meaning. The most likely failure mode is that `bmad-customize` ships only in the BMAD GitHub repo (not in the npm package) — Task 0 is the gate that catches this. If the skill is absent from the npm package, this story closes as a no-op and the bmad-customize integration is deferred to a follow-up epic.
 
 ### Finding source if not in node_modules
 

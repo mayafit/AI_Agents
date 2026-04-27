@@ -10,7 +10,7 @@ So that the v6.4.0 integration ships with a clean quality gate and users know wh
 
 ## Acceptance Criteria
 
-1. **Given** all Epic 24 stories (24.1-24.9) are merged to the feature branch, **When** `bmad-code-review` adversarial review is run on the combined diff, **Then** all critical and major findings are triaged and resolved before the release PR is opened; minor and info findings are documented.
+1. **Given** all Epic 24 stories (B1, B2, 24.1, 24.2, 24.3, 24.4, 24.6, 24.7, 24.8, 24.11, 24.12) are merged to the feature branch, **When** `bmad-code-review` adversarial review is run on the combined diff, **Then** all critical and major findings are triaged and resolved before the release PR is opened; minor and info findings are documented.
 
 2. **Given** the review is complete, **When** I inspect `README.md` and `AGENTS.md`, **Then** they reference bmad-method 6.5.0 and mention TOML customization support if Story 24.7's Task 0 confirmed the pipeline works.
 
@@ -24,7 +24,7 @@ So that the v6.4.0 integration ships with a clean quality gate and users know wh
 
 ### Task 1: Run bmad-code-review adversarial pass (AC: 1)
 
-- [ ] 1.1 Confirm Stories 24.1-24.9 are all merged to the Epic 24 feature branch
+- [ ] 1.1 Confirm all of B1, B2, 24.1, 24.2, 24.3, 24.4, 24.6, 24.7, 24.8, 24.11, 24.12 are merged to the Epic 24 feature branch (there is no 24.5 or 24.9; the correct full list is these 11 items plus this story 24.10)
 - [ ] 1.2 Run `/bmad-code-review` on all files changed in the Epic 24 diff (compare feature branch vs. main or the Epic 22 merge base)
 - [ ] 1.3 Triage each finding by severity: critical / major / minor / info
 - [ ] 1.4 Fix all critical findings immediately
@@ -55,6 +55,7 @@ So that the v6.4.0 integration ships with a clean quality gate and users know wh
 
 - [ ] 5.1 Open `CHANGELOG.md` (or create a release notes section if the project uses a different format)
 - [ ] 5.2 Add an entry for the new version with the following sections:
+  - **Bug fixes** — B1: `--agent` flag now correctly scopes the install; B2: stale `.github/copilot/skills/` directory cleaned on upgrade
   - **BMAD v6.5.0 upgrade** — dependency bump, fs-native compatibility, 42-platform baseline
   - **TOML customization** (conditional) — customize.toml delivery confirmed; bmad-customize skill; on_complete hooks pilot
   - **Routing assessment** — findings from Story 24.11: `.agents/skills/` standard impact; any skillsDir changes
@@ -73,7 +74,7 @@ So that the v6.4.0 integration ships with a clean quality gate and users know wh
 
 ### Prerequisites
 
-This story must not begin until ALL of 24.1-24.9 are merged to the feature branch. Running the adversarial review on a partial diff risks missing interactions between story changes.
+This story must not begin until ALL of B1, B2, 24.1, 24.2, 24.3, 24.4, 24.6, 24.7, 24.8, 24.11, and 24.12 are merged to the feature branch. Running the adversarial review on a partial diff risks missing interactions between story changes. Note: there is no 24.5 or 24.9 in Epic 24's numbering.
 
 ### What this story does NOT do
 

@@ -7,7 +7,7 @@
 # updated: 2026-04-23 — Reconciled statuses against git ground truth: Epic 21 (on-prem) shipped in 3.6.0/3.6.1, marked done (all 21.1-21.11). Epic 18 (Roo Code) mostly shipped via PRs #5/#7 + Epic 21 corrective work: 18.2/18.3/18.4/18.7/18.8 done, 18.5/18.6 remain backlog. Airgapped recompile bug shipped via PR #42, marked done. ExperimentalWarning bug shipped via PR #41, marked done. Fixed yaml indent on epic-14.
 # updated: 2026-04-23 — Archived Epic 17 (Sprint Management Model Rework, 16 stories 17.9-17.24) and Epic 21 (On-Prem / Local-LLM Tuning, 11 stories 21.1-21.11). Archived 2 bug stories (experimentalwarning, airgapped-recompile). Story files moved to implementation-artifacts/done/; removed from active sprint-status.yaml.
 # updated: 2026-04-26 — Epic 24 (BMAD v6.5.0 Integration) added to backlog (10 stories, 24.1-24.10). Pre-epic bugs B1 and B2 registered.
-# updated: 2026-04-27 — Epic 24 revised after adversarial review: target bumped to v6.5.0; 24.1 reclassified Medium; 24.4 reframed (custom workflows, not forks); 24.7 reframed as Small (customize.toml); 24.8+24.9 merged; Stories 24.11 (.agents/skills/ routing) and 24.12 (persistent_facts spike) added. Net: 11 stories.
+# updated: 2026-04-27 — Epic 24 revised after adversarial review: target bumped to v6.5.0; 24.1 reclassified Medium; 24.4 reframed (custom workflows, not forks); 24.7 reframed as Small (customize.toml); 24.8+24.9 merged; Stories 24.11 (.agents/skills/ routing) and 24.12 (persistent_facts spike) added. Net: 10 numbered stories (24.1-24.12, no 24.5/24.9) + 2 bugs (B1, B2) = 12 total.
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system
@@ -131,10 +131,12 @@ development_status:
   # workflow capabilities, adopt bmad-customize skill, wire on_complete hooks via customize.toml (no fork edits),
   # assess .agents/skills/ cross-tool standard, spike persistent_facts as marker-injection replacement,
   # verify resolver + CI health, and cut a new ma-agents release.
-  # Dependencies: Epic 22 must be fully delivered; Bug B1 must be fixed before Story 24.11; Epic 23 can run in parallel
-  # Execution order: B1 → 24.1 → 24.2 → [24.3 ‖ 24.4 ‖ 24.6 ‖ 24.7] → 24.12 → [24.11 ‖ 24.8] → 24.10
+  # Dependencies: Epic 22 must be fully delivered; Bug B1 must be fixed before Story 24.11; Bug B2 should be merged
+  # before Story 24.11 Task 5 (OBSOLETE_TOOL_SKILL_DIRS pattern); Epic 23 can run in parallel
+  # Execution order: [B1 ‖ B2] → 24.1 → 24.2 → [24.3 ‖ 24.4 ‖ 24.6 ‖ 24.7] → 24.12 → [24.11 ‖ 24.8] → 24.10
   # Note: 24.12 is serialized AFTER 24.2 (uses 24.2's persistent_facts research) and BEFORE 24.11 (its finding
   # informs whether 24.11's routing changes are temporary or permanent). 24.7 may no-op if Task 0 fails.
+  # All 12 stories: B1, B2, 24.1, 24.2, 24.3, 24.4, 24.6, 24.7, 24.8, 24.10, 24.11, 24.12 (no 24.5 or 24.9)
   epic-24: backlog
   24-1-bump-bmad-method-to-6-4-0-and-verify-fs-native-compat: ready-for-dev
   24-2-confirm-p5-1-architecture-decision: ready-for-dev

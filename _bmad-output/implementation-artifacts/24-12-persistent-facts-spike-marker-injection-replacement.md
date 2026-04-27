@@ -37,7 +37,7 @@ So that we can decide whether to plan a follow-up epic to remove the marker-inje
 
 ### Task 3: Commit decision record to architecture.md (AC: 3)
 
-- [ ] 3.1 Write a one-paragraph finding under a new "P5-1 Addendum: persistent_facts spike finding" heading in `architecture.md`
+- [ ] 3.1 Write a one-paragraph finding under a new "P5-1 Addendum: persistent_facts spike finding" heading in `_bmad-output/planning-artifacts/architecture.md` in the planning worktree (`d:\Code\agents-epic-24-bmad-640-planning`) — NOT in `d:\Code\agents`
 - [ ] 3.2 If YES or PARTIAL: note "marker-injection simplification is feasible for [subset] — plan follow-up epic"
 - [ ] 3.3 If NO: note "marker-injection layer remains necessary — no follow-up action from Epic 24"
 
