@@ -2142,7 +2142,6 @@ Features with direct ma-agents impact:
 - `customize.toml` support added to 6 dev-execution workflows: `bmad-dev-story`, `bmad-code-review`, `bmad-sprint-planning`, `bmad-sprint-status`, `bmad-quick-dev`, `bmad-checkpoint-preview` (#2308). ma-agents currently maintains SOURCE FORKS of the first four.
 - `bmad-customize` skill — guided authoring of TOML overrides in `_bmad/custom/` (#2289).
 - `on_complete` hooks wired into 23 workflow terminal steps (#2290) — candidate ride-on for ai-audit-trail and cleanup-done skills.
-- Kimi Code CLI support, installs to `.kimi/skills/` (#2302) — requires a 6th tool target in ma-agents.
 - GitHub API primary + raw CDN fallback in installer registry client (#2248).
 - `fs-extra` removed from BMAD internals, replaced with native `node:fs` (#2253).
 - Shared resolver now prefers `package.json > module.yaml > marketplace.json` (#2298).
@@ -2159,7 +2158,6 @@ Non-breaking improvements inherited for free: PRD scope-reduction guardrail (#19
 
 The install flow is unchanged from P4-1 (local plugin staging via PluginResolver). v6.4.0 changes affect what goes *into* the plugin bundle, not how it is staged:
 - `lib/bmad-extension-plugin/` rebuild: bump version, include `bmad-customize/` skill, remove 0–4 forked skill directories (per Story 24.4 outcome).
-- `lib/agents.js`: add Kimi Code entry (`code: 'kimi-code'`, `skillsDir: '.kimi/skills/'`); verify `--tools` flag value accepted by v6.4.0 installer.
 - `scripts/build-bmad-cache.js`: verify registry schema unchanged after #2248 (GitHub API primary + CDN fallback); adapt if needed.
 - `lib/bmad.js`: verify no fs-extra dependency on BMAD internals after #2253.
 - Resolver preference order (`package.json > module.yaml > marketplace.json`, #2298): verify plugin staging still resolves; no code change expected since we ship `module.yaml`.
@@ -2178,28 +2176,16 @@ lib/bmad-extension-plugin/        — ma-agents plugin bundle (installed by Plug
 
 For skills where Story 24.4 chooses migration: ma-agents ships a `_bmad/custom/` TOML file as part of the plugin bundle (or as a post-install-stamped file). For skills where Story 24.4 retains forks: the fork in `lib/bmad-extension/skills/<skill>/` continues to ship as the authoritative SKILL.md.
 
-**Kimi Code routing.**
-
-Add Kimi Code as the 6th supported tool target in `lib/agents.js`:
-
-```js
-{ code: 'kimi-code', label: 'Kimi Code', skillsDir: '.kimi/skills/' }
-```
-
-Add a Kimi Code matrix entry to `.github/workflows/multi-tool-smoke.yml` alongside the existing 5 tools (Claude Code, Cursor, Copilot, Cline, Roo Code). The smoke test validates that `npx ma-agents install --tools kimi-code` places content under `.kimi/skills/`.
-
 **Code paths affected.**
 
 | File | Change |
 |------|--------|
 | `package.json` | Bump `bmad-method: 6.3.0 → 6.4.0` |
-| `lib/agents.js` | Add Kimi Code entry |
 | `lib/bmad.js` | Verify no fs-extra dependency; update `BMAD_TARGET_VERSION` constant |
 | `scripts/build-bmad-cache.js` | Verify registry schema; adapt for #2248 if needed |
 | `lib/bmad-extension/skills/` | Delete 0–4 forked SKILL.md files per Story 24.4; add `bmad-customize/` |
 | `lib/bmad-extension-plugin/` | Rebuild against v6.4.0 |
 | `MANIFEST.yaml` | Reflect skill additions/removals |
-| `.github/workflows/multi-tool-smoke.yml` | Add Kimi Code matrix entry |
 
 Potentially changed (Story 24.4 decides):
 - `lib/bmad-extension/skills/bmad-sprint-planning/` — migrate to customize.toml or keep fork
@@ -2211,7 +2197,7 @@ Potentially changed (Story 24.4 decides):
 
 Sub-decision A:
 - *Migrate bmad-init.py to TOML immediately:* Rejected — the new `_bmad/config.toml` is a different file serving a different purpose. Migrating bmad-init.py without confirmed module-config movement is speculative churn.
-- *Block v6.4.0 upgrade until full TOML migration is scoped:* Rejected — Kimi Code support and the resolver fix are valuable; coexistence is low risk and keeps the upgrade unblocked.
+- *Block v6.4.0 upgrade until full TOML migration is scoped:* Rejected — the resolver fix and bmad-customize skill are valuable; coexistence is low risk and keeps the upgrade unblocked.
 
 Sub-decision B:
 - *Migrate all 4 forks to customize.toml unconditionally:* Rejected — TOML overlays may not express all of our changes (e.g., structural reordering or conditional logic). Blanket migration could silently lose behavior. Per-skill evaluation in Story 24.4 is safer.
@@ -2220,18 +2206,15 @@ Sub-decision B:
 **Rationale.**
 - Coexistence (Sub-A) is zero-risk and unblocks the upgrade without speculation about module-config movement.
 - Hybrid per-skill evaluation (Sub-B) captures the maintenance savings where safe while preserving correctness where TOML overlays are insufficient.
-- Kimi Code support is a single-entry addition to the agent registry — low effort, expands tool coverage.
 - Verifying fs-extra removal and resolver preference change against ma-agents code is a spike task (Story 24.1), not a design assumption — findings update this decision if needed.
 
 **Affects:**
 - `package.json` (bmad-method 6.3.0 → 6.4.0)
-- `lib/agents.js` (add Kimi Code entry)
 - `lib/bmad.js` (BMAD_TARGET_VERSION constant; fs-extra verification)
 - `scripts/build-bmad-cache.js` (registry schema verification / #2248 adaptation)
 - `lib/bmad-extension/skills/` (0–4 fork deletions + bmad-customize addition)
 - `lib/bmad-extension-plugin/` (rebuild)
 - `MANIFEST.yaml` (skill additions/removals per 24.4 outcome)
-- `.github/workflows/multi-tool-smoke.yml` (Kimi Code matrix entry)
 - Architecture: this document (P5-1)
 
 **Out of scope (deferred):**
