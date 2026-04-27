@@ -1,94 +1,88 @@
-# Story 24.7: Wire on_complete Hooks for AiAudit.md and Cleanup-Done Integration
+# Story 24.7: Register on_complete Hooks via customize.toml in Plugin Bundle
 
 Status: backlog
 
 ## Story
 
 As a **ma-agents maintainer**,
-I want to express the AiAudit.md append pattern and the cleanup-done skill trigger as `on_complete` hooks in a `customize.toml`, rather than requiring users to invoke them manually,
-So that post-workflow audit and cleanup behavior fires automatically when supported BMAD workflows complete.
+I want to ship a `customize.toml` file in the ma-agents plugin bundle that registers AiAudit.md and cleanup-done as `on_complete` hook targets for the relevant BMAD workflows,
+So that ma-agents users get automatic post-workflow audit entries without needing to manually invoke the ai-audit-trail skill — using BMAD's own hook mechanism, not ma-agents custom fork code.
 
 ## Acceptance Criteria
 
-1. **Given** a `customize.toml` in the ma-agents extension plugin, **When** I inspect it, **Then** at least one `on_complete` hook is defined for a pilot workflow (e.g., `bmad-dev-story`) pointing to the AiAudit.md append pattern.
+1. **Given** BMAD v6.4.0's `on_complete` hook support in `customize.toml` (#2290), **When** the ma-agents plugin bundle is installed, **Then** a `customize.toml` is present that registers at minimum the `bmad-dev-story` workflow with an `on_complete` hook referencing the AiAudit.md append pattern.
 
-2. **Given** a scratch install with the `customize.toml` deployed, **When** the pilot workflow completes in a test or manual run, **Then** the on_complete hook triggers the correct post-completion behavior (AiAudit.md append or equivalent).
+2. **Given** the `on_complete` hook is registered, **When** a scratch install completes and the hook schema is inspected, **Then** the TOML is valid per BMAD v6.5.0's schema (no parse errors, no unknown keys).
 
-3. **Given** the `cleanup-done` skill trigger is evaluated, **When** the evaluation is complete, **Then** either a second `on_complete` entry is added (if hookable at this layer) or a finding is documented in Dev Notes explaining why it is deferred and what condition would enable it.
+3. **Given** the `customize.toml`, **When** `scripts/build-plugin.js` runs, **Then** the file is included in `lib/bmad-extension-plugin/` output.
 
-4. **Given** the `customize.toml` is committed to the extension plugin, **When** I run `node scripts/build-plugin.js`, **Then** the plugin bundle includes the TOML file and the script exits 0.
+4. **Given** the `cleanup-done` skill hook is evaluated, **When** this story closes, **Then** a finding is documented: either (a) a `cleanup-done` `on_complete` entry is added to `customize.toml`, or (b) the finding explains why it is not hookable at this layer and defers to a follow-up.
 
-5. **Given** all changes, **When** I run `npm test`, **Then** the test suite exits 0.
+5. **Given** the existing `bmad-dev-story` custom workflow skill in `lib/bmad-extension/skills/`, **When** this story closes, **Then** it is unchanged — no SKILL.md modifications are made.
+
+6. **Given** `npm test`, **When** run after changes, **Then** exit code 0.
 
 ## Tasks / Subtasks
 
-### Task 1: Read v6.4.0 on_complete schema (AC: 1)
+### Task 1: Read BMAD v6.5.0 on_complete hook schema (prerequisite)
 
-- [ ] 1.1 Search `node_modules/bmad-method` for `on_complete` documentation — check CHANGELOG, README, and any example `customize.toml` files
-- [ ] 1.2 Identify the schema: key name, target format, supported hook types, and which workflows support the hook in v6.4.0 (PR #2290 added hooks to 23 terminal steps)
-- [ ] 1.3 Document the schema in Dev Notes for reference
+- [ ] 1.1 Locate `on_complete` documentation in `node_modules/bmad-method` — find a reference `customize.toml` with `on_complete` entries
+- [ ] 1.2 Note the required keys: workflow identifier, hook type, target skill/action
+- [ ] 1.3 Confirm whether the hook fires for our custom workflow skill (`bmad-dev-story`) or only for upstream BMAD workflows
 
-### Task 2: Draft customize.toml with AiAudit.md on_complete hook for bmad-dev-story (AC: 1)
+### Task 2: Draft customize.toml with AiAudit.md on_complete hook (AC: 1, 2)
 
-- [ ] 2.1 Determine the correct TOML path/location for the customize.toml in our plugin structure (e.g., `lib/bmad-extension-plugin/_bmad/custom/customize.toml` or `lib/bmad-extension/customize.toml`)
-- [ ] 2.2 Write the on_complete hook entry for `bmad-dev-story` pointing to the AiAudit.md append pattern
-- [ ] 2.3 Confirm the hook target path is correct for how AiAudit.md is deployed in a ma-agents install
+- [ ] 2.1 Create `lib/bmad-extension/customize.toml` (or the correct location per BMAD's plugin schema)
+- [ ] 2.2 Add `on_complete` entry for `bmad-dev-story` → AiAudit.md append action
+- [ ] 2.3 Validate TOML syntax: `node -e "require('node:fs'); ..."` or use a TOML linter
+- [ ] 2.4 Verify the file path is correct for the plugin bundle (inside `skills/` or at bundle root — check BMAD's custom-source resolution)
 
-### Task 3: Test hook behavior against scratch install (AC: 2)
+### Task 3: Evaluate cleanup-done hookability (AC: 4)
 
-- [ ] 3.1 Perform scratch install with the customize.toml deployed
-- [ ] 3.2 Trigger the pilot workflow terminal step (manually or via test)
-- [ ] 3.3 Verify on_complete hook fires and AiAudit.md is updated
-- [ ] 3.4 If verification is not practical in a test harness — document the manual verification steps performed
+- [ ] 3.1 Review what `cleanup-done` needs to trigger: which workflows complete in a state that should invoke it?
+- [ ] 3.2 Determine if those workflows have `on_complete` hook support in v6.5.0
+- [ ] 3.3 If yes: add `on_complete` entry to `customize.toml`
+- [ ] 3.4 If no: document finding in Dev Notes — "cleanup-done not hookable via on_complete at this layer; continue manual invocation pattern"
 
-### Task 4: Evaluate cleanup-done hookability (AC: 3)
+### Task 4: Wire into build script and verify bundle (AC: 3)
 
-- [ ] 4.1 Review `cleanup-done` skill behavior — does it run as a post-workflow action or is it user-invoked?
-- [ ] 4.2 Check whether the on_complete hook supports invoking a skill rather than a file append
-- [ ] 4.3 If hookable: add a second on_complete entry to `customize.toml` for cleanup-done
-- [ ] 4.4 If not hookable: document the limitation and the condition under which it could be enabled in a future story
+- [ ] 4.1 Confirm `scripts/build-plugin.js` copies `customize.toml` to plugin output
+- [ ] 4.2 If not: add copy step to build script
+- [ ] 4.3 Run `npm run build:plugin` — verify `customize.toml` is in `lib/bmad-extension-plugin/`
 
-### Task 5: Verify plugin bundle and test suite (AC: 4, 5)
+### Task 5: Confirm no SKILL.md changes (AC: 5)
 
-- [ ] 5.1 Run `node scripts/build-plugin.js` — exit code 0
-- [ ] 5.2 Inspect bundle output — confirm `customize.toml` is included
-- [ ] 5.3 Commit updated bundle if needed (bundle-drift CI check requires committed bundle matches script output)
-- [ ] 5.4 Run `npm test` — exit code 0
+- [ ] 5.1 `git diff lib/bmad-extension/skills/bmad-dev-story/` — confirm zero changes
+- [ ] 5.2 `git diff lib/bmad-extension/skills/` — confirm no skill files modified
+
+### Task 6: Run test suite (AC: 6)
+
+- [ ] 6.1 `npm test` — exit 0
 
 ## Dev Notes
 
-### on_complete hook context
+### Why Small, not Medium
 
-BMAD v6.4.0 PR #2290 wired `on_complete` hooks into all 23 workflow terminal steps. The hook mechanism allows a `customize.toml` to declare a callback (file path, skill invocation, or shell command — confirm from upstream docs) that fires when a workflow reaches its terminal state. This is the first time ma-agents can automate post-workflow behavior without user action.
+BMAD v6.4.0 already wired `on_complete` hooks into 23 workflow terminal steps. The work here is shipping the right TOML config — not implementing hook machinery. If Task 1 reveals the hook schema is incompatible with our use case, the story closes with a documented finding and no code changes.
 
-### AiAudit.md pattern
+### Critical: do not modify SKILL.md files
 
-The AiAudit.md pattern appends a session record to `AiAudit.md` after a BMAD workflow completes, capturing agent identity, timestamp, and a brief summary. This currently requires a manual user step. Wiring it as an on_complete hook eliminates the manual step.
+The previous framing of this story suggested modifying the forked `bmad-dev-story` skill to wire hooks. That creates a new delta against upstream. The correct approach is a `customize.toml` entry that registers the hook externally — BMAD's hook dispatch handles the rest.
 
-### Pilot workflow selection
+### Dependency on Story 24.12
 
-`bmad-dev-story` is chosen as the pilot because it is the most frequently run workflow and has a clear terminal state (story marked done). If the on_complete schema does not support `bmad-dev-story` in v6.4.0, choose the workflow with the broadest on_complete support from the PR #2290 list.
-
-### What this story does NOT do
-
-- Does NOT modify any SKILL.md files
-- Does NOT replace the manual AiAudit.md invocation path (the hook is additive; manual invocation still works)
-- Does NOT add on_complete hooks for all 23 workflows — pilot first, generalize in a future story
-
-### Failure mode: schema incompatibility
-
-If the on_complete schema proves incompatible with our AiAudit.md append semantics (e.g., the hook only supports skill invocations and not file appends, or vice versa), do not force an integration that breaks AiAudit semantics. Document the finding, describe the gap, and defer to a future story.
+Story 24.12 (persistent_facts spike) answers whether the entire marker-injection layer can be replaced by TOML. Do not add new marker-injection logic in this story regardless of what Task 1 finds. If `on_complete` hooks can't express what we need, document the gap for Story 24.12 to investigate — don't patch it with new injection code.
 
 ### Reference Files
 
-- `node_modules/bmad-method` — on_complete schema, example customize.toml files
-- `lib/bmad-extension-plugin/` — plugin bundle directory
-- `scripts/build-plugin.js` — plugin bundler
-- `lib/bmad-customizations/` — AiAudit.md template location
-- BMAD v6.4.0 PR #2290 — on_complete hook implementation
+- `node_modules/bmad-method` — on_complete hook schema reference
+- `lib/bmad-extension/` — plugin source (customize.toml goes here)
+- `scripts/build-plugin.js` — plugin build script
+- `lib/bmad-extension-plugin/` — build output
 
 ## Change Log
 
 | Date | Version | Author | Description |
 |------|---------|--------|-------------|
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
+| 2026-04-27 | 1.1.0 | (pending) | Rewritten as Small — customize.toml config entry, not fork modification. No SKILL.md changes permitted. Per adversarial review findings 4, 5. |

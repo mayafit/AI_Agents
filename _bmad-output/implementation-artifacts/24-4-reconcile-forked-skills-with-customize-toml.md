@@ -1,116 +1,93 @@
-# Story 24.4: Reconcile 4 Forked Workflow Skills with Upstream customize.toml
+# Story 24.4: Absorb Upstream Workflow Capabilities (quick-dev, checkpoint-preview)
 
 Status: backlog
 
 ## Story
 
 As a **ma-agents maintainer**,
-I want to process each of the 4 forked workflow skills per the Story 24.2 decision table, either migrating them to customize.toml overlays or documenting why the fork must be retained,
-So that ma-agents carries the minimum necessary divergence from upstream BMAD and benefits from upstream improvements in v6.4.0.
+I want to evaluate whether v6.5.0's `bmad-quick-dev` and `bmad-checkpoint-preview` skills — now customize.toml-capable — add capabilities worth absorbing into the ma-agents plugin bundle,
+So that ma-agents users benefit from upstream workflow improvements where they integrate naturally with our sprint-status.yaml schema and AiAudit.md conventions.
 
 ## Acceptance Criteria
 
-1. **Given** the Story 24.2 per-skill decision table, **When** this story is implemented, **Then** each of the 4 forked skills (`bmad-sprint-planning`, `bmad-sprint-status`, `bmad-dev-story`, `bmad-code-review`) has been processed according to its decision (migrate / retain / delete).
+1. **Given** Story 24.2 absorb assessment table is complete, **When** the decision for `bmad-quick-dev` is reviewed, **Then** the skill is either added to `lib/bmad-extension/skills/` with a MANIFEST.yaml entry, or documented as out of scope with rationale — and no partial implementation is left in place.
 
-2. **Given** a skill is decided as "migrate", **When** the migration is complete, **Then** the forked SKILL.md is removed from `lib/bmad-extension/skills/`, a `customize.toml` expressing the ma-agents delta is committed, and `MANIFEST.yaml` is updated to reflect the removal.
+2. **Given** Story 24.2 absorb assessment table is complete, **When** the decision for `bmad-checkpoint-preview` is reviewed, **Then** the same outcome applies: added to the plugin or documented as out of scope.
 
-3. **Given** a skill is decided as "retain fork", **When** the skill is reviewed, **Then** a comment block is added to the SKILL.md explaining why customize.toml cannot express the required delta, citing the specific TOML limitation.
+3. **Given** any skill is added, **When** `scripts/build-plugin.js` runs, **Then** the new skill is present in `lib/bmad-extension-plugin/` output.
 
-4. **Given** any skill deletions or additions, **When** I run `scripts/build-plugin.js`, **Then** the script exits 0 and produces a valid plugin bundle with no references to deleted skills.
+4. **Given** any skill is added, **When** a scratch install completes with `--tools claude-code`, **Then** the new skill lands in `.claude/skills/` and is accessible.
 
-5. **Given** all changes are applied, **When** I run `npm test` and perform a scratch install, **Then** the test suite exits 0 and the scratch install shows correct behavior for all 4 skill areas (planning, status, dev-story, code-review).
+5. **Given** the existing 4 custom workflow skills (`bmad-sprint-planning`, `bmad-sprint-status`, `bmad-dev-story`, `bmad-code-review`), **When** this story closes, **Then** they are unchanged — this story does not touch them. They are custom workflows, not upstream forks, and are not being reconciled here.
+
+6. **Given** `npm test`, **When** run after any additions, **Then** exit code 0.
 
 ## Tasks / Subtasks
 
-### Task 1: Read Story 24.2 per-skill decision table (AC: 1)
+### Task 1: Read Story 24.2 absorb assessment table (prerequisite)
 
-- [ ] 1.1 Open Story 24.2 Dev Notes — locate the per-skill decision table
-- [ ] 1.2 Record each skill's decision here for reference during Tasks 2-5
-- [ ] 1.3 Confirm Story 24.2 is done before proceeding
+- [ ] 1.1 Open Story 24.2 Dev Notes — locate the absorb assessment table
+- [ ] 1.2 Note the decision for `bmad-quick-dev`: "add" or "out of scope"
+- [ ] 1.3 Note the decision for `bmad-checkpoint-preview`: "add" or "out of scope"
+- [ ] 1.4 If both are "out of scope" — this story is done; mark done with finding documented
 
-### Task 2: Process bmad-sprint-planning (AC: 1, 2, 3)
+### Task 2: Add bmad-quick-dev (conditional on Task 1 decision)
 
-- [ ] 2.1 Apply the decision from the table: migrate, retain, or delete
-- [ ] 2.2 If migrate: write `lib/bmad-extension/skills/bmad-sprint-planning/customize.toml` expressing our delta; delete the forked SKILL.md
-- [ ] 2.3 If retain: add a comment block to SKILL.md explaining the TOML limitation
-- [ ] 2.4 If delete: remove the skill directory; verify no other files reference it
+- [ ] 2.1 Copy `bmad-quick-dev/` from `node_modules/bmad-method` to `lib/bmad-extension/skills/bmad-quick-dev/`
+- [ ] 2.2 Add a `MANIFEST.yaml` entry (description, applies_when conditions)
+- [ ] 2.3 Run `scripts/build-plugin.js` — confirm skill appears in plugin output
+- [ ] 2.4 Scratch install — confirm skill lands in `.claude/skills/`
 
-### Task 3: Process bmad-sprint-status (AC: 1, 2, 3)
+### Task 3: Add bmad-checkpoint-preview (conditional on Task 1 decision)
 
-- [ ] 3.1 Apply the decision from the table: migrate, retain, or delete
-- [ ] 3.2 If migrate: write `lib/bmad-extension/skills/bmad-sprint-status/customize.toml`; delete the forked SKILL.md
-- [ ] 3.3 If retain: add a comment block to SKILL.md
-- [ ] 3.4 If delete: remove the skill directory; verify no other files reference it
+- [ ] 3.1 Copy `bmad-checkpoint-preview/` from `node_modules/bmad-method` to `lib/bmad-extension/skills/bmad-checkpoint-preview/`
+- [ ] 3.2 Add a `MANIFEST.yaml` entry
+- [ ] 3.3 Run `scripts/build-plugin.js` — confirm skill appears in plugin output
+- [ ] 3.4 Scratch install — confirm skill lands in `.claude/skills/`
 
-### Task 4: Process bmad-dev-story (AC: 1, 2, 3)
+### Task 4: Verify existing custom workflow skills are untouched (AC: 5)
 
-- [ ] 4.1 Apply the decision from the table: migrate, retain, or delete
-- [ ] 4.2 If migrate: write `lib/bmad-extension/skills/bmad-dev-story/customize.toml`; delete the forked SKILL.md
-- [ ] 4.3 If retain: add a comment block to SKILL.md
-- [ ] 4.4 If delete: remove the skill directory; verify no other files reference it
+- [ ] 4.1 `git diff lib/bmad-extension/skills/bmad-sprint-planning/` — confirm no changes
+- [ ] 4.2 `git diff lib/bmad-extension/skills/bmad-sprint-status/` — confirm no changes
+- [ ] 4.3 `git diff lib/bmad-extension/skills/bmad-dev-story/` — confirm no changes
+- [ ] 4.4 `git diff lib/bmad-extension/skills/bmad-code-review/` — confirm no changes
 
-### Task 5: Process bmad-code-review (AC: 1, 2, 3)
+### Task 5: Run test suite (AC: 6)
 
-- [ ] 5.1 Apply the decision from the table: migrate, retain, or delete
-- [ ] 5.2 If migrate: write `lib/bmad-extension/skills/bmad-code-review/customize.toml`; delete the forked SKILL.md
-- [ ] 5.3 If retain: add a comment block to SKILL.md
-- [ ] 5.4 If delete: remove the skill directory; verify no other files reference it
-
-### Task 6: Update MANIFEST.yaml (AC: 2, 4)
-
-- [ ] 6.1 For every deleted SKILL.md: remove or update the MANIFEST.yaml entry
-- [ ] 6.2 For every new customize.toml: verify MANIFEST.yaml entry still points to the skill correctly (the skill itself now comes from upstream; we only ship the TOML overlay)
-- [ ] 6.3 Confirm MANIFEST.yaml is valid YAML after edits
-
-### Task 7: Run build-plugin.js and npm test (AC: 4, 5)
-
-- [ ] 7.1 Run `node scripts/build-plugin.js` — exit code 0
-- [ ] 7.2 Inspect bundle output — confirm no references to deleted SKILL.md files
-- [ ] 7.3 Run `npm test` — exit code 0
-- [ ] 7.4 Perform scratch install — exercise each of the 4 skill areas; confirm expected behavior
+- [ ] 5.1 `npm test` — exit 0
 
 ## Dev Notes
 
-### Per-skill decision table (to be populated by Story 24.2)
+### Critical framing: these are NOT upstream forks
 
-| Skill | Our Delta | Upstream v6.4.0 Delta | Decision | Rationale |
-|-------|-----------|----------------------|----------|-----------|
-| bmad-sprint-planning | (fill from 24.2) | (fill from 24.2) | (fill from 24.2) | (fill from 24.2) |
-| bmad-sprint-status | (fill from 24.2) | (fill from 24.2) | (fill from 24.2) | (fill from 24.2) |
-| bmad-dev-story | (fill from 24.2) | (fill from 24.2) | (fill from 24.2) | (fill from 24.2) |
-| bmad-code-review | (fill from 24.2) | (fill from 24.2) | (fill from 24.2) | (fill from 24.2) |
+The 4 ma-agents workflow skills (`bmad-sprint-planning`, `bmad-sprint-status`, `bmad-dev-story`, `bmad-code-review`) are entirely custom — they were written for ma-agents' sprint-status.yaml schema, AiAudit.md integration, and worktree-based development model. They have no upstream equivalent to "migrate away from." They are not touched in this story.
 
-Story 24.2 must populate this table before Story 24.4 begins implementation.
+This story is only about additive absorption: do the 2 newly customize.toml-capable upstream skills offer something useful?
 
 ### What this story does NOT do
 
-- Does NOT implement TOML config support for the module config path (Story 24.3)
-- Does NOT add bmad-customize skill (Story 24.6)
-- Does NOT wire on_complete hooks (Story 24.7)
-- Does NOT add Kimi routing (Story 24.5)
+- Does NOT modify the 4 custom workflow skills in any way
+- Does NOT migrate anything to customize.toml (wrong tool for custom workflows)
+- Does NOT add on_complete hooks (Story 24.7)
 
-### Migrate vs. retain criteria (from Story 24.2)
+### Per-skill decision table (filled in by Story 24.2)
 
-Migrate: delta consists only of additional instructions, tone/framing changes, or parameter defaults that TOML `override`/`append` can express cleanly.
-
-Retain: delta includes structural reordering, removal of upstream steps, or additions that TOML merge rules cannot express without losing behavioral fidelity.
-
-Delete: skill fully superseded by upstream v6.4.0 behavior; our delta is no longer needed.
-
-### customize.toml placement note
-
-If migrated overlays are placed in `lib/bmad-extension/skills/<skill-name>/customize.toml`, confirm that `scripts/build-plugin.js` picks them up and packages them into the plugin bundle correctly. If the TOML overlay needs to land in a different location (e.g., `lib/bmad-extension-plugin/_bmad/custom/`), adjust the build script accordingly and document the change.
+| Skill | Integration points found | Decision | Rationale |
+|-------|--------------------------|----------|-----------|
+| bmad-quick-dev | (filled by 24.2) | (filled by 24.2) | (filled by 24.2) |
+| bmad-checkpoint-preview | (filled by 24.2) | (filled by 24.2) | (filled by 24.2) |
 
 ### Reference Files
 
-- `lib/bmad-extension/skills/` — forked skill directory
-- `MANIFEST.yaml` — extension skill manifest
-- `scripts/build-plugin.js` — plugin bundler
-- Story 24.2 Dev Notes — per-skill decision table
-- Architecture: `_bmad-output/planning-artifacts/architecture.md` (Decision P5-1)
+- Story 24.2 Dev Notes — absorb assessment table (prerequisite)
+- `node_modules/bmad-method` — upstream v6.5.0 skill sources
+- `lib/bmad-extension/skills/` — plugin skill source directory
+- `MANIFEST.yaml` — skill registry
+- `scripts/build-plugin.js` — plugin build script
 
 ## Change Log
 
 | Date | Version | Author | Description |
 |------|---------|--------|-------------|
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
+| 2026-04-27 | 1.1.0 | (pending) | Completely rewritten — scope changed from "reconcile 4 forked skills" to "absorb quick-dev and checkpoint-preview". The 4 custom workflow skills are not upstream forks and are not being reconciled. Per adversarial review finding 6. |

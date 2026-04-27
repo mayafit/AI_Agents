@@ -2130,29 +2130,36 @@ Net deletion: ~140 lines. Replacement: ~30 lines for stage-and-invoke.
 
 ### Phase 5 Architectural Decisions (2026-04-26)
 
-#### Decision P5-1: BMAD v6.4.0 Integration (FR196–FR210, NFR55–NFR58)
+#### Decision P5-1: BMAD v6.5.0 Integration (FR196–FR210, NFR55–NFR58)
 
-**Context.** BMAD-METHOD v6.4.0 ships two breaking changes and several features that touch ma-agents directly:
+> **STATUS: TENTATIVE** — Sub-decision A (TOML config coexistence) is not confirmed until Story 24.2 verifies that `_bmad/bmm/config.yaml` still exists and carries the expected keys in v6.4.0/v6.5.0 output. Story 24.2 may amend this decision before implementation begins.
 
-Breaking:
+**Context.** BMAD-METHOD v6.4.0 and v6.5.0 ship two breaking changes and several features that touch ma-agents directly:
+
+Breaking (v6.4.0):
 1. TOML-based customization (#2284, #2283) — `_bmad/custom/*.toml` replaces the briefly-introduced YAML-based customization. Flat schema with structural merge rules (scalars, tables, code-keyed arrays, append arrays). `persistent_facts` unified into the same model.
 2. Four-file config architecture (#2285) — project-level config surface now consists of `_bmad/config.toml`, `config.user.toml`, `custom/config.toml`, and `custom/config.user.toml`.
 
-Features with direct ma-agents impact:
-- `customize.toml` support added to 6 dev-execution workflows: `bmad-dev-story`, `bmad-code-review`, `bmad-sprint-planning`, `bmad-sprint-status`, `bmad-quick-dev`, `bmad-checkpoint-preview` (#2308). ma-agents currently maintains SOURCE FORKS of the first four.
+Features with direct ma-agents impact (v6.4.0):
+- `customize.toml` support added to 6 dev-execution workflows: `bmad-dev-story`, `bmad-code-review`, `bmad-sprint-planning`, `bmad-sprint-status`, `bmad-quick-dev`, `bmad-checkpoint-preview` (#2308). ma-agents maintains custom workflow skills for the first four (these are not upstream forks — see Sub-decision B).
 - `bmad-customize` skill — guided authoring of TOML overrides in `_bmad/custom/` (#2289).
-- `on_complete` hooks wired into 23 workflow terminal steps (#2290) — candidate ride-on for ai-audit-trail and cleanup-done skills.
+- `on_complete` hooks wired into 23 workflow terminal steps (#2290) — AiAudit.md integration via a `customize.toml` entry in the plugin bundle (Story 24.7).
+- `persistent_facts` field in customize.toml — agent-level persistent facts injected via TOML; potential replacement for ma-agents' marker-injection layer (spike in Story 24.12).
 - GitHub API primary + raw CDN fallback in installer registry client (#2248).
-- `fs-extra` removed from BMAD internals, replaced with native `node:fs` (#2253).
+- `fs-extra` removed from BMAD internals, replaced with native `node:fs` (#2253) — ma-agents has 46 direct `fs-extra` call sites that must be audited (Story 24.1).
 - Shared resolver now prefers `package.json > module.yaml > marketplace.json` (#2298).
+
+New (v6.5.0):
+- 18 additional platforms, total 42 supported (#2313).
+- Cross-tool `.agents/skills/` standard — all platforms that support it now use it (#2313). Impact on ma-agents' per-tool routing assessed in Story 24.11.
 
 Non-breaking improvements inherited for free: PRD scope-reduction guardrail (#1927), `bmad-create-story` UPDATE-file awareness (#2274), sprint-status sync from quick-dev (#2234), model parity enforcement for code-review subagents (#2236).
 
 **Decision.** Two sub-decisions:
 
-**Sub-decision A — TOML config format: COEXISTENCE.** The new `_bmad/config.toml` is BMAD's project-level config. `_bmad/bmm/config.yaml` remains the module-level config read by `bmad-init.py`. These serve different purposes: project-level config stores agent roster and install answers; module-level config stores bmad-init state that ma-agents reads. No change to `bmad-init.py` is required unless v6.4.0 moves module config to TOML. Story 24.1 spike verifies this. If module config migrates, Story 24.3 adds TOML read support to `bmad-init.py`.
+**Sub-decision A — TOML config format: COEXISTENCE (TENTATIVE).** The new `_bmad/config.toml` is BMAD's project-level config. `_bmad/bmm/config.yaml` is expected to remain the module-level config read by `bmad-init.py` and the ma-agents workflow skills. These serve different purposes: project-level config stores agent roster and install answers; module-level config stores bmad-init state. Story 24.2 must confirm this assumption by verifying that `_bmad/bmm/config.yaml` is still written by v6.5.0 with the expected keys (`planning_artifacts`, `user_name`, `communication_language`, etc.). If module config has migrated to TOML, Story 24.3 expands to add TOML read support to `bmad-init.py` and update `CANONICAL_CONFIG_REL`.
 
-**Sub-decision B — Override skill reconciliation: HYBRID, per-skill evaluation in Story 24.4.** Default strategy is to migrate forks to `customize.toml` overlays and delete the fork wherever our changes fit TOML's merge model (scalar override, table merge, append-array, code-keyed array entry). Retain source forks only where our changes exceed what TOML overlays can express. Story 24.4 makes the per-skill call and implements the chosen strategy for each of the 4 forked skills.
+**Sub-decision B — Custom workflow skills: ABSORB, not reconcile.** The 4 ma-agents workflow skills (`bmad-sprint-planning`, `bmad-sprint-status`, `bmad-dev-story`, `bmad-code-review`) are NOT upstream forks — they are entirely custom workflows built around ma-agents' sprint-status.yaml schema and AiAudit.md integration. "Migrate to customize.toml" does not apply to these skills. Story 24.4's scope is: evaluate whether v6.4.0's newly customize.toml-capable workflows (`bmad-quick-dev`, `bmad-checkpoint-preview`) add capabilities that should be absorbed into the ma-agents custom skill set, and if so, add them to the plugin bundle.
 
 **New flow / component changes.**
 
@@ -2197,15 +2204,15 @@ Potentially changed (Story 24.4 decides):
 
 Sub-decision A:
 - *Migrate bmad-init.py to TOML immediately:* Rejected — the new `_bmad/config.toml` is a different file serving a different purpose. Migrating bmad-init.py without confirmed module-config movement is speculative churn.
-- *Block v6.4.0 upgrade until full TOML migration is scoped:* Rejected — the resolver fix and bmad-customize skill are valuable; coexistence is low risk and keeps the upgrade unblocked.
+- *Block v6.5.0 upgrade until full TOML migration is scoped:* Rejected — the resolver fix and bmad-customize skill are valuable; coexistence is low risk and keeps the upgrade unblocked.
 
 Sub-decision B:
 - *Migrate all 4 forks to customize.toml unconditionally:* Rejected — TOML overlays may not express all of our changes (e.g., structural reordering or conditional logic). Blanket migration could silently lose behavior. Per-skill evaluation in Story 24.4 is safer.
 - *Retain all 4 forks unconditionally:* Rejected — this is the status quo cost that customize.toml was designed to eliminate. Where migration is safe, forks add ongoing maintenance burden and upgrade friction.
 
 **Rationale.**
-- Coexistence (Sub-A) is zero-risk and unblocks the upgrade without speculation about module-config movement.
-- Hybrid per-skill evaluation (Sub-B) captures the maintenance savings where safe while preserving correctness where TOML overlays are insufficient.
+- Coexistence (Sub-A) is zero-risk pending Story 24.2 confirmation; if module config moved, Story 24.3 handles migration.
+- Correctly scoping Sub-B (absorb not reconcile) avoids a category error: the 4 custom workflow skills have no upstream equivalent to overlay against.
 - Verifying fs-extra removal and resolver preference change against ma-agents code is a spike task (Story 24.1), not a design assumption — findings update this decision if needed.
 
 **Affects:**
@@ -2219,6 +2226,6 @@ Sub-decision B:
 
 **Out of scope (deferred):**
 - Channel-based install (`--channel` / `--pin` flags) — evaluate in follow-up epic
-- Deep `on_complete` hook wiring for ai-audit-trail and cleanup-done — evaluate in Story 24.7
+- Full `persistent_facts` replacement of marker-injection layer — spike in Story 24.12; implementation deferred to follow-up epic
 - Advanced TOML authoring patterns beyond what `bmad-customize` skill guides
-- `bmad-init.py` TOML migration — conditional on Story 24.1 spike confirming module-config movement
+- `bmad-init.py` TOML migration — conditional on Story 24.2 confirming module-config movement; Story 24.3 handles if triggered

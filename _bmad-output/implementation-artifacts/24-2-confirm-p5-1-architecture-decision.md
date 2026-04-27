@@ -1,99 +1,85 @@
-# Story 24.2: Confirm Architecture Decision P5-1 (TOML Config + Skill Reconciliation)
+# Story 24.2: Finalize Architecture Decision P5-1
 
 Status: backlog
 
 ## Story
 
 As a **ma-agents maintainer**,
-I want to confirm (or amend) Architecture Decision P5-1 in light of Story 24.1 findings, and produce a per-skill decision table for the 4 forked workflow skills,
-So that Stories 24.3 and 24.4 have a definitive, researched specification before implementation begins.
+I want to finalize Architecture Decision P5-1 based on Story 24.1 findings — confirming or amending the TOML coexistence assumption, scoping the custom workflow skill absorb task, and answering whether `persistent_facts` can replace the marker-injection layer —
+So that Stories 24.3, 24.4, and 24.12 have a definitive, evidence-backed specification before implementation begins, and the TENTATIVE status on P5-1 is resolved.
 
 ## Acceptance Criteria
 
-1. **Given** Story 24.1 Dev Notes are complete, **When** the config format finding is reviewed, **Then** if `_bmad/bmm/config.yaml` no longer exists in v6.4.0 output, P5-1 Sub-decision A is amended to require TOML read/write support in `bmad-init.py` and the Story 24.3 scope note is updated accordingly.
+1. **Given** Story 24.1 Dev Notes are complete, **When** the config format finding is reviewed, **Then** P5-1 Sub-decision A is either confirmed as written (coexistence, no code change) or amended to require TOML read support (Story 24.3 scope expands). The TENTATIVE marker is removed from P5-1.
 
-2. **Given** v6.4.0 upstream source is installed in `node_modules/bmad-method`, **When** each of the 4 forked skills (`bmad-sprint-planning`, `bmad-sprint-status`, `bmad-dev-story`, `bmad-code-review`) is diffed against its upstream counterpart, **Then** a per-skill decision (migrate to customize.toml / retain fork / delete entirely) is documented in the architecture document or Story 24.4 Dev Notes.
+2. **Given** v6.5.0 upstream source installed in `node_modules/bmad-method`, **When** `bmad-quick-dev` and `bmad-checkpoint-preview` skills are inspected, **Then** a documented assessment answers: do these skills add capabilities (AiAudit integration, sprint-status sync, worktree conventions) that should be absorbed into the ma-agents plugin? Outcome is either "add to plugin bundle" or "not needed, out of scope" — both with rationale.
 
-3. **Given** the per-skill decisions are documented, **When** `architecture.md` Decision P5-1 is reviewed, **Then** any required amendments reflecting findings from ACs 1 and 2 are committed to `architecture.md`.
+3. **Given** v6.4.0's `persistent_facts` field in the customize.toml model, **When** the field's schema and injection mechanism are reviewed against what ma-agents' marker-injection layer does, **Then** a documented finding answers: can `persistent_facts` express the same pre-task instruction block (read MANIFEST.yaml, load always_load skills) that ma-agents stamps into CLAUDE.md / .clinerules / .roomodes? Outcome feeds Story 24.12 scope.
 
-4. **Given** the per-skill decision table is finalized, **When** Story 24.4 Dev Notes are reviewed, **Then** the table is present as a prerequisite section and Story 24.4 status may be advanced to ready-for-dev.
+4. **Given** all three findings are documented, **When** `architecture.md` Decision P5-1 is updated, **Then** the TENTATIVE marker is removed, Sub-decision A reflects the confirmed or amended position, and the `persistent_facts` finding is noted under "Out of scope (deferred)" or promoted to a confirmed direction.
+
+5. **Given** the custom workflow absorb assessment (AC2), **When** Story 24.4 Dev Notes are updated, **Then** the assessment table is present as a prerequisite and Story 24.4 may advance to ready-for-dev.
 
 ## Tasks / Subtasks
 
-### Task 1: Review Story 24.1 config format finding and update P5-1 Sub-decision A if needed (AC: 1)
+### Task 1: Confirm P5-1 Sub-decision A from Story 24.1 findings (AC: 1)
 
-- [ ] 1.1 Read Story 24.1 Dev Notes — locate the "Module config format check" finding
-- [ ] 1.2 If config.yaml still exists — note "P5-1 Sub-decision A confirmed as written; Story 24.3 scope remains no-op path"
-- [ ] 1.3 If config moved to TOML — amend P5-1 Sub-decision A text in `architecture.md` to require TOML support; update Story 24.3 scope note
+- [ ] 1.1 Read Story 24.1 Dev Notes — locate the `_bmad/bmm/config.yaml` finding
+- [ ] 1.2 If YAML config still exists with expected keys — note confirmed; no change to P5-1 Sub-decision A text beyond removing TENTATIVE marker
+- [ ] 1.3 If config moved to TOML — amend P5-1 Sub-decision A in `architecture.md`; update Story 24.3 scope note to expand from no-op to full TOML implementation
+- [ ] 1.4 Remove TENTATIVE marker from P5-1 header in `architecture.md`
 
-### Task 2: Diff bmad-sprint-planning against upstream v6.4.0 (AC: 2)
+### Task 2: Assess bmad-quick-dev and bmad-checkpoint-preview for absorption (AC: 2)
 
-- [ ] 2.1 Locate our forked `lib/bmad-extension/skills/bmad-sprint-planning/` SKILL.md
-- [ ] 2.2 Locate upstream counterpart in `node_modules/bmad-method` (search for sprint-planning skill path)
-- [ ] 2.3 Produce a diff summary — list lines/sections unique to our fork vs. upstream
-- [ ] 2.4 Record recommendation: migrate / retain / delete — with rationale
+- [ ] 2.1 Locate `bmad-quick-dev` in `node_modules/bmad-method` — read SKILL.md
+- [ ] 2.2 Locate `bmad-checkpoint-preview` in `node_modules/bmad-method` — read SKILL.md
+- [ ] 2.3 For each: does it integrate with sprint-status.yaml? Does it produce AiAudit.md entries? Does it enforce worktree/branch conventions? Document yes/no per integration point.
+- [ ] 2.4 Decision per skill: "add to plugin bundle" or "out of scope" — with one-line rationale
+- [ ] 2.5 If "add to plugin bundle": add a sub-task to Story 24.4 to include it
 
-### Task 3: Diff bmad-sprint-status against upstream v6.4.0 (AC: 2)
+### Task 3: Assess persistent_facts as marker-injection replacement (AC: 3)
 
-- [ ] 3.1 Locate our forked `lib/bmad-extension/skills/bmad-sprint-status/` SKILL.md
-- [ ] 3.2 Locate upstream counterpart in `node_modules/bmad-method`
-- [ ] 3.3 Produce a diff summary
-- [ ] 3.4 Record recommendation: migrate / retain / delete — with rationale
+- [ ] 3.1 Read `_bmad/custom/config.toml` schema from `node_modules/bmad-method` documentation or source
+- [ ] 3.2 Locate the `persistent_facts` field definition — what values it accepts, when/how they are injected into the agent session
+- [ ] 3.3 Compare injection surface: does `persistent_facts` reach into CLAUDE.md, .clinerules, .roomodes, AGENTS.md contexts? Or only into BMAD's own workflow prompts?
+- [ ] 3.4 State the finding clearly: "yes, can replace marker injection" / "partial replacement only" / "no, different injection surface" — with evidence
+- [ ] 3.5 Update Story 24.12 Dev Notes with this finding to scope the spike correctly
 
-### Task 4: Diff bmad-dev-story against upstream v6.4.0 (AC: 2)
+### Task 4: Update architecture.md and downstream story prerequisites (AC: 4, 5)
 
-- [ ] 4.1 Locate our forked `lib/bmad-extension/skills/bmad-dev-story/` SKILL.md
-- [ ] 4.2 Locate upstream counterpart in `node_modules/bmad-method`
-- [ ] 4.3 Produce a diff summary
-- [ ] 4.4 Record recommendation: migrate / retain / delete — with rationale
-
-### Task 5: Diff bmad-code-review against upstream v6.4.0 (AC: 2)
-
-- [ ] 5.1 Locate our forked `lib/bmad-extension/skills/bmad-code-review/` SKILL.md
-- [ ] 5.2 Locate upstream counterpart in `node_modules/bmad-method`
-- [ ] 5.3 Produce a diff summary
-- [ ] 5.4 Record recommendation: migrate / retain / delete — with rationale
-
-### Task 6: Update architecture.md and Story 24.4 Dev Notes (AC: 3, 4)
-
-- [ ] 6.1 Open `_bmad-output/planning-artifacts/architecture.md` — locate Decision P5-1
-- [ ] 6.2 Apply any amendments from Tasks 1-5; commit changes
-- [ ] 6.3 Open Story 24.4 Dev Notes — add per-skill decision table with columns: Skill | Our Delta | Upstream v6.4.0 Delta | Decision | Rationale
-- [ ] 6.4 Update sprint-status.yaml: set `24-4-reconcile-forked-skills-with-customize-toml` to `ready-for-dev` if all decisions are documented
+- [ ] 4.1 Apply all amendments to `architecture.md` P5-1 — remove TENTATIVE, update Sub-decision A, note persistent_facts finding
+- [ ] 4.2 Update Story 24.4 Dev Notes with the absorb assessment table (columns: Skill | Integration points found | Decision | Rationale)
+- [ ] 4.3 If Story 24.3 scope expanded: update Story 24.3 AC and Tasks accordingly
+- [ ] 4.4 Advance Story 24.4 status to `ready-for-dev` in sprint-status.yaml if prerequisites are documented
 
 ## Dev Notes
 
-### Why this story exists
+### Why this story gates P5-1 finalization
 
-Architecture Decision P5-1 was drafted pre-implementation, before Story 24.1 findings were available. This story is the "measure twice" gate. It may be lightweight (confirming P5-1 as written) or require amendments. The per-skill diff determines whether Story 24.4 is a quick hour of work or a full day.
+P5-1 was drafted pre-implementation with two TENTATIVE assumptions. This is the evidence-collection story that either confirms or corrects those assumptions. No Epic 24 implementation story should begin until P5-1 is finalized — doing so risks building against a wrong assumption.
+
+### Framing for Task 2: absorb, not diff
+
+The 4 ma-agents workflow skills (sprint-planning, sprint-status, dev-story, code-review) are NOT forks of upstream BMAD skills — they are custom workflows built around ma-agents' sprint-status.yaml schema and AiAudit.md integration. The question is not "how much did we diverge from upstream?" but "do the newly customize.toml-capable upstream skills (`bmad-quick-dev`, `bmad-checkpoint-preview`) add capabilities worth pulling into our plugin?"
 
 ### What this story does NOT do
 
-- Does NOT implement any TOML support (Story 24.3)
+- Does NOT implement TOML support (Story 24.3)
 - Does NOT modify any SKILL.md files (Story 24.4)
-- Does NOT add customize.toml overlays (Stories 24.4, 24.7)
-
-This story is a research and documentation story only. No source files outside `architecture.md` and the Story 24.4 Dev Notes section should be modified.
-
-### Per-skill decision criteria
-
-**Migrate to customize.toml** — if our fork's delta consists only of: additional instructions, tone/framing changes, or parameter defaults that the TOML `override` and `append` mechanisms can express cleanly.
-
-**Retain fork** — if our fork's delta includes: structural reordering of steps, removal of upstream steps, or additions that TOML merge rules cannot express without losing behavioral fidelity.
-
-**Delete entirely** — if the skill is fully superseded by upstream v6.4.0 behavior and our delta is no longer needed.
+- Does NOT implement the persistent_facts replacement (Story 24.12 — spike only)
+- Does NOT assess `.agents/skills/` routing (Story 24.11 — separate concern)
 
 ### Reference Files
 
-- `_bmad-output/planning-artifacts/architecture.md` — Decision P5-1
-- `lib/bmad-extension/skills/bmad-sprint-planning/`
-- `lib/bmad-extension/skills/bmad-sprint-status/`
-- `lib/bmad-extension/skills/bmad-dev-story/`
-- `lib/bmad-extension/skills/bmad-code-review/`
-- `node_modules/bmad-method` — upstream v6.4.0 skill sources
+- `_bmad-output/planning-artifacts/architecture.md` — Decision P5-1 (TENTATIVE)
+- Story 24.1 Dev Notes — config format finding
+- `node_modules/bmad-method` — upstream v6.5.0 sources
+- `lib/bmad-extension/skills/bmad-sprint-planning/`, `bmad-sprint-status/`, `bmad-dev-story/`, `bmad-code-review/` — our custom workflow skills
+- `lib/installer.js` — marker-injection layer (context for Task 3)
 
 ## Change Log
 
 | Date | Version | Author | Description |
 |------|---------|--------|-------------|
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
+| 2026-04-27 | 1.1.0 | (pending) | Reframed as P5-1 gate; replaced 4-skill diff with custom workflow absorb assessment; added persistent_facts research question; per adversarial review findings 2, 4, 6 |
