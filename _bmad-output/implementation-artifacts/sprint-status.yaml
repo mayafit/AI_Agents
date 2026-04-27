@@ -25,7 +25,7 @@
 # Old Epic 17 stories (17.1-17.8) archived; replaced by 17.9-17.24.
 
 generated: 2026-03-15
-last_updated: 2026-04-27 — Epic 24 revised to v6.5.0 target; adversarial review applied; 11 stories (24.8+24.9 merged, 24.11+24.12 added).
+last_updated: "2026-04-28 — Second adversarial review applied: 24.12 serialized after 24.2; 24.6 AC0 gate added (bmad-customize existence); 24.7 AC0 spike gate added (customize.toml pipeline); 24.11 AC5 added (OBSOLETE_TOOL_SKILL_DIRS); 24.10 conditional major-bump rule + Kimi refs removed."
 project: agents
 project_key: NOKEY
 tracking_system: file-system
@@ -132,7 +132,9 @@ development_status:
   # assess .agents/skills/ cross-tool standard, spike persistent_facts as marker-injection replacement,
   # verify resolver + CI health, and cut a new ma-agents release.
   # Dependencies: Epic 22 must be fully delivered; Bug B1 must be fixed before Story 24.11; Epic 23 can run in parallel
-  # Execution order: B1 → 24.1 → 24.2 → 24.3 ‖ 24.4 ‖ 24.6 ‖ 24.7 ‖ 24.12 → 24.11 ‖ 24.8 → 24.10
+  # Execution order: B1 → 24.1 → 24.2 → [24.3 ‖ 24.4 ‖ 24.6 ‖ 24.7] → 24.12 → [24.11 ‖ 24.8] → 24.10
+  # Note: 24.12 is serialized AFTER 24.2 (uses 24.2's persistent_facts research) and BEFORE 24.11 (its finding
+  # informs whether 24.11's routing changes are temporary or permanent). 24.7 may no-op if Task 0 fails.
   epic-24: backlog
   24-1-bump-bmad-method-to-6-4-0-and-verify-fs-native-compat: backlog
   24-2-confirm-p5-1-architecture-decision: backlog

@@ -18,9 +18,11 @@ So that ma-agents automatically covers future platforms without per-tool registr
 
 4. **Given** Bug B1 (`--agent` flag not scoping installs) is fixed before this story runs, **When** I test per-tool install isolation with `--agent <tool>`, **Then** the routing changes from this story can be validated in isolation.
 
-5. **Given** any `lib/agents.js` changes, **When** `npm test` runs, **Then** exit code 0.
+5. **Given** any `lib/agents.js` changes that replace or remove a `skillsDir` path, **When** those changes are made, **Then** the old path is registered in the `OBSOLETE_TOOL_SKILL_DIRS` registry (established in Bug B2) so upgrade installs clean up stale skill directories. No routing change ships without a corresponding stale-dir cleanup entry.
 
-6. **Given** this story's findings, **When** it closes, **Then** a recommendation is committed to `architecture.md` as an addendum to Decision P5-1 — either "adopt `.agents/skills/` as primary path in follow-up epic" or "per-tool routing remains correct; standard path is additive only."
+6. **Given** any `lib/agents.js` changes, **When** `npm test` runs, **Then** exit code 0.
+
+7. **Given** this story's findings, **When** it closes, **Then** a recommendation is committed to `architecture.md` as an addendum to Decision P5-1 — either "adopt `.agents/skills/` as primary path in follow-up epic" or "per-tool routing remains correct; standard path is additive only."
 
 ## Tasks / Subtasks
 
@@ -48,20 +50,30 @@ So that ma-agents automatically covers future platforms without per-tool registr
 - [ ] 4.2 Assert ONLY the expected skill directory is populated
 - [ ] 4.3 Assert `.agents/skills/` is populated if the tool uses the standard
 
-### Task 5: Update architecture.md with recommendation (AC: 6)
+### Task 5: Register stale dirs in OBSOLETE_TOOL_SKILL_DIRS (AC: 5)
 
-- [ ] 5.1 Append a P5-1 addendum to `architecture.md`: routing findings and recommendation
-- [ ] 5.2 If simplification is warranted: note it as a follow-up epic candidate
+- [ ] 5.1 For each `skillsDir` path that was changed or removed in Task 2, locate the `OBSOLETE_TOOL_SKILL_DIRS` registry in `lib/installer.js` (or wherever B2 placed it)
+- [ ] 5.2 Add an entry per tool: `{ tool: '<tool-name>', dir: '<old-skillsDir-path>' }`
+- [ ] 5.3 Verify upgrade logic iterates `OBSOLETE_TOOL_SKILL_DIRS` and removes stale directories during install
 
-### Task 6: Run test suite (AC: 5)
+### Task 6: Update architecture.md with recommendation (AC: 7)
 
-- [ ] 6.1 `npm test` — exit 0
+- [ ] 6.1 Append a P5-1 addendum to `architecture.md`: routing findings and recommendation
+- [ ] 6.2 If simplification is warranted: note it as a follow-up epic candidate
+
+### Task 7: Run test suite (AC: 6)
+
+- [ ] 7.1 `npm test` — exit 0
 
 ## Dev Notes
 
 ### Prerequisite: Bug B1 must be fixed first
 
 Bug B1 (`--agent` flag not scoping the install) is a prerequisite for validating any per-tool routing change. Without a working `--agent` scope, it's impossible to verify that a routing change produces the correct isolated result. Schedule B1 fix before this story is activated.
+
+### Prerequisite: Bug B2 must be merged before activating Task 5
+
+Bug B2 (`OBSOLETE_TOOL_SKILL_DIRS` registry pattern) must be merged before this story's Task 5 is written, because this story extends B2's pattern. If B2 is not yet merged when this story is activated, Task 5 must establish the registry itself (treat it as the B2 implementation).
 
 ### Risk: skill duplication
 
@@ -89,3 +101,4 @@ If a platform migrated exclusively to `.agents/skills/` and ma-agents still inst
 | Date | Version | Author | Description |
 |------|---------|--------|-------------|
 | 2026-04-27 | 1.0.0 | (pending) | Story created per adversarial review finding 3 — .agents/skills/ cross-tool standard must be assessed before Epic 24 ships |
+| 2026-04-28 | 1.1.0 | (pending) | Added AC5 and Task 5 — every routing change must register old skillsDir in OBSOLETE_TOOL_SKILL_DIRS to prevent stale-dir debt. Per second adversarial review Finding 4. |

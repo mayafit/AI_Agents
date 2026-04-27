@@ -10,7 +10,9 @@ So that ma-agents users get automatic post-workflow audit entries without needin
 
 ## Acceptance Criteria
 
-1. **Given** BMAD v6.4.0's `on_complete` hook support in `customize.toml` (#2290), **When** the ma-agents plugin bundle is installed, **Then** a `customize.toml` is present that registers at minimum the `bmad-dev-story` workflow with an `on_complete` hook referencing the AiAudit.md append pattern.
+0. **Given** BMAD v6.5.0 is installed via the 24.1 bump, **When** I inspect BMAD's installer code in `node_modules/bmad-method` for how `--custom-source` is processed, **Then** I can confirm (yes/no) that BMAD's installer reads and applies a `customize.toml` found inside a `--custom-source` plugin bundle directory. If the answer is NO — this story closes as a no-op with a documented finding; no `customize.toml` is shipped.
+
+1. **Given** AC0 confirms that `customize.toml` is applied from the plugin bundle AND BMAD v6.4.0's `on_complete` hook support in `customize.toml` (#2290), **When** the ma-agents plugin bundle is installed, **Then** a `customize.toml` is present that registers at minimum the `bmad-dev-story` workflow with an `on_complete` hook referencing the AiAudit.md append pattern.
 
 2. **Given** the `on_complete` hook is registered, **When** a scratch install completes and the hook schema is inspected, **Then** the TOML is valid per BMAD v6.5.0's schema (no parse errors, no unknown keys).
 
@@ -24,7 +26,14 @@ So that ma-agents users get automatic post-workflow audit entries without needin
 
 ## Tasks / Subtasks
 
-### Task 1: Read BMAD v6.5.0 on_complete hook schema (prerequisite)
+### Task 0: Verify customize.toml pipeline delivery (AC: 0) — CRITICAL GATE
+
+- [ ] 0.1 Open `node_modules/bmad-method` — locate the installer entrypoint and trace how `--custom-source <dir>` is processed
+- [ ] 0.2 Search for any code that reads or processes `customize.toml` from a custom-source directory during install
+- [ ] 0.3 If BMAD's installer applies `customize.toml` from the plugin bundle: record the exact mechanism (which function, what path it expects) in Dev Notes and proceed to Task 1
+- [ ] 0.4 If `customize.toml` is NOT applied from the plugin bundle during install: close this story as a no-op; document finding: "customize.toml delivery mechanism not supported by --custom-source pipeline in v6.5.0"; do NOT create any customize.toml file
+
+### Task 1: Read BMAD v6.5.0 on_complete hook schema (prerequisite — only if Task 0 confirmed)
 
 - [ ] 1.1 Locate `on_complete` documentation in `node_modules/bmad-method` — find a reference `customize.toml` with `on_complete` entries
 - [ ] 1.2 Note the required keys: workflow identifier, hook type, target skill/action
@@ -61,7 +70,11 @@ So that ma-agents users get automatic post-workflow audit entries without needin
 
 ## Dev Notes
 
-### Why Small, not Medium
+### Why this story is spike-first
+
+The most critical open risk in Epic 24 is that `customize.toml` in a `--custom-source` plugin bundle is never applied by BMAD's installer. If that's the case, all the work of drafting a valid TOML is wasted. Task 0 is the gate. If Task 0 finds the pipeline works, the rest of this story executes normally. If Task 0 finds it doesn't work, the story closes with a documented finding — the `on_complete` hook goal moves to a future epic when the delivery mechanism is confirmed.
+
+### Why Small, not Medium (when Task 0 passes)
 
 BMAD v6.4.0 already wired `on_complete` hooks into 23 workflow terminal steps. The work here is shipping the right TOML config — not implementing hook machinery. If Task 1 reveals the hook schema is incompatible with our use case, the story closes with a documented finding and no code changes.
 
@@ -86,3 +99,4 @@ Story 24.12 (persistent_facts spike) answers whether the entire marker-injection
 |------|---------|--------|-------------|
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
 | 2026-04-27 | 1.1.0 | (pending) | Rewritten as Small — customize.toml config entry, not fork modification. No SKILL.md changes permitted. Per adversarial review findings 4, 5. |
+| 2026-04-28 | 1.2.0 | (pending) | Added AC0 and Task 0 — spike gate: verify BMAD's --custom-source pipeline processes customize.toml before authoring any TOML. No-op exit path added. Per second adversarial review Finding 1 (CRITICAL). |

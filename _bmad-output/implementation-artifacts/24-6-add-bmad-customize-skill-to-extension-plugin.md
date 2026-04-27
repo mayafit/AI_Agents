@@ -10,7 +10,9 @@ So that I can use the upstream-authored TOML customization workflow without need
 
 ## Acceptance Criteria
 
-1. **Given** a fresh clone of the ma-agents repo, **When** I inspect `lib/bmad-extension/skills/bmad-customize/`, **Then** a valid SKILL.md exists that matches the upstream v6.4.0 `bmad-customize` content.
+0. **Given** Story 24.1 has bumped `bmad-method` to v6.5.0 and run `npm install`, **When** I search `node_modules/bmad-method` for a `bmad-customize` skill file, **Then** the file exists at a known path before any copy step proceeds. If the file is absent after the bump, this story closes as a no-op with a documented finding — do not fabricate or transcribe content from external sources.
+
+1. **Given** AC0 confirms the skill exists and a fresh clone of the ma-agents repo, **When** I inspect `lib/bmad-extension/skills/bmad-customize/`, **Then** a valid SKILL.md exists that matches the upstream v6.5.0 `bmad-customize` content.
 
 2. **Given** the `MANIFEST.yaml` extension manifest, **When** I search for `bmad-customize`, **Then** an entry exists with an appropriate `applies_when` condition (e.g., when the user wants to customize BMAD workflows or override agent behavior).
 
@@ -20,16 +22,21 @@ So that I can use the upstream-authored TOML customization workflow without need
 
 ## Tasks / Subtasks
 
-### Task 1: Locate upstream bmad-customize SKILL.md (AC: 1)
+### Task 0: Confirm bmad-customize exists post-24.1 bump (AC: 0) — PREREQUISITE
 
-- [ ] 1.1 Search `node_modules/bmad-method` for the `bmad-customize` skill file (expected path: something like `node_modules/bmad-method/tools/skills/bmad-customize/SKILL.md` or a similar path)
-- [ ] 1.2 If found — copy it to `lib/bmad-extension/skills/bmad-customize/SKILL.md`
-- [ ] 1.3 If not found in node_modules — check the v6.4.0 BMAD repository at the upstream path; transcribe/download the content manually and note the source in Dev Notes
-- [ ] 1.4 Do NOT modify the skill content — it is upstream-authoritative
+- [ ] 0.1 Confirm Story 24.1 is complete and `node_modules/bmad-method` is at v6.5.0
+- [ ] 0.2 Run: `find node_modules/bmad-method -name "SKILL.md" -path "*bmad-customize*"` — must return a result
+- [ ] 0.3 If found: record the exact path in Dev Notes and proceed to Task 1
+- [ ] 0.4 If NOT found: close this story as no-op; document finding in Dev Notes — "bmad-customize not shipped in npm package at v6.5.0; skill cannot be included without external source"; do NOT proceed
+
+### Task 1: Copy upstream bmad-customize SKILL.md (AC: 1)
+
+- [ ] 1.1 Copy the file found in Task 0 to `lib/bmad-extension/skills/bmad-customize/SKILL.md`
+- [ ] 1.2 Do NOT modify the skill content — it is upstream-authoritative
 
 ### Task 2: Add MANIFEST.yaml entry (AC: 2)
 
-- [ ] 2.1 Open `MANIFEST.yaml` (or `lib/bmad-extension/MANIFEST.yaml`) — inspect an existing entry for format reference
+- [ ] 2.1 Open `MANIFEST.yaml` (or `lib/bmad-extension/MANIFEST.yaml`) — inspect an existing entry for format reference (only proceed if Task 0 confirmed the skill exists)
 - [ ] 2.2 Add entry for `bmad-customize`:
   - `name: bmad-customize`
   - `description: Guided workflow for authoring TOML customization overlays for BMAD skills`
@@ -61,9 +68,13 @@ The `bmad-customize` SKILL.md content is upstream-authoritative. Do not alter it
 - Does NOT modify the upstream SKILL.md content
 - Does NOT add any ma-agents-specific instructions to the skill
 
+### Prerequisite: Story 24.1 must be complete
+
+This story depends on the v6.5.0 bump in Story 24.1. Do not activate 24.6 until 24.1 is merged. The most likely failure mode is that `bmad-customize` ships only in the BMAD GitHub repo (not in the npm package) — Task 0 is the gate that catches this. If the skill is absent from the npm package, this story closes as a no-op and the bmad-customize integration is deferred to a follow-up epic.
+
 ### Finding source if not in node_modules
 
-If `bmad-customize` is not shipped inside the `node_modules/bmad-method` npm package (e.g., it lives only in the GitHub repo), document the exact source path used and commit a note in Dev Notes so future maintainers know where to find updates.
+If `bmad-customize` is not shipped inside the `node_modules/bmad-method` npm package, do NOT transcribe or download content from external sources. Close this story as no-op and document the finding so a future maintainer can revisit once BMAD ships the skill in the npm distribution.
 
 ### Reference Files
 
@@ -77,3 +88,4 @@ If `bmad-customize` is not shipped inside the `node_modules/bmad-method` npm pac
 | Date | Version | Author | Description |
 |------|---------|--------|-------------|
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
+| 2026-04-28 | 1.1.0 | (pending) | Added AC0 and Task 0 — prerequisite: confirm bmad-customize exists in node_modules post-24.1 bump before any copy step. No-op exit path added. Per second adversarial review Finding 2 (CRITICAL). |

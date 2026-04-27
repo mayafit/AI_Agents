@@ -12,11 +12,11 @@ So that the v6.4.0 integration ships with a clean quality gate and users know wh
 
 1. **Given** all Epic 24 stories (24.1-24.9) are merged to the feature branch, **When** `bmad-code-review` adversarial review is run on the combined diff, **Then** all critical and major findings are triaged and resolved before the release PR is opened; minor and info findings are documented.
 
-2. **Given** the review is complete, **When** I inspect `README.md` and `AGENTS.md`, **Then** they reference bmad-method 6.4.0, document Kimi Code as a supported tool, and mention TOML customization support.
+2. **Given** the review is complete, **When** I inspect `README.md` and `AGENTS.md`, **Then** they reference bmad-method 6.5.0 and mention TOML customization support if Story 24.7's Task 0 confirmed the pipeline works.
 
-3. **Given** Epic 24 adds a new tool target (Kimi Code) and a new customization layer (TOML), **When** I inspect `package.json`, **Then** the version is bumped by a minor increment from the previous release (e.g., 3.7.x → 3.8.0).
+3. **Given** Epic 24's changes, **When** I inspect `package.json`, **Then** the version is bumped appropriately: minor increment (e.g., 3.7.x → 3.8.0) if no user-facing routing paths changed; major increment (e.g., 3.7.x → 4.0.0) if Story 24.11 changed one or more `skillsDir` values for tools that existing users have already installed (routing changes break existing installations without a re-install).
 
-4. **Given** the version bump, **When** I inspect the CHANGELOG or release notes, **Then** a section covering Epic 24 changes is present, including: bmad-method 6.4.0 upgrade, Kimi Code support, TOML customization adoption, on_complete hooks pilot, and plugin resolver verification.
+4. **Given** the version bump, **When** I inspect the CHANGELOG or release notes, **Then** a section covering Epic 24 changes is present, including: bmad-method 6.5.0 upgrade, fs-native compatibility, TOML customization adoption (conditional on 24.7 Task 0 result), on_complete hooks pilot (conditional), plugin resolver verification, and `.agents/skills/` routing assessment findings.
 
 5. **Given** the release PR is opened, **When** CI runs, **Then** all CI jobs pass and the PR is human-reviewed before merge — no auto-merge.
 
@@ -33,39 +33,39 @@ So that the v6.4.0 integration ships with a clean quality gate and users know wh
 
 ### Task 2: Update README.md (AC: 2)
 
-- [ ] 2.1 Open `README.md` — locate BMAD version reference (currently 6.3.0)
-- [ ] 2.2 Update to 6.4.0
-- [ ] 2.3 Add `kimi-code` to the supported tools list/table if it is present elsewhere in the README
-- [ ] 2.4 Add a brief mention of TOML customization support (link to bmad-customize skill or upstream docs)
+- [ ] 2.1 Open `README.md` — locate BMAD version reference
+- [ ] 2.2 Update to 6.5.0
+- [ ] 2.3 If Story 24.7 Task 0 confirmed customize.toml delivery: add a brief mention of TOML customization support (link to bmad-customize skill or upstream docs)
+- [ ] 2.4 If Story 24.11 changed any routing paths: add an upgrade note explaining that re-install may be needed
 
 ### Task 3: Update AGENTS.md (AC: 2)
 
 - [ ] 3.1 Open `AGENTS.md` — locate the tool list or supported agents section
-- [ ] 3.2 Add Kimi Code entry if missing
-- [ ] 3.3 Confirm BMAD version reference is updated to 6.4.0
+- [ ] 3.2 Confirm BMAD version reference is updated to 6.5.0
+- [ ] 3.3 If Story 24.11 changed routing for any registered tool: update that tool's entry
 
 ### Task 4: Bump package.json version (AC: 3)
 
 - [ ] 4.1 Open `package.json` — check current version
-- [ ] 4.2 Bump the minor version (x.Y.0 format) — e.g., if current is 3.7.x, new version is 3.8.0
-- [ ] 4.3 Confirm no other files hardcode the package version (search for the old version string)
+- [ ] 4.2 Determine bump level: if Story 24.11 changed any `skillsDir` → **major bump** (x.Y.0 → (x+1).0.0); otherwise → minor bump (x.Y.0 → x.(Y+1).0)
+- [ ] 4.3 Apply the bump
+- [ ] 4.4 Confirm no other files hardcode the package version (search for the old version string)
 
 ### Task 5: Draft release notes (AC: 4)
 
 - [ ] 5.1 Open `CHANGELOG.md` (or create a release notes section if the project uses a different format)
 - [ ] 5.2 Add an entry for the new version with the following sections:
-  - **BMAD v6.4.0 upgrade** — dependency bump, fs-native compatibility
-  - **Kimi Code support** — new `--tools kimi-code` option, `.kimi/skills/` deployment
-  - **TOML customization** — customize.toml overlays for forked skills, bmad-customize skill
-  - **on_complete hooks** — pilot integration with AiAudit.md for bmad-dev-story
-  - **Plugin resolver** — verified compatibility with v6.4.0 precedence fix
-  - **CI** — Kimi Code added to multi-tool smoke matrix
+  - **BMAD v6.5.0 upgrade** — dependency bump, fs-native compatibility, 42-platform baseline
+  - **TOML customization** (conditional) — customize.toml delivery confirmed; bmad-customize skill; on_complete hooks pilot
+  - **Routing assessment** — findings from Story 24.11: `.agents/skills/` standard impact; any skillsDir changes
+  - **Plugin resolver** — verified compatibility with v6.5.0 precedence order
+  - **persistent_facts spike** — decision record from Story 24.12 (marker-injection future or exit)
 
 ### Task 6: Open release PR (AC: 5)
 
 - [ ] 6.1 Push the feature branch
 - [ ] 6.2 Open a PR against main with the Epic 24 release title
-- [ ] 6.3 Confirm CI passes on all jobs (multi-tool smoke including kimi-code, offline gate, bundle-drift)
+- [ ] 6.3 Confirm CI passes on all jobs (multi-tool smoke, offline gate, bundle-drift)
 - [ ] 6.4 Request human review — do NOT merge without explicit approval
 - [ ] 6.5 After human approval, merge
 
@@ -82,15 +82,15 @@ This story must not begin until ALL of 24.1-24.9 are merged to the feature branc
 
 ### Semver rationale
 
-Adding Kimi Code (new user-facing feature) and adopting TOML customization (new behavior mechanism) both warrant a minor version bump. A patch bump would be insufficient; a major bump would require a breaking change that Epic 24 does not introduce.
+A minor bump is the default for Epic 24 (new BMAD version, new customization mechanism). However, if Story 24.11 finds that one or more of the 5 registered tools has migrated exclusively to `.agents/skills/` and `lib/agents.js` must update those `skillsDir` values, that is a breaking change for existing users who have already installed ma-agents to the old path — a re-install is required. In that case the bump **must** be major. Task 4 makes this determination after Story 24.11 results are known.
 
 ### Adversarial review scope
 
 The adversarial review should focus on:
 - Security: does the TOML parsing introduce any injection risk?
-- Correctness: are the customize.toml overlays semantically correct for v6.4.0?
-- Completeness: are any Kimi Code edge cases (e.g., space in path, Windows vs. Unix path separator) missed?
-- Regression: does anything in the Epic 24 diff inadvertently alter behavior for existing tools?
+- Correctness: are any customize.toml overlays semantically correct for v6.5.0?
+- Completeness: are any routing edge cases (e.g., space in path, Windows vs. Unix path separator) missed for tools whose skillsDir changed?
+- Regression: does anything in the Epic 24 diff inadvertently alter behavior for existing tools that did NOT change?
 
 ### Reference Files
 
@@ -106,3 +106,4 @@ The adversarial review should focus on:
 | Date | Version | Author | Description |
 |------|---------|--------|-------------|
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
+| 2026-04-28 | 1.1.0 | (pending) | Removed Kimi Code references (Kimi not in scope for ma-agents). Added conditional major-bump rule for routing changes in 24.11. Updated release notes sections to reflect actual Epic 24 scope. Per second adversarial review Findings 6 and cleanup. |
