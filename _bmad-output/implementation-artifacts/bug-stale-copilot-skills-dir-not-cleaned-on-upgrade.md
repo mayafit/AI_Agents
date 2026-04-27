@@ -1,6 +1,7 @@
 ---
 type: bug
 severity: low
+status: ready-for-dev
 title: Stale .github/copilot/skills/ directory not cleaned on upgrade after F2b routing fix
 ---
 
@@ -84,3 +85,65 @@ F2b's PR #70 corrected the `skillsDir` value in `lib/agents.js` and verified the
 - Bundle for fix consideration with Story 22.2's `RENAMED_SKILL_IDS` pattern — same shape of problem
 - Discoverable by sprint workflows via glob: `_bmad-output/implementation-artifacts/bug-*.md`
 - To add to a sprint, run `/add-to-sprint`
+
+## Dev Notes
+
+### Project Structure Notes
+
+Key files for this fix:
+
+- `lib/installer.js` — primary implementation site. Pattern to follow:
+  - `RETIRED_SKILL_IDS` (line ~1542) and `RENAMED_SKILL_IDS` (line ~1551) are frozen arrays of obsolete skill IDs
+  - `OBSOLETE_SKILL_IDS` (line ~1561) is their union — the sweep target
+  - `migrateRetiredSkills(options)` (line ~1563) iterates all agent install paths and removes obsolete entries from `.ma-agents.json` + disk
+  - New constant `OBSOLETE_TOOL_SKILL_DIRS` should follow the same pattern: a frozen array of `{ obsolete: string, replacedBy: string, sinceVersion: string }` objects
+  - Cleanup logic should mirror the `OBSOLETE_SKILL_IDS` sweep but operate on **directories**, not skill IDs inside `.ma-agents.json`
+  - The cleanup function should be called from `installSkill()` (line ~1247) and exported for test use
+
+- `lib/agents.js` — registry showing current `skillsDir` values. Copilot's corrected path is `.github/skills` (line ~91). The stale path is `.github/copilot/skills`.
+
+- `lib/bmad.js` — `runMigration()` and `installBmad()`/`updateBmad()` are alternative call sites if the cleanup should also run on BMAD install/update flows.
+
+Naming conventions:
+- Follow `OBSOLETE_SKILL_IDS` → name the new export `OBSOLETE_TOOL_SKILL_DIRS`
+- Export the cleanup function as `migrateObsoleteToolDirs` or similar, alongside `migrateRetiredSkills` in `module.exports`
+- Story 24.11 AC5 will extend this registry — define it in a way that new entries can be added trivially
+
+### Testing Requirements
+
+Existing tests to check before submitting:
+- `test/retired-skills-migration.test.js` — covers `migrateRetiredSkills`; the new tool-dir migration should follow the same fixture pattern
+- `test/rename-migration.test.js` — covers the RENAMED_SKILL_IDS sweep
+- `test/gitignore-plugin-stage.test.js` — example of testing .gitignore-adjacent file system changes
+
+New test required by this fix (add to `test/retired-skills-migration.test.js` or new `test/obsolete-tool-dirs.test.js`):
+1. Pre-populate `.github/copilot/skills/` with a marker file in a temp project
+2. Populate `.github/skills/` with content (simulates a post-F2b install)
+3. Call the cleanup function
+4. Assert `.github/copilot/skills/` is removed
+5. Assert `.github/skills/` is intact
+6. Run the cleanup again — assert idempotent (no error, no change)
+7. Case: obsolete dir exists but replacement dir is empty — assert obsolete dir is preserved and a warning is logged
+
+How to run tests: `npm test` in `d:\Code\agents`
+
+### What this story does NOT do
+
+- Does NOT change any `skillsDir` registry entries in `lib/agents.js` — only cleans up the old path
+- Does NOT handle skill ID migrations (that is `migrateRetiredSkills` territory)
+- Does NOT assess `.agents/skills/` routing (Story 24.11)
+- Does NOT fix the `--agent` flag scope bug (Bug B1)
+
+## Dev Agent Record
+
+### Agent Model Used
+(to be filled by implementing agent)
+
+### Debug Log References
+(none)
+
+### Completion Notes List
+(none — story not yet implemented)
+
+### File List
+(to be filled by implementing agent)

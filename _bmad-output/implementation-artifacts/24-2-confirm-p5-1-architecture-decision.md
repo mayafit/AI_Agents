@@ -1,6 +1,6 @@
 # Story 24.2: Finalize Architecture Decision P5-1
 
-Status: backlog
+Status: ready-for-dev
 
 ## Story
 
@@ -77,9 +77,57 @@ The 4 ma-agents workflow skills (sprint-planning, sprint-status, dev-story, code
 - `lib/bmad-extension/skills/bmad-sprint-planning/`, `bmad-sprint-status/`, `bmad-dev-story/`, `bmad-code-review/` — our custom workflow skills
 - `lib/installer.js` — marker-injection layer (context for Task 3)
 
+## Dev Notes (continued)
+
+### Project Structure Notes
+
+Files to read / write in this story:
+
+- `_bmad-output/planning-artifacts/architecture.md` — the target document. Find Decision P5-1 by searching for `P5-1`. The TENTATIVE marker appears in the heading. Sub-decision A is the YAML/TOML config format assumption. This file is in the **planning worktree** at `d:\Code\agents-epic-24-bmad-640-planning\_bmad-output\planning-artifacts\architecture.md` — NOT in the main codebase.
+- `node_modules/bmad-method` — source of upstream v6.5.0 skill files. After Story 24.1 bumps and runs `npm install`, this directory contains the full upstream source. Search for `bmad-quick-dev` and `bmad-checkpoint-preview` skill directories here.
+- `lib/bmad-extension/skills/` — contains the 4 custom ma-agents workflow skills: `bmad-sprint-planning/`, `bmad-sprint-status/`, `bmad-dev-story/`, `bmad-code-review/`. Each has a `SKILL.md` and `bmad-skill-manifest.yaml`.
+- `lib/installer.js` — marker-injection layer for context in Task 3. Key functions: `composeInstructionBlock()` (line ~113), `markdownMarkersMerger()` (line ~769), `stampExtraInstructionTemplates()` (line ~857). Templates live in `lib/templates/` — specifically `instruction-block-universal.template.md`.
+- Story 24.1 Dev Notes — the output of 24.1's Task 4 (config format finding). This is in the same story file at `_bmad-output/implementation-artifacts/24-1-bump-bmad-method-to-6-4-0-and-verify-fs-native-compat.md`.
+
+Naming conventions for architecture.md edits:
+- Decision heading format: `### Decision P5-1: <Title>` with sub-decisions as `**Sub-decision A:**` etc.
+- Findings format used in existing decisions: bulleted list with **bold** labels, rationale paragraph
+
+### Testing Requirements
+
+This story produces only documentation changes (architecture.md, story Dev Notes updates). No code changes means no new test cases.
+
+However, if AC3 of Story 24.2 results in a "YES, persistent_facts can replace marker injection" finding, Story 24.12 will need tests. That is deferred to 24.12.
+
+Test verification for this story: none — all acceptance criteria are verified by document inspection.
+
+How to run tests (for sanity check after any incidental file changes): `npm test` in `d:\Code\agents`
+
+### What this story does NOT do
+
+- Does NOT implement TOML support (Story 24.3)
+- Does NOT modify any SKILL.md files (Story 24.4)
+- Does NOT implement the persistent_facts replacement (Story 24.12 — spike only)
+- Does NOT assess `.agents/skills/` routing (Story 24.11 — separate concern)
+
 ## Change Log
 
 | Date | Version | Author | Description |
 |------|---------|--------|-------------|
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
 | 2026-04-27 | 1.1.0 | (pending) | Reframed as P5-1 gate; replaced 4-skill diff with custom workflow absorb assessment; added persistent_facts research question; per adversarial review findings 2, 4, 6 |
+| 2026-04-28 | 1.2.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, exact file paths, testing requirements |
+
+## Dev Agent Record
+
+### Agent Model Used
+(to be filled by implementing agent)
+
+### Debug Log References
+(none)
+
+### Completion Notes List
+(none — story not yet implemented)
+
+### File List
+(to be filled by implementing agent)

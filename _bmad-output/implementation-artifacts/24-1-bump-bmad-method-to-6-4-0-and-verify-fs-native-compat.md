@@ -1,6 +1,6 @@
 # Story 24.1: Bump bmad-method to 6.5.0 and Audit fs-extra Compatibility
 
-Status: backlog
+Status: ready-for-dev
 
 ## Story
 
@@ -93,9 +93,67 @@ The most important output of Task 4 is: "Does `_bmad/bmm/config.yaml` still exis
 - **FR196:** The ma-agents npm package bundles bmad-method v6.5.0 as a direct dependency
 - **NFR20:** The bundled BMAD cache must be version-pinned (v6.5.0 current)
 
+## Dev Notes (continued)
+
+### Project Structure Notes
+
+Exact file locations for each task:
+
+- `package.json` (repo root) — line containing `"bmad-method": "6.3.0"` is the only dependency pin to change. Current version is `3.7.0` for ma-agents itself.
+- `lib/bmad.js` — `BMAD_TARGET_VERSION` constant is at line ~1534: `const BMAD_TARGET_VERSION = '6.3.0';` — change to `'6.5.0'`
+- `lib/bmad.js` fs-extra call sites: `stagePlugin()` uses `fs.existsSync`, `fs.lstatSync`, `fs.statSync`, `fs.removeSync`, `fs.copySync`; `cleanupStage()` uses `fs.existsSync`, `fs.lstatSync`, `fs.unlinkSync`, `fs.removeSync`; `runUpdateStep()` and surrounding functions use `fs.readFileSync`, `fs.writeFileSync`, `fs.ensureDir`, `fs.outputFile`, `fs.pathExists`, `fs.copy`, `fs.remove`, `fs.rename`
+- `lib/installer.js` fs-extra call sites: `ensurePluginStageIgnored()`, `ensureBmadOutputTracked()`, `performInstall()`, `generateSkillsManifest()`, `markdownMarkersMerger()`, and `updateAgentInstructions()` all use fs-extra APIs (`fs.outputFile`, `fs.ensureDir`, `fs.existsSync`, `fs.readFileSync`, `fs.writeFileSync`, `fs.remove`, `fs.readFile`, `fs.writeFile`, `fs.copy`, `fs.rename`, `fs.pathExists`)
+- `lib/bmad-extension-plugin/skills/module.yaml` — contains schema version comment `# BMAD v6.3.0 schema` — update to `# BMAD v6.5.0 schema`
+- `scripts/build-plugin.js` — `SRC_DIR = lib/bmad-extension/`, `OUT_DIR = lib/bmad-extension-plugin/`; requires `module.yaml`, `module-help.csv`, `.claude-plugin/marketplace.json.template`
+
+**fs-extra vs node:fs boundary classification guide:**
+- `fs.ensureDir(path)` → node:fs equivalent: `fs.mkdir(path, { recursive: true })`
+- `fs.outputFile(path, data)` → `fs.mkdir(dirname, {recursive:true})` then `fs.writeFile(path, data)`
+- `fs.pathExists(path)` → `fs.access(path).then(()=>true).catch(()=>false)`
+- `fs.remove(path)` → `fs.rm(path, { recursive: true, force: true })`
+- `fs.copy(src, dst)` → `fs.cp(src, dst, { recursive: true })` (Node 16.7+)
+- `fs.readFileSync`, `fs.writeFileSync`, `fs.existsSync`, `fs.readdirSync` — identical in both
+
+### Testing Requirements
+
+Existing test files that cover the affected code:
+- `test/bmad-version-bump.test.js` — directly tests version bump mechanics and `BMAD_TARGET_VERSION`
+- `test/build-plugin.test.js` — tests `scripts/build-plugin.js` output
+- `test/plugin-manifests.test.js` — tests plugin bundle structure and `module.yaml`
+- `test/integration-verification.test.js` — end-to-end install flow
+- `test/offline-recompile.test.js` — validates offline/air-gapped install behavior
+
+New tests required:
+- `test/bmad-version-bump.test.js` — add assertion that `BMAD_TARGET_VERSION === '6.5.0'` and `package.json` `dependencies['bmad-method'] === '6.5.0'`
+- If any fs-extra API is migrated to node:fs, add/update fixtures in the relevant test for the changed function
+
+How to run tests: `npm test` in `d:\Code\agents` (executes all ~50 test files; takes ~30s)
+
+### What this story does NOT do
+
+- Does NOT implement TOML config support (Story 24.3 — conditional on findings here)
+- Does NOT reconcile or absorb custom workflow skills (Story 24.4)
+- Does NOT add new CI matrix entries (Story 24.8)
+- Does NOT assess `.agents/skills/` routing (Story 24.11)
+
 ## Change Log
 
 | Date | Version | Author | Description |
 |------|---------|--------|-------------|
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
 | 2026-04-27 | 1.1.0 | (pending) | Bump target changed to v6.5.0; reclassified Medium; added fs-extra audit tasks and module.yaml schema diff per adversarial review findings 1, 7, 10 |
+| 2026-04-28 | 1.2.0 | (pending) | Enhanced to ready-for-dev: added exact file paths, line references, fs-extra boundary classification guide, testing requirements |
+
+## Dev Agent Record
+
+### Agent Model Used
+(to be filled by implementing agent)
+
+### Debug Log References
+(none)
+
+### Completion Notes List
+(none — story not yet implemented)
+
+### File List
+(to be filled by implementing agent)

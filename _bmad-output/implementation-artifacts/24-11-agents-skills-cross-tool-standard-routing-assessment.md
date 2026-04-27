@@ -1,6 +1,6 @@
 # Story 24.11: Assess .agents/skills/ Cross-Tool Standard Impact on ma-agents Routing
 
-Status: backlog
+Status: ready-for-dev
 
 ## Story
 
@@ -96,9 +96,73 @@ If a platform migrated exclusively to `.agents/skills/` and ma-agents still inst
 - `lib/installer.js` — install loop that iterates agents
 - `architecture.md` — P5-1 addendum target
 
+## Dev Notes (continued)
+
+### Project Structure Notes
+
+Files to read and potentially modify:
+
+- `lib/agents.js` — the per-tool routing registry. Current `skillsDir` values for the 5 registered flagship tools:
+  - `claude-code`: `.claude/skills`
+  - `copilot`: `.github/skills` (updated in F2b)
+  - `cline`: `.cline/skills`
+  - `roo-code`: `.roo/skills`
+  - `kilocode`: `.kilocode/skills`
+  - The `getProjectPath()` function returns `path.join(process.cwd(), ...<skillsDir components>)` for each tool. If `skillsDir` changes, `getProjectPath()` must also be updated (they are redundant — both must match).
+  - `getBmadPlatformCode(agentId)` maps ma-agents IDs to BMAD platform codes (for `--tools` parameter). Copilot uses `'github-copilot'`, Roo Code uses `'roo'`. If a tool's routing changes, verify the BMAD platform code is still correct.
+
+- `lib/installer.js` — `OBSOLETE_TOOL_SKILL_DIRS` registry (created by Bug B2 before this story runs). Look for it near `OBSOLETE_SKILL_IDS` (line ~1561). The `migrateRetiredSkills` function at line ~1563 is the model for iterating and cleaning up. For any `skillsDir` change, add to `OBSOLETE_TOOL_SKILL_DIRS`.
+
+- `node_modules/bmad-method` — BMAD v6.5.0 platform directory. Search for platform-codes.yaml or equivalent: `find node_modules/bmad-method -name "platform-codes.yaml" -o -name "platforms.yaml"`. This file maps platform IDs to their skill directories. Cross-reference each of the 5 tool platform codes (see agents.js) against this file.
+
+- `_bmad-output/planning-artifacts/architecture.md` — P5-1 section where the routing assessment addendum goes (Task 6). The planning worktree version of this file.
+
+**Platform codes to check in BMAD's platform-codes.yaml:**
+| ma-agents tool | BMAD platform code | Previous skillsDir |
+|---|---|---|
+| claude-code | `claude-code` | `.claude/skills` |
+| copilot | `github-copilot` | `.github/skills` |
+| cline | `cline` | `.cline/skills` |
+| roo-code | `roo` | `.roo/skills` |
+| kilocode | `kilo` | `.kilocode/skills` |
+
+### Testing Requirements
+
+Existing tests to check:
+- `test/routing-parity.test.js` — verifies per-tool routing is consistent between ma-agents and BMAD platform codes; this is the primary test to update if any `skillsDir` changes
+- `test/create-agent.test.js` — tests agent creation flow including path resolution
+- `test/integration-verification.test.js` — end-to-end install; add per-tool isolation assertions using the fixed B1 `--agent` scoping
+
+New tests required if any `skillsDir` changes:
+1. Update `test/routing-parity.test.js` to assert the new path
+2. Add a test in `test/retired-skills-migration.test.js` (or `test/obsolete-tool-dirs.test.js` if created by B2) verifying that the old `skillsDir` path is cleaned up on upgrade
+
+How to run tests: `npm test` in `d:\Code\agents`
+
+### What this story does NOT do
+
+- Does NOT migrate the full routing architecture to `.agents/skills/` (that's a follow-up epic if Task 3 recommends it)
+- Does NOT add new platforms — only evaluates the 5 already registered
+- Does NOT touch the plugin bundle structure
+
 ## Change Log
 
 | Date | Version | Author | Description |
 |------|---------|--------|-------------|
 | 2026-04-27 | 1.0.0 | (pending) | Story created per adversarial review finding 3 — .agents/skills/ cross-tool standard must be assessed before Epic 24 ships |
 | 2026-04-28 | 1.1.0 | (pending) | Added AC5 and Task 5 — every routing change must register old skillsDir in OBSOLETE_TOOL_SKILL_DIRS to prevent stale-dir debt. Per second adversarial review Finding 4. |
+| 2026-04-28 | 1.2.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, current skillsDir table, platform code mapping, exact function references, testing requirements |
+
+## Dev Agent Record
+
+### Agent Model Used
+(to be filled by implementing agent)
+
+### Debug Log References
+(none)
+
+### Completion Notes List
+(none — story not yet implemented)
+
+### File List
+(to be filled by implementing agent)

@@ -1,6 +1,6 @@
 # Story 24.3: Implement TOML Config Support in Installer (Conditional on 24.2)
 
-Status: backlog
+Status: ready-for-dev
 
 ## Story
 
@@ -86,8 +86,54 @@ For writing, there is no stdlib writer before 3.11+ (and even 3.11 only reads). 
 - Story 24.1 Dev Notes — config format finding
 - Architecture: `_bmad-output/planning-artifacts/architecture.md` (Decision P5-1, Sub-decision A)
 
+## Dev Notes (continued)
+
+### Project Structure Notes
+
+Files to read/modify if the conditional path (TOML migration) is taken:
+
+- `lib/bmad.js` — `CANONICAL_CONFIG_REL` constant is at line ~45: `const CANONICAL_CONFIG_REL = path.join(BMAD_DIR, 'bmm', 'config.yaml');`. If TOML, change `'config.yaml'` to `'config.toml'` (or whatever path 24.1 finds). `LEGACY_MANIFEST_REL` (line ~46) is kept as a detection marker — do not touch it.
+- `lib/installer.js` — `resolveBmadOutputDirs(projectRoot)` function (line ~174) reads `configPath` from `CANONICAL_CONFIG_REL` and uses a regex-based YAML scalar scanner. If TOML, the `scanScalar()` helper must be replaced with TOML parsing. The `yaml` package (from `package.json`) is already a dependency — check if it can parse TOML or if `toml-node` / `@iarna/toml` is needed. Note: `package.json` already lists `"yaml": "^2.8.2"` and `"js-yaml": "^4.1.1"` but neither parses TOML.
+- `lib/bmad-init.py` (if it exists at repo root or `scripts/`) — Python config read/write logic. Verify existence with `ls scripts/` before attempting edits.
+
+No-op confirmation path: If Task 1.2 determines `config.yaml` still exists in v6.5.0, document the finding in Dev Notes and mark story done. The only file change in that case is adding a one-line note to the Dev Notes section.
+
+TOML parsing in Node.js: The `yaml` package does NOT parse TOML. For Node.js, BMAD's own installer likely uses `@iarna/toml` or the built-in approach. Check `node_modules/bmad-method/package.json` for its TOML dependency before adding a new one — reusing the same library avoids version conflicts.
+
+### Testing Requirements
+
+If no-op (config.yaml still present): no new tests needed.
+
+If TOML migration is needed:
+- `test/config-storage.test.js` — covers config read/write; add a fixture with a `config.toml` file and assert `resolveBmadOutputDirs()` reads it correctly
+- `test/config-path-migration.test.js` — covers config path transitions; add TOML variant test case
+- `test/integration-verification.test.js` — end-to-end install; add scratch install that checks `_bmad/bmm/config.toml` is read correctly
+
+How to run tests: `npm test` in `d:\Code\agents`
+
+### What this story does NOT do
+
+- Does NOT migrate any skill SKILL.md files (Story 24.4)
+- Does NOT implement customize.toml overlays (Stories 24.4, 24.7)
+- Does NOT change how BMAD is invoked from Node.js beyond the config path constant
+
 ## Change Log
 
 | Date | Version | Author | Description |
 |------|---------|--------|-------------|
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
+| 2026-04-28 | 1.1.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, exact constant locations, TOML library guidance, testing requirements |
+
+## Dev Agent Record
+
+### Agent Model Used
+(to be filled by implementing agent)
+
+### Debug Log References
+(none)
+
+### Completion Notes List
+(none — story not yet implemented)
+
+### File List
+(to be filled by implementing agent)

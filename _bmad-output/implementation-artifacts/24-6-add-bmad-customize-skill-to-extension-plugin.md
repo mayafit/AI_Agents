@@ -1,6 +1,6 @@
 # Story 24.6: Add bmad-customize Skill to Extension Plugin
 
-Status: backlog
+Status: ready-for-dev
 
 ## Story
 
@@ -83,9 +83,63 @@ If `bmad-customize` is not shipped inside the `node_modules/bmad-method` npm pac
 - `MANIFEST.yaml` — extension skill manifest
 - `scripts/build-plugin.js` — plugin bundler
 
+## Dev Notes (continued)
+
+### Project Structure Notes
+
+File locations for this story:
+
+- `node_modules/bmad-method` — search for `bmad-customize`: `find node_modules/bmad-method -name "SKILL.md" -path "*bmad-customize*"`. Only proceed if found — if absent, close as no-op per AC0.
+- `lib/bmad-extension/skills/bmad-customize/` — destination directory to create. Follow the pattern of existing skills (e.g., `lib/bmad-extension/skills/sre-check-system-status/` or any `mil498-*` skill):
+  - `SKILL.md` — copied verbatim from upstream (no modifications)
+  - `bmad-skill-manifest.yaml` — create following the pattern in other skill directories (fields: `name`, `description`, `version`, `category`)
+- `lib/bmad-extension/MANIFEST.yaml` (if it exists) or `lib/bmad-extension/skills/module.yaml` — the skill registry. Check which file lists all extension skills and add the entry there. `module.yaml` is the BMAD plugin manifest; the ma-agents MANIFEST.yaml is a separate file. Add to both if both exist.
+- `scripts/build-plugin.js` — no changes expected; the build script auto-discovers `lib/bmad-extension/skills/` subdirectories. Just run it and verify output.
+- `lib/bmad-extension-plugin/` — the committed build output. After running `build-plugin.js`, commit the diff in this directory.
+
+**MANIFEST.yaml entry format** (inspect an existing entry in `lib/bmad-extension/MANIFEST.yaml`):
+```yaml
+  - id: bmad-customize
+    file: bmad-customize/SKILL.md
+    description: Guided workflow for authoring TOML customization overlays for BMAD skills
+    applies_when:
+      - when the user wants to customize BMAD workflow behavior or override default agent instructions
+```
+
+### Testing Requirements
+
+Existing tests to run:
+- `test/build-plugin.test.js` — add assertion that `bmad-customize` appears in plugin output (or verify test auto-discovers all skills)
+- `test/plugin-manifests.test.js` — if it checks the skills list, update expected count
+
+If no-op (skill not in node_modules): run `npm test` to confirm nothing broke; no new test cases.
+
+How to run tests: `npm test` in `d:\Code\agents`
+
+### What this story does NOT do
+
+- Does NOT write or apply any customize.toml overlays (Stories 24.4, 24.7)
+- Does NOT modify the upstream SKILL.md content
+- Does NOT add any ma-agents-specific instructions to the skill
+
 ## Change Log
 
 | Date | Version | Author | Description |
 |------|---------|--------|-------------|
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
 | 2026-04-28 | 1.1.0 | (pending) | Added AC0 and Task 0 — prerequisite: confirm bmad-customize exists in node_modules post-24.1 bump before any copy step. No-op exit path added. Per second adversarial review Finding 2 (CRITICAL). |
+| 2026-04-28 | 1.2.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, exact file paths, MANIFEST entry format, testing requirements |
+
+## Dev Agent Record
+
+### Agent Model Used
+(to be filled by implementing agent)
+
+### Debug Log References
+(none)
+
+### Completion Notes List
+(none — story not yet implemented)
+
+### File List
+(to be filled by implementing agent)

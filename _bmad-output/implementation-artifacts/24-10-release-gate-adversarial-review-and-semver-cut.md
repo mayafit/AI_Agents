@@ -1,6 +1,6 @@
 # Story 24.10: Release Gate — Adversarial Code Review and Semver Cut
 
-Status: backlog
+Status: ready-for-dev
 
 ## Story
 
@@ -101,9 +101,57 @@ The adversarial review should focus on:
 - `CHANGELOG.md`
 - `.github/workflows/` — CI suite
 
+## Dev Notes (continued)
+
+### Project Structure Notes
+
+Files touched in this story:
+
+- `README.md` (repo root) — search for `6.3.0` to locate the BMAD version reference; update to `6.5.0`
+- `AGENTS.md` (repo root, if it exists — check `ls` at repo root) — update BMAD version reference
+- `package.json` (repo root) — `"version"` field currently `"3.7.0"`. Minor bump → `"3.8.0"`; major bump → `"4.0.0"`. The major bump rule: if Story 24.11 changed any `skillsDir` value in `lib/agents.js`, bump major; otherwise bump minor.
+- `CHANGELOG.md` or release notes file (check repo root for `CHANGELOG.md`, `HISTORY.md`, or `RELEASES.md`) — add the new version entry. If no dedicated changelog exists, add a `## What's New` section to `README.md`.
+- All files changed in Epic 24 diff — the `bmad-code-review` adversarial review runs against this full diff. Use `git diff main..HEAD` (or against the Epic 22 merge base) to get the scope.
+
+**Semver decision logic:**
+1. Check if Story 24.11 is complete — open its Dev Notes or implementation file
+2. If `lib/agents.js` has any `skillsDir` changes → major bump (`3.7.x → 4.0.0`)
+3. Otherwise → minor bump (`3.7.x → 3.8.0`)
+4. No patch bump — Epic 24 always warrants at minimum a minor version
+
+### Testing Requirements
+
+This story does not add new source code — it is a quality gate and documentation story. No new test files needed.
+
+Pre-release verification:
+- All CI jobs must pass before opening the release PR (verified by Story 24.8)
+- `npm test` in `d:\Code\agents` must exit 0
+
+How to run the adversarial review: invoke the `/bmad-code-review` skill (available via Claude Code) against the Epic 24 diff, or run it through the BMAD agent.
+
+### What this story does NOT do
+
+- Does NOT implement any new features
+- Does NOT retroactively plan or document architecture decisions (Winston handles architecture.md)
+
 ## Change Log
 
 | Date | Version | Author | Description |
 |------|---------|--------|-------------|
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
 | 2026-04-28 | 1.1.0 | (pending) | Removed Kimi Code references (Kimi not in scope for ma-agents). Added conditional major-bump rule for routing changes in 24.11. Updated release notes sections to reflect actual Epic 24 scope. Per second adversarial review Findings 6 and cleanup. |
+| 2026-04-28 | 1.2.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, semver decision logic, file locations |
+
+## Dev Agent Record
+
+### Agent Model Used
+(to be filled by implementing agent)
+
+### Debug Log References
+(none)
+
+### Completion Notes List
+(none — story not yet implemented)
+
+### File List
+(to be filled by implementing agent)

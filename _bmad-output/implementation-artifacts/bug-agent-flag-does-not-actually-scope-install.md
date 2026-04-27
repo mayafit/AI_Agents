@@ -1,6 +1,7 @@
 ---
 type: bug
 severity: low
+status: ready-for-dev
 title: --agent flag does not actually scope the install
 ---
 
@@ -81,3 +82,56 @@ Likely (2) — the install pipeline iterates `getAllAgents()` unconditionally ra
 - Discovered during Story 22.10 (PR #66) and confirmed in the Epic 22 adversarial review
 - Discoverable by sprint workflows via glob: `_bmad-output/implementation-artifacts/bug-*.md`
 - To add to a sprint, run `/add-to-sprint`
+
+## Dev Notes
+
+### Project Structure Notes
+
+Key files for this fix:
+
+- `bin/cli.js` — `parseArgs()` at line ~232 parses `--agent` into `agentFlag`; `installWizard` receives `preselectedAgents` (line ~1158-1162). The bug: `agentFlag` is wired into the skills-only install path (line ~1212 `const targetAgents = agentFlag ? [agentFlag] : agentIds`) but the BMAD install path (`installBmad`/`updateBmad`) receives `bmadTools` built from `selectedAgentIds` — the full set, not filtered by `agentFlag`.
+- `lib/installer.js` — `installSkill(skillId, agentIds, ...)` — `agentIds` is the correct filter point; the function already iterates only the passed agent IDs via `getAgent(agentId)` loop. The bug is in how `agentIds` gets populated upstream.
+- `lib/agents.js` — `getAllAgents()` returns all 13 registered agents; `getAgent(id)` returns a single agent. The filtering should happen in the caller (cli.js), not here.
+- `lib/bmad.js` — `installBmad(modules, tools)` and `updateBmad(modules, tools)` accept a `tools` array; when `agentFlag` is set this should be `[getBmadPlatformCode(agentFlag)]` only.
+
+Naming conventions:
+- Agent ID strings: `claude-code`, `copilot`, `cline`, `roo-code`, `kilocode` (from `lib/agents.js` registry)
+- `getBmadPlatformCode(agentId)` maps ma-agents IDs to BMAD platform codes (e.g., `roo-code` → `roo`, `copilot` → `github-copilot`)
+- The `agentFlag` variable in cli.js stores the raw `--agent` value (an agent ID)
+
+### Testing Requirements
+
+Existing tests to check before submitting:
+- `test/yes-flag.test.js` — covers `--yes` flag behavior including multi-agent paths
+- `test/routing-parity.test.js` — verifies per-tool routing consistency
+- `test/integration-verification.test.js` — end-to-end install verification
+
+New test required by this fix:
+- Add a test case (in `test/yes-flag.test.js` or a new `test/agent-scope.test.js`) that:
+  1. Calls `installSkill` with `agentIds: ['claude-code']` against a scratch temp directory
+  2. Asserts `.claude/skills/` is populated
+  3. Asserts `.cline/skills/`, `.roo/skills/`, `.kilocode/skills/`, `.github/skills/` are NOT created
+  4. Asserts `.ma-agents.json` `agents` array contains only `claude-code`
+
+How to run tests: `npm test` in `d:\Code\agents` (runs all ~50 test files sequentially)
+
+### What this story does NOT do
+
+- Does NOT change how multi-agent installs (no `--agent` flag) work
+- Does NOT modify `lib/agents.js` registry entries or `skillsDir` values
+- Does NOT address the stale copilot directory cleanup (Bug B2)
+- Does NOT add `.agents/skills/` routing (Story 24.11)
+
+## Dev Agent Record
+
+### Agent Model Used
+(to be filled by implementing agent)
+
+### Debug Log References
+(none)
+
+### Completion Notes List
+(none — story not yet implemented)
+
+### File List
+(to be filled by implementing agent)

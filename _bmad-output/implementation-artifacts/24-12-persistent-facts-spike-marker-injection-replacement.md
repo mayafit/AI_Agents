@@ -1,6 +1,6 @@
 # Story 24.12: Spike — Can persistent_facts Replace ma-agents' Marker-Injection Layer?
 
-Status: backlog
+Status: ready-for-dev
 
 ## Story
 
@@ -66,8 +66,73 @@ Story 24.2 Task 3 contains preliminary findings from reading the `persistent_fac
 - `lib/templates/` — instruction block templates
 - `architecture.md` — P5-1 addendum target
 
+## Dev Notes (continued)
+
+### Project Structure Notes
+
+Files to READ in this spike (do not modify any of them):
+
+- `node_modules/bmad-method` — locate `persistent_facts` schema:
+  ```
+  grep -r "persistent_facts" node_modules/bmad-method/ --include="*.yaml" --include="*.toml" --include="*.md" | head -20
+  ```
+  Also search customize.toml documentation:
+  ```
+  find node_modules/bmad-method -name "customize.toml" -o -name "*.toml" | head -10
+  ```
+- `lib/installer.js` — the marker-injection layer to potentially replace. Key functions (read-only reference):
+  - `composeInstructionBlock()` at line ~113 — generates the universal instruction block content
+  - `markdownMarkersMerger()` at line ~769 — writes the `<!-- MA-AGENTS-START -->` block into CLAUDE.md, .clinerules, AGENTS.md
+  - `stampExtraInstructionTemplates()` at line ~857 — dispatches to `markdownMarkersMerger` and `yaml-customModes` merger for .roomodes
+  - `handleMarkerBlockDrift()` at line ~710 — handles when the injected block was edited by the user
+  - Total injection layer: ~300 lines (lines ~710-1130 approximately)
+- `lib/templates/instruction-block-universal.template.md` — the content that gets injected. Read this to understand what `persistent_facts` must replicate.
+- `lib/templates/instruction-block-onprem.template.md` — the on-prem variant. `persistent_facts` must handle both profiles.
+
+**Tools that receive marker injection** (from `lib/agents.js`):
+- Claude Code → `.claude/CLAUDE.md` (markdown-markers)
+- Copilot → `.github/copilot/copilot.md` (markdown-markers)
+- Cline → `.cline/clinerules.md` + `.clinerules` (markdown-markers, dual-file)
+- Roo Code → `.roo/rules/00-ma-agents.md` + `.roomodes` (markdown-markers + yaml-customModes)
+- Kilocode → `.kilocode/kilocode.md` (markdown-markers)
+- OpenCode → `opencode.json` (json-merge)
+
+For `persistent_facts` to be a FULL replacement, it must reach ALL 6 tool contexts above. Partial replacement (e.g., Claude Code only) is a valid finding — document the injection surface coverage precisely.
+
+- `_bmad-output/planning-artifacts/architecture.md` — the target for the P5-1 addendum (Task 3). The planning worktree version.
+
+### Testing Requirements
+
+This is a spike — no code changes, therefore no new tests.
+
+If the outcome is YES (persistent_facts can replace marker injection), a follow-up epic will need tests. Document the test strategy as part of the decision record so the follow-up epic can reference it.
+
+How to run tests (sanity check only): `npm test` in `d:\Code\agents`
+
+### What this story does NOT do
+
+- Does NOT modify `lib/installer.js` or any marker-injection path
+- Does NOT modify any template files in `lib/templates/`
+- Does NOT add new TOML or hook configurations (Story 24.7 is the gate for that)
+- Does NOT produce any code output — the sole deliverable is the architecture.md decision record
+
 ## Change Log
 
 | Date | Version | Author | Description |
 |------|---------|--------|-------------|
 | 2026-04-27 | 1.0.0 | (pending) | Story created per adversarial review finding 4 — persistent_facts spike to determine if marker-injection layer can be removed |
+| 2026-04-28 | 1.1.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, exact function references with line numbers, injection surface table, search patterns for node_modules investigation |
+
+## Dev Agent Record
+
+### Agent Model Used
+(to be filled by implementing agent)
+
+### Debug Log References
+(none)
+
+### Completion Notes List
+(none — story not yet implemented)
+
+### File List
+(to be filled by implementing agent)

@@ -1,6 +1,6 @@
 # Story 24.8: Verify Plugin Resolver Compatibility and CI Gate Health
 
-Status: backlog
+Status: ready-for-dev
 
 ## Story
 
@@ -84,6 +84,55 @@ Before v6.4.0, BMAD's resolver treated `marketplace.json` and `module.yaml` roug
 - `.github/workflows/multi-tool-smoke.yml` — 5-tool smoke matrix
 - `.github/workflows/` — offline gate and bundle-drift workflow files
 
+## Dev Notes (continued)
+
+### Project Structure Notes
+
+Files to inspect and potentially modify:
+
+- `lib/bmad-extension-plugin/` — the committed plugin bundle. Current structure:
+  - `.claude-plugin/marketplace.json` — lowest-priority resolver entry (present)
+  - `skills/module.yaml` — mid-priority resolver entry (present)
+  - No `package.json` at bundle root — Task 1 determines if this matters
+- `scripts/build-plugin.js` — if a `package.json` needs to be added to the bundle, add a generation step here (following the `marketplace.json.template` token substitution pattern at line ~77). The `OUT_DIR` constant (line ~74) is `lib/bmad-extension-plugin/`.
+- `lib/bmad.js` — `stagePlugin(projectRoot)` (line ~93) copies `lib/bmad-extension-plugin/` to `<projectRoot>/.ma-agents-plugin-stage/` and passes `./${PLUGIN_STAGE_DIR_NAME}` as `customSourceArg` to bmad-method's `--custom-source`. The `PLUGIN_STAGE_DIR_NAME` constant (line ~57) is `'.ma-agents-plugin-stage'`.
+- `.github/workflows/` — CI workflow files. Look for:
+  - Offline install gate job (from Story 22.9) — filename likely `offline-install.yml` or similar
+  - Bundle-drift check job — likely runs `npm run build:plugin` and `git diff lib/bmad-extension-plugin/`
+  - Multi-tool smoke matrix — `multi-tool-smoke.yml`
+
+For Task 1, search the BMAD source to understand the resolver:
+```
+grep -r "PluginResolver\|resolverPriority\|package.json\|marketplace.json\|module.yaml" node_modules/bmad-method/tools/installer/ | head -30
+```
+
+**If a `package.json` is needed at bundle root**, the minimal format (matching the plugin identity from `marketplace.json`) would be:
+```json
+{
+  "name": "ma-agents-extension",
+  "version": "3.7.0",
+  "description": "ma-agents BMAD extension plugin"
+}
+```
+The version should be substituted from `package.json` at build time (same pattern as `${version}` in `marketplace.json.template`).
+
+### Testing Requirements
+
+Existing tests to run:
+- `test/build-plugin.test.js` — if `package.json` is added to the bundle, update expected output files
+- `test/plugin-manifests.test.js` — covers the plugin bundle structure; update if new files are added
+- `test/offline-recompile.test.js` — covers the offline install path; run to confirm it still passes after the version bump
+
+New tests: this story is primarily verification and CI-run tasks. No new unit tests required unless `scripts/build-plugin.js` is modified (in which case update `test/build-plugin.test.js`).
+
+How to run tests: `npm test` in `d:\Code\agents`; also trigger CI by pushing the Epic 24 branch.
+
+### What this story does NOT do
+
+- Does NOT add new tool targets
+- Does NOT change the offline gate logic — verifies it passes
+- Does NOT fix pre-existing CI failures unrelated to Epic 24
+
 ## Change Log
 
 | Date | Version | Author | Description |
@@ -91,3 +140,18 @@ Before v6.4.0, BMAD's resolver treated `marketplace.json` and `module.yaml` roug
 | 2026-04-26 | 1.0.0 | (pending) | Story 24.8 drafted as resolver compatibility verification |
 | 2026-04-26 | 1.0.0 | (pending) | Story 24.9 drafted as CI offline gate + bundle-drift verification |
 | 2026-04-27 | 2.0.0 | (pending) | Stories 24.8 and 24.9 merged into single story. Added resolver precedence audit task. Per adversarial review findings 9. |
+| 2026-04-28 | 2.1.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, exact file paths, resolver search patterns, testing requirements |
+
+## Dev Agent Record
+
+### Agent Model Used
+(to be filled by implementing agent)
+
+### Debug Log References
+(none)
+
+### Completion Notes List
+(none — story not yet implemented)
+
+### File List
+(to be filled by implementing agent)

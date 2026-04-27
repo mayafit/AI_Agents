@@ -25,7 +25,7 @@
 # Old Epic 17 stories (17.1-17.8) archived; replaced by 17.9-17.24.
 
 generated: 2026-03-15
-last_updated: "2026-04-28 — Second adversarial review applied: 24.12 serialized after 24.2; 24.6 AC0 gate added (bmad-customize existence); 24.7 AC0 spike gate added (customize.toml pipeline); 24.11 AC5 added (OBSOLETE_TOOL_SKILL_DIRS); 24.10 conditional major-bump rule + Kimi refs removed."
+last_updated: "2026-04-28 — All Epic 24 stories enhanced and set to ready-for-dev"
 project: agents
 project_key: NOKEY
 tracking_system: file-system
@@ -34,8 +34,8 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   # ─── ACTIVE BUGS ──────────────────────────────────────────────────────────────
   # Standalone bug stories — discoverable via glob: _bmad-output/implementation-artifacts/bug-*.md
-  bug-agent-flag-does-not-actually-scope-install: backlog
-  bug-stale-copilot-skills-dir-not-cleaned-on-upgrade: backlog
+  bug-agent-flag-does-not-actually-scope-install: ready-for-dev
+  bug-stale-copilot-skills-dir-not-cleaned-on-upgrade: ready-for-dev
 
   # ─── IN PROGRESS ──────────────────────────────────────────────────────────────
 
@@ -136,14 +136,14 @@ development_status:
   # Note: 24.12 is serialized AFTER 24.2 (uses 24.2's persistent_facts research) and BEFORE 24.11 (its finding
   # informs whether 24.11's routing changes are temporary or permanent). 24.7 may no-op if Task 0 fails.
   epic-24: backlog
-  24-1-bump-bmad-method-to-6-4-0-and-verify-fs-native-compat: backlog
-  24-2-confirm-p5-1-architecture-decision: backlog
-  24-3-implement-toml-config-support-in-installer: backlog
-  24-4-reconcile-forked-skills-with-customize-toml: backlog
-  24-6-add-bmad-customize-skill-to-extension-plugin: backlog
-  24-7-wire-on-complete-hooks-for-audit-and-cleanup: backlog
-  24-8-verify-plugin-resolver-compatibility: backlog
-  24-10-release-gate-adversarial-review-and-semver-cut: backlog
-  24-11-agents-skills-cross-tool-standard-routing-assessment: backlog
-  24-12-persistent-facts-spike-marker-injection-replacement: backlog
+  24-1-bump-bmad-method-to-6-4-0-and-verify-fs-native-compat: ready-for-dev
+  24-2-confirm-p5-1-architecture-decision: ready-for-dev
+  24-3-implement-toml-config-support-in-installer: ready-for-dev
+  24-4-reconcile-forked-skills-with-customize-toml: ready-for-dev
+  24-6-add-bmad-customize-skill-to-extension-plugin: ready-for-dev
+  24-7-wire-on-complete-hooks-for-audit-and-cleanup: ready-for-dev
+  24-8-verify-plugin-resolver-compatibility: ready-for-dev
+  24-10-release-gate-adversarial-review-and-semver-cut: ready-for-dev
+  24-11-agents-skills-cross-tool-standard-routing-assessment: ready-for-dev
+  24-12-persistent-facts-spike-marker-injection-replacement: ready-for-dev
   epic-24-retrospective: optional

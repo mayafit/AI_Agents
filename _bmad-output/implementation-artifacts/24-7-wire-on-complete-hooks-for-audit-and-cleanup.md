@@ -1,6 +1,6 @@
 # Story 24.7: Register on_complete Hooks via customize.toml in Plugin Bundle
 
-Status: backlog
+Status: ready-for-dev
 
 ## Story
 
@@ -93,6 +93,49 @@ Story 24.12 (persistent_facts spike) answers whether the entire marker-injection
 - `scripts/build-plugin.js` — plugin build script
 - `lib/bmad-extension-plugin/` — build output
 
+## Dev Notes (continued)
+
+### Project Structure Notes
+
+Files to inspect and potentially create:
+
+- `node_modules/bmad-method` — Task 0 investigation target. Look for:
+  - The `--custom-source` flag handling in `tools/installer/bmad-cli.js` or `tools/installer/`
+  - Any reference to `customize.toml` in the installer source code
+  - Search: `grep -r "customize.toml" node_modules/bmad-method/tools/` and `grep -r "on_complete" node_modules/bmad-method/tools/`
+  - If found: note the exact function/file where `customize.toml` is consumed from the plugin bundle
+- `lib/bmad-extension/` — source directory for the plugin bundle. If Task 0 confirms the pipeline works, the `customize.toml` file goes here (at bundle root or inside `skills/` per BMAD's convention — verify from source).
+- `lib/bmad-extension/skills/bmad-dev-story/SKILL.md` — DO NOT MODIFY. Read-only reference to understand which workflow identifier BMAD uses for this skill (the `id` field in `bmad-skill-manifest.yaml` is the hook target key).
+- `scripts/build-plugin.js` — check if it copies files at the `lib/bmad-extension/` root (not just under `skills/`). The script's required source entries are `marketplace.json.template`, `skills/module.yaml`, `skills/module-help.csv`. If `customize.toml` must be at bundle root, verify `build-plugin.js` copies it — add a copy step if not.
+- `lib/bmad-extension-plugin/` — committed build output. After `npm run build:plugin`, commit the diff here.
+
+**TOML syntax reference for on_complete hook** (if Task 1 confirms the schema):
+```toml
+[workflows.bmad-dev-story.on_complete]
+action = "append"
+target = "_bmad-output/AiAudit.md"
+# ... other fields per BMAD's schema
+```
+(exact field names must come from `node_modules/bmad-method` documentation — do not invent field names)
+
+### Testing Requirements
+
+If Task 0 confirms the pipeline is supported:
+- `test/build-plugin.test.js` — add assertion that `customize.toml` appears in the plugin build output
+- `test/customizations-translation.test.js` — check if this covers customize.toml; add a test if the TOML is parsed or validated anywhere in ma-agents code
+
+If Task 0 finds the pipeline is NOT supported (no-op):
+- Run `npm test` to confirm no regressions; no new tests needed
+
+How to run tests: `npm test` in `d:\Code\agents`
+
+### What this story does NOT do
+
+- Does NOT modify any SKILL.md files — no skill content changes
+- Does NOT add new marker-injection code (explicitly forbidden — see Dev Notes "Do not add new injection code")
+- Does NOT implement persistent_facts replacement (Story 24.12)
+- Does NOT change the `lib/bmad.js` invocation of bmad-method
+
 ## Change Log
 
 | Date | Version | Author | Description |
@@ -100,3 +143,18 @@ Story 24.12 (persistent_facts spike) answers whether the entire marker-injection
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
 | 2026-04-27 | 1.1.0 | (pending) | Rewritten as Small — customize.toml config entry, not fork modification. No SKILL.md changes permitted. Per adversarial review findings 4, 5. |
 | 2026-04-28 | 1.2.0 | (pending) | Added AC0 and Task 0 — spike gate: verify BMAD's --custom-source pipeline processes customize.toml before authoring any TOML. No-op exit path added. Per second adversarial review Finding 1 (CRITICAL). |
+| 2026-04-28 | 1.3.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, investigation search patterns, testing requirements |
+
+## Dev Agent Record
+
+### Agent Model Used
+(to be filled by implementing agent)
+
+### Debug Log References
+(none)
+
+### Completion Notes List
+(none — story not yet implemented)
+
+### File List
+(to be filled by implementing agent)
