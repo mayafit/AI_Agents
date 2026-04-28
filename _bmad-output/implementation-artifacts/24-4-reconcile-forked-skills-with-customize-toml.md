@@ -1,6 +1,6 @@
 # Story 24.4: Absorb Upstream Workflow Capabilities (quick-dev, checkpoint-preview)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -26,12 +26,14 @@ So that ma-agents users benefit from upstream workflow improvements where they i
 
 ### Task 1: Read Story 24.2 absorb assessment table (prerequisite)
 
-- [ ] 1.1 Open Story 24.2 Dev Notes — locate the absorb assessment table
-- [ ] 1.2 Note the decision for `bmad-quick-dev`: "add" or "out of scope"
-- [ ] 1.3 Note the decision for `bmad-checkpoint-preview`: "add" or "out of scope"
-- [ ] 1.4 If both are "out of scope" — this story is done; mark done with finding documented
+- [x] 1.1 Open Story 24.2 Dev Notes — locate the absorb assessment table
+- [x] 1.2 Note the decision for `bmad-quick-dev`: out of scope
+- [x] 1.3 Note the decision for `bmad-checkpoint-preview`: out of scope
+- [x] 1.4 Both are "out of scope" — story is done per no-op path; finding documented in Dev Agent Record
 
 ### Task 2: Add bmad-quick-dev (conditional on Task 1 decision)
+
+SKIPPED — both skills assessed as "out of scope" in Task 1 (Story 24.2 assessment). No skills to add.
 
 - [ ] 2.1 Copy `bmad-quick-dev/` from `node_modules/bmad-method` to `lib/bmad-extension/skills/bmad-quick-dev/`
 - [ ] 2.2 Add a `MANIFEST.yaml` entry (description, applies_when conditions)
@@ -40,12 +42,16 @@ So that ma-agents users benefit from upstream workflow improvements where they i
 
 ### Task 3: Add bmad-checkpoint-preview (conditional on Task 1 decision)
 
+SKIPPED — both skills assessed as "out of scope" in Task 1 (Story 24.2 assessment). No skills to add.
+
 - [ ] 3.1 Copy `bmad-checkpoint-preview/` from `node_modules/bmad-method` to `lib/bmad-extension/skills/bmad-checkpoint-preview/`
 - [ ] 3.2 Add a `MANIFEST.yaml` entry
 - [ ] 3.3 Run `scripts/build-plugin.js` — confirm skill appears in plugin output
 - [ ] 3.4 Scratch install — confirm skill lands in `.claude/skills/`
 
 ### Task 4: Verify existing custom workflow skills are untouched (AC: 5)
+
+SKIPPED — no code was written in this story; `git diff lib/bmad-extension/skills/` confirms zero changes (worktree was clean throughout).
 
 - [ ] 4.1 `git diff lib/bmad-extension/skills/bmad-sprint-planning/` — confirm no changes
 - [ ] 4.2 `git diff lib/bmad-extension/skills/bmad-sprint-status/` — confirm no changes
@@ -54,7 +60,7 @@ So that ma-agents users benefit from upstream workflow improvements where they i
 
 ### Task 5: Run test suite (AC: 6)
 
-- [ ] 5.1 `npm test` — exit 0
+- [x] 5.1 `npm test` — run on clean worktree; pre-existing failure in `bmad-version-bump.test.js` (expects 6.3.0, installed is 6.5.0) is unrelated to this story and present on HEAD before any Story 24.4 changes. No new failures introduced.
 
 ## Dev Notes
 
@@ -138,17 +144,24 @@ How to run tests: `npm test` in `d:\Code\agents`
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
 | 2026-04-27 | 1.1.0 | (pending) | Completely rewritten — scope changed from "reconcile 4 forked skills" to "absorb quick-dev and checkpoint-preview". The 4 custom workflow skills are not upstream forks and are not being reconciled. Per adversarial review finding 6. |
 | 2026-04-28 | 1.2.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, exact file paths, skill-addition pattern, testing requirements |
+| 2026-04-28 | 1.3.0 | claude-sonnet-4-6 | No-op implementation: both skills out of scope per Story 24.2. Tasks 1 checked, Tasks 2-5 skipped with rationale. Status set to review. |
 
 ## Dev Agent Record
 
 ### Agent Model Used
-(to be filled by implementing agent)
+claude-sonnet-4-6 (2026-04-28)
 
 ### Debug Log References
 (none)
 
 ### Completion Notes List
-(none — story not yet implemented)
+- No-op confirmed — both skills out of scope per Story 24.2 assessment (conducted 2026-04-28).
+- `bmad-quick-dev`: no sprint-status.yaml writes, no AiAudit.md integration. Decision: out of scope.
+- `bmad-checkpoint-preview`: passive sprint-status read only (no writes), no AiAudit.md. Decision: out of scope.
+- Tasks 2-4 skipped (conditional on "add" decision — not applicable).
+- `lib/bmad-extension/skills/` untouched: `git diff` confirmed zero changes to all 4 custom workflow skills.
+- `npm test` run on clean worktree. Pre-existing failure in `bmad-version-bump.test.js` (6.3.0 vs 6.5.0) present on HEAD before this story; not introduced here. No new failures.
 
 ### File List
-(to be filled by implementing agent)
+- `_bmad-output/implementation-artifacts/24-4-reconcile-forked-skills-with-customize-toml.md` — story status updated to review, tasks checked/skipped, Dev Agent Record filled
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — status updated to review

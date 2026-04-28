@@ -141,7 +141,7 @@ development_status:
   24-1-bump-bmad-method-to-6-4-0-and-verify-fs-native-compat: review
   24-2-confirm-p5-1-architecture-decision: review
   24-3-implement-toml-config-support-in-installer: review
-  24-4-reconcile-forked-skills-with-customize-toml: ready-for-dev
+  24-4-reconcile-forked-skills-with-customize-toml: review
   24-6-add-bmad-customize-skill-to-extension-plugin: review
   24-7-wire-on-complete-hooks-for-audit-and-cleanup: review
   24-8-verify-plugin-resolver-compatibility: ready-for-dev
