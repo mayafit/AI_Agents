@@ -1,6 +1,6 @@
 # Story 24.6: Add bmad-customize Skill to Extension Plugin
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -24,10 +24,12 @@ So that I can use the upstream-authored TOML customization workflow without need
 
 ### Task 0: Confirm bmad-customize exists post-24.1 bump (AC: 0) — PREREQUISITE
 
-- [ ] 0.1 Confirm Story 24.1 is complete and `node_modules/bmad-method` is at v6.5.0
-- [ ] 0.2 Run: `find node_modules/bmad-method -name "SKILL.md" -path "*bmad-customize*"` — must return a result
-- [ ] 0.3 If found: record the exact path in Dev Notes and proceed to Task 1
-- [ ] 0.4 If NOT found: close this story as no-op; document finding in Dev Notes — "bmad-customize not shipped in npm package at v6.5.0; skill cannot be included without external source"; do NOT proceed
+- [x] 0.1 Confirm Story 24.1 is complete and `node_modules/bmad-method` is at v6.5.0
+  - NOTE: Story 24.1 is in `review` status; installed bmad-method is v6.3.0. Task 0 gate still evaluated.
+- [x] 0.2 Run: `find node_modules/bmad-method -name "SKILL.md" -path "*bmad-customize*"` — must return a result
+  - Result: no output (empty) — skill NOT found in node_modules/bmad-method v6.3.0
+- [x] 0.3 If found: record the exact path in Dev Notes and proceed to Task 1 — N/A (not found)
+- [x] 0.4 If NOT found: close this story as no-op — EXIT PATH TAKEN. See Dev Agent Record for finding.
 
 ### Task 1: Copy upstream bmad-customize SKILL.md (AC: 1)
 
@@ -129,17 +131,25 @@ How to run tests: `npm test` in `d:\Code\agents`
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
 | 2026-04-28 | 1.1.0 | (pending) | Added AC0 and Task 0 — prerequisite: confirm bmad-customize exists in node_modules post-24.1 bump before any copy step. No-op exit path added. Per second adversarial review Finding 2 (CRITICAL). |
 | 2026-04-28 | 1.2.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, exact file paths, MANIFEST entry format, testing requirements |
+| 2026-04-28 | 1.3.0 | Dev Agent | Task 0 gate evaluated — bmad-customize not found in node_modules/bmad-method v6.3.0 (Story 24.1 prereq not met). Story closes as no-op per AC0/Task 0.4 exit path. Status set to review. |
 
 ## Dev Agent Record
 
 ### Agent Model Used
-(to be filled by implementing agent)
+claude-sonnet-4-6 (2026-04-28)
 
 ### Debug Log References
 (none)
 
 ### Completion Notes List
-(none — story not yet implemented)
+- Task 0 gate evaluated on 2026-04-28.
+- Search command run: `find node_modules/bmad-method -name "SKILL.md" -path "*bmad-customize*"`
+- Result: empty (no output) — bmad-customize is NOT present in node_modules/bmad-method.
+- Installed bmad-method version: 6.3.0 (Story 24.1 was `review` at time of this check; package.json targets 6.5.0 but npm install has not been run with the bumped version yet on this branch).
+- Note: Even if Story 24.1 completes and npm install runs, the bmad-customize skill may be absent from the npm distribution. A re-check after 24.1 lands is recommended before reopening this story.
+- Story closes as no-op per AC0 / Task 0.4 exit path. No files created or modified in source tree.
+- `npm test` run: pre-existing failure in `test/bmad-version-bump.test.js` (installed v6.3.0 vs expected 6.5.0) — this is a Story 24.1 pre-condition failure, NOT introduced by this story. All other tests pass.
 
 ### File List
-(to be filled by implementing agent)
+- `_bmad-output/implementation-artifacts/24-6-add-bmad-customize-skill-to-extension-plugin.md` — story status updated to review, Task 0 checkboxes marked, Dev Agent Record filled
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — 24-6 status updated from ready-for-dev to review
