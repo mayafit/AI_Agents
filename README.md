@@ -292,7 +292,7 @@ Running `ma-agents` on a project where skills are already installed triggers the
    - Updates BMAD-METHOD personas and workflows to the latest versions if detected.
 
 ### BMAD-METHOD Integration
-`ma-agents` bundles [BMAD-METHOD](https://docs.bmad-method.org/) **v6.3.0** to provide advanced orchestration and specialized personas.
+`ma-agents` bundles [BMAD-METHOD](https://docs.bmad-method.org/) **v6.5.0** to provide advanced orchestration and specialized personas.
 
 #### Core Features
 - **Auto-Detection**: Recognizes existing BMAD installations and prompts for silent updates.
