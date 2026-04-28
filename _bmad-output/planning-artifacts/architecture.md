@@ -2125,3 +2125,107 @@ Net deletion: ~140 lines. Replacement: ~30 lines for stage-and-invoke.
 - Structured logging for diagnostic purposes
 - Visual Studio integration investigation (Phase 3)
 - Agent Activity Dashboard architecture (Phase 3)
+
+---
+
+### Phase 5 Architectural Decisions (2026-04-26)
+
+#### Decision P5-1: BMAD v6.5.0 Integration (FR196–FR210, NFR55–NFR58)
+
+> **STATUS: TENTATIVE** — Sub-decision A (TOML config coexistence) is not confirmed until Story 24.2 verifies that `_bmad/bmm/config.yaml` still exists and carries the expected keys in v6.4.0/v6.5.0 output. Story 24.2 may amend this decision before implementation begins.
+
+**Context.** BMAD-METHOD v6.4.0 and v6.5.0 ship two breaking changes and several features that touch ma-agents directly:
+
+Breaking (v6.4.0):
+1. TOML-based customization (#2284, #2283) — `_bmad/custom/*.toml` replaces the briefly-introduced YAML-based customization. Flat schema with structural merge rules (scalars, tables, code-keyed arrays, append arrays). `persistent_facts` unified into the same model.
+2. Four-file config architecture (#2285) — project-level config surface now consists of `_bmad/config.toml`, `config.user.toml`, `custom/config.toml`, and `custom/config.user.toml`.
+
+Features with direct ma-agents impact (v6.4.0):
+- `customize.toml` support added to 6 dev-execution workflows: `bmad-dev-story`, `bmad-code-review`, `bmad-sprint-planning`, `bmad-sprint-status`, `bmad-quick-dev`, `bmad-checkpoint-preview` (#2308). ma-agents maintains custom workflow skills for the first four (these are not upstream forks — see Sub-decision B).
+- `bmad-customize` skill — guided authoring of TOML overrides in `_bmad/custom/` (#2289).
+- `on_complete` hooks wired into 23 workflow terminal steps (#2290) — AiAudit.md integration via a `customize.toml` entry in the plugin bundle (Story 24.7).
+- `persistent_facts` field in customize.toml — agent-level persistent facts injected via TOML; potential replacement for ma-agents' marker-injection layer (spike in Story 24.12).
+- GitHub API primary + raw CDN fallback in installer registry client (#2248).
+- `fs-extra` removed from BMAD internals, replaced with native `node:fs` (#2253) — ma-agents has 46 direct `fs-extra` call sites that must be audited (Story 24.1).
+- Shared resolver now prefers `package.json > module.yaml > marketplace.json` (#2298).
+
+New (v6.5.0):
+- 18 additional platforms, total 42 supported (#2313).
+- Cross-tool `.agents/skills/` standard — all platforms that support it now use it (#2313). Impact on ma-agents' per-tool routing assessed in Story 24.11.
+
+Non-breaking improvements inherited for free: PRD scope-reduction guardrail (#1927), `bmad-create-story` UPDATE-file awareness (#2274), sprint-status sync from quick-dev (#2234), model parity enforcement for code-review subagents (#2236).
+
+**Decision.** Two sub-decisions:
+
+**Sub-decision A — TOML config format: COEXISTENCE (TENTATIVE).** The new `_bmad/config.toml` is BMAD's project-level config. `_bmad/bmm/config.yaml` is expected to remain the module-level config read by `bmad-init.py` and the ma-agents workflow skills. These serve different purposes: project-level config stores agent roster and install answers; module-level config stores bmad-init state. Story 24.2 must confirm this assumption by verifying that `_bmad/bmm/config.yaml` is still written by v6.5.0 with the expected keys (`planning_artifacts`, `user_name`, `communication_language`, etc.). If module config has migrated to TOML, Story 24.3 expands to add TOML read support to `bmad-init.py` and update `CANONICAL_CONFIG_REL`.
+
+**Sub-decision B — Custom workflow skills: ABSORB, not reconcile.** The 4 ma-agents workflow skills (`bmad-sprint-planning`, `bmad-sprint-status`, `bmad-dev-story`, `bmad-code-review`) are NOT upstream forks — they are entirely custom workflows built around ma-agents' sprint-status.yaml schema and AiAudit.md integration. "Migrate to customize.toml" does not apply to these skills. Story 24.4's scope is: evaluate whether v6.4.0's newly customize.toml-capable workflows (`bmad-quick-dev`, `bmad-checkpoint-preview`) add capabilities that should be absorbed into the ma-agents custom skill set, and if so, add them to the plugin bundle.
+
+**New flow / component changes.**
+
+The install flow is unchanged from P4-1 (local plugin staging via PluginResolver). v6.4.0 changes affect what goes *into* the plugin bundle, not how it is staged:
+- `lib/bmad-extension-plugin/` rebuild: bump version, include `bmad-customize/` skill, remove 0–4 forked skill directories (per Story 24.4 outcome).
+- `scripts/build-bmad-cache.js`: verify registry schema unchanged after #2248 (GitHub API primary + CDN fallback); adapt if needed.
+- `lib/bmad.js`: verify no fs-extra dependency on BMAD internals after #2253.
+- Resolver preference order (`package.json > module.yaml > marketplace.json`, #2298): verify plugin staging still resolves; no code change expected since we ship `module.yaml`.
+
+**TOML customization layer.**
+
+BMAD v6.4.0 introduces a new customization layer that sits *above* the plugin bundle in the configuration hierarchy:
+
+```
+_bmad/custom/config.toml          — project team overrides (committed)
+_bmad/custom/config.user.toml     — individual developer overrides (gitignored)
+_bmad/config.toml                 — project-level base config (BMAD-owned)
+_bmad/config.user.toml            — per-user base config (BMAD-owned, gitignored)
+lib/bmad-extension-plugin/        — ma-agents plugin bundle (installed by PluginResolver)
+```
+
+For skills where Story 24.4 chooses migration: ma-agents ships a `_bmad/custom/` TOML file as part of the plugin bundle (or as a post-install-stamped file). For skills where Story 24.4 retains forks: the fork in `lib/bmad-extension/skills/<skill>/` continues to ship as the authoritative SKILL.md.
+
+**Code paths affected.**
+
+| File | Change |
+|------|--------|
+| `package.json` | Bump `bmad-method: 6.3.0 → 6.4.0` |
+| `lib/bmad.js` | Verify no fs-extra dependency; update `BMAD_TARGET_VERSION` constant |
+| `scripts/build-bmad-cache.js` | Verify registry schema; adapt for #2248 if needed |
+| `lib/bmad-extension/skills/` | Delete 0–4 forked SKILL.md files per Story 24.4; add `bmad-customize/` |
+| `lib/bmad-extension-plugin/` | Rebuild against v6.4.0 |
+| `MANIFEST.yaml` | Reflect skill additions/removals |
+
+Potentially changed (Story 24.4 decides):
+- `lib/bmad-extension/skills/bmad-sprint-planning/` — migrate to customize.toml or keep fork
+- `lib/bmad-extension/skills/bmad-sprint-status/` — migrate to customize.toml or keep fork
+- `lib/bmad-extension/skills/bmad-dev-story/` — migrate to customize.toml or keep fork
+- `lib/bmad-extension/skills/bmad-code-review/` — migrate to customize.toml or keep fork
+
+**Alternatives considered.**
+
+Sub-decision A:
+- *Migrate bmad-init.py to TOML immediately:* Rejected — the new `_bmad/config.toml` is a different file serving a different purpose. Migrating bmad-init.py without confirmed module-config movement is speculative churn.
+- *Block v6.5.0 upgrade until full TOML migration is scoped:* Rejected — the resolver fix and bmad-customize skill are valuable; coexistence is low risk and keeps the upgrade unblocked.
+
+Sub-decision B:
+- *Migrate all 4 forks to customize.toml unconditionally:* Rejected — TOML overlays may not express all of our changes (e.g., structural reordering or conditional logic). Blanket migration could silently lose behavior. Per-skill evaluation in Story 24.4 is safer.
+- *Retain all 4 forks unconditionally:* Rejected — this is the status quo cost that customize.toml was designed to eliminate. Where migration is safe, forks add ongoing maintenance burden and upgrade friction.
+
+**Rationale.**
+- Coexistence (Sub-A) is zero-risk pending Story 24.2 confirmation; if module config moved, Story 24.3 handles migration.
+- Correctly scoping Sub-B (absorb not reconcile) avoids a category error: the 4 custom workflow skills have no upstream equivalent to overlay against.
+- Verifying fs-extra removal and resolver preference change against ma-agents code is a spike task (Story 24.1), not a design assumption — findings update this decision if needed.
+
+**Affects:**
+- `package.json` (bmad-method 6.3.0 → 6.4.0)
+- `lib/bmad.js` (BMAD_TARGET_VERSION constant; fs-extra verification)
+- `scripts/build-bmad-cache.js` (registry schema verification / #2248 adaptation)
+- `lib/bmad-extension/skills/` (0–4 fork deletions + bmad-customize addition)
+- `lib/bmad-extension-plugin/` (rebuild)
+- `MANIFEST.yaml` (skill additions/removals per 24.4 outcome)
+- Architecture: this document (P5-1)
+
+**Out of scope (deferred):**
+- Channel-based install (`--channel` / `--pin` flags) — evaluate in follow-up epic
+- Full `persistent_facts` replacement of marker-injection layer — spike in Story 24.12; implementation deferred to follow-up epic
+- Advanced TOML authoring patterns beyond what `bmad-customize` skill guides
+- `bmad-init.py` TOML migration — conditional on Story 24.2 confirming module-config movement; Story 24.3 handles if triggered

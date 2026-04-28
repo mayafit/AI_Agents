@@ -1,0 +1,146 @@
+# Story 24.4: Absorb Upstream Workflow Capabilities (quick-dev, checkpoint-preview)
+
+Status: ready-for-dev
+
+## Story
+
+As a **ma-agents maintainer**,
+I want to evaluate whether v6.5.0's `bmad-quick-dev` and `bmad-checkpoint-preview` skills — now customize.toml-capable — add capabilities worth absorbing into the ma-agents plugin bundle,
+So that ma-agents users benefit from upstream workflow improvements where they integrate naturally with our sprint-status.yaml schema and AiAudit.md conventions.
+
+## Acceptance Criteria
+
+1. **Given** Story 24.2 absorb assessment table is complete, **When** the decision for `bmad-quick-dev` is reviewed, **Then** the skill is either added to `lib/bmad-extension/skills/` with a MANIFEST.yaml entry, or documented as out of scope with rationale — and no partial implementation is left in place.
+
+2. **Given** Story 24.2 absorb assessment table is complete, **When** the decision for `bmad-checkpoint-preview` is reviewed, **Then** the same outcome applies: added to the plugin or documented as out of scope.
+
+3. **Given** any skill is added, **When** `scripts/build-plugin.js` runs, **Then** the new skill is present in `lib/bmad-extension-plugin/` output.
+
+4. **Given** any skill is added, **When** a scratch install completes with `--tools claude-code`, **Then** the new skill lands in `.claude/skills/` and is accessible.
+
+5. **Given** the existing 4 custom workflow skills (`bmad-sprint-planning`, `bmad-sprint-status`, `bmad-dev-story`, `bmad-code-review`), **When** this story closes, **Then** they are unchanged — this story does not touch them. They are custom workflows, not upstream forks, and are not being reconciled here.
+
+6. **Given** `npm test`, **When** run after any additions, **Then** exit code 0.
+
+## Tasks / Subtasks
+
+### Task 1: Read Story 24.2 absorb assessment table (prerequisite)
+
+- [ ] 1.1 Open Story 24.2 Dev Notes — locate the absorb assessment table
+- [ ] 1.2 Note the decision for `bmad-quick-dev`: "add" or "out of scope"
+- [ ] 1.3 Note the decision for `bmad-checkpoint-preview`: "add" or "out of scope"
+- [ ] 1.4 If both are "out of scope" — this story is done; mark done with finding documented
+
+### Task 2: Add bmad-quick-dev (conditional on Task 1 decision)
+
+- [ ] 2.1 Copy `bmad-quick-dev/` from `node_modules/bmad-method` to `lib/bmad-extension/skills/bmad-quick-dev/`
+- [ ] 2.2 Add a `MANIFEST.yaml` entry (description, applies_when conditions)
+- [ ] 2.3 Run `scripts/build-plugin.js` — confirm skill appears in plugin output
+- [ ] 2.4 Scratch install — confirm skill lands in `.claude/skills/`
+
+### Task 3: Add bmad-checkpoint-preview (conditional on Task 1 decision)
+
+- [ ] 3.1 Copy `bmad-checkpoint-preview/` from `node_modules/bmad-method` to `lib/bmad-extension/skills/bmad-checkpoint-preview/`
+- [ ] 3.2 Add a `MANIFEST.yaml` entry
+- [ ] 3.3 Run `scripts/build-plugin.js` — confirm skill appears in plugin output
+- [ ] 3.4 Scratch install — confirm skill lands in `.claude/skills/`
+
+### Task 4: Verify existing custom workflow skills are untouched (AC: 5)
+
+- [ ] 4.1 `git diff lib/bmad-extension/skills/bmad-sprint-planning/` — confirm no changes
+- [ ] 4.2 `git diff lib/bmad-extension/skills/bmad-sprint-status/` — confirm no changes
+- [ ] 4.3 `git diff lib/bmad-extension/skills/bmad-dev-story/` — confirm no changes
+- [ ] 4.4 `git diff lib/bmad-extension/skills/bmad-code-review/` — confirm no changes
+
+### Task 5: Run test suite (AC: 6)
+
+- [ ] 5.1 `npm test` — exit 0
+
+## Dev Notes
+
+### Prerequisite: Story 24.2 must be at done status before this story begins
+
+Story 24.4's Task 1 reads the absorb assessment table that Story 24.2 produces. This means Story 24.2 must be fully complete (status `done`) before this story is activated — not merely `in-progress`. Check Story 24.2's Dev Notes for the completed assessment table before proceeding past Task 1.1.
+
+### Critical framing: these are NOT upstream forks
+
+The 4 ma-agents workflow skills (`bmad-sprint-planning`, `bmad-sprint-status`, `bmad-dev-story`, `bmad-code-review`) are entirely custom — they were written for ma-agents' sprint-status.yaml schema, AiAudit.md integration, and worktree-based development model. They have no upstream equivalent to "migrate away from." They are not touched in this story.
+
+This story is only about additive absorption: do the 2 newly customize.toml-capable upstream skills offer something useful?
+
+### What this story does NOT do
+
+- Does NOT modify the 4 custom workflow skills in any way
+- Does NOT migrate anything to customize.toml (wrong tool for custom workflows)
+- Does NOT add on_complete hooks (Story 24.7)
+
+### Per-skill decision table (filled in by Story 24.2)
+
+| Skill | Integration points found | Decision | Rationale |
+|-------|--------------------------|----------|-----------|
+| bmad-quick-dev | (filled by 24.2) | (filled by 24.2) | (filled by 24.2) |
+| bmad-checkpoint-preview | (filled by 24.2) | (filled by 24.2) | (filled by 24.2) |
+
+### Reference Files
+
+- Story 24.2 Dev Notes — absorb assessment table (prerequisite)
+- `node_modules/bmad-method` — upstream v6.5.0 skill sources
+- `lib/bmad-extension/skills/` — plugin skill source directory
+- `MANIFEST.yaml` — skill registry
+- `scripts/build-plugin.js` — plugin build script
+
+## Dev Notes (continued)
+
+### Project Structure Notes
+
+Files to read when assessing absorption (Task 1) and implementing additions (Tasks 2-3):
+
+- `node_modules/bmad-method` — after Story 24.1's bump, locate `bmad-quick-dev` and `bmad-checkpoint-preview`. Search pattern: `find node_modules/bmad-method -type d -name "bmad-quick-dev"` and `-name "bmad-checkpoint-preview"`. If these directories exist, each will contain a `SKILL.md` and possibly a `bmad-skill-manifest.yaml`.
+- `lib/bmad-extension/skills/` — destination directory for any absorbed skill. Current custom skills (DO NOT TOUCH): `bmad-sprint-planning/`, `bmad-sprint-status/`, `bmad-dev-story/`, `bmad-code-review/`. Each has a `SKILL.md` and `bmad-skill-manifest.yaml`.
+- `lib/bmad-extension/skills/module.yaml` — skill registry for the extension module. When adding a new skill, append an entry following the existing format: `- id: <skill-id>` with `description:`, `applies_when:`, `file:` fields.
+- `lib/bmad-extension/MANIFEST.yaml` — the ma-agents MANIFEST.yaml for the extension skills (separate from the per-install MANIFEST.yaml generated by `generateSkillsManifest()`). Add the new skill entry here following existing entries.
+- `scripts/build-plugin.js` — runs `SRC_DIR = lib/bmad-extension/` → `OUT_DIR = lib/bmad-extension-plugin/`. No changes needed to the script unless new file types are introduced. Run `node scripts/build-plugin.js` and inspect `lib/bmad-extension-plugin/skills/` to verify output.
+
+**Pattern for adding a skill** (from existing skills like `sre-check-system-status`):
+1. Create `lib/bmad-extension/skills/<skill-id>/SKILL.md` — copy upstream content verbatim
+2. Create `lib/bmad-extension/skills/<skill-id>/bmad-skill-manifest.yaml` — add standard manifest with `name`, `description`, `version: "1.0.0"`, `category`
+3. Add entry to `lib/bmad-extension/skills/module.yaml`
+
+### Testing Requirements
+
+Existing test files to run:
+- `test/build-plugin.test.js` — verifies `scripts/build-plugin.js` output contains expected skills; update to assert the new skill is present if absorbed
+- `test/plugin-manifests.test.js` — verifies `module.yaml` and bundle structure; update if a new skill is added
+- `test/bmad-extension.test.js` — covers extension module skills; update fixture expectations if new skills are added
+
+If both skills are "out of scope" (no-op): no test changes needed — run `npm test` to confirm no regressions.
+
+How to run tests: `npm test` in `d:\Code\agents`
+
+### What this story does NOT do
+
+- Does NOT modify the 4 custom workflow skills in any way
+- Does NOT migrate anything to customize.toml (wrong tool for custom workflows)
+- Does NOT add on_complete hooks (Story 24.7)
+
+## Change Log
+
+| Date | Version | Author | Description |
+|------|---------|--------|-------------|
+| 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
+| 2026-04-27 | 1.1.0 | (pending) | Completely rewritten — scope changed from "reconcile 4 forked skills" to "absorb quick-dev and checkpoint-preview". The 4 custom workflow skills are not upstream forks and are not being reconciled. Per adversarial review finding 6. |
+| 2026-04-28 | 1.2.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, exact file paths, skill-addition pattern, testing requirements |
+
+## Dev Agent Record
+
+### Agent Model Used
+(to be filled by implementing agent)
+
+### Debug Log References
+(none)
+
+### Completion Notes List
+(none — story not yet implemented)
+
+### File List
+(to be filled by implementing agent)
