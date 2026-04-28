@@ -142,7 +142,7 @@ development_status:
   24-2-confirm-p5-1-architecture-decision: review
   24-3-implement-toml-config-support-in-installer: ready-for-dev
   24-4-reconcile-forked-skills-with-customize-toml: ready-for-dev
-  24-6-add-bmad-customize-skill-to-extension-plugin: ready-for-dev
+  24-6-add-bmad-customize-skill-to-extension-plugin: review
   24-7-wire-on-complete-hooks-for-audit-and-cleanup: ready-for-dev
   24-8-verify-plugin-resolver-compatibility: ready-for-dev
   24-10-release-gate-adversarial-review-and-semver-cut: ready-for-dev
