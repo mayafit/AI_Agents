@@ -138,7 +138,7 @@ development_status:
   # informs whether 24.11's routing changes are temporary or permanent). 24.7 may no-op if Task 0 fails.
   # All 12 stories: B1, B2, 24.1, 24.2, 24.3, 24.4, 24.6, 24.7, 24.8, 24.10, 24.11, 24.12 (no 24.5 or 24.9)
   epic-24: backlog
-  24-1-bump-bmad-method-to-6-4-0-and-verify-fs-native-compat: ready-for-dev
+  24-1-bump-bmad-method-to-6-4-0-and-verify-fs-native-compat: review
   24-2-confirm-p5-1-architecture-decision: ready-for-dev
   24-3-implement-toml-config-support-in-installer: ready-for-dev
   24-4-reconcile-forked-skills-with-customize-toml: ready-for-dev
