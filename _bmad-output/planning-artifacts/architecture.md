@@ -2249,3 +2249,44 @@ Sub-decision B:
 
 **Recommended action:** Marker-injection layer remains necessary — no follow-up action from Epic 24. If a future BMAD version ships `persistent_facts` in its npm package and extends its injection surface to cover non-BMAD-workflow sessions across all 6 tools, this decision should be revisited. Until that is confirmed, the ~300-line injection layer in `lib/installer.js` (`composeInstructionBlock`, `markdownMarkersMerger`, `stampExtraInstructionTemplates`, `handleMarkerBlockDrift`) is the only reliable cross-tool mechanism available.
 - `bmad-init.py` TOML migration — conditional on Story 24.2 confirming module-config movement; Story 24.3 handles if triggered
+
+---
+
+## P5-1 Addendum: .agents/skills/ Cross-Tool Standard Assessment (Story 24.11)
+
+**Finding: NO routing changes required. Per-tool routing remains correct for all 5 registered tools.**
+
+### Platform Routing Table — BMAD v6.5.0 vs ma-agents
+
+| Tool | ma-agents skillsDir | BMAD v6.5.0 target_dir | Changed? | Exclusive to .agents/skills/? |
+|------|---------------------|------------------------|----------|-------------------------------|
+| claude-code | `.claude/skills` | `.claude/skills` | No | No |
+| copilot | `.github/skills` | `.github/skills` | No | No |
+| cline | `.cline/skills` | `.cline/skills` | No | No |
+| roo-code | `.roo/skills` | `.roo/skills` | No | No |
+| kilocode | `.kilocode/skills` | `.kilocode/skills` | No | No |
+
+**Source:** `node_modules/bmad-method/tools/installer/ide/platform-codes.yaml` (v6.5.0, the version shipped with ma-agents 3.7.0).
+
+### .agents/skills/ Standard Adoption in v6.5.0
+
+BMAD v6.5.0 introduced `.agents/skills/` as a cross-tool standard directory (#2313). In the current platform-codes.yaml it is used exclusively by two platforms not registered in ma-agents:
+
+- `codex` (OpenAI Codex) → `.agents/skills/`
+- `junie` (JetBrains Junie) → `.agents/skills/`
+
+All 5 ma-agents flagship tools (`claude-code`, `github-copilot`, `cline`, `roo`, `kilo`) retain their pre-existing per-tool `target_dir` entries. None migrated exclusively to `.agents/skills/`.
+
+### Risk Assessment
+
+- **Skill duplication risk:** None. No flagship tool reads both a per-tool path AND `.agents/skills/`.
+- **Silent failure risk (broken routing):** None. All 5 tools still route to the same directories ma-agents writes to.
+- **OBSOLETE_TOOL_SKILL_DIRS impact:** No new entries required — no `skillsDir` paths changed.
+
+### Recommendation
+
+**Per-tool routing remains correct; `.agents/skills/` standard is additive only — no follow-up from Epic 24.**
+
+The `.agents/skills/` path is currently used only by platforms outside ma-agents' registered set. Adopting it as the primary install path would require all 5 flagship tools to migrate their BMAD platform entries simultaneously, which has not happened. If ≥3 of the 5 flagship tools migrate to `.agents/skills/` in a future BMAD release, a follow-up epic should be opened to simplify ma-agents routing to a single primary path plus per-tool overrides. Until that threshold is reached, the current per-tool registry in `lib/agents.js` is the correct and safe design.
+
+**No changes to `lib/agents.js`, `lib/installer.js`, or `OBSOLETE_TOOL_SKILL_DIRS` are required by this story.**
