@@ -1,7 +1,7 @@
 ---
 type: bug
 severity: low
-status: ready-for-dev
+status: review
 title: Stale .github/copilot/skills/ directory not cleaned on upgrade after F2b routing fix
 ---
 
@@ -137,13 +137,21 @@ How to run tests: `npm test` in `d:\Code\agents`
 ## Dev Agent Record
 
 ### Agent Model Used
-(to be filled by implementing agent)
+claude-sonnet-4-6 (Claude Code)
 
 ### Debug Log References
 (none)
 
 ### Completion Notes List
-(none — story not yet implemented)
+- Added `OBSOLETE_TOOL_SKILL_DIRS` frozen constant to `lib/installer.js` (after `OBSOLETE_SKILL_IDS`), following the exact same registry pattern as `RETIRED_SKILL_IDS` / `RENAMED_SKILL_IDS`. Initial entry: copilot pre-F2b path `{ obsolete: '.github/copilot/skills', replacedBy: '.github/skills', sinceVersion: '3.7.0' }`.
+- Added `migrateObsoleteToolDirs(projectRoot)` function that iterates the registry and: removes obsolete dir when replacement has content; preserves and warns when replacement is empty/absent; is fully idempotent (no-op when obsolete dir already gone).
+- Hooked cleanup into `installSkill()` inside the `scope === 'project'` success path, guarded by the `projectContextHandled` flag so it fires at most once per `installSkill()` call.
+- Exported `OBSOLETE_TOOL_SKILL_DIRS` and `migrateObsoleteToolDirs` from `module.exports` so Story 24.11 can extend the registry.
+- Created `test/obsolete-tool-dirs.test.js` with 8 tests covering: removal (t1), preservation when new dir absent (t2), preservation when new dir empty (t2b), idempotency/noop (t3), double-run idempotency (t4), frozen-constant guard (t5), content-survival check (t6), recursive removal (t7).
+- Added `test/obsolete-tool-dirs.test.js` to the `npm test` script in `package.json`.
+- All 8 new tests pass. All existing tests pass (npm test exit 0 from main repo).
 
 ### File List
-(to be filled by implementing agent)
+- `lib/installer.js` — added `OBSOLETE_TOOL_SKILL_DIRS` constant, `migrateObsoleteToolDirs()` function, call site in `installSkill()`, and exports
+- `test/obsolete-tool-dirs.test.js` — new test file (8 tests)
+- `package.json` — added `test/obsolete-tool-dirs.test.js` to the `test` script
