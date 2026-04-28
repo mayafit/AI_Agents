@@ -35,7 +35,7 @@ development_status:
   # ─── ACTIVE BUGS ──────────────────────────────────────────────────────────────
   # Standalone bug stories — discoverable via glob: _bmad-output/implementation-artifacts/bug-*.md
   bug-agent-flag-does-not-actually-scope-install: review
-  bug-stale-copilot-skills-dir-not-cleaned-on-upgrade: ready-for-dev
+  bug-stale-copilot-skills-dir-not-cleaned-on-upgrade: review
 
   # ─── IN PROGRESS ──────────────────────────────────────────────────────────────
 
