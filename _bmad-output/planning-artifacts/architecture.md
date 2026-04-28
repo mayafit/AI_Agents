@@ -2238,4 +2238,14 @@ Sub-decision B:
 - Channel-based install (`--channel` / `--pin` flags) — evaluate in follow-up epic
 - Full `persistent_facts` replacement of marker-injection layer — spike in Story 24.12; implementation deferred to follow-up epic
 - Advanced TOML authoring patterns beyond what `bmad-customize` skill guides
+
+---
+
+## P5-1 Addendum: persistent_facts Spike Finding (Story 24.12)
+
+**Finding: NO — `persistent_facts` cannot replace the marker-injection layer. Marker-injection layer remains necessary.**
+
+`persistent_facts` does not exist in the installed `bmad-method` npm package. A full search across all file types (`.yaml`, `.toml`, `.md`, `.js`) in `node_modules/bmad-method` (v6.3.0 — the version actually shipped by ma-agents) returned zero matches. The BMAD online documentation at `docs.bmad-method.org` describes `persistent_facts` as a TOML-based, array-of-strings field introduced in v6.4.0 that pins foundational context for the duration of a BMAD workflow run — but this feature is absent from the npm tarball used by ma-agents. Even if a future npm bump delivers the field, its injection surface is fundamentally incompatible with ma-agents' requirements: `persistent_facts` is a BMAD CLI runtime concept loaded during agent/workflow activation within BMAD's own orchestration layer. It does not write to `.clinerules`, `.roomodes`, `opencode.json`, or any of the 6 tool-specific config files that ma-agents' marker-injection layer targets (Claude Code → `.claude/CLAUDE.md`, Copilot → `.github/copilot/copilot.md`, Cline → `.cline/clinerules.md` + `.clinerules`, Roo Code → `.roo/rules/00-ma-agents.md` + `.roomodes`, Kilocode → `.kilocode/kilocode.md`, OpenCode → `opencode.json`). For a user to receive the "read MANIFEST.yaml, load always_load skills, select task skills" instruction, that instruction must be present in whichever config file the AI tool reads at session start — regardless of whether the user invokes a BMAD workflow. `persistent_facts` reaches only BMAD-activated workflow contexts; the other 5 tool surfaces are orthogonal to it.
+
+**Recommended action:** Marker-injection layer remains necessary — no follow-up action from Epic 24. If a future BMAD version ships `persistent_facts` in its npm package and extends its injection surface to cover non-BMAD-workflow sessions across all 6 tools, this decision should be revisited. Until that is confirmed, the ~300-line injection layer in `lib/installer.js` (`composeInstructionBlock`, `markdownMarkersMerger`, `stampExtraInstructionTemplates`, `handleMarkerBlockDrift`) is the only reliable cross-tool mechanism available.
 - `bmad-init.py` TOML migration — conditional on Story 24.2 confirming module-config movement; Story 24.3 handles if triggered

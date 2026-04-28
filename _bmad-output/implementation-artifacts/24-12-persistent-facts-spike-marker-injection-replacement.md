@@ -1,6 +1,6 @@
 # Story 24.12: Spike — Can persistent_facts Replace ma-agents' Marker-Injection Layer?
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -22,24 +22,24 @@ So that we can decide whether to plan a follow-up epic to remove the marker-inje
 
 ### Task 1: Read persistent_facts schema (AC: 1)
 
-- [ ] 1.1 Locate `persistent_facts` in BMAD v6.5.0 source: `node_modules/bmad-method` — search for `persistent_facts` in customize.toml docs or schema files
-- [ ] 1.2 Document: what type does it accept (string, array, object)?
-- [ ] 1.3 Document: when is it injected — at workflow start? At every agent turn? Only for specific workflow types?
-- [ ] 1.4 Document: which tools receive it — Claude Code only? All 5 registered tools? Tool-agnostic?
+- [x] 1.1 Locate `persistent_facts` in BMAD v6.5.0 source: `node_modules/bmad-method` — search for `persistent_facts` in customize.toml docs or schema files
+- [x] 1.2 Document: what type does it accept (string, array, object)?
+- [x] 1.3 Document: when is it injected — at workflow start? At every agent turn? Only for specific workflow types?
+- [x] 1.4 Document: which tools receive it — Claude Code only? All 5 registered tools? Tool-agnostic?
 
 ### Task 2: Compare against marker-injection content (AC: 2)
 
-- [ ] 2.1 Read the current `<!-- MA-AGENTS-START -->` block content from `lib/templates/` or an installed CLAUDE.md
-- [ ] 2.2 State the injection requirement: "Every agent session must receive the instruction: read MANIFEST.yaml, load always_load skills, select task skills"
-- [ ] 2.3 Can `persistent_facts` express this verbatim? Or only a subset?
-- [ ] 2.4 Does `persistent_facts` reach into `.clinerules`, `.roomodes`, `AGENTS.md` as well as CLAUDE.md — or only into Claude Code's context?
-- [ ] 2.5 State the answer: YES (full replacement possible), PARTIAL (covers Claude Code only, others still need injection), or NO (different injection surface entirely)
+- [x] 2.1 Read the current `<!-- MA-AGENTS-START -->` block content from `lib/templates/` or an installed CLAUDE.md
+- [x] 2.2 State the injection requirement: "Every agent session must receive the instruction: read MANIFEST.yaml, load always_load skills, select task skills"
+- [x] 2.3 Can `persistent_facts` express this verbatim? Or only a subset?
+- [x] 2.4 Does `persistent_facts` reach into `.clinerules`, `.roomodes`, `AGENTS.md` as well as CLAUDE.md — or only into Claude Code's context?
+- [x] 2.5 State the answer: YES (full replacement possible), PARTIAL (covers Claude Code only, others still need injection), or NO (different injection surface entirely)
 
 ### Task 3: Commit decision record to architecture.md (AC: 3)
 
-- [ ] 3.1 Write a one-paragraph finding under a new "P5-1 Addendum: persistent_facts spike finding" heading in `_bmad-output/planning-artifacts/architecture.md` in the planning worktree (`d:\Code\agents-epic-24-bmad-640-planning`) — NOT in `d:\Code\agents`
-- [ ] 3.2 If YES or PARTIAL: note "marker-injection simplification is feasible for [subset] — plan follow-up epic"
-- [ ] 3.3 If NO: note "marker-injection layer remains necessary — no follow-up action from Epic 24"
+- [x] 3.1 Write a one-paragraph finding under a new "P5-1 Addendum: persistent_facts spike finding" heading in `_bmad-output/planning-artifacts/architecture.md` in the planning worktree (`d:\Code\agents-epic-24-bmad-640-planning`) — NOT in `d:\Code\agents`
+- [x] 3.2 If YES or PARTIAL: note "marker-injection simplification is feasible for [subset] — plan follow-up epic"
+- [x] 3.3 If NO: note "marker-injection layer remains necessary — no follow-up action from Epic 24"
 
 ## Dev Notes
 
@@ -122,17 +122,23 @@ How to run tests (sanity check only): `npm test` in `d:\Code\agents`
 |------|---------|--------|-------------|
 | 2026-04-27 | 1.0.0 | (pending) | Story created per adversarial review finding 4 — persistent_facts spike to determine if marker-injection layer can be removed |
 | 2026-04-28 | 1.1.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, exact function references with line numbers, injection surface table, search patterns for node_modules investigation |
+| 2026-04-28 | 1.2.0 | claude-sonnet-4-6 | Spike implemented — finding: NO. persistent_facts absent from npm package v6.3.0; injection surface incompatible with ma-agents' 6-tool requirement even if field existed. Decision record committed to architecture.md. |
 
 ## Dev Agent Record
 
 ### Agent Model Used
-(to be filled by implementing agent)
+claude-sonnet-4-6
 
 ### Debug Log References
-(none)
+(none — spike, no code changes)
 
 ### Completion Notes List
-(none — story not yet implemented)
+- Task 1: `grep -r "persistent_facts" node_modules/bmad-method/` returned zero matches across all file types. The installed package is v6.3.0 (not v6.5.0 as the story assumed). No `.toml` files with `persistent_facts` exist anywhere in the npm tarball.
+- Task 2: WebSearch + WebFetch confirmed `persistent_facts` exists in BMAD's online documentation (docs.bmad-method.org) as a v6.4.0 feature — an array-of-strings loaded during BMAD workflow/agent activation as foundational context. However, it is a BMAD CLI runtime concept, not a disk-injection mechanism. It does not write to `.clinerules`, `.roomodes`, `opencode.json`, or any of the 6 tool config files. Coverage is limited to BMAD-activated sessions only; tools used without BMAD workflow activation (Copilot, Cline standalone, Roo Code standalone, Kilocode, OpenCode) would receive nothing.
+- Task 3: Decision record appended to `_bmad-output/planning-artifacts/architecture.md` as "P5-1 Addendum: persistent_facts Spike Finding (Story 24.12)". Finding: **NO**. Marker-injection layer remains necessary — no follow-up action from Epic 24.
+- Confirmed: `lib/installer.js`, `lib/bmad.js`, and all `lib/templates/` files are UNTOUCHED.
 
 ### File List
-(to be filled by implementing agent)
+- `_bmad-output/planning-artifacts/architecture.md` — P5-1 Addendum section appended
+- `_bmad-output/implementation-artifacts/24-12-persistent-facts-spike-marker-injection-replacement.md` — checkboxes checked, status → review, Dev Agent Record filled
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — 24-12 status → review
