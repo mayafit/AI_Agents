@@ -826,7 +826,12 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     const bmadAgents = agents.filter(a => a.category === 'bmad');
 
     if (yesFlag) {
-      selectedAgentIds = [...ideAgents.map(a => a.id), ...bmadAgents.map(a => a.id)];
+      // Bug B1 fix: when --agent flag is present (preselectedAgents already
+      // populated selectedAgentIds), do NOT overwrite with all agents.
+      // Only fall back to all agents when no agent was pre-selected.
+      if (selectedAgentIds.length === 0) {
+        selectedAgentIds = [...ideAgents.map(a => a.id), ...bmadAgents.map(a => a.id)];
+      }
       if (selectedAgentIds.length === 0) {
         console.error(chalk.red('Error: No agents detected'));
         console.error(chalk.gray('  Hint: Ensure at least one supported IDE is present'));
