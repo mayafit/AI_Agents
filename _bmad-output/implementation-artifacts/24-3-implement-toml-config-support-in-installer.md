@@ -1,6 +1,6 @@
 # Story 24.3: Implement TOML Config Support in Installer (Conditional on 24.2)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -24,9 +24,9 @@ So that the ma-agents install flow remains correct regardless of whether BMAD mo
 
 ### Task 1: Confirm scope from Story 24.2 decision (AC: 1)
 
-- [ ] 1.1 Read Story 24.1 Dev Notes — locate the "Module config format check" finding
-- [ ] 1.2 If `config.yaml` still present → document "no-op confirmed", mark story done, skip Tasks 2-5
-- [ ] 1.3 If config moved to TOML → proceed with Tasks 2-5
+- [x] 1.1 Read Story 24.1 Dev Notes — locate the "Module config format check" finding
+- [x] 1.2 If `config.yaml` still present → document "no-op confirmed", mark story done, skip Tasks 2-5
+- [ ] 1.3 If config moved to TOML → proceed with Tasks 2-5 (N/A — config.yaml confirmed present)
 
 ### Task 2 (conditional): Update CANONICAL_CONFIG_REL in lib/bmad.js (AC: 2)
 
@@ -55,6 +55,10 @@ So that the ma-agents install flow remains correct regardless of whether BMAD mo
 - [ ] 5.3 Document findings in Dev Notes
 
 ## Dev Notes
+
+### No-op confirmed (2026-04-28)
+
+`_bmad/bmm/config.yaml` is confirmed present in BMAD v6.5.0 with all expected keys (`planning_artifacts`, `user_name`, `communication_language`, `document_output_language`, `implementation_artifacts`). Source: Story 24.1 scratch install findings + Story 24.2 architecture decision P5-1 Sub-decision A. TOML files are additive alongside `config.yaml` — no code changes required. Tasks 2-5 are explicitly skipped per Task 1.2 no-op path.
 
 ### Conditional structure is by design
 
@@ -123,17 +127,23 @@ How to run tests: `npm test` in `d:\Code\agents`
 |------|---------|--------|-------------|
 | 2026-04-26 | 1.0.0 | (pending) | Story drafted as part of Epic 24 planning |
 | 2026-04-28 | 1.1.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, exact constant locations, TOML library guidance, testing requirements |
+| 2026-04-28 | 2.0.0 | claude-sonnet-4-6 | No-op confirmed: config.yaml present in v6.5.0 (Sub-decision A CONFIRMED per Story 24.2). Tasks 2-5 skipped. Story marked review. |
 
 ## Dev Agent Record
 
 ### Agent Model Used
-(to be filled by implementing agent)
+claude-sonnet-4-6
 
 ### Debug Log References
 (none)
 
 ### Completion Notes List
-(none — story not yet implemented)
+1. Confirmed `_bmad/bmm/config.yaml` is present in BMAD v6.5.0 with all expected keys — source: Story 24.1 scratch install findings (see Dev Agent Record, Task 4) and Story 24.2 architecture decision P5-1 Sub-decision A.
+2. TOML files (`_bmad/config.toml`, `_bmad/config.user.toml`, `_bmad/custom/config.toml`, `_bmad/custom/config.user.toml`) are additive in v6.5.0 — they do not replace `config.yaml`.
+3. No code changes required. Tasks 2-5 explicitly skipped per Task 1.2 no-op path.
+4. `npm test` run: 29 passed, 1 pre-existing failure (`installed bmad-method is version 6.5.0` — worktree branch `chore/tighten-npm-tarball` predates Story 24.1; `node_modules` has 6.3.0 but test expects 6.5.0). Not caused by this story.
+5. Story status updated to `review`. sprint-status.yaml updated to `review`.
 
 ### File List
-(to be filled by implementing agent)
+- `_bmad-output/implementation-artifacts/24-3-implement-toml-config-support-in-installer.md` — story status, task checkboxes, dev notes, dev agent record updated
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — story status updated to `review`
