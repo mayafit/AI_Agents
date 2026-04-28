@@ -145,7 +145,7 @@ development_status:
   24-6-add-bmad-customize-skill-to-extension-plugin: review
   24-7-wire-on-complete-hooks-for-audit-and-cleanup: review
   24-8-verify-plugin-resolver-compatibility: review
-  24-10-release-gate-adversarial-review-and-semver-cut: ready-for-dev
+  24-10-release-gate-adversarial-review-and-semver-cut: review
   24-11-agents-skills-cross-tool-standard-routing-assessment: review
   24-12-persistent-facts-spike-marker-injection-replacement: review
   epic-24-retrospective: optional
