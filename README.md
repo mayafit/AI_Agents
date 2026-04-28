@@ -2,6 +2,17 @@
 
 A universal NPX tool to install AI coding agent skills. Write skills once, install them across Claude Code, Gemini, Copilot, Cline, Cursor, Kilocode, and Roo Code.
 
+## What's New in v3.8.0
+
+- **BMAD-METHOD v6.5.0** — upgraded from 6.3.0; 42-platform baseline, TOML customization coexistence confirmed
+- **`--agent` flag fixed** — `--agent claude-code` now correctly scopes the entire install (skills, BMAD update, instruction-block stamping) to that tool only; previously it was ignored in non-interactive mode
+- **Stale Copilot skills dir cleanup** — upgrading from an older version that used `.github/copilot/skills/` now automatically removes the old directory when `.github/skills/` is populated
+- **Plugin resolver verified** — bundle resolves via BMAD's Strategy 1 (module.yaml); no package.json needed; 134 skills install cleanly in all CI matrix configurations
+
+See [CHANGELOG.md](CHANGELOG.md) for full release notes.
+
+---
+
 ## Installation & Usage
 
 `ma-agents` is designed to be run via `npx` in the root of your project.
@@ -23,7 +34,7 @@ npx ma-agents install code-review claude-code --global
 # CI/CD: skip all prompts, use defaults
 npx ma-agents install --yes
 
-# Target a specific agent only
+# Scope the entire install to one agent (skills, BMAD update, instruction block)
 npx ma-agents install --yes --agent claude-code
 ```
 
@@ -290,6 +301,7 @@ Running `ma-agents` on a project where skills are already installed triggers the
    - Re-injects the latest instructions into `CLAUDE.md`, `.clinerules`, etc.
    - Regenerates the `MANIFEST.yaml` to reflect the current skill set.
    - Updates BMAD-METHOD personas and workflows to the latest versions if detected.
+   - **Cleans up stale tool directories** — if a tool's skill path changed between releases (e.g., Copilot migrated from `.github/copilot/skills/` to `.github/skills/`), the old directory is automatically removed when the new one has content.
 
 ### BMAD-METHOD Integration
 `ma-agents` bundles [BMAD-METHOD](https://docs.bmad-method.org/) **v6.5.0** to provide advanced orchestration and specialized personas.
@@ -445,7 +457,7 @@ npx ma-agents install code-review claude-code --force
 | Flag | Description |
 |------|-------------|
 | `--yes` | Skip all prompts, use defaults. Selects all detected agents, installs/updates BMAD automatically. |
-| `--agent <name>` | Target a specific agent — skips agent selection. Run `npx ma-agents agents` for valid names. |
+| `--agent <name>` | Scope the entire install to one agent — skill selection, BMAD update, and instruction-block stamping all apply to that tool only. Run `npx ma-agents agents` for valid names. |
 | `--force` | Skip upgrade prompts, always overwrite existing installations. |
 | `--global` | Install to global/user-level paths instead of project-level. |
 | `--path <dir>` | Custom installation directory. |
