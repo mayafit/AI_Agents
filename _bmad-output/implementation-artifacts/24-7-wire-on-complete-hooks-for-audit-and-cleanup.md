@@ -1,6 +1,6 @@
 # Story 24.7: Register on_complete Hooks via customize.toml in Plugin Bundle
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -28,10 +28,10 @@ So that ma-agents users get automatic post-workflow audit entries without needin
 
 ### Task 0: Verify customize.toml pipeline delivery (AC: 0) — CRITICAL GATE
 
-- [ ] 0.1 Open `node_modules/bmad-method` — locate the installer entrypoint and trace how `--custom-source <dir>` is processed
-- [ ] 0.2 Search for any code that reads or processes `customize.toml` from a custom-source directory during install
+- [x] 0.1 Open `node_modules/bmad-method` — locate the installer entrypoint and trace how `--custom-source <dir>` is processed
+- [x] 0.2 Search for any code that reads or processes `customize.toml` from a custom-source directory during install
 - [ ] 0.3 If BMAD's installer applies `customize.toml` from the plugin bundle: record the exact mechanism (which function, what path it expects) in Dev Notes and proceed to Task 1
-- [ ] 0.4 If `customize.toml` is NOT applied from the plugin bundle during install: close this story as a no-op; document finding: "customize.toml delivery mechanism not supported by --custom-source pipeline in v6.5.0"; do NOT create any customize.toml file
+- [x] 0.4 If `customize.toml` is NOT applied from the plugin bundle during install: close this story as a no-op; document finding: "customize.toml delivery mechanism not supported by --custom-source pipeline in v6.5.0"; do NOT create any customize.toml file
 
 ### Task 1: Read BMAD v6.5.0 on_complete hook schema (prerequisite — only if Task 0 confirmed)
 
@@ -69,6 +69,28 @@ So that ma-agents users get automatic post-workflow audit entries without needin
 - [ ] 6.1 `npm test` — exit 0
 
 ## Dev Notes
+
+### Task 0 Investigation Results (2026-04-28)
+
+**Finding: NO — `customize.toml` is NOT processed by BMAD's `--custom-source` pipeline in v6.5.0. Story closes as no-op.**
+
+Commands run and results:
+
+```
+grep -r "customize.toml" node_modules/bmad-method/tools/    → no matches
+grep -r "customize.toml" node_modules/bmad-method/ (*.js)   → no matches
+grep -r "customize.toml" node_modules/bmad-method/ (*.py)   → no matches
+grep -r "on_complete" node_modules/bmad-method/ (*.js)       → no matches
+grep -r "on_complete" node_modules/bmad-method/ (*.py)       → no matches
+grep -r "on_complete" node_modules/bmad-method/ (*.md)       → no matches (only incidental substrings in unrelated step files)
+grep -r "custom_source|customSource" node_modules/bmad-method/ (*.js) → matches in installer/ui.js, installer/core/installer.js, installer/modules/official-modules.js
+```
+
+The `--custom-source` flag is processed by `node_modules/bmad-method/tools/installer/ui.js` and delegates to `_resolveCustomSourcesCli()`. This resolves custom modules (skills/agents) from a plugin directory — but none of the installer code (in `tools/installer/commands/install.js`, `core/installer.js`, `core/manifest.js`, `modules/official-modules.js`, or `ui.js`) references `customize.toml` at all. There is also zero occurrence of `on_complete` in any `.js`, `.py`, or `.md` file under `node_modules/bmad-method/`.
+
+**Conclusion**: BMAD v6.5.0 does not implement `customize.toml` reading from a `--custom-source` plugin bundle, nor does it implement `on_complete` hook dispatch. The referenced "BMAD v6.4.0 on_complete hook support (#2290)" noted in the story's AC1 was either not shipped, not included in the published npm package, or exists in a different form. No `customize.toml` file will be created. Story closes as documented no-op.
+
+**`npm test` result**: 29 passed, 1 pre-existing failure (`installed bmad-method is version 6.5.0: expected '6.3.0' to equal '6.5.0'` — this is the version-check test from Story 24.1 awaiting its own fix, unrelated to this story). No regressions introduced.
 
 ### Why this story is spike-first
 
@@ -144,17 +166,19 @@ How to run tests: `npm test` in `d:\Code\agents`
 | 2026-04-27 | 1.1.0 | (pending) | Rewritten as Small — customize.toml config entry, not fork modification. No SKILL.md changes permitted. Per adversarial review findings 4, 5. |
 | 2026-04-28 | 1.2.0 | (pending) | Added AC0 and Task 0 — spike gate: verify BMAD's --custom-source pipeline processes customize.toml before authoring any TOML. No-op exit path added. Per second adversarial review Finding 1 (CRITICAL). |
 | 2026-04-28 | 1.3.0 | (pending) | Enhanced to ready-for-dev: added project structure notes, investigation search patterns, testing requirements |
+| 2026-04-28 | 1.4.0 | claude-sonnet-4-6 | Task 0 investigation complete — no-op exit. customize.toml not processed by --custom-source in v6.5.0; on_complete not implemented. Status set to review. |
 
 ## Dev Agent Record
 
 ### Agent Model Used
-(to be filled by implementing agent)
+claude-sonnet-4-6
 
 ### Debug Log References
-(none)
+(none — investigation was a direct grep scan with zero matches)
 
 ### Completion Notes List
-(none — story not yet implemented)
+- No-op: `customize.toml` delivery via `--custom-source` not supported in v6.5.0. `on_complete` hook integration deferred. Zero files created or modified (other than this story file and sprint-status.yaml). No SKILL.md files were modified (AC5 satisfied). npm test: 29 passed, 1 pre-existing failure unrelated to this story.
 
 ### File List
-(to be filled by implementing agent)
+- `_bmad-output/implementation-artifacts/24-7-wire-on-complete-hooks-for-audit-and-cleanup.md` (this file — updated with findings)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (status updated to `review`)

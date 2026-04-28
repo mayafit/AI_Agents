@@ -143,7 +143,7 @@ development_status:
   24-3-implement-toml-config-support-in-installer: review
   24-4-reconcile-forked-skills-with-customize-toml: ready-for-dev
   24-6-add-bmad-customize-skill-to-extension-plugin: review
-  24-7-wire-on-complete-hooks-for-audit-and-cleanup: ready-for-dev
+  24-7-wire-on-complete-hooks-for-audit-and-cleanup: review
   24-8-verify-plugin-resolver-compatibility: ready-for-dev
   24-10-release-gate-adversarial-review-and-semver-cut: ready-for-dev
   24-11-agents-skills-cross-tool-standard-routing-assessment: ready-for-dev
