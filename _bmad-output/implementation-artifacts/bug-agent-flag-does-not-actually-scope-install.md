@@ -1,7 +1,7 @@
 ---
 type: bug
 severity: low
-status: ready-for-dev
+status: review
 title: --agent flag does not actually scope the install
 ---
 
@@ -125,13 +125,22 @@ How to run tests: `npm test` in `d:\Code\agents` (runs all ~50 test files sequen
 ## Dev Agent Record
 
 ### Agent Model Used
-(to be filled by implementing agent)
+claude-sonnet-4-6
 
 ### Debug Log References
-(none)
+(none — fix was straightforward, no debug logs needed)
 
 ### Completion Notes List
-(none — story not yet implemented)
+- Fixed `installWizard` Step 2 in `bin/cli.js`: when `--agent` flag pre-selects agents, `yesFlag=true` no longer overwrites `selectedAgentIds` with all agents. The guard `if (selectedAgentIds.length === 0)` ensures the pre-selected agent(s) are honoured.
+- Updated `.github/scripts/multi-tool-smoke-verify.sh`: removed the "known limitation" workaround comment in Step 3; added Invariant E that asserts other flagship tools' skill dirs are absent after a scoped install.
+- Added `test/agent-scope.test.js` with 6 assertions covering: target dir created, 4 other dirs absent, manifest agents array contains only the target agent.
+- Added `test/agent-scope.test.js` to `package.json` test script.
+- Minor note: `bash` associative arrays (`declare -A`) require bash 4+; macOS ships bash 3.2 by default. The CI environment uses ubuntu-latest which has bash 5, so Invariant E in the shell script is safe. (Minor finding — not blocking.)
 
 ### File List
-(to be filled by implementing agent)
+- `bin/cli.js` — Bug B1 fix: guard in Step 2 preserves preselectedAgents when yesFlag=true
+- `.github/scripts/multi-tool-smoke-verify.sh` — removed workaround comment; added Invariant E (scoping regression guard)
+- `test/agent-scope.test.js` — new: 6 regression tests for agent-scoped install
+- `package.json` — added agent-scope.test.js to test script
+- `_bmad-output/implementation-artifacts/bug-agent-flag-does-not-actually-scope-install.md` — status → review
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — status → review

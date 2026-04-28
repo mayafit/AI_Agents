@@ -151,12 +151,8 @@ log "[3/5] Running ma-agents install --agent $TOOL"
 # spec used `--tools` as an aspirational placeholder. Match Story 22.9's
 # invocation convention for consistency.
 #
-# NOTE: currently the ma-agents installer runs the full multi-agent flow
-# even when --agent is passed; the flag does not hard-scope the install to
-# a single target. This is a known limitation (tracked separately). For
-# the smoke test's purposes, all we need is that the specified tool's
-# skills directory is populated — the extra work for other tools is
-# wasted but harmless.
+# Bug B1 fix: --agent now hard-scopes the install to a single tool target.
+# Invariant E (below) asserts that other tools' skill directories are absent.
 set +e
 node "$PKG_DIR/bin/cli.js" install --yes --force --agent "$TOOL"
 install_exit=$?
@@ -266,6 +262,35 @@ else
   err "        (override with SKIP_PERSONA_CHECK=1 ONLY for tools that cannot host type:agent skills)"
   fail=$((fail + 1))
 fi
+
+# Invariant E: Bug B1 regression guard — other flagship tools' skill
+# directories must NOT be created when --agent scopes the install to a
+# single tool. An --agent install must be a hard scope, not an over-install.
+#
+# Flagship tool → skills dir mapping (must stay in sync with lib/agents.js):
+#   claude-code  → .claude/skills
+#   copilot      → .github/skills
+#   cline        → .cline/skills
+#   roo-code     → .roo/skills
+#   kilocode     → .kilocode/skills
+declare -A FLAGSHIP_DIRS
+FLAGSHIP_DIRS["claude-code"]=".claude/skills"
+FLAGSHIP_DIRS["copilot"]=".github/skills"
+FLAGSHIP_DIRS["cline"]=".cline/skills"
+FLAGSHIP_DIRS["roo-code"]=".roo/skills"
+FLAGSHIP_DIRS["kilocode"]=".kilocode/skills"
+for other_tool in claude-code copilot cline roo-code kilocode; do
+  if [ "$other_tool" = "$TOOL" ]; then
+    continue  # skip the target tool itself
+  fi
+  other_dir="${FLAGSHIP_DIRS[$other_tool]}"
+  if [ -d "$PROJECT_DIR/$other_dir" ]; then
+    err "  FAIL: --agent $TOOL install created $other_dir (belongs to $other_tool) — scoping regression"
+    fail=$((fail + 1))
+  else
+    log "  OK:   $other_dir absent (correct — not the target tool)"
+  fi
+done
 
 # ---------------------------------------------------------------------------
 # Step 5 — Report to $GITHUB_STEP_SUMMARY (if present) for a glanceable
