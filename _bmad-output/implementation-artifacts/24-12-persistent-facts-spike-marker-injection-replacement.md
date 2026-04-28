@@ -57,7 +57,7 @@ Regardless of what this spike finds, do not add new marker-injection features an
 
 ### Input from Story 24.2
 
-Story 24.2 Task 3 contains preliminary findings from reading the `persistent_facts` schema. Use those findings as a starting point — don't duplicate that research.
+Story 24.2 Task 3 preliminary finding (2026-04-28, claude-sonnet-4-6): `persistent_facts` field not found in node_modules/bmad-method v6.5.0 npm package — searched .md, .toml, .yaml, and .js files with zero matches. The field is referenced in v6.4.0 release notes and architecture documentation as a TOML-based mechanism for injecting persistent agent instructions, but is not present in the installed npm package source. This may indicate the feature lives in Discord/release-notes documentation only, or is implemented in a layer of the tooling (e.g., the BMAD CLI runtime) that is not shipped as readable source in the npm tarball. Story 24.12 should investigate directly from the GitHub source repository (not node_modules) to determine whether `persistent_facts` is a viable replacement for ma-agents' marker-injection layer. Until the injection surface is confirmed, assessment is PARTIAL at best: even if the field exists, it would need to reach all 6 tool contexts (Claude Code, Copilot, Cline, Roo Code, Kilocode, OpenCode) to replace the current layer. Story 24.12 to check GitHub source.
 
 ### Reference Files
 

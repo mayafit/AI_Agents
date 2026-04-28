@@ -2132,8 +2132,6 @@ Net deletion: ~140 lines. Replacement: ~30 lines for stage-and-invoke.
 
 #### Decision P5-1: BMAD v6.5.0 Integration (FR196–FR210, NFR55–NFR58)
 
-> **STATUS: TENTATIVE** — Sub-decision A (TOML config coexistence) is not confirmed until Story 24.2 verifies that `_bmad/bmm/config.yaml` still exists and carries the expected keys in v6.4.0/v6.5.0 output. Story 24.2 may amend this decision before implementation begins.
-
 **Context.** BMAD-METHOD v6.4.0 and v6.5.0 ship two breaking changes and several features that touch ma-agents directly:
 
 Breaking (v6.4.0):
@@ -2157,9 +2155,21 @@ Non-breaking improvements inherited for free: PRD scope-reduction guardrail (#19
 
 **Decision.** Two sub-decisions:
 
-**Sub-decision A — TOML config format: COEXISTENCE (TENTATIVE).** The new `_bmad/config.toml` is BMAD's project-level config. `_bmad/bmm/config.yaml` is expected to remain the module-level config read by `bmad-init.py` and the ma-agents workflow skills. These serve different purposes: project-level config stores agent roster and install answers; module-level config stores bmad-init state. Story 24.2 must confirm this assumption by verifying that `_bmad/bmm/config.yaml` is still written by v6.5.0 with the expected keys (`planning_artifacts`, `user_name`, `communication_language`, etc.). If module config has migrated to TOML, Story 24.3 expands to add TOML read support to `bmad-init.py` and update `CANONICAL_CONFIG_REL`.
+**Sub-decision A — TOML config format: COEXISTENCE (CONFIRMED).** The new `_bmad/config.toml` is BMAD's project-level config. `_bmad/bmm/config.yaml` is the module-level config read by `bmad-init.py` and the ma-agents workflow skills. These serve different purposes: project-level config stores agent roster and install answers; module-level config stores bmad-init state. `_bmad/bmm/config.yaml` confirmed present in v6.5.0 scratch install with keys: `planning_artifacts`, `user_name`, `communication_language`, `document_output_language`, `implementation_artifacts`. Four new TOML files also written alongside YAML (`_bmad/config.toml`, `_bmad/config.user.toml`, `_bmad/custom/config.toml`, `_bmad/custom/config.user.toml`) — TOML is additive. Story 24.3 scope: TOML coexistence is confirmed. Story 24.3 may assess whether ma-agents should READ the new TOML files, but the YAML config path is not broken.
 
-**Sub-decision B — Custom workflow skills: ABSORB, not reconcile.** The 4 ma-agents workflow skills (`bmad-sprint-planning`, `bmad-sprint-status`, `bmad-dev-story`, `bmad-code-review`) are NOT upstream forks — they are entirely custom workflows built around ma-agents' sprint-status.yaml schema and AiAudit.md integration. "Migrate to customize.toml" does not apply to these skills. Story 24.4's scope is: evaluate whether v6.4.0's newly customize.toml-capable workflows (`bmad-quick-dev`, `bmad-checkpoint-preview`) add capabilities that should be absorbed into the ma-agents custom skill set, and if so, add them to the plugin bundle.
+**Sub-decision B — Custom workflow skills: ABSORB, not reconcile (CONFIRMED).** The 4 ma-agents workflow skills (`bmad-sprint-planning`, `bmad-sprint-status`, `bmad-dev-story`, `bmad-code-review`) are NOT upstream forks — they are entirely custom workflows built around ma-agents' sprint-status.yaml schema and AiAudit.md integration. "Migrate to customize.toml" does not apply to these skills. Story 24.4's scope is: evaluate whether v6.4.0's newly customize.toml-capable workflows (`bmad-quick-dev`, `bmad-checkpoint-preview`) add capabilities that should be absorbed into the ma-agents custom skill set, and if so, add them to the plugin bundle.
+
+**Evidence base (Story 24.2 findings).**
+
+- **Story 24.1 config finding:** Scratch install of v6.5.0 confirmed `_bmad/bmm/config.yaml` is written with all 5 expected keys. Four new TOML files written alongside (additive). Sub-decision A confirmed with no code changes required.
+- **bmad-quick-dev / bmad-checkpoint-preview absorb assessment (Story 24.4 input):**
+
+  | Skill | sprint-status? | AiAudit? | Decision | Rationale |
+  |-------|---------------|----------|----------|-----------|
+  | bmad-quick-dev | no | no | out of scope | Upstream skill is a general-purpose dev workflow with no sprint-status.yaml or AiAudit.md integration; not additive to ma-agents plugin |
+  | bmad-checkpoint-preview | partial (reads sprint-status for review-status stories) | no | out of scope | Only passively reads sprint-status to list review-blocked stories; no write integration, no AiAudit.md; not additive enough to warrant absorption |
+
+- **persistent_facts preliminary finding (Story 24.12 input):** `persistent_facts` field not found in node_modules/bmad-method v6.5.0 npm package (no matches in .md, .toml, .yaml, or .js files). May be Discord/release-notes only, not shipped in npm package. Story 24.12 spike should check GitHub source directly. Assessment: PARTIAL at best — even if present, the field would need to reach all 6 tool contexts (Claude Code, Copilot, Cline, Roo Code, Kilocode, OpenCode) to replace ma-agents' marker-injection layer; npm package evidence is insufficient to determine injection surface.
 
 **New flow / component changes.**
 

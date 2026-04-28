@@ -78,8 +78,16 @@ This story is only about additive absorption: do the 2 newly customize.toml-capa
 
 | Skill | Integration points found | Decision | Rationale |
 |-------|--------------------------|----------|-----------|
-| bmad-quick-dev | (filled by 24.2) | (filled by 24.2) | (filled by 24.2) |
-| bmad-checkpoint-preview | (filled by 24.2) | (filled by 24.2) | (filled by 24.2) |
+| bmad-quick-dev | no sprint-status.yaml integration, no AiAudit.md integration | out of scope | General-purpose upstream dev workflow; reads config.yaml for language/path config but has no sprint-status or AiAudit write integration. Not additive to ma-agents plugin. |
+| bmad-checkpoint-preview | reads sprint-status passively (scans for review-status stories), no AiAudit.md | out of scope | Only passively reads sprint-status to surface review-blocked stories; no write integration, no AiAudit.md. Value does not justify absorption overhead. |
+
+### Input from Story 24.2
+
+Assessment conducted 2026-04-28 by claude-sonnet-4-6 during Story 24.2 implementation.
+
+**bmad-quick-dev:** Inspected `node_modules/bmad-method/src/bmm-skills/4-implementation/bmad-quick-dev/SKILL.md` and `workflow.md`. The skill loads `_bmad/bmm/config.yaml` for project config variables and uses a multi-step workflow (clarify → plan → implement → review → present). No references to sprint-status.yaml (write) or AiAudit.md found. Decision: **out of scope**.
+
+**bmad-checkpoint-preview:** Inspected `node_modules/bmad-method/src/bmm-skills/4-implementation/bmad-checkpoint-preview/SKILL.md` and `step-01-orientation.md`. The skill scans for a sprint-status file to list stories at `review` status — this is a passive read for context only. No AiAudit.md integration found. Decision: **out of scope**.
 
 ### Reference Files
 
