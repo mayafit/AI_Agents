@@ -1,6 +1,6 @@
 {
   "generated": "2026-04-23T17:33:59.621Z",
-  "bmadMethodVersion": "6.3.0",
+  "bmadMethodVersion": "6.5.0",
   "registrySchema": "v63",
   "modules": {
     "bmb": {

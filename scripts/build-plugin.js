@@ -392,7 +392,7 @@ function writeResolvedMarketplaceJson(stagingDir, pkg) {
 // Skills tree copy.
 //
 // Source `lib/bmad-extension/skills/` contains:
-//   - module.yaml         (BMAD v6.3.0 canonical location)
+//   - module.yaml         (BMAD v6.5.0 canonical location)
 //   - module-help.csv     (PluginResolver Strategy 1 companion)
 //   - <skill-name>/       (one directory per skill)
 //       ├── SKILL.md
