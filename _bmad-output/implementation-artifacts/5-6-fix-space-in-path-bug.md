@@ -1,6 +1,6 @@
 # Story 5.6: Fix Space-in-Path Bug
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Epic: 5 — Bundled BMAD Installation (Phase 2) -->
