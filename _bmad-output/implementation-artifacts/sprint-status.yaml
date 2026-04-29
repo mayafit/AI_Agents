@@ -8,6 +8,7 @@
 # updated: 2026-04-23 — Archived Epic 17 (Sprint Management Model Rework, 16 stories 17.9-17.24) and Epic 21 (On-Prem / Local-LLM Tuning, 11 stories 21.1-21.11). Archived 2 bug stories (experimentalwarning, airgapped-recompile). Story files moved to implementation-artifacts/done/; removed from active sprint-status.yaml.
 # updated: 2026-04-26 — Epic 24 (BMAD v6.5.0 Integration) added to backlog (10 stories, 24.1-24.10). Pre-epic bugs B1 and B2 registered.
 # updated: 2026-04-27 — Epic 24 revised after adversarial review: target bumped to v6.5.0; 24.1 reclassified Medium; 24.4 reframed (custom workflows, not forks); 24.7 reframed as Small (customize.toml); 24.8+24.9 merged; Stories 24.11 (.agents/skills/ routing) and 24.12 (persistent_facts spike) added. Net: 10 numbered stories (24.1-24.12, no 24.5/24.9) + 2 bugs (B1, B2) = 12 total.
+# updated: 2026-04-29 — Reconciled against git ground truth: Epic 24 fully released in v3.8.0 (PR #85) — all 10 stories + bugs B1/B2 marked done. Epic 14 redesigned (Jira backend, 4 stories replacing old 5-story list). Story 17.22 added as ready-for-dev (Jira Phase A routing). Stories 16.1/16.2 Jira enhancements added as ready-for-dev (FR139). Epic 19 corrected from in-progress to backlog.
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system
@@ -25,7 +26,7 @@
 # Old Epic 17 stories (17.1-17.8) archived; replaced by 17.9-17.24.
 
 generated: 2026-03-15
-last_updated: "2026-04-28 — All Epic 24 stories enhanced and set to ready-for-dev"
+last_updated: "2026-04-29 — Story 14.4 done: two-case Jira error messages (missing-tool vs API-error) in all 13 skills"
 project: agents
 project_key: NOKEY
 tracking_system: file-system
@@ -34,8 +35,8 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   # ─── ACTIVE BUGS ──────────────────────────────────────────────────────────────
   # Standalone bug stories — discoverable via glob: _bmad-output/implementation-artifacts/bug-*.md
-  bug-agent-flag-does-not-actually-scope-install: review
-  bug-stale-copilot-skills-dir-not-cleaned-on-upgrade: review
+  bug-agent-flag-does-not-actually-scope-install: done
+  bug-stale-copilot-skills-dir-not-cleaned-on-upgrade: done
 
   # ─── IN PROGRESS ──────────────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ development_status:
   # Epic 19: BMAD Knowledge Graph (Phase 3)
   # Dependencies: Epic 15 (extension module structure), Epic 17 (sprint skill structure settled)
   # Execution order: 19.1 → 19.2+19.3+19.4 (parallel) → 19.5 → 19.6 → 19.7
-  epic-19: in-progress
+  epic-19: backlog
   19-1-knowledge-graph-core-library: ready-for-dev
   19-2-graph-emission-create-prd: ready-for-dev
   19-3-graph-emission-create-architecture-epics: ready-for-dev
@@ -91,15 +92,28 @@ development_status:
   18-8-end-to-end-validation-test-coverage: done
   epic-18-retrospective: optional
 
-  # Epic 14: External Tooling Integration
-  # Dependencies: Epic 12, Epic 10, Epic 13 | Analyst + Architect required
-  # Stories 14.4, 14.5 blocked on Story 14.3 architecture approval
+  # Epic 17 — Jira Phase A (new, post-archival redesign 2026-04-29)
+  # Story 17.22 was redesigned AFTER Epic 17 archival (2026-04-23). It ships the backend-routing
+  # structure (tracking_system switch) in all 13 sprint skills as a Phase A placeholder.
+  # Epic 14 Story 14.3 later fills in the Jira operation body — it is blocked on this story.
+  17-22-embed-backend-routing-13-sprint-skills: ready-for-dev
+
+  # Epic 16 — Jira enhancement (post-archival, FR139)
+  # Epic 16 was archived as done (2026-04-03). Stories 16.1 and 16.2 require enhancement to add
+  # Jira as a 4th wizard option (FR139: install-time backend selection). Should ship with Story 17.22.
+  16-1-repository-layout-wizard-jira-enhancement: ready-for-dev
+  16-2-config-storage-jira-enhancement: ready-for-dev
+
+  # Epic 14: Jira Backend Integration for Sprint Skills (Phase 3) — redesigned 2026-04-29
+  # Goal: All 13 sprint skills route on tracking_system and perform Jira operations when configured.
+  # Dependencies: Story 17.22 must ship first (provides backend-routing structure); 14.1 before 14.3
+  # Execution order: 14.1 → 14.3 (blocked on 14.1 + 17.22) → 14.4 (blocked on 14.3)
+  # Story 14.2 (Confluence) is DEFERRED — requires new PRD FR defining knowledge_backend field
   epic-14: backlog
-  14-1-research-sprint-management-integration: backlog
-  14-2-research-knowledge-management-integration: backlog
-  14-3-architecture-external-tooling-abstraction: backlog
-  14-4-implement-jira-backend: backlog
-  14-5-implement-confluence-backend: backlog
+  14-1-define-jira-operation-descriptions: backlog
+  14-2-confluence-mcp-integration: backlog  # DEFERRED — out of scope until PRD defines knowledge_backend
+  14-3-implement-jira-operation-branch-sprint-skills: done
+  14-4-jira-onboarding-guidance-error-messages: done
   epic-14-retrospective: optional
 
   # Epic 22: BMAD v6.3.0 Plugin Migration (Phase 4)
@@ -137,15 +151,15 @@ development_status:
   # Note: 24.12 is serialized AFTER 24.2 (uses 24.2's persistent_facts research) and BEFORE 24.11 (its finding
   # informs whether 24.11's routing changes are temporary or permanent). 24.7 may no-op if Task 0 fails.
   # All 12 stories: B1, B2, 24.1, 24.2, 24.3, 24.4, 24.6, 24.7, 24.8, 24.10, 24.11, 24.12 (no 24.5 or 24.9)
-  epic-24: backlog
-  24-1-bump-bmad-method-to-6-4-0-and-verify-fs-native-compat: review
-  24-2-confirm-p5-1-architecture-decision: review
-  24-3-implement-toml-config-support-in-installer: review
-  24-4-reconcile-forked-skills-with-customize-toml: review
-  24-6-add-bmad-customize-skill-to-extension-plugin: review
-  24-7-wire-on-complete-hooks-for-audit-and-cleanup: review
-  24-8-verify-plugin-resolver-compatibility: review
-  24-10-release-gate-adversarial-review-and-semver-cut: review
-  24-11-agents-skills-cross-tool-standard-routing-assessment: review
-  24-12-persistent-facts-spike-marker-injection-replacement: review
+  epic-24: done
+  24-1-bump-bmad-method-to-6-4-0-and-verify-fs-native-compat: done
+  24-2-confirm-p5-1-architecture-decision: done
+  24-3-implement-toml-config-support-in-installer: done
+  24-4-reconcile-forked-skills-with-customize-toml: done
+  24-6-add-bmad-customize-skill-to-extension-plugin: done
+  24-7-wire-on-complete-hooks-for-audit-and-cleanup: done
+  24-8-verify-plugin-resolver-compatibility: done
+  24-10-release-gate-adversarial-review-and-semver-cut: done
+  24-11-agents-skills-cross-tool-standard-routing-assessment: done
+  24-12-persistent-facts-spike-marker-injection-replacement: done
   epic-24-retrospective: optional
