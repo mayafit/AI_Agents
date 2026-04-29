@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.0] - 2026-04-28
+
+### Bug Fixes
+
+- **Routing alignment for copilot, roo-code, kilocode (bmad-method 6.5.0)**:
+  `bmad-method 6.5.0` moved the `github-copilot`, `roo`, and `kilo` platform
+  `target_dir` values from tool-specific paths (`.github/skills`, `.roo/skills`,
+  `.kilocode/skills`) to the shared `.agents/skills/` directory. `lib/agents.js`
+  `skillsDir`, `lib/bmad.js` `TOOL_SKILL_DIRS`, multi-tool smoke workflow, and
+  smoke verifier `FLAGSHIP_DIRS` are now aligned to `.agents/skills/` for these
+  three platforms. Persona skills (`ma-agent-*`) now land correctly in all five
+  flagship tools under CI.
+- **Migration**: `OBSOLETE_TOOL_SKILL_DIRS` extended with `.github/skills`,
+  `.roo/skills`, and `.kilocode/skills` entries so stale directories from 3.8.0
+  installs are automatically cleaned up on the next `ma-agents install`.
+- **Invariant E (smoke test)**: Updated to skip scoping checks when two tools
+  share the same directory (the shared `.agents/skills/` case).
+
 ## [3.8.0] - 2026-04-28
 
 ### Bug Fixes
