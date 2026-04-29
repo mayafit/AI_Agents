@@ -26,7 +26,7 @@
 # Old Epic 17 stories (17.1-17.8) archived; replaced by 17.9-17.24.
 
 generated: 2026-03-15
-last_updated: "2026-04-29 — v3.8.1: align copilot/roo-code/kilocode to .agents/skills (bmad-method 6.5.0 routing fix)"
+last_updated: "2026-04-29 — Stories 16.1 + 16.2 done: Jira as 4th sprint management option in wizard"
 project: agents
 project_key: NOKEY
 tracking_system: file-system
@@ -101,8 +101,8 @@ development_status:
   # Epic 16 — Jira enhancement (post-archival, FR139)
   # Epic 16 was archived as done (2026-04-03). Stories 16.1 and 16.2 require enhancement to add
   # Jira as a 4th wizard option (FR139: install-time backend selection). Should ship with Story 17.22.
-  16-1-repository-layout-wizard-jira-enhancement: ready-for-dev
-  16-2-config-storage-jira-enhancement: ready-for-dev
+  16-1-repository-layout-wizard-jira-enhancement: done
+  16-2-config-storage-jira-enhancement: done
 
   # Epic 14: Jira Backend Integration for Sprint Skills (Phase 3) — redesigned 2026-04-29
   # Goal: All 13 sprint skills route on tracking_system and perform Jira operations when configured.

@@ -380,6 +380,46 @@ async function collectRemotePath(concern) {
   }
 }
 
+async function collectJiraConfig() {
+  // Collect Jira server URL
+  let jiraUrl;
+  while (true) {
+    const { url } = await prompts({
+      type: 'text',
+      name: 'url',
+      message: 'Jira server URL (e.g. https://mycompany.atlassian.net):'
+    });
+    if (!url || !url.trim()) {
+      console.log(chalk.red('  Jira server URL cannot be empty. Please try again.'));
+      continue;
+    }
+    jiraUrl = url.trim();
+    break;
+  }
+
+  // Collect Jira project key
+  let jiraProjectKey;
+  while (true) {
+    const { key } = await prompts({
+      type: 'text',
+      name: 'key',
+      message: 'Jira project key (e.g. MYPROJ):'
+    });
+    if (!key || !key.trim()) {
+      console.log(chalk.red('  Jira project key cannot be empty. Please try again.'));
+      continue;
+    }
+    if (!/^[A-Z][A-Z0-9]+$/.test(key.trim())) {
+      console.log(chalk.red('  Jira project key must be uppercase alphanumeric (e.g. MYPROJ). Please try again.'));
+      continue;
+    }
+    jiraProjectKey = key.trim();
+    break;
+  }
+
+  return { mode: 'jira', jiraUrl, jiraProjectKey };
+}
+
 function normalizePath(p) {
   return p.replace(/\\/g, '/');
 }
@@ -428,24 +468,43 @@ function writeRepoLayoutConfig(layout) {
   const configPath = path.join(process.cwd(), '_bmad', 'bmm', 'config.yaml');
   try {
     if (!fs.existsSync(configPath)) {
-      console.log(chalk.yellow('  _bmad/bmm/config.yaml not found — skipping config write'));
-      return;
+      // Create an empty file so writeConfigField can append to it
+      fs.mkdirSync(path.join(process.cwd(), '_bmad', 'bmm'), { recursive: true });
+      fs.writeFileSync(configPath, '', 'utf-8');
     }
     let content = fs.readFileSync(configPath, 'utf-8');
     const projectRoot = process.cwd();
     const kbPortable = toPortablePath(layout.knowledgebase.path, projectRoot);
-    const spPortable = toPortablePath(layout.sprintManagement.path, projectRoot);
     const kbPath = kbPortable.portable;
-    const spPath = spPortable.portable;
     content = writeConfigField(content, 'knowledgebase_path', kbPath);
-    content = writeConfigField(content, 'sprint_management_path', spPath);
-    // Derive workflow-consumable artifact paths from layout paths (relative when base is relative)
-    const planningArtifacts = kbPath === '.' ? '_bmad-output/planning-artifacts' : `${kbPath}/_bmad-output/planning-artifacts`;
-    const implArtifacts = spPath === '.' ? '_bmad-output/implementation-artifacts' : `${spPath}/_bmad-output/implementation-artifacts`;
-    content = writeConfigField(content, 'planning_artifacts', planningArtifacts);
-    content = writeConfigField(content, 'implementation_artifacts', implArtifacts);
-    fs.writeFileSync(configPath, content, 'utf-8');
-    console.log(chalk.gray(`  Config: knowledgebase_path="${kbPath}", sprint_management_path="${spPath}"`));
+
+    const spMode = layout.sprintManagement.mode;
+    if (spMode === 'jira') {
+      // Jira backend: write sprint_backend + Jira config; no sprint_management_path
+      content = writeConfigField(content, 'sprint_backend', 'jira');
+      content = writeConfigField(content, 'jira_url', layout.sprintManagement.jiraUrl);
+      content = writeConfigField(content, 'jira_project_key', layout.sprintManagement.jiraProjectKey);
+      // Derive artifact paths from kb only
+      const planningArtifacts = kbPath === '.' ? '_bmad-output/planning-artifacts' : `${kbPath}/_bmad-output/planning-artifacts`;
+      const implArtifacts = '_bmad-output/implementation-artifacts';
+      content = writeConfigField(content, 'planning_artifacts', planningArtifacts);
+      content = writeConfigField(content, 'implementation_artifacts', implArtifacts);
+      fs.writeFileSync(configPath, content, 'utf-8');
+      console.log(chalk.gray(`  Config: knowledgebase_path="${kbPath}", sprint_backend=jira, jira_url="${layout.sprintManagement.jiraUrl}", jira_project_key="${layout.sprintManagement.jiraProjectKey}"`));
+    } else {
+      // File-system backend
+      const spPortable = toPortablePath(layout.sprintManagement.path, projectRoot);
+      const spPath = spPortable.portable;
+      content = writeConfigField(content, 'sprint_backend', 'file-system');
+      content = writeConfigField(content, 'sprint_management_path', spPath);
+      // Derive workflow-consumable artifact paths from layout paths (relative when base is relative)
+      const planningArtifacts = kbPath === '.' ? '_bmad-output/planning-artifacts' : `${kbPath}/_bmad-output/planning-artifacts`;
+      const implArtifacts = spPath === '.' ? '_bmad-output/implementation-artifacts' : `${spPath}/_bmad-output/implementation-artifacts`;
+      content = writeConfigField(content, 'planning_artifacts', planningArtifacts);
+      content = writeConfigField(content, 'implementation_artifacts', implArtifacts);
+      fs.writeFileSync(configPath, content, 'utf-8');
+      console.log(chalk.gray(`  Config: knowledgebase_path="${kbPath}", sprint_backend=file-system, sprint_management_path="${spPath}"`));
+    }
   } catch (e) {
     console.log(chalk.red(`  Cannot write config.yaml: ${e.message}`));
   }
@@ -453,6 +512,7 @@ function writeRepoLayoutConfig(layout) {
 
 function writeProjectLayoutYaml(layout) {
   const layoutPath = path.join(process.cwd(), '_bmad-output', 'project-layout.yaml');
+  // Only skip writing when BOTH concerns are truly same-repo (jira requires config recording)
   const bothSame = layout.knowledgebase.mode === 'same' && layout.sprintManagement.mode === 'same';
 
   if (bothSame) {
@@ -464,7 +524,7 @@ function writeProjectLayoutYaml(layout) {
     return;
   }
 
-  // Multi-repo: generate project-layout.yaml
+  // Multi-repo or Jira mode: generate project-layout.yaml
   fs.mkdirSync(path.join(process.cwd(), '_bmad-output'), { recursive: true });
 
   const date = new Date().toISOString().slice(0, 10);
@@ -487,15 +547,20 @@ function writeProjectLayoutYaml(layout) {
   }
 
   // Sprint management section
-  const spPortable = toPortablePath(layout.sprintManagement.path, projectRoot);
   content += `sprint_management:\n`;
   content += `  mode: ${layout.sprintManagement.mode}\n`;
-  content += `  path: ${yamlEscapeValue(spPortable.portable)}\n`;
-  if (spPortable.isAbsolute) {
-    content += `  # PORTABILITY: absolute path — other developers may need to reconfigure\n`;
-  }
-  if (layout.sprintManagement.mode === 'remote' && layout.sprintManagement.gitUrl) {
-    content += `  gitUrl: ${yamlEscapeValue(layout.sprintManagement.gitUrl)}\n`;
+  if (layout.sprintManagement.mode === 'jira') {
+    content += `  jira_url: ${yamlEscapeValue(layout.sprintManagement.jiraUrl)}\n`;
+    content += `  jira_project_key: ${yamlEscapeValue(layout.sprintManagement.jiraProjectKey)}\n`;
+  } else {
+    const spPortable = toPortablePath(layout.sprintManagement.path, projectRoot);
+    content += `  path: ${yamlEscapeValue(spPortable.portable)}\n`;
+    if (spPortable.isAbsolute) {
+      content += `  # PORTABILITY: absolute path — other developers may need to reconfigure\n`;
+    }
+    if (layout.sprintManagement.mode === 'remote' && layout.sprintManagement.gitUrl) {
+      content += `  gitUrl: ${yamlEscapeValue(layout.sprintManagement.gitUrl)}\n`;
+    }
   }
 
   fs.writeFileSync(layoutPath, content, 'utf-8');
@@ -529,14 +594,23 @@ function readExistingLayout() {
         const modeMatch = afterSection.match(/^\s+mode:\s*(\S+)/m);
         const pathMatch = afterSection.match(/^\s+path:\s*"?([^"\n]+)"?/m);
         const gitUrlMatch = afterSection.match(/^\s+gitUrl:\s*"?([^"\n]+)"?/m);
+        const jiraUrlMatch = afterSection.match(/^\s+jira_url:\s*"?([^"\n]+)"?/m);
+        const jiraProjectKeyMatch = afterSection.match(/^\s+jira_project_key:\s*"?([^"\n]+)"?/m);
 
-        if (modeMatch && pathMatch) {
-          const resolvedPath = resolveStoredPath(pathMatch[1], projectRoot);
-          const entry = { mode: modeMatch[1], path: resolvedPath };
-          if (modeMatch[1] === 'remote' && gitUrlMatch) {
-            entry.gitUrl = gitUrlMatch[1];
+        if (modeMatch) {
+          const mode = modeMatch[1];
+          if (mode === 'jira') {
+            const jiraUrl = jiraUrlMatch ? jiraUrlMatch[1].replace(/^"(.*)"$/, '$1') : '';
+            const jiraProjectKey = jiraProjectKeyMatch ? jiraProjectKeyMatch[1].replace(/^"(.*)"$/, '$1') : '';
+            layout[key] = { mode: 'jira', jiraUrl, jiraProjectKey };
+          } else if (pathMatch) {
+            const resolvedPath = resolveStoredPath(pathMatch[1], projectRoot);
+            const entry = { mode, path: resolvedPath };
+            if (mode === 'remote' && gitUrlMatch) {
+              entry.gitUrl = gitUrlMatch[1];
+            }
+            layout[key] = entry;
           }
-          layout[key] = entry;
         }
       }
 
@@ -666,6 +740,7 @@ async function collectRepoLayout(flags, existingLayout = null) {
       { title: 'Current repository (default)', value: 'same' },
       { title: 'Local path', value: 'local' },
       { title: 'Remote git repository', value: 'remote' },
+      ...(concern === 'sprintManagement' ? [{ title: 'Jira', value: 'jira' }] : []),
     ];
     // Pre-select existing mode if available
     const initialIndex = existingMode ? modeChoices.findIndex(c => c.value === existingMode) : 0;
@@ -686,6 +761,8 @@ async function collectRepoLayout(flags, existingLayout = null) {
       layout[concern] = await collectLocalPath(labels[concern]);
     } else if (mode === 'remote') {
       layout[concern] = await collectRemotePath(labels[concern]);
+    } else if (mode === 'jira') {
+      layout[concern] = await collectJiraConfig();
     }
   }
 
