@@ -930,7 +930,7 @@ generated: "2026-04-03T12:00:00Z"
 last_updated: "2026-04-03T12:00:00Z"
 project: ProjectName
 project_key: KEY
-tracking_system: file-system    # or "jira" — see adapter pattern below
+tracking_system: file-system    # or "jira" — see MCP integration pattern below
 story_location: _bmad-output/implementation-artifacts
 
 epics:
@@ -1011,18 +1011,25 @@ When items are archived (removed from `sprint-status.yaml`):
 - No trace of the item remains in `sprint-status.yaml` — the `done/` folder is the archive
 - This keeps the active file lean and focused on current work
 
-**Jira Adapter Pattern:**
+**Sprint Backend Selection & Jira Integration (2026-04-29 revised):**
 
-The `tracking_system` field switches between backends:
+The backend is selected at install time and stored in `_bmad/bmm/config.yaml` under `sprint_backend`. The `tracking_system` field in `sprint-status.yaml` reflects the active selection:
 
 ```yaml
 tracking_system: file-system    # default — all operations read/write sprint-status.yaml
-tracking_system: jira           # future — operations proxy to Jira API
+tracking_system: jira           # Jira selected at install time or switched interactively
 ```
 
-- **`file-system` backend (current):** All 13 affected skills read/write `sprint-status.yaml` directly. The file is the single source of truth.
-- **`jira` backend (future):** Skills detect `tracking_system: jira` and delegate to a Jira adapter module. The adapter translates unified data model operations (move item, update status, close sprint) into Jira API calls. The `sprint-status.yaml` schema is the canonical data contract — Jira responses are mapped into the same structure.
-- **Same data model:** Both backends expose identical data shapes. Skills never branch on backend type for business logic — only the I/O layer differs.
+**Install-time selection:** The installer wizard presents four choices:
+1. **Local file-system** — `sprint-status.yaml` at the default project path (default)
+2. **Remote git repository** — a git URL that is cloned to a local destination path; `sprint-status.yaml` is read from the cloned repo
+3. **Custom filesystem path** — user-specified path to `sprint-status.yaml`
+4. **Jira** — user provides a Jira server URL and project key; stored in `sprint_backend` config
+
+- **`file-system` backend:** All 13 affected skills read/write `sprint-status.yaml` directly. The file is the single source of truth.
+- **`jira` backend:** Skills perform the required Jira operation (create issue, update status, query sprint, etc.) using whatever Jira-capable tool the agent has available — any MCP server, plugin, or integration connected to the configured Jira instance. Skills describe the operation in natural language; the agent resolves it to the appropriate tool at runtime. No specific MCP server or tool name is required.
+- **Interactive error handling:** If a Jira operation fails, the skill pauses and asks the user: (a) retry the Jira operation, or (b) switch to file management. If the user switches, the skill writes `tracking_system: file-system` to `sprint-status.yaml`, updates `sprint_backend` in `_bmad/bmm/config.yaml`, and completes the operation using the local file. The switch is permanent.
+- **Same data model:** Both execution paths expose identical data shapes. Skills never branch on backend for business logic — only the I/O routing differs.
 
 **Skill Integration Map (13 skills affected):**
 
@@ -2049,7 +2056,7 @@ Net deletion: ~140 lines. Replacement: ~30 lines for stage-and-invoke.
 - P2-6 rev includes code example with full parameter mapping table
 - P2-9 includes verified module structure from CIS, manifest examples, migration detection code
 - P2-10 includes wizard flow, config storage format, cross-reference file schema
-- P2-11 includes unified YAML schema, movement semantics, close-sprint lifecycle, Jira adapter pattern, 13-skill integration map
+- P2-11 includes unified YAML schema, movement semantics, close-sprint lifecycle, install-time backend selection (file-system / custom path / Jira), tool-agnostic Jira operation model with interactive error handling, 13-skill integration map; companion spec at `mcp-detection-pattern-spec.md`
 
 **Pattern Completeness:** HIGH
 - CIS module pattern verified against actual source code — not assumed

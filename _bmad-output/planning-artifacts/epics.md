@@ -176,7 +176,7 @@ This document provides the complete epic and story breakdown for agents, decompo
 - FR135: Each item carries its own `status` field, updated in-place within the section where it resides
 - FR136: Items reaching `done` status are removed from `sprint-status.yaml` and archived to `done/` folder
 - FR137: A close-sprint workflow transitions a sprint from `active` to `closed`, archiving all done items and returning incomplete items to backlog
-- FR138: When `tracking_system` is configured as `jira`, sprint management skills read/write from Jira API using the same data model (adapter pattern)
+- FR138: When `tracking_system` is configured as `jira`, sprint management skills perform operations against Jira using whatever Jira-capable tool the agent has available; on failure the skill asks the user to retry or switch to file management
 - FR139: The unified schema replaces the previous three-file model (`backlog.yaml`, `sprints/sprint-N.yaml`, `sprint-status.yaml`) — deprecated files are migrated or removed
 - FR140: All 12 sprint-related skills are reworked to operate against the single unified file
 
@@ -349,9 +349,9 @@ This document provides the complete epic and story breakdown for agents, decompo
 | FR135 | Epic 17 | In-place status updates on each item |
 | FR136 | Epic 17 | Done items removed from file, archived to done/ |
 | FR137 | Epic 17 | Close-sprint workflow for sprint lifecycle closure |
-| FR138 | Epic 17 / Epic 14 | Jira adapter pattern (tracking_system switch) |
-| FR139 | Epic 17 | Migration/removal of deprecated 3-file model |
-| FR140 | Epic 17 | All 12 sprint skills reworked for unified file |
+| FR138 | Epic 17 | generate-backlog skill regenerates backlog section from epics/bugs, preserving sprint-assigned items |
+| FR139 | Epic 17 / Epic 16 | Install-time backend selection: wizard adds Jira as 4th option; stores jira_url + jira_project_key in config |
+| FR140 | Epic 17 / Epic 14 | Tool-agnostic Jira operations for all 13 sprint skills; interactive retry/switch error handling on failure |
 | FR141 | Epic 19 | Graph node identity: file-id#heading-anchor |
 | FR142 | Epic 19 | Directed typed edges with full provenance (6 edge types) |
 | FR143 | Epic 19 | Bidirectional index per node |
@@ -464,8 +464,8 @@ At project-level installation, ma-agents generates `_bmad-output/project-context
 Sprint management is redesigned around a **single unified `sprint-status.yaml`** file with three sections: `epics` (reference), `backlog` (unassigned items), and `sprints` (sprint definitions with assigned items). Stories and bugs MOVE between sections using movement semantics. Each item carries its own status, updated in-place. Done items are removed from the file and archived. A new close-sprint skill handles sprint lifecycle closure. A Jira adapter pattern enables the same data model to read/write from Jira API when `tracking_system` is configured as `jira`. All 12 sprint-related skills are reworked for the unified file, and the deprecated 3-file model is migrated/removed.
 **FRs covered:** FR65, FR66, FR67, FR128, FR129, FR130, FR131, FR132, FR133, FR134, FR135, FR136, FR137, FR138, FR139, FR140 (plus rework of FR68-FR71 workflows to work with new model)
 **NFRs addressed:** NFR19 (menu + slash command invocation)
-**Dependencies:** Epic 11 (bug entity structure). Reworks Epic 12's workflow shells to use the new model. Epic 14 (Jira adapter architecture — Story 14.3 must be approved before Story 17.22 implementation).
-**Note:** Epic 12 delivered workflow files but not the underlying sprint data model. This epic builds the unified model, rewires all workflows, and provides the Jira adapter pattern.
+**Dependencies:** Epic 11 (bug entity structure). Reworks Epic 12's workflow shells to use the new model. Story 17.22 is NOT blocked on Epic 14 — it embeds the Phase A placeholder routing structure; Epic 14 Story 14.3 is blocked on Story 17.22 (needs the routing structure already present in all 13 skills before it can fill in the Jira operation body).
+**Note:** Epic 12 delivered workflow files but not the underlying sprint data model. This epic builds the unified model, rewires all workflows, and embeds the MCP detection stub (Section 4.1-A of `mcp-detection-pattern-spec.md`) in all 13 sprint skills.
 **Skills affected:** Heavy rework (6): generate-backlog, add-to-sprint, remove-from-sprint, sprint-status-view, cleanup-done, bmad-sprint-planning. Moderate rework (3): add-sprint, modify-sprint, bmad-dev-story. Light rework (3): story-status-lookup, bmad-sprint-status, prioritize-backlog. New skill (1): close-sprint.
 
 ### Epic 21: On-Prem / Local-LLM Tuning (Phase 3)
@@ -519,10 +519,10 @@ Stories in Epics 6, 8, and 15 that touch `bmad.js` must build on Epic 5's vendor
 2. **Epic 15** (BMAD 6.2.1 Migration) — version bump, module restructure, agent/workflow conversion → **release**
 
 **Phase C — Remaining Features:**
-3. **Epic 17** (Sprint Management Model Rework) — unified sprint-status.yaml, reworks Epic 12 workflows, depends on Epic 11. Stories 17.9-17.24 can proceed independently (except 17.22). Story 17.22 (Jira adapter) blocked on Epic 14 Story 14.3 architecture approval.
-4. **Epic 16** (Multi-Repo Layout) — depends on Epic 15 module restructure
+3. **Epic 17** (Sprint Management Model Rework) — unified sprint-status.yaml, reworks Epic 12 workflows, depends on Epic 11. Story 17.22 ships the backend-routing structure in all 13 sprint skills — no Epic 14 dependency needed for the Phase A placeholder body. Epic 14 Story 14.3 later fills in the Jira operation instructions.
+4. **Epic 16** (Multi-Repo Layout) — depends on Epic 15 module restructure. Stories 16.1 and 16.2 (wizard + config storage, enhanced with Jira option) should ship with Epic 17.
 5. **Epics 4, 7** (VS Integration, Test Suite) — on hold, can resume in parallel
-6. **Epic 14** (External Tooling) — Phase 3, depends on Epics 12, 13. Story 14.3 architecture is prerequisite for Epic 17 Story 17.22 (Jira adapter).
+6. **Epic 14** (Jira Backend Integration) — Phase 3; extends what Story 17.22 stubbed. Execution: 14.1 (define Jira operation descriptions) → 14.3 (fill in Jira operation branch in all 13 skills) → 14.4 (error message guidance). Story 14.2 (Confluence) deferred until PRD defines `knowledge_backend` field.
 
 **Phase D — Phase 3 Features:**
 7. **Epic 19** (BMAD Knowledge Graph) — depends on Epic 15 (extension module structure) and Epic 17 (sprint skill structure settled). Story execution order: 19.1 (core library) → 19.2 (PRD emission) → 19.3 (architecture + epics emission) → 19.4 (story + remaining emission) → 19.5 (open-graph skill) → 19.6 (visualization renderer) → 19.7 (LLM contract validation + tests). Stories 19.2-19.4 can proceed in parallel once 19.1 is done.
@@ -1728,104 +1728,109 @@ So that users understand what the generated file is, why it appeared, and how to
 
 ---
 
-## Epic 14: External Tooling Integration (Phase 3)
+## Epic 14: Jira Backend Integration for Sprint Skills (Phase 3)
 
-**Goal:** ma-agents can connect to external project management and knowledge management platforms (Jira, Confluence) as alternatives to the default file-system backends. The backend is configured at installation time via `project-context.md` or the root directives file (`CLAUDE.md` / equivalent), so agents and skills resolve data against the configured system without code changes.
-**FRs covered:** Proposed — to be formally added to PRD after Story 14.3 architecture is approved
-**Dependency:** Epic 12 (Sprint Management workflows), Epic 10 (Project Knowledge Preservation), Epic 13 (Project Context Auto-Generation — provides the config schema and installation pipeline)
-**Phase:** 3 — analyst research and architecture design must complete before any implementation story is detailed
-**Analyst + Architect required:** Yes — Stories 14.1, 14.2, and 14.3 are prerequisites for all implementation work
+**Goal:** When teams select Jira as the sprint management backend (at install time or via config), all 13 sprint management skills perform their operations against Jira. Skills use whatever Jira-capable tool the agent has available. On failure, the skill asks the user to retry or switch to file management — the user's choice is persisted to config.
+**FRs covered:** FR139, FR140 (revised 2026-04-29)
+**Dependency:** Story 17.22 must ship first — it provides the backend-routing structure that Story 14.3 fills in with Jira operation logic. Story 14.1 must complete before Story 14.3. Story 14.2 (Confluence) is deferred — it requires a new PRD FR defining the `knowledge_backend` field before any implementation work can be scoped.
+**Phase:** 3 — starts after Epic 17 Story 17.22 ships. Execution order: 14.1 → 14.3 (blocked on 14.1 + 17.22) → 14.4 (after 14.3). Story 14.2 is out-of-scope until PRD is updated.
 
 ---
 
-### Story 14.1: Analyst Research — Jira Sprint Management Integration
+### Story 14.1: Define Jira Operation Descriptions for Sprint Skills
 
-As a **Product Manager / Analyst**,
-I want a research report on integrating Jira as a sprint management backend for ma-agents,
-So that the architect has clear requirements before designing the abstraction layer.
+As a **Project Manager / Analyst**,
+I want a documented mapping from sprint management operations to clear natural-language Jira operation descriptions,
+So that Story 14.3 can write skill instructions that correctly direct the agent to perform the right Jira action regardless of which Jira tool is available.
 
 **Acceptance Criteria:**
 
-**Given** the current file-system sprint management model (`sprint-status.yaml`, story files)
-**When** the analyst completes the research report
-**Then** it documents: Jira REST API capabilities, authentication models (API token, OAuth, service account), field mapping (Jira status → ma-agents story status), rate limits, and offline/air-gapped scenarios
-**And** it defines the proposed configuration schema to be set in `project-context.md` at installation time
-**And** it identifies the minimum viable Jira integration scope (read story status) vs full bidirectional sync (write back story state)
-**And** it covers both Jira Cloud and Jira Server/Data Center
+**Given** the 13 sprint management skills and their file-system operations
+**When** the analyst reviews each skill
+**Then** they document, for each skill, the equivalent Jira operation in natural language (e.g., "create a Jira story in project {project_key}, linked to epic {epic_key}, with summary and description from the backlog item")
+**And** the documentation covers all Jira issue types in scope: stories, epics, bugs, sprints
 
-**Given** the `story-status-lookup` skill (implemented in Epic 11 review cycle) has a reserved Jira extension point
-**When** the report addresses credential handling
-**Then** it proposes how credentials are stored (env vars vs `project-context.md` vs OS keychain)
-**And** it clarifies what must be configured at install time vs at runtime
+**Given** the operation descriptions are complete
+**When** the mapping is reviewed
+**Then** every sprint skill operation has a Jira equivalent description, or a documented "no direct Jira equivalent" note with a recommended workaround
+**And** the Jira field mapping (sprint-status schema → Jira fields) is documented for each operation
+**And** any operations involving bulk data (e.g., `generate-backlog`, `bmad-sprint-planning`) have documented partial-failure handling notes
+
+**Given** the mapping is approved
+**When** Story 14.3 begins
+**Then** it uses this mapping as its primary input to write the Jira operation instructions in all 13 skill SKILL.md files
 
 **Technical notes:**
-- Output artifact: `_bmad-output/planning-artifacts/research-external-tooling-sprint-management.md`
-- This report is the primary input for Story 14.3 (architecture design)
-- Consider: what happens if Jira is unavailable mid-session (network failure, rate limit)?
+- Output artifact: updated Section 6.2 of `_bmad-output/planning-artifacts/mcp-detection-pattern-spec.md`
+- This story runs AFTER Epic 17 Story 17.22 ships
+- This story does NOT modify any skill files — that is Story 14.3's job
+- Operation descriptions must be tool-agnostic — no specific MCP server names or tool call syntax
 
 ---
 
-### Story 14.2: Analyst Research — Knowledge Management Integration (Confluence)
+### Story 14.2: Confluence MCP Integration — DEFERRED (out of scope)
 
-As a **Product Manager / Analyst**,
-I want a research report on integrating Confluence (and similar tools) as a knowledge management backend for ma-agents,
-So that the architect can design a unified external tooling abstraction that covers both sprint and knowledge management.
+*(Deferred pending PRD update. Confluence integration requires a new capability area and new PRD FRs defining:*
+- *the `knowledge_backend` configuration field (which file it lives in, valid values, schema)*
+- *which BMAD skills would read/write from Confluence vs local files*
+- *whether integration is read-only, write-only, or bidirectional*
+
+*Until those FRs are written and approved, no story can be scoped. This story is a placeholder — do not begin work on it.)*
+
+---
+
+### Story 14.3: Implement Jira Operation Branch in All 13 Sprint Skills
+
+As a **Developer**,
+I want each sprint management skill's SKILL.md to include clear Jira operation instructions for its operations,
+So that when `tracking_system: jira` is active, the agent performs the correct Jira action using whatever Jira-capable tool it has available.
 
 **Acceptance Criteria:**
 
-**Given** the current file-system knowledge model (markdown files in `_bmad-output/`)
-**When** the analyst completes the research report
-**Then** it documents: Confluence REST API capabilities, space/page model mapping to ma-agents artifact types (PRD, architecture, epics, retrospectives), read vs write requirements, and versioning model
-**And** it identifies which ma-agents artifacts benefit most from Confluence sync and which should remain file-system-only
-**And** it flags risks: bidirectional sync conflicts, Confluence markup vs markdown conversion, large attachment handling
+**Given** the operation descriptions from Story 14.1
+**When** the Jira branch is activated in a sprint skill
+**Then** the skill instructs the agent to perform the required Jira operation in natural language (create issue, move issue to sprint, update status, query sprint items, etc.)
+**And** the data model mapping (Jira Sprint → `sprints[]`, Jira Backlog → `backlog[]`, Jira Epic → `epics[]`, Jira status → canonical status vocabulary) is applied consistently across all skills
 
-**Given** agents read from knowledge artifacts during sessions
-**When** the report covers the user experience
-**Then** it proposes how agents know to read from Confluence vs the local file system
-**And** it clarifies whether the integration is read-only, write-only, or bidirectional
+**Given** the Jira operation succeeds
+**When** the skill processes the response
+**Then** it maps the result back to the canonical sprint-status schema format and presents it in the standard BMAD format
+
+**Given** the Jira operation fails (any error — tool unavailable, network error, API error)
+**When** the failure occurs
+**Then** the skill pauses and presents the user with: (a) Retry — attempt the Jira operation again, or (b) Switch to file management — update `tracking_system: file-system` in `sprint-status.yaml` and `sprint_backend` in `_bmad/bmm/config.yaml`, then complete the operation using the local file. The switch is permanent.
 
 **Technical notes:**
-- Output artifact: `_bmad-output/planning-artifacts/research-external-tooling-knowledge-management.md`
-- Input for Story 14.3 (architecture design)
-- Consider other platforms (Notion, Obsidian vaults, SharePoint) — flag capability gaps vs Confluence
+- Blocked on Story 14.1 (Jira operation descriptions) AND Story 17.22 (backend-routing structure must already be in all 13 skills)
+- Output: updated SKILL.md files for all 13 sprint skills — the `jira` branch body is filled in with skill-specific Jira operation instructions from the Story 14.1 mapping
+- The file-system branch and all skill business logic are unchanged
+- Operation instructions must remain tool-agnostic — no specific MCP server or tool names
 
 ---
 
-### Story 14.3: Architecture Design — External Tooling Abstraction Layer
+### Story 14.4: Jira Onboarding Guidance — Error Messages and Setup Instructions
 
-As an **Architect**,
-I want to design the abstraction layer that decouples ma-agents sprint and knowledge operations from their backend implementation,
-So that future backends (Jira, Confluence, Linear, Notion) can be added without changing core workflows or skills.
+As a **Developer / User**,
+I want the Jira failure message to give actionable guidance,
+So that users know what to configure in their agent when a Jira operation cannot be completed.
 
 **Acceptance Criteria:**
 
-**Given** the research reports from Stories 14.1 and 14.2
-**When** the architecture design is complete
-**Then** it defines: backend interface contracts, the configuration schema in `project-context.md`, credential handling pattern, and how skills resolve their configured backend at runtime
-**And** it specifies exactly how the `story-status-lookup` skill's Jira extension point (reserved during implementation) is fulfilled — including the configuration key names that `project-context.md` / root directives must contain
-**And** it addresses: offline/air-gapped scenarios, partial configuration (only sprint management configured, or only knowledge management), and graceful degradation to file-system defaults
+**Given** a Jira operation fails because no Jira-capable tool is available
+**When** the skill presents the retry/switch prompt
+**Then** the message includes guidance: the agent needs a Jira integration configured (MCP server, plugin, or native integration connected to the Jira instance configured at install time)
 
-**Given** the installation pipeline (Epic 13)
-**When** the architecture covers installation-time configuration
-**Then** it defines which configuration questions are asked at install time vs deferred to first use
-**And** it specifies how the installer writes the backend configuration into `project-context.md`
+**Given** a Jira operation fails due to an API error (tool available but request failed)
+**When** the skill presents the retry/switch prompt
+**Then** the message includes the Jira error details so the user can diagnose the issue
+
+**Given** the error messages in `mcp-detection-pattern-spec.md` Section 4.1-B
+**When** this story is complete
+**Then** the messages are updated with actionable guidance appropriate to each error type
 
 **Technical notes:**
-- Output artifact: ADR in `_bmad-output/planning-artifacts/adr-external-tooling-abstraction.md`
-- Stories 14.4 and 14.5 are fully blocked on this story
-- After this story is approved, add formal FRs to the PRD and create detailed implementation stories for 14.4 and 14.5
-
----
-
-### Story 14.4: Implement Jira Sprint Management Backend
-
-*(Blocked on Stories 14.1 + 14.3 — full story spec to be written after architecture ADR is approved and FRs are added to PRD)*
-
----
-
-### Story 14.5: Implement Confluence Knowledge Management Backend
-
-*(Blocked on Stories 14.2 + 14.3 — full story spec to be written after architecture ADR is approved and FRs are added to PRD)*
+- Blocked on Story 14.3 — error messages are updated in the same 13 SKILL.md files after Story 14.3 completes. Output: updated error message text in `mcp-detection-pattern-spec.md` Section 4.1-B, and corresponding update to the 13 skill SKILL.md files (error message text only)
+- Messages must remain tool-agnostic — refer to "a Jira-capable tool" rather than any specific MCP server or integration name
 
 ---
 
@@ -2120,7 +2125,7 @@ So that the project layout is configured correctly for multi-repo environments.
 **Given** the user runs `npx ma-agents install`
 **When** the wizard reaches the repository layout section
 **Then** it asks: "Where is your knowledgebase managed?" with options: Current repository (default), Local path, Remote git repository
-**And** it asks: "Where is your sprint management managed?" with the same options
+**And** it asks: "Where is your sprint management managed?" with options: Current repository (default), Local path, Remote git repository, Jira
 
 **Given** the user selects "Remote git repository" for knowledgebase
 **When** prompted for details
@@ -2134,6 +2139,11 @@ So that the project layout is configured correctly for multi-repo environments.
 **Then** the wizard validates the path exists
 **And** if it does not exist, alerts the user and asks to confirm or correct (FR115)
 
+**Given** the user selects "Jira" for sprint management
+**When** prompted for Jira details
+**Then** the wizard asks for the Jira server URL (e.g., `https://mycompany.atlassian.net`)
+**And** asks for the Jira project key (e.g., `MYPROJ`)
+
 **Given** the user selects "Current repository" for both concerns
 **When** the wizard completes
 **Then** no additional configuration is needed — single-repo mode preserved (FR116)
@@ -2146,6 +2156,7 @@ So that the project layout is configured correctly for multi-repo environments.
 - New section in `cli.js` wizard, after agent selection
 - Use existing inquirer prompts pattern
 - `git clone` command must quote the URL and destination path for space-safety
+- "Jira" is a fourth sprint management option alongside the existing three; knowledgebase does not get this option
 
 ### Story 16.2: Config Storage and Cross-Reference File
 
@@ -2163,7 +2174,18 @@ knowledgebase_path: "d:/Code/kb-repo"
 sprint_management_path: "d:/Code/sprint-repo"
 ```
 
-**Given** multi-repo mode is configured
+**Given** the user selected "Jira" for sprint management with URL `https://mycompany.atlassian.net` and project key `MYPROJ`
+**When** the installation completes
+**Then** `_bmad/bmm/config.yaml` contains:
+```yaml
+sprint_backend: jira
+jira_url: "https://mycompany.atlassian.net"
+jira_project_key: "MYPROJ"
+```
+**And** `sprint_management_path` is not set in `_bmad/core/config.yaml` (no local path applies)
+**And** Phase A sprint skills default to `_bmad-output/implementation-artifacts/sprint-status.yaml` relative to the project root, creating the file at that path if it does not exist
+
+**Given** multi-repo mode is configured (file-system sprint management at external path)
 **When** the installation completes
 **Then** `_bmad-output/project-layout.yaml` is created in the CODE repository containing:
 ```yaml
@@ -2175,6 +2197,16 @@ knowledgebase:
 sprint_management:
   mode: local
   path: "d:/Code/sprint-repo"
+```
+
+**Given** Jira is selected for sprint management
+**When** the installation completes
+**Then** `_bmad-output/project-layout.yaml` contains:
+```yaml
+sprint_management:
+  mode: jira
+  jira_url: "https://mycompany.atlassian.net"
+  jira_project_key: "MYPROJ"
 ```
 
 **Given** single-repo mode is configured (both set to "current repository")
@@ -2898,45 +2930,43 @@ So that sprint closure is a clean, well-defined workflow.
 - Single file read-modify-write on `sprint-status.yaml` plus file moves for archived stories
 - After close-sprint, the Scrum Master typically runs `add-sprint` to create the next sprint
 
-### Story 17.22: Jira Adapter Pattern (tracking_system Switch)
+### Story 17.22: Add Backend Routing to All 13 Sprint Skills (tracking_system Switch)
 
 As a **Project Manager**,
-I want sprint management skills to read/write from Jira when `tracking_system` is configured as `jira`,
-So that teams using Jira for project tracking can use the same BMAD sprint skills with their Jira instance.
+I want sprint management skills to check `tracking_system` and route operations to the correct backend,
+So that teams using Jira as their sprint backend have skills that attempt Jira operations and handle failures interactively.
 
 **Acceptance Criteria:**
 
-**Given** `project-context.md` (or root directives) contains `tracking_system: file-system` (default)
+**Given** `sprint-status.yaml` contains `tracking_system: file-system` (default or absent)
 **When** any sprint management skill is invoked
-**Then** it reads/writes `sprint-status.yaml` on the local file system (current behavior)
+**Then** it reads/writes `sprint-status.yaml` on the local file system (unchanged behavior)
 
-**Given** `project-context.md` contains `tracking_system: jira` with Jira connection config
+**Given** `sprint-status.yaml` contains `tracking_system: jira`
 **When** any sprint management skill is invoked
-**Then** it reads/writes from the Jira API using the same data model (epics, backlog items, sprint items)
-**And** the Jira adapter maps: Jira Sprint -> `sprints[]` entries, Jira Backlog -> `backlog[]` entries, Jira Epic -> `epics[]` entries
-**And** Jira status fields are mapped to the same status vocabulary: `backlog`, `ready-for-dev`, `in-progress`, `review`, `done`
+**Then** the skill outputs the placeholder message: "Jira tracking is configured (`tracking_system: jira`), but Jira operation support for this skill is not yet implemented (pending Epic 14 Story 14.3). Operating in file-system mode."
+**And** the skill continues with file-system behavior (reads/writes `sprint-status.yaml` locally)
+**And** the skill does NOT attempt any Jira operation — Jira is not the source of truth in Phase A
 
-**Given** the Jira adapter is active
-**When** an item is moved from backlog to sprint (Story 17.11 logic)
-**Then** the adapter calls the Jira REST API to move the issue to the target sprint
-**And** the local `sprint-status.yaml` is NOT written (Jira is the source of truth)
+**Given** the backend-routing block is embedded in all 13 sprint skills with the Phase A placeholder `jira` branch body
+**When** Epic 14 Story 14.3 later fills in the Jira operation instructions for each skill
+**Then** only the `jira` branch body changes — the surrounding routing structure, file-system branch, and unknown-value fallback are unchanged
 
-**Given** the Jira connection fails (network error, auth failure, rate limit)
-**When** the skill detects the failure
-**Then** it reports the error clearly and suggests checking credentials/connectivity
-**And** does NOT fall back to file-system silently (explicit fail, no silent data divergence)
+**Given** `sprint-status.yaml` contains an unknown `tracking_system` value
+**When** any sprint management skill is invoked
+**Then** it outputs: "Unsupported tracking system: `{value}`. Supported values are `file-system` and `jira`. Proceeding with file-system backend."
+**And** it continues with file-system behavior
 
-**Given** the adapter pattern is implemented
-**When** a new backend is added in the future (e.g., Linear, Azure DevOps)
-**Then** only a new adapter module is needed — no changes to skill logic
+**Given** the backend-routing block is embedded in all 13 sprint skills
+**When** Epic 14 Story 14.3 later fills in the Jira operation instructions for a skill
+**Then** only the `jira` branch body changes — the routing structure, error handling, and file-system branch are unchanged
 
 **Technical notes:**
-- Blocked on Epic 14 Story 14.3 (External Tooling Abstraction Layer architecture) — the adapter interface contract must be designed first
-- The adapter pattern uses a `resolveBackend(config)` function that returns either a `FilesystemBackend` or `JiraBackend` object implementing the same interface
-- Interface methods: `readSprintStatus()`, `writeSprintStatus(data)`, `moveItem(itemId, fromSection, toSection)`, `updateItemStatus(itemId, newStatus)`, `archiveItem(itemId)`
-- Credentials: environment variables (`JIRA_BASE_URL`, `JIRA_API_TOKEN`, `JIRA_USER_EMAIL`) as proposed by Epic 14 research
-- All 12 sprint skills call through the backend interface — they never read/write files directly
-- FR138 scope: same data model, different storage backend. Skills do NOT expose Jira-specific UI or fields.
+- NOT blocked on Epic 14 — this story embeds the routing structure (Section 4.1-A of `mcp-detection-pattern-spec.md`); Epic 14 Story 14.3 fills in the Jira operation body for each skill
+- The Phase A `jira` branch body is a placeholder: "Jira operation not yet implemented for this skill (pending Epic 14 Story 14.3). Proceeding with file-system." followed by file-system behavior
+- Embed the routing structure verbatim in each skill's SKILL.md at the start of the workflow, before any numbered steps
+- FR139 scope: install-time backend selection is stored in config; `tracking_system` field reflects the active backend. FR140 scope: all 13 skills must route on `tracking_system` and handle the interactive failure prompt
+- Cross-reference: `mcp-detection-pattern-spec.md` is the canonical source for the routing structure templates
 
 ### Story 17.23: Migration and Deprecation of Old Files
 
