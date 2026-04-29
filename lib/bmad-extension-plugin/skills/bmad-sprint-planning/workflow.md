@@ -42,6 +42,38 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
 
 ---
 
+## Backend Routing
+
+Before executing any file-system operations, determine and route to the correct backend:
+
+1. Read `_bmad-output/implementation-artifacts/sprint-status.yaml` and extract the `tracking_system` field.
+   If the field is absent or the file does not exist, default to `file-system`.
+
+2. If `tracking_system` is `file-system`:
+   Proceed with the **File-System Backend** instructions below.
+
+3. If `tracking_system` is `jira`:
+   > "This operation will create/update Jira sprints and items in bulk. If it fails mid-way, Jira may be in partial state. The Jira server URL is `{jira_url}` and project key is `{jira_project_key}` (from `_bmad/bmm/config.yaml`). Proceed?"
+
+   a. Perform the Jira operation: Query all epics, backlog issues, sprint definitions, and sprint items for project `{jira_project_key}` at `{jira_url}` (multiple sequential read calls). For the write phase: create new Jira sprints for each sprint definition not already in Jira (one API call per sprint). Create or update Jira issues for each item in the plan (one API call per item). Map item fields as follows: title → issue summary, type → issue type (story → Story, bug → Bug), status → Jira workflow status (see status mapping below), priority → issue priority/rank. Map sprint fields: name → sprint name, start_date → sprint start date, end_date → sprint end date. Status mapping: backlog → Backlog/Open, ready-for-dev → To Do/Selected for Development, in-progress → In Progress, review → In Review/Code Review, done → Done/Resolved, on-hold → On Hold/Blocked, cancelled → Won't Do/Cancelled.
+      Use whatever Jira-capable tool is available in your current tool context.
+      Map Jira entities to the canonical schema (Sprint → sprints[], Backlog → backlog[],
+      Epic → epics[], Jira status → canonical vocabulary per Section 6.3 of the routing spec).
+   b. If the Jira operation SUCCEEDS: continue with the Jira data returned. Jira is the source of truth.
+   c. If the Jira operation FAILS for any reason:
+      Pause and present the user with:
+      > "The Jira operation failed: {error details}. How would you like to proceed?
+      > (a) Retry — attempt the Jira operation again
+      > (b) Switch to file management — update sprint-status.yaml and config to use
+      >     file-system backend, then complete this operation locally. This change is permanent."
+      If user chooses (b): write `tracking_system: file-system` to `sprint-status.yaml`,
+      update `sprint_backend: file-system` in `_bmad/bmm/config.yaml`,
+      then proceed with **File-System Backend** instructions below.
+
+4. **File-System Backend** — execute the workflow steps below.
+
+---
+
 ## EXECUTION
 
 <workflow>
