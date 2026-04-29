@@ -372,23 +372,190 @@ Skills operating in Jira mode use the Jira server URL and project key configured
 1. Warn the user before proceeding: "This operation will create/update [N] Jira items. If it fails mid-way, Jira may be in partial state. Proceed?"
 2. On failure: present the retry/switch prompt per Section 2.4.
 
-### 6.2 Operation to Jira Description Mapping (to be completed by Epic 14 Story 14.1)
+### 6.2 Per-Skill Jira Operation Descriptions
 
-| Sprint Operation | Jira Operation Category | Notes |
-|---|---|---|
-| Read full state | Query sprint board + backlog | Read-only; maps to sprint board inspection |
-| Find item by ID | Issue search | Search by issue key or summary |
-| Read sprint by ID | Sprint issues query | Agile sprint content |
-| Read backlog | Board backlog query | Issues not assigned to a sprint |
-| Read epics | Epic query | Epic-level query |
-| Update item status | Issue transition | Status must be mapped to Jira workflow status (Section 6.3); target status provided |
-| Move item to sprint | Add issue to sprint | Target sprint ID provided |
-| Move item to backlog | Remove issue from sprint | Returns item to board backlog |
-| Add items | Issue create | One Jira call per item; see bulk write limitation in Section 6.1 |
-| Create sprint | Sprint create | Sprint data (name, capacity, dates) provided |
-| Activate sprint | Sprint start | |
-| Close sprint | Sprint close | |
-| Archive items | Issue resolution + local file move | Hybrid: Jira transition + local story file archive |
+This section provides a per-skill mapping from file-system operations to Jira equivalents. These descriptions are the contract that Story 14.3 embeds verbatim into each skill's Jira branch body (Section 4.1-B step (a)). All descriptions are tool-agnostic: no MCP server name, specific tool name, or API endpoint URL is used.
+
+#### generate-backlog
+
+| File-System Operations | Jira Equivalent |
+|---|---|
+| Read epics | Query all issues of type Epic in project `{jira_project_key}`. Build epics map from returned issues (key → summary). |
+| Read backlog | Query all backlog issues (type Story or Bug) in project `{jira_project_key}` that are not assigned to any active sprint. |
+| Write full state, Add items, Update epics | Create new Jira issues (type Story or Bug) for any backlog items not already in Jira; update the summary, type, and priority fields of existing issues if changed. One Jira API call per new or changed item. |
+
+**Bulk write warning required.** Before executing writes, the skill MUST output: "This operation will create/update [N] Jira items. If it fails mid-way, Jira may be in partial state. Proceed?" On failure mid-way, present the retry/switch prompt per Section 2.4.
+
+---
+
+#### add-to-sprint
+
+| File-System Operations | Jira Equivalent |
+|---|---|
+| Find item by ID | Search for the Jira issue matching the item ID in project `{jira_project_key}` — search by issue key if the item ID matches a Jira key format, otherwise search by summary match. |
+| Read backlog | No separate Jira call required — item is identified in the find-item step above. |
+| Move item to sprint | Find the active sprint on the board for project `{jira_project_key}`. Call the board's "move issue to sprint" operation to add the issue to the active sprint, removing it from the board backlog. |
+
+No bulk write warning required (single-item operation).
+
+---
+
+#### remove-from-sprint
+
+| File-System Operations | Jira Equivalent |
+|---|---|
+| Find item by ID | Search for the Jira issue matching the item ID in project `{jira_project_key}` — by issue key or summary match. |
+| Move item to backlog | Call the "remove issue from sprint" operation to move the issue from the active sprint back to the board backlog (unassigned from sprint). Reset the issue's status to the canonical `ready-for-dev` equivalent per Section 6.3 if the current status is more advanced. |
+| Reorder backlog priorities | After removal, query the current board backlog order. Append the removed issue to the end of the board backlog. Backlog ordering in Jira uses the board's ranking capability — update rank accordingly. |
+
+No bulk write warning required (single-item operation).
+
+---
+
+#### sprint-status-view
+
+| File-System Operations | Jira Equivalent |
+|---|---|
+| Read full state | Query all sprint data for project `{jira_project_key}`: active sprint with its issues (statuses, types, summaries), all planning sprints, backlog issues, and epic-level summary. |
+| Read sprint by ID | For each sprint to display: query the sprint's issue list with current statuses. |
+| Read backlog | Query all backlog issues for project `{jira_project_key}` not assigned to any sprint. |
+
+**Read-only.** No Jira writes. Map Jira sprint status (`future` → `planning`, `active` → `active`, `closed` → `closed`) and issue statuses to canonical schema vocabulary per Section 6.3 for display.
+
+---
+
+#### cleanup-done
+
+| File-System Operations | Jira Equivalent |
+|---|---|
+| Read full state | Query all issues in project `{jira_project_key}` that have a done or cancelled status (per Section 6.3 mapping). |
+| Remove items | Transition all done/cancelled issues in project `{jira_project_key}` to the "Done" or "Resolved" workflow state if not already in that state. One issue transition call per item. |
+| Archive items | **Hybrid operation:** Jira issues are NOT deleted — they remain in Jira as resolved. The local story file move (`{story_location}/{id}.md` → `{story_location}/done/{id}.md`) is a local file operation that executes regardless of backend. |
+| Update epics | If all issues for an epic are now resolved, update the epic's status to "Done" in Jira. |
+
+Note: the local file archive step (moving `.md` files to `done/`) always executes as a local operation, even in Jira mode.
+
+---
+
+#### bmad-sprint-planning
+
+| File-System Operations | Jira Equivalent |
+|---|---|
+| Read full state | Query all epics, all backlog issues (not assigned to any sprint), all sprint definitions, and all sprint item lists for project `{jira_project_key}`. Multiple sequential read calls required. |
+| Read epics | Query all issues of type Epic in project `{jira_project_key}`. |
+| Write full state, Add items | Create new Jira issues (type Story or Bug) for each planned item not already in Jira; update existing issues' fields if changed. One Jira API call per new or changed item. |
+| Update epics | Update epic status fields in Jira to reflect the planned state. |
+
+**Bulk write warning required.** Before executing writes, the skill MUST output: "This operation will create/update [N] Jira items. If it fails mid-way, Jira may be in partial state. Proceed?" On failure mid-way, present the retry/switch prompt per Section 2.4.
+
+---
+
+#### add-sprint
+
+| File-System Operations | Jira Equivalent |
+|---|---|
+| Read full state | Query existing sprints for the board associated with project `{jira_project_key}` to determine the next sprint number (for default name generation). |
+| Create sprint | Create a new sprint on the board for project `{jira_project_key}` using the provided name, start date, and end date. The sprint is created in `future` (planning) state. The `capacity` field has no direct Jira equivalent — it is stored as a sprint goal annotation or custom field if available, otherwise noted only in local context. |
+
+No bulk write warning required (single sprint creation).
+
+---
+
+#### modify-sprint
+
+| File-System Operations | Jira Equivalent |
+|---|---|
+| Read sprint by ID | Query the sprint by ID from the board for project `{jira_project_key}` to retrieve current name, dates, and state. |
+| Activate sprint | If the status change is `planning → active`: start the sprint using the sprint start API. This transitions the sprint from `future` to `active` state in Jira. Enforce the single-active-sprint constraint — check for an existing active sprint before starting. |
+| Update epics | If sprint metadata changes affect epic tracking, update epic fields in Jira accordingly. |
+
+For metadata-only changes (name, dates): update the sprint record using the sprint update API. For status change to `closed` without full close lifecycle: use the sprint close API directly (with the same warning to use `close-sprint` for full lifecycle).
+
+---
+
+#### bmad-dev-story
+
+| File-System Operations | Jira Equivalent |
+|---|---|
+| Find item by ID | Search for the Jira issue matching the item ID in project `{jira_project_key}` — by issue key or summary match. |
+| Update item status | Transition the issue to the new status using the issue transition API. Map canonical status to Jira workflow status per Section 6.3. Perform this transition twice during the story lifecycle: once to `in-progress` (at story start, Step 4) and once to `review` (at story completion, Step 9). |
+
+The status transition is an in-place update — the issue does not move between Jira boards or sprints; only its workflow status changes.
+
+---
+
+#### story-status-lookup
+
+| File-System Operations | Jira Equivalent |
+|---|---|
+| Find item by ID | Search for the Jira issue matching the item ID in project `{jira_project_key}` — by issue key if the item ID matches a Jira key format, otherwise by summary match. Return the issue's current workflow status. |
+
+**Read-only.** Map the returned Jira status to the canonical vocabulary per Section 6.3 to determine Delivered vs. WIP classification.
+
+---
+
+#### bmad-sprint-status
+
+| File-System Operations | Jira Equivalent |
+|---|---|
+| Read full state | Query the active sprint for project `{jira_project_key}` — retrieve all issues in the sprint with their current statuses, types, and summaries. Query the backlog issue count. Query epic-level progress (count of resolved vs. open issues per epic). |
+
+**Read-only.** No Jira writes. Map Jira sprint status and issue statuses to canonical schema vocabulary per Section 6.3 for health analysis and risk flag computation.
+
+---
+
+#### close-sprint
+
+| File-System Operations | Jira Equivalent |
+|---|---|
+| Read full state, Read sprint by ID | Query all issues in the active sprint for project `{jira_project_key}` with their current statuses. |
+| Remove items, Archive items | For done/cancelled items: transition each issue to the "Resolved" or "Done" workflow state in Jira (one transition call per item). Also perform the local file archive (`{story_location}/{id}.md` → `{story_location}/done/{id}.md`) as a local operation regardless of backend. |
+| Move item to backlog | For incomplete items being returned to backlog: call "remove issue from sprint" to move each issue from the active sprint back to the board backlog. Reset status to `ready-for-dev` equivalent per Section 6.3. |
+| Close sprint | Call the sprint close API to transition the sprint from active to closed state in Jira. |
+| Update epics | After close, update epic statuses in Jira if all stories for an epic are now resolved. |
+
+The local file archive step (moving `.md` files to `done/`) always executes as a local operation.
+
+---
+
+#### prioritize-backlog
+
+| File-System Operations | Jira Equivalent |
+|---|---|
+| Read backlog | Query all backlog issues for project `{jira_project_key}` not assigned to any sprint. |
+| Reorder backlog priorities | Apply the prioritization criteria. Reorder issues in the board backlog by updating each issue's rank or priority order. Use whatever backlog ranking capability is available on the board (issue ranking for next-gen boards, or priority field for classic boards). One rank-update call per issue whose rank changes. |
+
+Note: Jira backlog ordering semantics vary by board type. Use the board's native ranking mechanism — do not assume a specific API method.
+
+---
+
+### 6.2.1 Jira Field Mapping
+
+| sprint-status.yaml field | Jira field |
+|---|---|
+| `item.id` | Issue key (e.g. `MYPROJ-123`) used for lookup; or matched by summary when issue key is not yet known |
+| `item.title` | Issue summary |
+| `item.status` | Issue status (mapped via Section 6.3) |
+| `item.type` | Issue type: `story` → Story, `bug` → Bug |
+| `item.priority` | Issue priority field or board rank (board rank is preferred for backlog ordering) |
+| `sprint.name` | Sprint name |
+| `sprint.status` | Sprint state: `planning` → `future`, `active` → `active`, `closed` → `closed` |
+| `sprint.start_date` | Sprint start date |
+| `sprint.end_date` | Sprint end date |
+| `sprint.goal` | Sprint goal |
+| `epic.title` | Epic summary |
+| `epic.status` | Epic status: `in-progress` → "In Progress", `done` → "Done" |
+| `tracking_system` | Stored in `sprint-status.yaml` metadata only — no corresponding Jira field |
+| `project_key` | Matches `jira_project_key` from `_bmad/bmm/config.yaml` install-time config |
+
+### 6.2.2 Bulk Write Limitations
+
+The `generate-backlog` and `bmad-sprint-planning` skills involve bulk create/update operations with the following constraints:
+
+- **No transaction support.** Multiple sequential Jira API calls are made with no atomicity guarantee. If any call fails mid-way, Jira will be in partial state: some items will have been created or updated, others not.
+- **Pre-flight warning required.** Before executing any bulk write, the skill MUST warn the user: "This operation will create/update [N] Jira items. If it fails mid-way, Jira may be in partial state. Proceed?"
+- **Failure handling.** On any failure mid-way through a bulk sequence, the skill MUST present the standard retry/switch prompt per Section 2.4. The user decides whether to retry (which may re-attempt already-applied changes) or switch to file management.
+- **Skills affected:** `generate-backlog` (bulk backlog + epic creation/update), `bmad-sprint-planning` (bulk sprint, item, and epic creation/update). All other skills perform single-item or single-sprint operations and do not require this warning.
 
 ### 6.3 Status Mapping
 
