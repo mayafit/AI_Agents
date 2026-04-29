@@ -112,8 +112,8 @@ development_status:
   epic-14: backlog
   14-1-define-jira-operation-descriptions: backlog
   14-2-confluence-mcp-integration: backlog  # DEFERRED — out of scope until PRD defines knowledge_backend
-  14-3-implement-jira-operation-branch-sprint-skills: backlog  # blocked on 14.1 + 17.22
-  14-4-jira-onboarding-guidance-error-messages: backlog  # blocked on 14.3
+  14-3-implement-jira-operation-branch-sprint-skills: done
+  14-4-jira-onboarding-guidance-error-messages: done
   epic-14-retrospective: optional
 
   # Epic 22: BMAD v6.3.0 Plugin Migration (Phase 4)

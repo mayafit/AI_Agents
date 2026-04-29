@@ -269,21 +269,33 @@ fi
 #
 # Flagship tool → skills dir mapping (must stay in sync with lib/agents.js):
 #   claude-code  → .claude/skills
-#   copilot      → .github/skills
+#   copilot      → .agents/skills   (bmad-method 6.5.0 shared path)
 #   cline        → .cline/skills
-#   roo-code     → .roo/skills
-#   kilocode     → .kilocode/skills
+#   roo-code     → .agents/skills   (bmad-method 6.5.0 shared path)
+#   kilocode     → .agents/skills   (bmad-method 6.5.0 shared path)
+#
+# Note: copilot, roo-code, and kilocode share .agents/skills/ as of
+# bmad-method 6.5.0. When the current tool uses .agents/skills/, other
+# tools that also use that shared path are skipped (their presence in
+# .agents/skills/ is expected, not a scoping regression).
 declare -A FLAGSHIP_DIRS
 FLAGSHIP_DIRS["claude-code"]=".claude/skills"
-FLAGSHIP_DIRS["copilot"]=".github/skills"
+FLAGSHIP_DIRS["copilot"]=".agents/skills"
 FLAGSHIP_DIRS["cline"]=".cline/skills"
-FLAGSHIP_DIRS["roo-code"]=".roo/skills"
-FLAGSHIP_DIRS["kilocode"]=".kilocode/skills"
+FLAGSHIP_DIRS["roo-code"]=".agents/skills"
+FLAGSHIP_DIRS["kilocode"]=".agents/skills"
+current_dir="${FLAGSHIP_DIRS[$TOOL]:-$SKILLS_DIR}"
 for other_tool in claude-code copilot cline roo-code kilocode; do
   if [ "$other_tool" = "$TOOL" ]; then
     continue  # skip the target tool itself
   fi
   other_dir="${FLAGSHIP_DIRS[$other_tool]}"
+  # Skip check when other tool shares the same directory as the current tool
+  # (e.g. copilot/roo-code/kilocode all use .agents/skills/ in bmad-method 6.5.0).
+  if [ "$other_dir" = "$current_dir" ]; then
+    log "  OK:   $other_dir shared with $other_tool (expected — same platform dir)"
+    continue
+  fi
   if [ -d "$PROJECT_DIR/$other_dir" ]; then
     err "  FAIL: --agent $TOOL install created $other_dir (belongs to $other_tool) — scoping regression"
     fail=$((fail + 1))

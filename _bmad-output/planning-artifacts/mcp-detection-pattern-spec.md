@@ -115,15 +115,12 @@ The skill then continues with the normal file-system workflow.
 When `tracking_system: jira` is detected, the skill instructs the agent to perform the required Jira operation using whatever Jira-capable tool is available (any MCP server, plugin, or integration connected to the configured Jira instance):
 
 - **Success:** Jira is the source of truth. The skill continues using the returned Jira data.
-- **Failure (any error — tool unavailable, network error, API error):** The skill pauses and presents the user with:
+- **Failure — no Jira-capable tool available:** The skill pauses and presents the user with a message explaining that no Jira tool is configured and describing what to configure (an MCP server, plugin, or native integration connected to the Jira instance URL). Options are (a) Retry once configured or (b) Switch to file-system backend permanently.
+- **Failure — Jira tool returned an error:** The skill pauses and presents the user with the actual Jira error details. Options are (a) Retry or (b) Switch to file-system backend permanently.
 
-  > "The Jira operation failed: {error details}. How would you like to proceed?
-  > (a) Retry — attempt the Jira operation again
-  > (b) Switch to file management — update sprint-status.yaml and config to use file-system backend, then complete this operation locally. This change is permanent."
+  In both failure cases, if the user chooses (b), the skill writes `tracking_system: file-system` to `sprint-status.yaml` and updates `sprint_backend` in `_bmad/bmm/config.yaml`, then completes the operation using the local file.
 
-  If the user chooses (b), the skill writes `tracking_system: file-system` to `sprint-status.yaml` and updates `sprint_backend` in `_bmad/bmm/config.yaml`, then completes the operation using the local file.
-
-The interactive failure prompt is the same regardless of error type — the user decides whether to retry or switch, not the skill.
+The two failure cases are distinguished so the user receives actionable guidance: a missing-tool failure directs the user to configure a Jira integration, while an API error surfaces the actual error for diagnosis.
 
 ### 2.5 Unsupported Backend Message
 
@@ -266,12 +263,21 @@ Story 14.3 replaces step 3 above with the following structure, using the Jira op
       Epic → epics[], Jira status → canonical vocabulary per Section 6.3 of this spec).
    b. If the Jira operation SUCCEEDS: continue with the Jira data returned. Jira is the source of truth.
    c. If the Jira operation FAILS for any reason:
-      Pause and present the user with:
-      > "The Jira operation failed: {error details}. How would you like to proceed?
-      > (a) Retry — attempt the Jira operation again
-      > (b) Switch to file management — update sprint-status.yaml and config to use
-      >     file-system backend, then complete this operation locally. This change is permanent."
-      If user chooses (b): write `tracking_system: file-system` to `sprint-status.yaml`,
+      - If no Jira-capable tool is available in your current context:
+        Pause and present the user with:
+        > "No Jira-capable tool is available. To use Jira tracking, configure a Jira integration
+        > in your agent (an MCP server, plugin, or native integration connected to the Jira
+        > instance at `{jira_url}`). How would you like to proceed?
+        > (a) Retry — attempt the Jira operation again once a Jira tool is configured
+        > (b) Switch to file management — update sprint-status.yaml and config to use
+        >     file-system backend, then complete this operation locally. This change is permanent."
+      - If a Jira tool attempted the operation but returned an error:
+        Pause and present the user with:
+        > "The Jira operation failed: {actual Jira error details}. How would you like to proceed?
+        > (a) Retry — attempt the Jira operation again
+        > (b) Switch to file management — update sprint-status.yaml and config to use
+        >     file-system backend, then complete this operation locally. This change is permanent."
+      If user chooses (b) in either case: write `tracking_system: file-system` to `sprint-status.yaml`,
       update `sprint_backend: file-system` in `_bmad/bmm/config.yaml`,
       then proceed with **File-System Backend** instructions below.
 ```
