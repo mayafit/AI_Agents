@@ -54,12 +54,21 @@ Before executing any file-system operations, determine and route to the correct 
       Epic → epics[], Jira status → canonical vocabulary per Section 6.3 of the routing spec).
    b. If the Jira operation SUCCEEDS: continue with the Jira data returned. Jira is the source of truth.
    c. If the Jira operation FAILS for any reason:
-      Pause and present the user with:
-      > "The Jira operation failed: {error details}. How would you like to proceed?
-      > (a) Retry — attempt the Jira operation again
-      > (b) Switch to file management — update sprint-status.yaml and config to use
-      >     file-system backend, then complete this operation locally. This change is permanent."
-      If user chooses (b): write `tracking_system: file-system` to `sprint-status.yaml`,
+      - If no Jira-capable tool is available in your current context:
+        Pause and present the user with:
+        > "No Jira-capable tool is available. To use Jira tracking, configure a Jira integration
+        > in your agent (an MCP server, plugin, or native integration connected to the Jira
+        > instance at `{jira_url}`). How would you like to proceed?
+        > (a) Retry — attempt the Jira operation again once a Jira tool is configured
+        > (b) Switch to file management — update sprint-status.yaml and config to use
+        >     file-system backend, then complete this operation locally. This change is permanent."
+      - If a Jira tool attempted the operation but returned an error:
+        Pause and present the user with:
+        > "The Jira operation failed: {actual Jira error details}. How would you like to proceed?
+        > (a) Retry — attempt the Jira operation again
+        > (b) Switch to file management — update sprint-status.yaml and config to use
+        >     file-system backend, then complete this operation locally. This change is permanent."
+      If user chooses (b) in either case: write `tracking_system: file-system` to `sprint-status.yaml`,
       update `sprint_backend: file-system` in `_bmad/bmm/config.yaml`,
       then proceed with **File-System Backend** instructions below.
 
