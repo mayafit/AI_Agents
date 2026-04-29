@@ -37,6 +37,36 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
 
 ---
 
+## Backend Routing
+
+Before executing any file-system operations, determine and route to the correct backend:
+
+1. Read `_bmad-output/implementation-artifacts/sprint-status.yaml` and extract the `tracking_system` field.
+   If the field is absent or the file does not exist, default to `file-system`.
+
+2. If `tracking_system` is `file-system`:
+   Proceed with the **File-System Backend** instructions below.
+
+3. If `tracking_system` is `jira`:
+   a. Perform the Jira operation: Query the active sprint for project `{jira_project_key}` at `{jira_url}` and retrieve all sprint issues with their statuses. Query backlog issue count. Query epic progress (completed stories per epic). Map Jira sprint states and issue statuses to canonical vocabulary per the status mapping below. Use this data for health analysis — no writes. Status mapping: Backlog/Open → backlog, To Do/Selected for Development → ready-for-dev, In Progress → in-progress, In Review/Code Review → review, Done/Resolved → done, On Hold/Blocked → on-hold, Won't Do/Cancelled → cancelled.
+      Use whatever Jira-capable tool is available in your current tool context.
+      Map Jira entities to the canonical schema (Sprint → sprints[], Backlog → backlog[],
+      Epic → epics[], Jira status → canonical vocabulary per Section 6.3 of the routing spec).
+   b. If the Jira operation SUCCEEDS: continue with the Jira data returned. Jira is the source of truth.
+   c. If the Jira operation FAILS for any reason:
+      Pause and present the user with:
+      > "The Jira operation failed: {error details}. How would you like to proceed?
+      > (a) Retry — attempt the Jira operation again
+      > (b) Switch to file management — update sprint-status.yaml and config to use
+      >     file-system backend, then complete this operation locally. This change is permanent."
+      If user chooses (b): write `tracking_system: file-system` to `sprint-status.yaml`,
+      update `sprint_backend: file-system` in `_bmad/bmm/config.yaml`,
+      then proceed with **File-System Backend** instructions below.
+
+4. **File-System Backend** — execute the steps below.
+
+---
+
 ## EXECUTION
 
 <workflow>

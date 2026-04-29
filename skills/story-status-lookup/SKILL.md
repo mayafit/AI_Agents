@@ -9,19 +9,33 @@ Do not flag bugs in WIP code. Do flag bugs in delivered code.
 
 ---
 
-## Backend Configuration
+## Backend Routing
 
-Before performing a lookup, check the project context for the configured sprint management backend.
+Before performing a lookup, determine and route to the correct backend:
 
-**Where to look (in priority order):**
-1. `project-context.md` in the project root — look for a `sprint_management` field
-2. The root directives file (`CLAUDE.md`, `.cursor/rules`, or equivalent for the active agent)
-3. If neither defines a backend, **default to `file-system`**
+1. Read `_bmad-output/implementation-artifacts/sprint-status.yaml` and extract the `tracking_system` field.
+   If the field is absent or the file does not exist, default to `file-system`.
 
-| `sprint_management` value | Backend |
-|---|---|
-| `file-system` or not set | Read `sprint-status.yaml` (see below) |
-| `jira` | *(Future — see Jira section below)* |
+2. If `tracking_system` is `file-system`:
+   Proceed with the **File-System Backend** instructions below.
+
+3. If `tracking_system` is `jira`:
+   a. Perform the Jira operation: Search for the Jira issue matching the item ID in project `{jira_project_key}` at `{jira_url}` (search by issue key or summary match). Return the issue's current Jira status. Map to canonical vocabulary: Backlog/Open → backlog, To Do/Selected for Development → ready-for-dev, In Progress → in-progress, In Review/Code Review → review, Done/Resolved/Closed → done, On Hold/Blocked → on-hold, Won't Do/Cancelled → cancelled. If the issue is not found in Jira, report "not found" and classify as WIP.
+      Use whatever Jira-capable tool is available in your current tool context.
+      Map Jira entities to the canonical schema (Sprint → sprints[], Backlog → backlog[],
+      Epic → epics[], Jira status → canonical vocabulary per Section 6.3 of the routing spec).
+   b. If the Jira operation SUCCEEDS: continue with the Jira data returned. Jira is the source of truth.
+   c. If the Jira operation FAILS for any reason:
+      Pause and present the user with:
+      > "The Jira operation failed: {error details}. How would you like to proceed?
+      > (a) Retry — attempt the Jira operation again
+      > (b) Switch to file management — update sprint-status.yaml and config to use
+      >     file-system backend, then complete this operation locally. This change is permanent."
+      If user chooses (b): write `tracking_system: file-system` to `sprint-status.yaml`,
+      update `sprint_backend: file-system` in `_bmad/bmm/config.yaml`,
+      then proceed with **File-System Backend** instructions below.
+
+4. **File-System Backend** — execute the steps below.
 
 ---
 
@@ -78,12 +92,6 @@ Never guess or assume delivered status. When in doubt, WIP.
 
 ---
 
-## Future: Jira Backend
+## Jira Backend
 
-When `sprint_management: jira` is set in the project context, this extension point applies:
-
-- Jira base URL, project key, and credentials will be defined in the project context or environment config
-- Query the Jira issue status API for the relevant issue key
-- Map the Jira workflow status to delivered/WIP using a status mapping defined in the project context
-
-**This backend is not yet implemented.** When Jira support is added, update this skill with the lookup procedure and status mapping. The file-system backend remains the default fallback if Jira is unreachable.
+When `tracking_system: jira` is configured in `sprint-status.yaml`, the Backend Routing section above handles the lookup. The Jira backend queries the issue by key or summary and maps the Jira workflow status to the canonical vocabulary. The file-system backend remains the fallback if the Jira operation fails and the user chooses to switch backends.

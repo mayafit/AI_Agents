@@ -26,7 +26,7 @@
 # Old Epic 17 stories (17.1-17.8) archived; replaced by 17.9-17.24.
 
 generated: 2026-03-15
-last_updated: "2026-04-29 — Reconcile sprint-status: Epic 24 done (v3.8.0), Epic 14 redesigned, Jira Phase A stories added"
+last_updated: "2026-04-29 — Story 14.3 done: Phase B Jira operation branch implemented in all 13 sprint skills"
 project: agents
 project_key: NOKEY
 tracking_system: file-system
@@ -112,7 +112,7 @@ development_status:
   epic-14: backlog
   14-1-define-jira-operation-descriptions: backlog
   14-2-confluence-mcp-integration: backlog  # DEFERRED — out of scope until PRD defines knowledge_backend
-  14-3-implement-jira-operation-branch-sprint-skills: backlog  # blocked on 14.1 + 17.22
+  14-3-implement-jira-operation-branch-sprint-skills: done
   14-4-jira-onboarding-guidance-error-messages: backlog  # blocked on 14.3
   epic-14-retrospective: optional
 
