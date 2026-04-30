@@ -1,6 +1,6 @@
 # Story 5.5: Explicit Parameter Passing to bmad-method
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Epic: 5 — Bundled BMAD Installation (Phase 2) -->

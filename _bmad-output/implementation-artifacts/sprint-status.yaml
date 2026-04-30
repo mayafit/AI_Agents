@@ -26,7 +26,7 @@
 # Old Epic 17 stories (17.1-17.8) archived; replaced by 17.9-17.24.
 
 generated: 2026-03-15
-last_updated: "2026-04-29 — Story 14.1 done: Jira operation descriptions defined for all 13 sprint skills in mcp-detection-pattern-spec.md Section 6.2"
+last_updated: "2026-04-30 — Epic 5 closed: Stories 5.5 (buildBmadArgs explicit parameter passing) and 5.6 (space-in-path verification) marked done. Code was already in main; status files updated."
 project: agents
 project_key: NOKEY
 tracking_system: file-system
@@ -40,10 +40,10 @@ development_status:
 
   # ─── IN PROGRESS ──────────────────────────────────────────────────────────────
 
-  # Epic 5: Bundled BMAD Installation — stories 5.1-5.4 done (archived), 5.5-5.6 in review
-  epic-5: in-progress
-  5-5-explicit-parameter-passing: review
-  5-6-fix-space-in-path-bug: review
+  # Epic 5: Bundled BMAD Installation — all stories done (5.1-5.6)
+  epic-5: done
+  5-5-explicit-parameter-passing: done
+  5-6-fix-space-in-path-bug: done
   epic-5-retrospective: optional
 
   # ─── ON HOLD ──────────────────────────────────────────────────────────────────
