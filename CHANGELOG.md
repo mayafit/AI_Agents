@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.0] - 2026-04-30
+
+### New Features
+
+- **Jira sprint backend selection at install time (Epic 14 / Stories 16.1, 16.2)**:
+  The `ma-agents` wizard now offers Jira as a 4th option for sprint management
+  (alongside the existing file-system options). When selected, the wizard collects
+  the Jira URL and project key, writes `sprint_backend: jira`, `jira_url`, and
+  `jira_project_key` to `_bmad/bmm/config.yaml`, and skips creating a local
+  `sprint-status.yaml` path. (`bin/cli.js`)
+
+- **Skill-level Jira routing in all 13 sprint management skills (Epic 14 / Stories 17.22, 14.3, 14.4)**:
+  Every sprint management skill now begins with a `## Backend Routing` section that
+  reads `tracking_system` from `sprint-status.yaml` and routes accordingly:
+  - `file-system` → existing file-based workflow unchanged
+  - `jira` → skill-specific Jira operation executed via whatever Jira-capable tool
+    is available in the agent context (MCP server, plugin, or native integration)
+
+  On Jira failure the skill pauses and offers the user:
+  - *(a) Retry* — re-attempt the Jira operation
+  - *(b) Switch to file management* — permanently writes `tracking_system: file-system`
+    to `sprint-status.yaml` and `sprint_backend: file-system` to config, then
+    completes the operation locally
+
+  Skills covered: `add-sprint`, `add-to-sprint`, `remove-from-sprint`,
+  `sprint-status-view`, `cleanup-done`, `bmad-sprint-planning`, `modify-sprint`,
+  `bmad-dev-story`, `bmad-sprint-status`, `close-sprint`, `prioritize-backlog`,
+  `generate-backlog`, `story-status-lookup`.
+
+- **Jira operation descriptions specification (Epic 14 / Story 14.1)**:
+  `mcp-detection-pattern-spec.md` Section 6.2 now contains per-skill Jira operation
+  description tables, canonical field mapping (14 fields), and bulk-write limitations
+  for `bmad-sprint-planning` and `generate-backlog`.
+
+### Epic Completions
+
+- **Epic 5 (Bundled BMAD Installation)** fully closed. Stories 5.5 (`buildBmadArgs()`
+  explicit parameter passing, 34 unit tests) and 5.6 (space-in-path verification)
+  confirmed delivered and marked done.
+- **Epic 14 (Jira Backend Integration)** — Stories 14.1, 14.3, 14.4 done.
+  Story 14.2 (Confluence) deferred pending PRD definition of `knowledge_backend`.
+
 ## [3.8.1] - 2026-04-29
 
 ### Bug Fixes
