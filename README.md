@@ -2,12 +2,11 @@
 
 A universal NPX tool to install AI coding agent skills. Write skills once, install them across Claude Code, Gemini, Copilot, Cline, Cursor, Kilocode, and Roo Code.
 
-## What's New in v3.8.0
+## What's New in v3.9.0
 
-- **BMAD-METHOD v6.5.0** — upgraded from 6.3.0; 42-platform baseline, TOML customization coexistence confirmed
-- **`--agent` flag fixed** — `--agent claude-code` now correctly scopes the entire install (skills, BMAD update, instruction-block stamping) to that tool only; previously it was ignored in non-interactive mode
-- **Stale Copilot skills dir cleanup** — upgrading from an older version that used `.github/copilot/skills/` now automatically removes the old directory when `.github/skills/` is populated
-- **Plugin resolver verified** — bundle resolves via BMAD's Strategy 1 (module.yaml); no package.json needed; 134 skills install cleanly in all CI matrix configurations
+- **Jira sprint backend** — the install wizard now offers Jira as a 4th sprint management option. Select Jira to provide your Jira URL and project key; credentials are stored in `_bmad/bmm/config.yaml`. All 13 sprint management skills automatically route operations to Jira or file-system based on `tracking_system` in `sprint-status.yaml`.
+- **Skill-level Jira routing** — every sprint skill reads `tracking_system` and routes to the Jira backend via whatever Jira-capable tool is available in your agent context (MCP server, plugin, or native integration). Failure prompts offer retry or permanent switch to file management.
+- **Routing alignment (3.8.1)** — copilot, roo-code, and kilocode persona skills now land in `.agents/skills/` to match `bmad-method 6.5.0`'s unified target directory.
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
