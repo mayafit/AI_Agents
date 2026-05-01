@@ -4,6 +4,9 @@ phase2StepsCompleted: ['step-02-context', 'step-04-decisions', 'step-05-patterns
 phase2CompletedAt: '2026-03-11'
 phase2cStepsCompleted: ['step-02-context', 'step-04-decisions', 'step-06-structure', 'step-07-validation', 'step-08-complete']
 phase2cCompletedAt: '2026-03-26'
+phase5EditHistory:
+  - date: '2026-05-01'
+    changes: 'Added P5-2: BMAD v6.6.0 Integration (FR196–FR198, NFR55). Key decision: buildBmadArgs guard — when bmadTools is empty on a fresh install, skip BMAD invocation rather than emitting --tools none (rejected by v6.6.0). project_name config migration is transparent. --custom-source bug fixes improve plugin staging reliability. Technology stack bumped from bmad-method v6.5.0 to v6.6.0.'
 phase4EditHistory:
   - date: '2026-04-13'
     changes: 'Added Phase 4 Architectural Decisions section with Decision P4-1: BMAD v6.3.0 Plugin Migration (FR182-FR195, NFR50-NFR54). Captures the architectural inversion from post-install manifest surgery (current applyCustomizations in lib/bmad.js:205-346) to pre-install local plugin staging: ma-agents assembles a BMAD-Builder-compliant plugin (.claude-plugin/marketplace.json + skills/module.yaml) into lib/bmad-extension-plugin/ at build time, bundles it in the npm tarball, and on install stages it to <project>/.ma-agents-plugin-stage/ before invoking bmad-method with --custom-source <local-path>. Air-gapped guarantee preserved via PluginResolver local-file strategy. Multi-tool routing preserved via BMAD installer (--tools claude-code/copilot/cline/roo-code/kilocode). Skill namespace rename bmad-ma-agent-* → ma-agent-* to vacate reserved prefix. Removal of legacy skills (bmad-init, bmad-agent-qa Quinn, bmad-agent-sm Bob, bmad-agent-quick-flow-solo-dev Barry) following upstream persona consolidation into Amelia. Config read path moved from _bmad/_config/ to _bmad/bmm/config.yaml. Deferred follow-up: Demerzel and Gad converted to Memory-agent format; Yael/Amit/Alex remain stateless. Technology stack bumped from bmad-method v6.2.0 to v6.3.0.'
@@ -2094,7 +2097,7 @@ Net deletion: ~140 lines. Replacement: ~30 lines for stage-and-invoke.
 
 **Architectural Decisions**
 - [x] Critical decisions documented with rationale (P2-1 through P2-10)
-- [x] Technology stack fully specified (Node.js, bmad-method v6.3.0)
+- [x] Technology stack fully specified (Node.js, bmad-method v6.6.0)
 - [x] Pipeline architectures defined (5-stage install, 6-stage BMAD, 14-step Phase 2 implementation)
 - [x] Extensibility model formalized (config-driven agents, directory-scanned skills, BMAD module pattern)
 - [x] Module architecture verified against BMAD 6.2.0 source (CIS module reference)
@@ -2137,7 +2140,7 @@ Net deletion: ~140 lines. Replacement: ~30 lines for stage-and-invoke.
 
 ### Phase 5 Architectural Decisions (2026-04-26)
 
-#### Decision P5-1: BMAD v6.5.0 Integration (FR196–FR210, NFR55–NFR58)
+#### Decision P5-1: BMAD v6.5.0 Integration (FR199–FR210, NFR55–NFR58)
 
 **Context.** BMAD-METHOD v6.4.0 and v6.5.0 ship two breaking changes and several features that touch ma-agents directly:
 
@@ -2297,3 +2300,25 @@ All 5 ma-agents flagship tools (`claude-code`, `github-copilot`, `cline`, `roo`,
 The `.agents/skills/` path is currently used only by platforms outside ma-agents' registered set. Adopting it as the primary install path would require all 5 flagship tools to migrate their BMAD platform entries simultaneously, which has not happened. If ≥3 of the 5 flagship tools migrate to `.agents/skills/` in a future BMAD release, a follow-up epic should be opened to simplify ma-agents routing to a single primary path plus per-tool overrides. Until that threshold is reached, the current per-tool registry in `lib/agents.js` is the correct and safe design.
 
 **No changes to `lib/agents.js`, `lib/installer.js`, or `OBSOLETE_TOOL_SKILL_DIRS` are required by this story.**
+
+---
+
+### Decision P5-2: BMAD v6.6.0 Integration (FR196–FR198, NFR55)
+
+**Context.** bmad-method v6.6.0 introduces a breaking change: `--tools none` is rejected for fresh `--yes` installs. ma-agents' `buildBmadArgs()` currently emits `--tools none` when `ctx.tools` is empty (line 609 of `lib/bmad.js`). This occurs when no IDE-category agents are selected, producing an empty `bmadTools` array in `bin/cli.js` (line 1059).
+
+**Decision.** Guard at the call site: when `bmadTools.length === 0` on a fresh install path, skip BMAD invocation entirely. The BMAD integration layer (`lib/bmad.js`) is only invoked when at least one IDE tool target is present. This preserves the invariant: "BMAD is installed iff at least one IDE agent is configured."
+
+**Options Considered.**
+- *Pass a default tool:* Rejected. Silently installing for a tool the user didn't select violates the least-surprise principle.
+- *Error out:* Rejected. Zero IDE tools is a valid configuration for pure skill-only installs. A hard error would break those users.
+- *Skip silently (chosen):* Zero IDE tools → BMAD install step is a no-op. Consistent with the existing behavior for other optional install steps.
+
+**Secondary changes:**
+- `project_name` config field migration (`[modules.bmm]` → `[core]`) is handled transparently by bmad-method on the next install/update run. No code change needed in ma-agents.
+- `--custom-source` URL parsing fixes (Azure DevOps multi-segment paths, HTTP URLs, `_git` prefixes) and PluginResolver nested `module.yaml` support improve reliability of the plugin staging flow. No architectural change needed — these are upstream fixes consumed automatically.
+- New `--set`/`--list-options` flags (FR198) are pass-through additions; their exposure in the ma-agents CLI is deferred to a future story.
+
+**Technology stack:** bmad-method bumped from v6.5.0 → v6.6.0.
+
+**FR Coverage:** FR196 (buildBmadArgs guard), FR197 (version pin), FR198 (--set/--list-options), NFR55 (automated test coverage).
