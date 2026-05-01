@@ -2,8 +2,10 @@
 stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-24', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-25', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-07', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-08']
 workflowStatus: 'complete'
 completedDate: '2026-03-05'
-lastEdited: '2026-04-08'
+lastEdited: '2026-05-01'
 editHistory:
+  - date: '2026-05-01'
+    changes: 'Added F21: BMAD v6.6.0 Integration capability area. FR196: buildBmadArgs guard — when no IDE tools are selected for a fresh install, the BMAD installation step must be skipped rather than invoking bmad-method with --tools none (rejected by v6.6.0 for fresh --yes installs). FR197: bmad-method pin bumped to v6.6.0. NFR55: automated test must assert buildBmadArgs never emits --tools none and that the install flow skips BMAD when bmadTools array is empty. Also documents --set/--list-options non-interactive config flags (FR198) and notes project_name config auto-migration is transparent (no user action required).'
   - date: '2026-04-14'
     changes: 'Added FR181 (Profile Uninstall subcommand) and NFR49 (uninstall preservation contract) to support Epic 21 corrective work. Closes adversarial-review Finding #17 — no uninstall / rollback path. Full spec in Epic 21 Story 21.11.'
   - date: '2026-04-14'
@@ -136,6 +138,10 @@ Each capability area represents a permanent part of the product that is enhanced
 18. **Software Quality Assurance (SQA)** — Dedicated SQA agent (Gad) providing structured quality workflows for software projects: a multi-dimensional Project Audit (code-to-story traceability, stories-to-architecture/PRD alignment, process compliance, sprint health, release state) and an IEEE/ISO/IEC 12207 lifecycle process compliance assessment with compliance matrix, gap analysis, and backlog story generation for identified gaps. — **Planned**
 
 19. **Local-LLM / On-Prem Agent Tuning** — Adapts the ma-agents installed configuration to the realities of disconnected, air-gapped enterprise networks running local non-Claude LLMs (e.g., Nemotron Super 49B). Two layers: (a) **Universal guardrails** shipped to all installs — richer per-tool config (`.roomodes` with BMAD-mode file-regex restrictions, expanded `AGENTS.md`/`.clinerules`/`CLAUDE.md` injection) that enforces "text response vs. file creation" discipline and BMAD phase boundaries at the tool's application layer, not just via prompt; (b) **On-prem profile** opt-in via install-time prompt (persisted in `.ma-agents.json`) — adds local-LLM-specific guardrails (`/no_think` planning prefix, no-home-dir-writes, no `str_replace_editor` warning, reasoning-mode guidance, phase-aware persona prompt prefixes). Also ships a reference vLLM deployment doc (tool-call-parser, context length, quantization) for the inference-serving side, which the installer does not manage. — **Planned**
+
+20. **BMAD 6.3.0 Plugin Migration** — Ships the BMAD extension as a Claude-Plugin-compatible package (`.claude-plugin/marketplace.json`) installed via BMAD's PluginResolver using a local file path, preserving the air-gapped guarantee while replacing post-install manifest surgery with pre-install plugin staging. Skill renames (bmad-ma-agent-* → ma-agent-*), retirement of bmad-init / bmad-agent-qa / bmad-agent-sm / bmad-agent-quick-flow-solo-dev in alignment with upstream consolidation. — **Planned**
+
+21. **BMAD v6.6.0 Integration** — Upgrade bmad-method to v6.6.0, guard the installer against the `--tools none` breaking change, and adopt upstream reliability improvements. (Planned)
 
 Any artifact can reference any other regardless of hierarchy — a story's AC may derive from the epic, an architecture decision, and a UX design simultaneously. A central `files` table maps short file IDs to arbitrary file pointers (relative paths, absolute paths, Confluence URLs, or any document reference). Nodes are addressable anchors within registered files (`file-id#heading`), edges are directional typed relationships with full provenance (creator name, AI agent identifier, date, label). Stored as LLM-friendly JSON at `_bmad-output/knowledge-graph.json`. Rendered as an interactive graph in VSCode webview (browser fallback) via `_bmad-output/knowledge-graph.html`. `open-graph` skill surfaces the visualization from any BMAD session. — **Planned**
 
@@ -489,6 +495,12 @@ ma-agents does not integrate as an IDE extension. Instead, it injects skill cont
 - FR194: In the same follow-up epic, the Gad (SQA Engineer) persona is restructured as a Memory-agent at `_bmad/memory/ma-agent-sqa/` to accumulate audit findings, IEEE 12207 compliance history, and bug-pattern observations across sessions
 - FR195: Yael (Cyber), Amit (DevOps), and Alex (SRE) remain stateless agents — each invocation is task-scoped with no persistent cross-session memory requirement. Converting them would add maintenance cost with no workflow benefit
 
+### BMAD v6.6.0 Integration
+
+- FR196: When no IDE-category agents are selected during a fresh BMAD install, the installer must skip the BMAD invocation entirely rather than passing `--tools none` to bmad-method. Selecting zero IDE targets is a valid configuration (e.g., pure non-BMAD installs) and must not produce an error
+- FR197: The bundled bmad-method version pin (FR74) is upgraded from v6.5.0 to v6.6.0. On first run after the upgrade, bmad-method automatically migrates any affected internal configuration fields; no user action is required and the install command output is unchanged
+- FR198: The installer CLI defers exposure of the `--set <module>.<key>=<value>` and `--list-options [module]` flags introduced by bmad-method v6.6.0. These are available as bmad-method pass-through flags and may be surfaced in a future story when CI/Docker non-interactive config use cases are validated
+
 ### Specialized Agent Personas (MIL-STD-498 / SRE / DevOps / Cyber)
 
 - FR35: Engineers can target BMAD specialized agents (SRE, DevOps, Cyber, MIL-STD-498, SQA) for persona installation
@@ -829,6 +841,10 @@ sprints:
 - NFR52: Multi-tool install parity — the same bundled plugin, without tool-specific repackaging or variant bundles, must produce a functional skill installation when bmad-method is invoked with `--tools claude-code`, `--tools copilot`, `--tools cline`, `--tools roo-code`, and `--tools kilocode`. Verified via smoke install against each target during release verification (FR192)
 - NFR53: The plugin stage directory (`<project>/.ma-agents-plugin-stage/`) is not part of the delivered installation — it exists only during the install pipeline and is removed on success. It must be listed in the ma-agents-generated `.gitignore` entries for projects that do not already ignore it, to prevent accidental commit of transient artifacts
 - NFR54: The 6.3.0 migration must preserve the air-gapped self-containment guarantee end-to-end — the ma-agents npm tarball must contain all plugin assets, all BMAD cache modules (including any new 6.3.0 bundled modules), and all dependencies sufficient for offline install. No code path in the installer may require access to `github.com`, `marketplace.bmad-method.org`, npm registry, or any external host after the tarball is on disk
+
+### BMAD v6.6.0 Integration
+
+- NFR55: Automated tests must assert: (a) the bmad-method invocation command never contains `--tools none` regardless of which code path assembles it; (b) the install flow silently skips BMAD invocation when the derived `bmadTools` array is empty; (c) existing installs with non-empty tools lists are unaffected — satisfies FR196
 
 ### BMAD Knowledge Graph
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * Tests for Story 24.1: Bump bmad-method to 6.5.0 and Audit fs-extra Compatibility
+ * Tests for Story 24.1: Bump bmad-method to 6.6.0 and Audit fs-extra Compatibility
  *
- * Task 1: Verify package.json dependency updated to 6.5.0
- * Task 2: Verify build:bmad-cache reads the v6.5.0 registry layout
+ * Task 1: Verify package.json dependency updated to 6.6.0
+ * Task 2: Verify build:bmad-cache reads the v6.6.0 registry layout
  * Task 3: Verify bmad.js CLI compatibility with bmad-cli.js entry point
  * Task 4: Verify prePopulateBmadCache compatibility
  *
  * Originally authored for Story 15.1 (6.2.2). Rewritten for Story 22.1 (6.3.0),
- * updated for Story 24.1 (6.5.0). The installer layout remains the same as 6.3.0
+ * updated for Story 24.1 (6.6.0). The installer layout remains the same as 6.3.0
  * (tools/installer/bmad-cli.js, tools/installer/modules/registry-fallback.yaml,
  * tools/installer/commands/install.js). fs-extra removed in 6.4.0 → replaced with
  * native node:fs in bmad-method internals; ma-agents continues to use its own fs-extra.
@@ -37,25 +37,25 @@ function test(name, fn) {
 
 const projectRoot = path.resolve(__dirname, '..');
 
-console.log('\nStory 24.1: Bump bmad-method to 6.5.0 and Audit fs-extra Compatibility\n');
+console.log('\nStory 24.1: Bump bmad-method to 6.6.0 and Audit fs-extra Compatibility\n');
 
 // ---- Task 1: package.json dependency ----
 
 console.log('Task 1: package.json dependency');
 
-test('package.json pins bmad-method at 6.5.0 (exact, no caret/tilde)', () => {
+test('package.json pins bmad-method at 6.6.0 (exact, no caret/tilde)', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
-  assert.strictEqual(pkg.dependencies['bmad-method'], '6.5.0');
+  assert.strictEqual(pkg.dependencies['bmad-method'], '6.6.0');
 });
 
-test('installed bmad-method is version 6.5.0', () => {
+test('installed bmad-method is version 6.6.0', () => {
   const bmadPkg = JSON.parse(
     fs.readFileSync(path.join(projectRoot, 'node_modules', 'bmad-method', 'package.json'), 'utf8')
   );
-  assert.strictEqual(bmadPkg.version, '6.5.0');
+  assert.strictEqual(bmadPkg.version, '6.6.0');
 });
 
-test('require.resolve finds bmad-cli.js (6.5.0 entry point)', () => {
+test('require.resolve finds bmad-cli.js (6.6.0 entry point)', () => {
   const resolved = require.resolve('bmad-method/tools/installer/bmad-cli.js');
   assert.ok(resolved.includes('bmad-cli.js'), `Unexpected path: ${resolved}`);
   assert.ok(fs.existsSync(resolved), `File does not exist: ${resolved}`);
@@ -65,19 +65,19 @@ test('require.resolve finds bmad-cli.js (6.5.0 entry point)', () => {
 
 console.log('\nTask 2: build:bmad-cache compatibility');
 
-test('registry-fallback.yaml exists in 6.5.0', () => {
+test('registry-fallback.yaml exists in 6.6.0', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const yamlPath = path.join(bmadDir, 'tools', 'installer', 'modules', 'registry-fallback.yaml');
   assert.ok(fs.existsSync(yamlPath), `YAML not found at ${yamlPath}`);
 });
 
-test('legacy external-official-modules.yaml is absent in 6.5.0', () => {
+test('legacy external-official-modules.yaml is absent in 6.6.0', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const legacyPath = path.join(bmadDir, 'tools', 'cli', 'external-official-modules.yaml');
   assert.ok(!fs.existsSync(legacyPath), `Legacy YAML unexpectedly found at ${legacyPath}`);
 });
 
-test('registry parser extracts 4 external modules from 6.5.0 (bmb, cis, gds, tea)', () => {
+test('registry parser extracts 4 external modules from 6.6.0 (bmb, cis, gds, tea)', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const yamlPath = path.join(bmadDir, 'tools', 'installer', 'modules', 'registry-fallback.yaml');
   const content = fs.readFileSync(yamlPath, 'utf8');
@@ -125,16 +125,16 @@ test('registry parser extracts 4 external modules from 6.5.0 (bmb, cis, gds, tea
     `Unexpected module list: ${codes.join(', ')}`);
 });
 
-test('wds module is NOT in the v6.5.0 upstream registry (retired)', () => {
+test('wds module is NOT in the v6.6.0 upstream registry (retired)', () => {
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const yamlPath = path.join(bmadDir, 'tools', 'installer', 'modules', 'registry-fallback.yaml');
   const content = fs.readFileSync(yamlPath, 'utf8');
-  assert.ok(!content.includes('code: wds'), 'wds code unexpectedly found in 6.5.0 registry');
-  assert.ok(!content.includes('bmad-method-wds-expansion'), 'wds repo URL unexpectedly found in 6.5.0 registry');
+  assert.ok(!content.includes('code: wds'), 'wds code unexpectedly found in 6.6.0 registry');
+  assert.ok(!content.includes('bmad-method-wds-expansion'), 'wds repo URL unexpectedly found in 6.6.0 registry');
 });
 
 test('built_in filter excludes core/bmm from external module list', () => {
-  // Simulated parse of a v6.5.0-style entry to confirm the normalize rule.
+  // Simulated parse of a v6.6.0-style entry to confirm the normalize rule.
   const raw = [
     { key: 'bmad-core', code: 'core', url: 'https://example.com/core', built_in: 'true' },
     { key: 'bmad-method', code: 'bmm', url: 'https://example.com/bmm', built_in: 'true' },
@@ -147,14 +147,14 @@ test('built_in filter excludes core/bmm from external module list', () => {
   assert.strictEqual(filtered[0].code, 'bmb');
 });
 
-test('cache-manifest.json exists and records bmadMethodVersion 6.5.0', () => {
+test('cache-manifest.json exists and records bmadMethodVersion 6.6.0', () => {
   const manifestPath = path.join(projectRoot, 'lib', 'bmad-cache', 'cache-manifest.json');
   assert.ok(fs.existsSync(manifestPath), `Manifest not found at ${manifestPath}`);
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  assert.strictEqual(manifest.bmadMethodVersion, '6.5.0');
+  assert.strictEqual(manifest.bmadMethodVersion, '6.6.0');
 });
 
-test('cache-manifest.json contains at least the v6.5.0 official modules (bmb, cis, gds, tea)', () => {
+test('cache-manifest.json contains at least the v6.6.0 official modules (bmb, cis, gds, tea)', () => {
   const manifestPath = path.join(projectRoot, 'lib', 'bmad-cache', 'cache-manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const codes = Object.keys(manifest.modules);
@@ -220,7 +220,7 @@ console.log('\nTask 3: bmad.js CLI compatibility');
 
 const bmad = require('../lib/bmad');
 
-test('getBmadCommand resolves bmad-cli.js from 6.5.0', () => {
+test('getBmadCommand resolves bmad-cli.js from 6.6.0', () => {
   const result = bmad.buildBmadArgs({
     projectRoot: '/test',
     modules: ['bmm'],
@@ -241,7 +241,7 @@ test('buildBmadArgs generates valid --action update flag', () => {
   assert.ok(result.includes('--action update'), `Expected --action update in: ${result}`);
 });
 
-// Helper: locate the CLI install command across both the legacy and v6.5.0
+// Helper: locate the CLI install command across both the legacy and v6.6.0
 // layouts so the flag-existence checks below survive minor reorganizations
 // within bmad-method itself.
 function readInstallCommand() {
@@ -258,77 +258,77 @@ function readInstallCommand() {
   throw new Error(`install.js not found in any known location: ${candidates.join(', ')}`);
 }
 
-test('6.5.0 CLI accepts --directory flag', () => {
+test('6.6.0 CLI accepts --directory flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--directory'), '6.5.0 install.js missing --directory flag');
+  assert.ok(content.includes('--directory'), '6.6.0 install.js missing --directory flag');
 });
 
-test('6.5.0 CLI accepts --modules flag', () => {
+test('6.6.0 CLI accepts --modules flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--modules'), '6.5.0 install.js missing --modules flag');
+  assert.ok(content.includes('--modules'), '6.6.0 install.js missing --modules flag');
 });
 
-test('6.5.0 CLI accepts --tools flag', () => {
+test('6.6.0 CLI accepts --tools flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--tools'), '6.5.0 install.js missing --tools flag');
+  assert.ok(content.includes('--tools'), '6.6.0 install.js missing --tools flag');
 });
 
-test('6.5.0 CLI accepts the current custom-module flag', () => {
+test('6.6.0 CLI accepts the current custom-module flag', () => {
   // bmad-method 6.3.0 renamed --custom-content to --custom-source.
   // Accept either so the test survives both versions during bisects and
   // documents the rename.
   const { content } = readInstallCommand();
   const hasFlag = content.includes('--custom-source') || content.includes('--custom-content');
-  assert.ok(hasFlag, '6.5.0 install.js missing both --custom-source and --custom-content flags');
+  assert.ok(hasFlag, '6.6.0 install.js missing both --custom-source and --custom-content flags');
 });
 
-test('buildBmadArgs uses --custom-source on v6.5.0 (was --custom-content on v6.2.x)', () => {
+test('buildBmadArgs uses --custom-source on v6.6.0 (was --custom-content on v6.2.x)', () => {
   // Verify the dynamic flag resolver picks the right name for the installed
-  // bmad-method. On v6.5.0 it must be --custom-source; on v6.2.x it stays
+  // bmad-method. On v6.6.0 it must be --custom-source; on v6.2.x it stays
   // --custom-content. This is what makes AC #6 (scratch install) work.
   const flag = bmad.resolveCustomContentFlag();
   assert.ok(['--custom-source', '--custom-content'].includes(flag),
     `Unexpected flag returned: ${flag}`);
-  // Since we pin 6.5.0 in this repo, assert the specific value:
+  // Since we pin 6.6.0 in this repo, assert the specific value:
   assert.strictEqual(flag, '--custom-source',
-    `Expected --custom-source for bmad-method 6.5.0, got ${flag}`);
+    `Expected --custom-source for bmad-method 6.6.0, got ${flag}`);
 });
 
-test('6.5.0 CLI accepts --action flag', () => {
+test('6.6.0 CLI accepts --action flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--action'), '6.5.0 install.js missing --action flag');
+  assert.ok(content.includes('--action'), '6.6.0 install.js missing --action flag');
 });
 
-test('6.5.0 CLI accepts --yes flag', () => {
+test('6.6.0 CLI accepts --yes flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--yes'), '6.5.0 install.js missing --yes flag');
+  assert.ok(content.includes('--yes'), '6.6.0 install.js missing --yes flag');
 });
 
-test('6.5.0 CLI accepts --user-name flag', () => {
+test('6.6.0 CLI accepts --user-name flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--user-name'), '6.5.0 install.js missing --user-name flag');
+  assert.ok(content.includes('--user-name'), '6.6.0 install.js missing --user-name flag');
 });
 
-test('6.5.0 CLI accepts --communication-language flag', () => {
+test('6.6.0 CLI accepts --communication-language flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--communication-language'), '6.5.0 install.js missing --communication-language flag');
+  assert.ok(content.includes('--communication-language'), '6.6.0 install.js missing --communication-language flag');
 });
 
-test('6.5.0 CLI accepts --document-output-language flag', () => {
+test('6.6.0 CLI accepts --document-output-language flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--document-output-language'), '6.5.0 install.js missing --document-output-language flag');
+  assert.ok(content.includes('--document-output-language'), '6.6.0 install.js missing --document-output-language flag');
 });
 
-test('6.5.0 CLI accepts --output-folder flag', () => {
+test('6.6.0 CLI accepts --output-folder flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--output-folder'), '6.5.0 install.js missing --output-folder flag');
+  assert.ok(content.includes('--output-folder'), '6.6.0 install.js missing --output-folder flag');
 });
 
-test('module.yaml custom-content format is still referenced by 6.5.0 installer', () => {
+test('module.yaml custom-content format is still referenced by 6.6.0 installer', () => {
   // 6.3.0 consolidated the custom-module flow into
   // tools/installer/modules/custom-module-manager.js (the legacy
   // tools/cli/installers/lib/custom/handler.js was removed). This structure
-  // is unchanged in 6.5.0. Verify the entry point still references module.yaml
+  // is unchanged in 6.6.0. Verify the entry point still references module.yaml
   // so the extension ma-agents ships (lib/bmad-extension/skills/module.yaml)
   // is still a valid custom module payload.
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
@@ -360,7 +360,7 @@ test('prePopulateBmadCache is exported', () => {
 
 test('prePopulateBmadCache source handles all cache modules dynamically', () => {
   // The function iterates fs.readdir(cacheSource) and handles any number of
-  // modules, so it automatically absorbs v6.5.0 changes (fewer or renamed
+  // modules, so it automatically absorbs v6.6.0 changes (fewer or renamed
   // modules) without code changes.
   const bmadSource = fs.readFileSync(path.join(projectRoot, 'lib', 'bmad.js'), 'utf8');
   assert.ok(bmadSource.includes('fs.readdir(cacheSource)'), 'prePopulateBmadCache should iterate cache directory');

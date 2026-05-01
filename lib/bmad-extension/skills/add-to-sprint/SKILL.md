@@ -18,7 +18,7 @@ Guided workflow to move backlog items to a sprint in the unified `sprint-status.
 Before executing any file-system operations, determine and route to the correct backend:
 
 1. Read `_bmad-output/implementation-artifacts/sprint-status.yaml` and extract the `tracking_system` field.
-   If the field is absent or the file does not exist, default to `file-system`.
+   If the field is absent or the file does not exist, read `sprint_backend` from `_bmad/bmm/config.yaml`. Use that value if present, otherwise default to `file-system`.
 
 2. If `tracking_system` is `file-system`:
    Proceed with the **File-System Backend** instructions below.

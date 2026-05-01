@@ -1049,57 +1049,57 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     }
 
     const bmadInstalled = bmad.isBmadInstalled();
+    const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id)).map(id => getBmadPlatformCode(id));
     // Story 22.6 — ma-agents customizations are now packaged as a BMAD plugin
     // and installed by bmad-method itself via --custom-source. The separate
     // `applyCustomizations()` call has been removed; installBmad()/updateBmad()
     // stage the plugin and invoke the installer in one pass.
-    if (!bmadInstalled) {
-      if (yesFlag) {
-        console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
-        const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id)).map(id => getBmadPlatformCode(id));
-        const success = await bmad.installBmad(['bmm'], bmadTools);
-        if (success) {
-          console.log(chalk.green(' BMAD-METHOD installed successfully!'));
-        }
-      } else {
-        const { installBmad } = await prompts({
-          type: 'confirm',
-          name: 'installBmad',
-          message: 'BMAD-METHOD not detected. Would you like to install it?',
-          initial: true
-        });
-
-        if (installBmad) {
+    // v6.6.0: --tools none is rejected for fresh installs; skip BMAD entirely when no IDE tools selected.
+    if (bmadTools.length > 0) {
+      if (!bmadInstalled) {
+        if (yesFlag) {
           console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
-          const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id)).map(id => getBmadPlatformCode(id));
           const success = await bmad.installBmad(['bmm'], bmadTools);
           if (success) {
             console.log(chalk.green(' BMAD-METHOD installed successfully!'));
           }
-        }
-      }
-    } else {
-      if (yesFlag) {
-        console.log(chalk.cyan('\n Updating BMAD-METHOD...'));
-        const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id)).map(id => getBmadPlatformCode(id));
-        const success = await bmad.updateBmad(['bmm'], bmadTools);
-        if (success) {
-          console.log(chalk.green(' BMAD-METHOD updated successfully!'));
+        } else {
+          const { installBmad } = await prompts({
+            type: 'confirm',
+            name: 'installBmad',
+            message: 'BMAD-METHOD not detected. Would you like to install it?',
+            initial: true
+          });
+
+          if (installBmad) {
+            console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
+            const success = await bmad.installBmad(['bmm'], bmadTools);
+            if (success) {
+              console.log(chalk.green(' BMAD-METHOD installed successfully!'));
+            }
+          }
         }
       } else {
-        const { updateBmad } = await prompts({
-          type: 'confirm',
-          name: 'updateBmad',
-          message: 'BMAD-METHOD installation detected. Would you like to update it?',
-          initial: true
-        });
-
-        if (updateBmad) {
+        if (yesFlag) {
           console.log(chalk.cyan('\n Updating BMAD-METHOD...'));
-          const bmadTools = selectedAgentIds.filter(id => bmadToolsFilter.includes(id)).map(id => getBmadPlatformCode(id));
           const success = await bmad.updateBmad(['bmm'], bmadTools);
           if (success) {
             console.log(chalk.green(' BMAD-METHOD updated successfully!'));
+          }
+        } else {
+          const { updateBmad } = await prompts({
+            type: 'confirm',
+            name: 'updateBmad',
+            message: 'BMAD-METHOD installation detected. Would you like to update it?',
+            initial: true
+          });
+
+          if (updateBmad) {
+            console.log(chalk.cyan('\n Updating BMAD-METHOD...'));
+            const success = await bmad.updateBmad(['bmm'], bmadTools);
+            if (success) {
+              console.log(chalk.green(' BMAD-METHOD updated successfully!'));
+            }
           }
         }
       }

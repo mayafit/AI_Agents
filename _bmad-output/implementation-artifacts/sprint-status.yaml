@@ -26,7 +26,7 @@
 # Old Epic 17 stories (17.1-17.8) archived; replaced by 17.9-17.24.
 
 generated: 2026-03-15
-last_updated: "2026-04-30 — v3.9.0 release: Jira backend integration (Epic 14 stories 16.1/16.2/17.22/14.3/14.4/14.1) + Epic 5 closure"
+last_updated: "2026-05-01 — Epic 25 (BMAD v6.6.0 Integration) complete. Stories 25.1 and 25.2 done. bmad-method bumped to 6.6.0, empty-tools guard implemented and tested."
 project: agents
 project_key: NOKEY
 tracking_system: file-system
@@ -163,3 +163,13 @@ development_status:
   24-11-agents-skills-cross-tool-standard-routing-assessment: done
   24-12-persistent-facts-spike-marker-injection-replacement: done
   epic-24-retrospective: optional
+
+  # Epic 25: BMAD v6.6.0 Integration (Phase 5)
+  # Goal: Upgrade bmad-method v6.5.0 → v6.6.0. Fix --tools none breaking change guard,
+  # rebuild cache, verify CI health, cut new ma-agents release.
+  # Dependencies: Epic 24 fully complete (released as v3.9.0)
+  # Execution order: 25.1 → 25.2 (25.1 must be merged before 25.2 exposes the breaking change)
+  epic-25: done
+  25-1-guard-buildBmadArgs-empty-tools: done
+  25-2-bump-bmad-method-to-6-6-0-rebuild-cache: done
+  epic-25-retrospective: optional

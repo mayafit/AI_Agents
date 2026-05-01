@@ -3,6 +3,9 @@ stepsCompleted: [1, 2, 3, 4, 'phase2-step-01', 'phase2-step-02', 'phase2-step-03
 workflowStatus: 'complete'
 completedDate: '2026-03-08'
 lastEdited: '2026-04-07'
+phase5EditHistory:
+  - date: '2026-05-01'
+    changes: 'Added Epic 25: BMAD v6.6.0 Integration (Phase 5). 2 stories (25.1-25.2): buildBmadArgs guard for --tools none breaking change, and bmad-method version bump + cache rebuild.'
 phase4EditHistory:
   - date: '2026-04-13'
     changes: 'Added Epic 22: BMAD v6.3.0 Plugin Migration (Phase 4). 10 stories (22.1–22.10) covering version bump + cache rebuild, skill namespace rename sweep, legacy skill retirement (bmad-init/Quinn/Bob/Barry), build-plugin script, .claude-plugin/marketplace.json + skills/module.yaml, lib/bmad.js stage-and-invoke replacement, config path migration to _bmad/bmm/config.yaml, gitignore stage dir, CI offline install gate, multi-tool smoke verification. Added Epic 23: Memory-Agent Conversion for Demerzel and Gad (Phase 4 — deferred follow-up). 2 stories (23.1, 23.2). Added FR182–FR195 and NFR50–NFR54 to Requirements Inventory and FR Coverage Map. Updated Epic List and Development Execution Order.'
@@ -4668,5 +4671,48 @@ scripts/
 - Demerzel: `ml-advise` skill explicitly requires search across past experiments, retrospectives, and TechSpecs — Memory format is the canonical fit
 - Gad: SQA workflows accumulate findings (bug patterns, compliance history) across sessions — Memory format reduces re-discovery cost
 - Yael, Amit, Alex: each invocation is task-scoped (run a scan, scaffold infra, check deployment) — no cross-session state requirement, conversion is pure overhead
+
+---
+
+## Epic 25: BMAD v6.6.0 Integration (Phase 5)
+
+**Goal:** Upgrade bmad-method from v6.5.0 to v6.6.0. Fix the `--tools none` breaking change by guarding `buildBmadArgs()` against empty tool arrays on fresh installs, rebuild the bmad-cache, verify CI health, and cut a new ma-agents release.
+
+**Dependencies:** Epic 24 must be fully complete (it is — all stories done, released as v3.9.0).
+
+**Execution order:** 25.1 → 25.2 (25.1 must ship first so the guard is in place before the version bump exposes the breaking change in tests)
+
+**FR Coverage:** FR196, FR197, FR198, NFR55
+
+### Story 25.1: Guard buildBmadArgs Against Empty Tools on Fresh Installs
+
+**Status:** ready-for-dev
+**Size:** Small
+**Priority:** Critical (breaking change)
+
+**User Story:** As a ma-agents user who installs without selecting any IDE agents, I get a clean no-op for the BMAD step rather than a failing `--tools none` invocation.
+
+**Acceptance Criteria:**
+1. When `bmadTools` is empty and `!bmadInstalled`, the BMAD install step is silently skipped (no bmad-method invocation, no error)
+2. When `bmadTools` is empty and `bmadInstalled`, the BMAD update step is silently skipped
+3. `buildBmadArgs()` never produces a command string containing `--tools none`
+4. Existing behavior for non-empty `bmadTools` arrays is unaffected
+5. A new test in the test suite asserts AC 1–3
+
+### Story 25.2: Bump bmad-method to v6.6.0 and Rebuild Cache
+
+**Status:** ready-for-dev (blocked on 25.1)
+**Size:** Small
+**Priority:** High
+
+**User Story:** As a ma-agents user, I get all upstream v6.6.0 bug fixes (--custom-source reliability, PluginResolver improvements) without any manual intervention.
+
+**Acceptance Criteria:**
+1. `package.json` `bmad-method` field updated from `6.5.0` to `6.6.0`
+2. `npm update bmad-method` run and `package-lock.json` updated
+3. `npm run build:bmad-cache` (or equivalent) run successfully — cache rebuilt with v6.6.0 content
+4. All existing tests pass with the new version
+5. `npm test` green
+6. `project_name` config migration verified non-breaking (no ma-agents code change needed — bmad-method auto-migrates)
 
 **FR195 explicitly documents that Yael, Amit, and Alex remain stateless — this is an architectural decision, not a backlog deferral.**
