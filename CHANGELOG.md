@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.11.0] - 2026-05-02
+
+### New Features
+
+- **Cline workflow generation (Epic 25 / Story 25.3)**: After BMAD installs, updates,
+  or migrates when Cline is a selected tool, `deployClineWorkflows()` now scans
+  `.cline/skills/` and writes a `.clinerules/workflows/<skill-name>.md` wrapper for
+  every installed skill. Cline users can type `/` in chat to browse and invoke all
+  BMAD skills via Cline's native slash-command system. Two wrapper strategies:
+  - Skills with `workflow.md` get a delegation wrapper pointing to that file.
+  - SKILL.md-only skills get a read wrapper with a frontmatter-ignore instruction.
+  No-op when Cline is not among the selected tools. (`lib/bmad.js`)
+
+## [3.10.0] - 2026-05-01
+
+### Bug Fixes
+
+- **Jira backend first-run fix (Story 25.1)**: Fixed a bug where the Jira backend
+  (`tracking_system: jira`) was ignored on the first run after install. Sprint skills
+  now correctly detect and activate the Jira backend on initial invocation. (`lib/bmad.js`)
+
+### Dependencies
+
+- **BMAD v6.6.0**: Bundled bmad-method updated to v6.6.0, including upstream persona
+  and workflow improvements.
+
 ## [3.9.0] - 2026-04-30
 
 ### New Features

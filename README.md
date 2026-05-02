@@ -2,6 +2,15 @@
 
 A universal NPX tool to install AI coding agent skills. Write skills once, install them across Claude Code, Gemini, Copilot, Cline, Cursor, Kilocode, and Roo Code.
 
+## What's New in v3.11.0
+
+- **Cline workflow generation** — when Cline is selected during install, update, or migration, ma-agents now auto-generates `.clinerules/workflows/<skill-name>.md` for every BMAD skill installed to `.cline/skills/`. Type `/` in Cline chat to browse and invoke all BMAD skills natively.
+
+## What's New in v3.10.0
+
+- **Jira backend first-run fix** — the Jira backend is now correctly detected and activated on the very first run after install, resolving a bug where `tracking_system` was ignored until a second invocation.
+- **BMAD v6.6.0** — bundled bmad-method updated to v6.6.0.
+
 ## What's New in v3.9.0
 
 - **Jira sprint backend** — the install wizard now offers Jira as a 4th sprint management option. Select Jira to provide your Jira URL and project key; credentials are stored in `_bmad/bmm/config.yaml`. All 13 sprint management skills automatically route operations to Jira or file-system based on `tracking_system` in `sprint-status.yaml`.
