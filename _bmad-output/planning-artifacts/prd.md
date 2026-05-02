@@ -1,9 +1,11 @@
 ---
-stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-24', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-25', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-07', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-08']
+stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-24', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-25', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-07', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-08', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-05-01']
 workflowStatus: 'complete'
 completedDate: '2026-03-05'
 lastEdited: '2026-05-01'
 editHistory:
+  - date: '2026-05-01'
+    changes: 'Added F22: Cline Workflow Generation capability area (Shipped). FR199–FR201: after every BMAD install/update/migration where Cline is selected, deployClineWorkflows scans .cline/skills/ and generates .clinerules/workflows/<skill-name>.md wrappers for all BMAD skills — delegation wrappers for skills with workflow.md, read+frontmatter-ignore wrappers for SKILL.md-only skills. Updated Cline row in IDE/Agent Integration table. Added Cline implementation consideration. Added Journey Requirements Summary row for Cline workflow invocation.'
   - date: '2026-05-01'
     changes: 'Added F21: BMAD v6.6.0 Integration capability area. FR196: buildBmadArgs guard — when no IDE tools are selected for a fresh install, the BMAD installation step must be skipped rather than invoking bmad-method with --tools none (rejected by v6.6.0 for fresh --yes installs). FR197: bmad-method pin bumped to v6.6.0. NFR55: automated test must assert buildBmadArgs never emits --tools none and that the install flow skips BMAD when bmadTools array is empty. Also documents --set/--list-options non-interactive config flags (FR198) and notes project_name config auto-migration is transparent (no user action required).'
   - date: '2026-04-14'
@@ -143,6 +145,8 @@ Each capability area represents a permanent part of the product that is enhanced
 
 21. **BMAD v6.6.0 Integration** — Upgrade bmad-method to v6.6.0, guard the installer against the `--tools none` breaking change, and adopt upstream reliability improvements. (Planned)
 
+22. **Cline Workflow Generation** — After BMAD installs or updates when Cline is a selected tool, the installer auto-generates `.clinerules/workflows/<skill-name>.md` wrapper files for every BMAD skill in `.cline/skills/`. BMAD skills ship with Claude Code-style YAML frontmatter that Cline does not natively parse; the generated wrappers are the adapter layer that makes skills callable via Cline's native `/workflow-name` invocation mechanism. Skills with a `workflow.md` receive a delegation wrapper; self-contained skills (SKILL.md only) receive a wrapper that reads SKILL.md with a frontmatter-ignore instruction. Triggered on install, update, and migration. — **Shipped**
+
 Any artifact can reference any other regardless of hierarchy — a story's AC may derive from the epic, an architecture decision, and a UX design simultaneously. A central `files` table maps short file IDs to arbitrary file pointers (relative paths, absolute paths, Confluence URLs, or any document reference). Nodes are addressable anchors within registered files (`file-id#heading`), edges are directional typed relationships with full provenance (creator name, AI agent identifier, date, label). Stored as LLM-friendly JSON at `_bmad-output/knowledge-graph.json`. Rendered as an interactive graph in VSCode webview (browser fallback) via `_bmad-output/knowledge-graph.html`. `open-graph` skill surfaces the visualization from any BMAD session. — **Planned**
 
 ### Future Directions
@@ -258,6 +262,7 @@ Alon defines the enterprise development methodology and builds the tooling to en
 | Skill authoring & governance | Alon |
 | Agent persona customization | Alon |
 | Cross-agent methodology portability (12 agents incl. OpenCode) | All |
+| Cline workflow wrappers — BMAD skills callable via `/workflow-name` | Alon (methodology owner), all Cline users |
 | Air-gapped / on-prem operation | Amit, Alon |
 | Inter-role document traceability | Eli → Noam → Yael → Oren (full chain) |
 | `_bmad-output` as version-controlled project knowledge | All |
@@ -355,7 +360,7 @@ ma-agents does not integrate as an IDE extension. Instead, it injects skill cont
 |-------|------------------|
 | Claude Code | `.claude/` directory, `CLAUDE.md` instruction injection (top-priority placement) |
 | Cursor | `.cursor/rules/` directory |
-| Cline | `.cline/` directory with resource mapping (references→docs, assets→templates) |
+| Cline | `.cline/` directory with resource mapping (references→docs, assets→templates); `.clinerules/workflows/` for auto-generated skill invocation wrappers |
 | Copilot | `.github/copilot-instructions.md` |
 | Gemini | `.gemini/` directory |
 | Kilocode | `.kilocode/rules/` directory |
@@ -374,6 +379,7 @@ ma-agents does not integrate as an IDE extension. Instead, it injects skill cont
 
 ### Implementation Considerations
 
+- **Cline workflow generation** — BMAD installs skills to `.cline/skills/` using Claude Code-style YAML frontmatter that Cline does not natively interpret. Cline's skill invocation mechanism is `/workflow-name` resolved from `.clinerules/workflows/`. After every BMAD install, update, or migration where Cline is a selected tool, the installer scans `.cline/skills/` and generates a `.clinerules/workflows/<skill-name>.md` wrapper for each skill subdirectory. Wrappers are two-variant: skills with a `workflow.md` receive a delegation wrapper; skills with only SKILL.md receive a read wrapper with a frontmatter-ignore instruction. Without these wrappers, BMAD skills are present on disk but unreachable via Cline's slash-command invocation system
 - **OpenCode integration** uses JSON-based instruction injection (`opencode.json` instructions array) rather than markdown comment blocks. The installer must handle JSON config merging (OpenCode configs merge, not replace) and skill path resolution for `.opencode/skills/`
 - **Visual Studio integration** is an identified gap. The team needs to investigate how Visual Studio exposes AI agent configuration (Copilot Chat extensions, `.editorconfig`-adjacent patterns, or VS-specific instruction files) and determine the appropriate injection mechanism
 - **Bundled BMAD installation** bundles bmad-method and external modules inside the npm package, pre-populating bmad-method's cache. Node.js and npm are always available in target environments
@@ -651,6 +657,12 @@ sprints:
 - FR120: All BMAD workflows that produce or consume sprint artifacts (sprint planning, story creation, story status lookup, sprint status via `sprint-status.yaml`, bug management, retrospectives) resolve their paths from the configured `{sprint_management_path}`
 - FR121: When the agent activity dashboard is implemented, it resolves story status files and sprint data from the configured `{sprint_management_path}` — correctly reading agent activity across repositories
 - FR122: In multi-repo mode, the installer creates a lightweight cross-reference file in the code repository (`_bmad-output/project-layout.yaml`) documenting the knowledgebase and sprint management paths — so agents activated in the code repo can discover where planning and sprint data live without re-running installation
+
+### Cline Workflow Generation
+
+- FR199: When Cline is among the selected tools for a BMAD install, update, or migration, the installer invokes `deployClineWorkflows(projectRoot, tools)` after the BMAD operation completes — scanning `.cline/skills/` for all BMAD-installed skill subdirectories and generating a `.clinerules/workflows/<skill-name>.md` wrapper file for each one
+- FR200: For skills that contain a `workflow.md` file, the generated wrapper delegates to that file — allowing Cline to execute the full BMAD workflow document via its native `/workflow-name` invocation. For self-contained skills (SKILL.md only), the wrapper instructs Cline to read SKILL.md while ignoring its YAML frontmatter, which Cline does not natively parse
+- FR201: Cline workflow wrappers are regenerated on every qualifying install, update, and migration run — ensuring wrappers stay in sync when skills are added, updated, or removed by BMAD
 
 ### OpenCode Agent Support
 
