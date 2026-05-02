@@ -6,6 +6,8 @@ phase2cStepsCompleted: ['step-02-context', 'step-04-decisions', 'step-06-structu
 phase2cCompletedAt: '2026-03-26'
 phase5EditHistory:
   - date: '2026-05-01'
+    changes: 'Added P5-3: Cline Workflow Generation. New post-install step deployClineWorkflows() generates .clinerules/workflows/<skill-name>.md wrappers for every BMAD skill installed to .cline/skills/, bridging BMAD skill packages to Cline native slash-command discovery. No-op for non-Cline installs. Called from installBmad(), updateBmad(), and runMigration() immediately after deployMethodology(). Two wrapper strategies: delegate to workflow.md when present, otherwise delegate to SKILL.md with frontmatter-ignore instruction.'
+  - date: '2026-05-01'
     changes: 'Added P5-2: BMAD v6.6.0 Integration (FR196–FR198, NFR55). Key decision: buildBmadArgs guard — when bmadTools is empty on a fresh install, skip BMAD invocation rather than emitting --tools none (rejected by v6.6.0). project_name config migration is transparent. --custom-source bug fixes improve plugin staging reliability. Technology stack bumped from bmad-method v6.5.0 to v6.6.0.'
 phase4EditHistory:
   - date: '2026-04-13'
@@ -2322,3 +2324,64 @@ The `.agents/skills/` path is currently used only by platforms outside ma-agents
 **Technology stack:** bmad-method bumped from v6.5.0 → v6.6.0.
 
 **FR Coverage:** FR196 (buildBmadArgs guard), FR197 (version pin), FR198 (--set/--list-options), NFR55 (automated test coverage).
+
+### Decision P5-3: Cline Workflow Generation
+
+**Context.** BMAD installs skill packages to `.cline/skills/<skill-name>/` when `cline` is a selected tool. Each package contains `SKILL.md` (always present) and optionally `workflow.md`, `checklist.md`, and other supporting files. Cline's native slash-command discovery reads from `.clinerules/workflows/` — a separate directory that BMAD does not populate. Without explicit wrappers in `.clinerules/workflows/`, users cannot invoke BMAD skills via Cline's `/` command menu; they must read and follow `SKILL.md` manually.
+
+The Cline agent registry entry (`lib/agents.js`) confirms the gap:
+- `skillsDir: '.cline/skills'` — where BMAD deposits skill packages
+- `instructionFiles: ['.cline/clinerules.md', '.clinerules']` — instruction injection targets
+- Neither entry is `.clinerules/workflows/` — that directory is never written by the existing install pipeline
+
+**Decision.** Add a new post-install step, `deployClineWorkflows(projectRoot, tools)`, called immediately after `deployMethodology()` in all three BMAD entry points: `installBmad()`, `updateBmad()`, and `runMigration()`. The function is a no-op when `'cline'` is not in the `tools` array, so non-Cline installs are unaffected.
+
+**Wrapper generation algorithm.**
+
+For each subdirectory in `.cline/skills/` that contains a `SKILL.md`:
+
+1. Parse the YAML frontmatter of `SKILL.md` to extract `name` (display name) and `description`.
+2. If `.cline/skills/<skill-name>/workflow.md` exists → the wrapper delegates to that file:
+   ```
+   ## Step 1: Read and follow the BMAD skill workflow
+   Read the file `.cline/skills/<skill-name>/workflow.md` and follow all instructions within it exactly.
+   ```
+3. If no `workflow.md` → the wrapper delegates to `SKILL.md` with an explicit frontmatter-ignore instruction:
+   ```
+   ## Step 1: Read and follow the BMAD skill instructions
+   Read the file `.cline/skills/<skill-name>/SKILL.md`. Ignore the YAML frontmatter block (the `---` delimited section at the top of the file). Follow all instructions in the body of that file exactly.
+   ```
+4. Write the wrapper to `.clinerules/workflows/<skill-name>.md`, creating the directory if absent (`fs.ensureDir`).
+
+The `workflow.md`-first strategy ensures that skills with a dedicated, Cline-optimized workflow get the leaner entry point, while skills that ship only `SKILL.md` still receive a usable wrapper.
+
+**Install flow position.**
+
+```
+installBmad() / updateBmad() / runMigration()
+  └─ stagePlugin()                  ← pre-install: bundle plugin to staging dir
+  └─ invokeBmad()                   ← BMAD installer: deploys to .cline/skills/ among others
+  └─ applyCustomizations()          ← post-install: .customize.yaml for built-in agents
+  └─ deployMethodology()            ← post-install: presentation deck
+  └─ deployClineWorkflows()         ← post-install: .clinerules/workflows/ wrappers  ← NEW
+```
+
+**Inputs and outputs.**
+
+| Direction | Path | Description |
+|-----------|------|-------------|
+| Input | `.cline/skills/` | BMAD-installed skill packages (one subdir per skill) |
+| Input | `.cline/skills/<name>/SKILL.md` | Always-present skill definition with frontmatter |
+| Input | `.cline/skills/<name>/workflow.md` | Optional skill-specific workflow (preferred entry point) |
+| Output | `.clinerules/workflows/<name>.md` | Generated Cline slash-command wrapper |
+
+**Guard conditions.**
+- `'cline'` not in `tools` → return immediately (no filesystem access).
+- `.cline/skills/` does not exist → return immediately (BMAD install may not have run for this path).
+- Skill subdir lacks `SKILL.md` → skip that skill.
+
+**Exportability.** `deployClineWorkflows` is exported from `lib/bmad.js` alongside `installBmad`, `updateBmad`, `deployMethodology`, and the other public surface of the module, enabling isolated unit testing.
+
+**Relationship to Epic 18 (Roo Code / Cline migration).** Story 18.7 notes that "the bmad-method installer's cleanup for Cline already removes `.clinerules/workflows`" and that migration should run before that cleanup. `deployClineWorkflows` re-populates `.clinerules/workflows/` on every install/update, so a Roo Code migration that runs the BMAD installer afterward would correctly depopulate it. No conflict with the migration story.
+
+**FR Coverage:** No new numbered FRs assigned — this is a gap-fill for FR34 (Cline as a supported IDE agent target) and FR8 (BMAD installation alongside skills). Epic 21, Story 21.5 (Expanded `.clinerules` Template) covers the instruction injection side; this decision covers the workflow discovery side.
