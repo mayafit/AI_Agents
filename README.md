@@ -2,6 +2,10 @@
 
 A universal NPX tool to install AI coding agent skills. Write skills once, install them across Claude Code, Gemini, Copilot, Cline, Cursor, Kilocode, and Roo Code.
 
+## What's New in v3.12.0
+
+- **Cline `.clinerules` directory fix** — `.clinerules` is now correctly created as a directory (matching Cline's native structure), not as a file. This prevents ENOTDIR errors during workflow generation and ensures `.clinerules/workflows/` is always generated correctly. Legacy installs that had `.clinerules` as a file are automatically migrated on the next install or update.
+
 ## What's New in v3.11.0
 
 - **Cline workflow generation** — when Cline is selected during install, update, or migration, ma-agents now auto-generates `.clinerules/workflows/<skill-name>.md` for every BMAD skill installed to `.cline/skills/`. Type `/` in Cline chat to browse and invoke all BMAD skills natively.

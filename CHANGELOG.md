@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.0] - 2026-05-02
+
+### Bug Fixes
+
+- **Cline `.clinerules` directory invariant (Story 25.4)**: Fixed a bug where ma-agents
+  created `.clinerules` as a flat file (a duplicate of `.cline/clinerules.md`), which
+  caused an ENOTDIR error when `deployClineWorkflows()` tried to create `.clinerules/workflows/`.
+  Changes:
+  - `lib/agents.js`: removed `.clinerules` from Cline `instructionFiles` — `.cline/clinerules.md`
+    is the single injection target.
+  - `lib/installer.js`: `checkClinerulesDualFileDrift()` now no-ops when `.clinerules`
+    is a directory (correct Cline structure); only fires for legacy file installs.
+  - `lib/bmad.js`: `deployClineWorkflows()` migrates a legacy `.clinerules` file to a
+    directory before generating `workflows/` — ensures smooth upgrade from v3.11.0 installs.
+
+### Tests
+
+- `test/clinerules.test.js`: 13 tests updated to cover directory invariant, single-file
+  injection, legacy migration, and drift-check no-op.
+
 ## [3.11.0] - 2026-05-02
 
 ### New Features

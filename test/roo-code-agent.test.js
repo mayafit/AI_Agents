@@ -59,11 +59,11 @@ test('getGlobalPath is a function', () => {
     'getGlobalPath should be a function');
 });
 
-test('getProjectPath returns path ending in .roo/skills', () => {
+test('getProjectPath returns path ending in .agents/skills', () => {
   const projectPath = rooCode.getProjectPath();
   assert.ok(
-    projectPath.endsWith('.roo/skills') || projectPath.endsWith('.roo\\skills'),
-    `Expected path ending in .roo/skills, got: ${projectPath}`
+    projectPath.endsWith('.agents/skills') || projectPath.endsWith('.agents\\skills'),
+    `Expected path ending in .agents/skills, got: ${projectPath}`
   );
 });
 
@@ -100,8 +100,8 @@ test('template is "generic"', () => {
   assert.strictEqual(rooCode.template, 'generic');
 });
 
-test('skillsDir is ".roo/skills"', () => {
-  assert.strictEqual(rooCode.skillsDir, '.roo/skills');
+test('skillsDir is ".agents/skills"', () => {
+  assert.strictEqual(rooCode.skillsDir, '.agents/skills');
 });
 
 test('instructionFiles is a non-empty array', () => {
