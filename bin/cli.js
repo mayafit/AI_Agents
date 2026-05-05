@@ -114,6 +114,11 @@ ${chalk.bold('Install options:')}
   ${chalk.cyan('--force')}           Skip upgrade prompts, always overwrite
   ${chalk.cyan('--yes')}             Skip all prompts, use defaults (for CI/CD)
   ${chalk.cyan('--agent <name>')}    Target a specific agent (skip agent selection)
+  ${chalk.cyan('--bmad-modules [csv]')} Control BMAD module selection.
+                       Bare:    open a multiselect prompt
+                       With CSV: install exactly those (e.g. tea,bmb)
+                       Omitted: install every non-retired module (default)
+                       'bmm' is always force-included.
   ${chalk.cyan('--log')}              Log all console output to install_<datetime>.log
 
 ${chalk.bold('Reconfigure options:')}
@@ -135,6 +140,8 @@ ${chalk.bold('Examples:')}
   npx ${NAME} install --yes
   npx ${NAME} install --yes --agent claude-code
   npx ${NAME} install --yes --global
+  npx ${NAME} install --yes --bmad-modules bmm,tea,bmb
+  npx ${NAME} install --bmad-modules                    # prompt for modules
   npx ${NAME} uninstall code-review claude-code
   npx ${NAME} status
   npx ${NAME} status --global
@@ -241,12 +248,36 @@ function parseFlags(args) {
     positional.splice(agentIdx, 2);
   }
 
+  // --bmad-modules — controls BMad module selection. Optional-value flag:
+  //   bare         → ask the user via multiselect prompt
+  //   with CSV     → install exactly those (bmm force-prepended, unknowns rejected)
+  //   not present  → install all non-retired modules (no prompt)
+  // Force-prepending of `bmm` and validation of unknown ids is handled
+  // centrally by lib/bmad.resolveBmadModules.
+  let bmadModulesFlag = '';
+  let bmadModulesPrompt = false;
+  const bmadModulesIdx = positional.indexOf('--bmad-modules');
+  if (bmadModulesIdx !== -1) {
+    const value = positional[bmadModulesIdx + 1];
+    if (!value || value.startsWith('--')) {
+      // Bare flag — the next token is another flag or the end of args.
+      // Treat as a request to prompt the user.
+      bmadModulesPrompt = true;
+      positional.splice(bmadModulesIdx, 1);
+    } else {
+      bmadModulesFlag = value;
+      positional.splice(bmadModulesIdx, 2);
+    }
+  }
+
   return {
     globalFlag,
     forceFlag,
     yesFlag,
     agentFlag,
     customPath,
+    bmadModulesFlag,
+    bmadModulesPrompt,
     scope: globalFlag ? 'global' : 'project',
     positional
   };
@@ -775,9 +806,77 @@ async function collectRepoLayout(flags, existingLayout = null) {
   return layout;
 }
 
+// --- BMad module selection ---
+
+/**
+ * Resolve which BMAD modules to install for this run.
+ *
+ * Three branches:
+ *   1. `--bmad-modules <csv>` → install exactly those (bmm force-prepended,
+ *      unknowns rejected with a clear error)
+ *   2. `--bmad-modules` bare  → multiselect prompt; bmm is required and
+ *      pre-checked, others default-checked so a no-op confirmation matches
+ *      the no-flag default
+ *   3. (no flag)              → install every non-retired module from the
+ *      cache manifest, no prompt — restores the originally-intended
+ *      behavior that the hardcoded ['bmm'] literal had been suppressing
+ *
+ * `bmm` is force-included in every path because the BMad core agents
+ * (analyst, PM, dev, architect, ...) live there and downstream skills
+ * break without them. Retired modules (currently only `wds`) are filtered
+ * out unconditionally.
+ */
+async function selectBmadModules({ bmadModulesFlag, bmadModulesPrompt }) {
+  const installable = bmad.getInstallableBmadModules().filter(m => !m.retired);
+
+  // Branch 1: explicit CSV — validate + use as-is.
+  if (bmadModulesFlag) {
+    const requested = bmadModulesFlag.split(',').map(s => s.trim()).filter(Boolean);
+    try {
+      return bmad.resolveBmadModules({ requested, available: installable });
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(1);
+    }
+  }
+
+  // Branch 2: bare --bmad-modules → multiselect prompt.
+  if (bmadModulesPrompt) {
+    const choices = installable.map(m => {
+      const isCore = m.id === 'bmm';
+      const requiredTag = isCore ? chalk.yellow(' (required)') : '';
+      return {
+        title: chalk.white(m.id) + requiredTag + chalk.gray(` — ${m.description}`),
+        value: m.id,
+        // Default-check everything so hitting Enter matches the no-flag
+        // "install all" default. Users uncheck what they want to skip.
+        selected: true,
+      };
+    });
+
+    const { chosenModules } = await prompts({
+      type: 'multiselect',
+      name: 'chosenModules',
+      message: 'Select BMAD-METHOD modules to install:',
+      choices,
+      instructions: chalk.gray('  Use space to toggle, enter to confirm. bmm is required and will be installed regardless.'),
+      min: 1,
+    });
+
+    if (chosenModules === undefined) process.exit(0);
+
+    // Belt-and-suspenders: force bmm back in if the user managed to uncheck
+    // it despite the (required) tag.
+    return bmad.resolveBmadModules({ requested: chosenModules, available: installable });
+  }
+
+  // Branch 3: no flag → install everything available.
+  return installable.map(m => m.id);
+}
+
 // --- Install wizard ---
 
-async function installWizard(preselectedSkill, preselectedAgents, customPath, forceFlag, yesFlag = false, cliScope) {
+async function installWizard(preselectedSkill, preselectedAgents, customPath, forceFlag, yesFlag = false, cliScope, bmadModulesFlag = '', bmadModulesPrompt = false) {
   const skills = listSkills();
   const agents = listAgents();
 
@@ -1056,10 +1155,19 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     // stage the plugin and invoke the installer in one pass.
     // v6.6.0: --tools none is rejected for fresh installs; skip BMAD entirely when no IDE tools selected.
     if (bmadTools.length > 0) {
+      // Resolve module set once per BMAD invocation. Default is "install
+      // every non-retired module"; users opt into a specific subset with
+      // --bmad-modules <csv> or open a multiselect prompt with --bmad-modules
+      // (bare).
+      const bmadModules = await selectBmadModules({
+        bmadModulesFlag,
+        bmadModulesPrompt,
+      });
+
       if (!bmadInstalled) {
         if (yesFlag) {
-          console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
-          const success = await bmad.installBmad(['bmm'], bmadTools);
+          console.log(chalk.cyan(`\n Installing BMAD-METHOD (modules: ${bmadModules.join(', ')})...`));
+          const success = await bmad.installBmad(bmadModules, bmadTools);
           if (success) {
             console.log(chalk.green(' BMAD-METHOD installed successfully!'));
           }
@@ -1072,8 +1180,8 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
           });
 
           if (installBmad) {
-            console.log(chalk.cyan('\n Installing BMAD-METHOD...'));
-            const success = await bmad.installBmad(['bmm'], bmadTools);
+            console.log(chalk.cyan(`\n Installing BMAD-METHOD (modules: ${bmadModules.join(', ')})...`));
+            const success = await bmad.installBmad(bmadModules, bmadTools);
             if (success) {
               console.log(chalk.green(' BMAD-METHOD installed successfully!'));
             }
@@ -1081,8 +1189,8 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
         }
       } else {
         if (yesFlag) {
-          console.log(chalk.cyan('\n Updating BMAD-METHOD...'));
-          const success = await bmad.updateBmad(['bmm'], bmadTools);
+          console.log(chalk.cyan(`\n Updating BMAD-METHOD (modules: ${bmadModules.join(', ')})...`));
+          const success = await bmad.updateBmad(bmadModules, bmadTools);
           if (success) {
             console.log(chalk.green(' BMAD-METHOD updated successfully!'));
           }
@@ -1095,8 +1203,8 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
           });
 
           if (updateBmad) {
-            console.log(chalk.cyan('\n Updating BMAD-METHOD...'));
-            const success = await bmad.updateBmad(['bmm'], bmadTools);
+            console.log(chalk.cyan(`\n Updating BMAD-METHOD (modules: ${bmadModules.join(', ')})...`));
+            const success = await bmad.updateBmad(bmadModules, bmadTools);
             if (success) {
               console.log(chalk.green(' BMAD-METHOD updated successfully!'));
             }
@@ -1222,7 +1330,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 // --- Command handlers ---
 
 async function handleInstall(args) {
-  const { globalFlag, forceFlag, yesFlag, agentFlag, customPath, scope, positional } = parseFlags(args);
+  const { globalFlag, forceFlag, yesFlag, agentFlag, customPath, bmadModulesFlag, bmadModulesPrompt, scope, positional } = parseFlags(args);
 
   // Task 3.2: Validate agentFlag against known agents
   if (agentFlag) {
@@ -1241,13 +1349,13 @@ async function handleInstall(args) {
 
   // No skill → launch wizard (Task 3.3, 3.4)
   if (!skillId) {
-    await installWizard(null, preselectedAgents, customPath, forceFlag, yesFlag, scope);
+    await installWizard(null, preselectedAgents, customPath, forceFlag, yesFlag, scope, bmadModulesFlag, bmadModulesPrompt);
     return;
   }
 
   // Skill but no agents (and no agentFlag) → wizard with skill preselected
   if (!agentFlag && agentIds.length === 0) {
-    await installWizard(skillId, null, customPath, forceFlag, yesFlag, scope);
+    await installWizard(skillId, null, customPath, forceFlag, yesFlag, scope, bmadModulesFlag, bmadModulesPrompt);
     return;
   }
 

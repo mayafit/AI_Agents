@@ -5,6 +5,8 @@ phase2CompletedAt: '2026-03-11'
 phase2cStepsCompleted: ['step-02-context', 'step-04-decisions', 'step-06-structure', 'step-07-validation', 'step-08-complete']
 phase2cCompletedAt: '2026-03-26'
 phase5EditHistory:
+  - date: '2026-05-05'
+    changes: 'Bug fix clarification for P2-6: refined the parameter-mapping table for `--modules`. Default install set is every non-retired module from the bundled cache manifest (currently bmm, tea, bmb, cis, gds — wds is retired upstream and skipped). The optional-value `--bmad-modules` CLI flag overrides — bare opens a multiselect prompt; `--bmad-modules tea,bmb` installs exactly those. `bmm` is force-included in every path. Restores the originally-intended "full bundle" install behavior the hardcoded `[''bmm'']` literal in `bin/cli.js` had been suppressing — the bundled tea/bmb/cis/gds modules sat in `~/.bmad/cache/external-modules/` unused. Code-level changes localized to `bin/cli.js` (`parseFlags`, `selectBmadModules`, four call-site replacements) and `lib/bmad.js` (added helpers `getInstallableBmadModules`, `getInstalledBmadModules`, `resolveBmadModules`, plus `BMAD_MODULE_DESCRIPTIONS`).'
   - date: '2026-05-01'
     changes: 'Architecture correction for P5-3: .clinerules is a directory, not an instruction-injection file. lib/agents.js Cline instructionFiles changed from [.cline/clinerules.md, .clinerules] to [.cline/clinerules.md] only — .clinerules removed because it must be a directory. lib/installer.js checkClinerulesDualFileDrift gains a guard: if .clinerules is already a directory, skip the drift check entirely. lib/bmad.js deployClineWorkflows gains a migration step: if .clinerules is a file (legacy), delete it silently (content already in .cline/clinerules.md), then create workflows/ inside the new directory. Updated P5-3 decision text, corrected persistent_facts section injection-target list, corrected P5-1 per-tool-templates row.'
   - date: '2026-05-01'
@@ -409,7 +411,7 @@ function buildBmadArgs(installContext) {
   const args = [
     'node', `"${bmadPath}"`, 'install',
     '--directory', `"${installContext.projectRoot}"`,           // FR123: project path (quoted for spaces)
-    '--modules', installContext.selectedModules.join(','),      // e.g., "bmm,bmb,cis,tea,gds,wds"
+    '--modules', installContext.selectedModules.join(','),      // default: every non-retired module from cache manifest; override via --bmad-modules
     '--tools', installContext.selectedTools.join(','),          // FR123: e.g., "claude-code,cursor,opencode"
     '--user-name', `"${installContext.userName}"`,              // FR123: from ma-agents wizard
     '--communication-language', installContext.commLang,        // FR123: default "English"
@@ -431,7 +433,7 @@ function buildBmadArgs(installContext) {
 |---|---|---|
 | Project path | `--directory` | Detected from cwd / package.json / .git |
 | Selected platforms (claude-code, cursor, opencode...) | `--tools` | Interactive wizard or `--yes` defaults |
-| BMAD modules to install | `--modules` | Always "bmm,bmb,cis,tea,gds,wds" (full bundle) |
+| BMAD modules to install | `--modules` | Default: every non-retired module from the cache manifest (currently bmm,tea,bmb,cis,gds — `wds` is retired upstream and skipped). Override: `--bmad-modules <csv>` for an explicit subset; `--bmad-modules` (bare) opens a multiselect prompt. `bmm` is force-included in every path |
 | User name | `--user-name` | Wizard prompt or system username |
 | Communication language | `--communication-language` | Wizard prompt or "English" default |
 | Document output language | `--document-output-language` | Wizard prompt or "English" default |

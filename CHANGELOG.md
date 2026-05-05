@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.1] - 2026-05-05
+
+### Bug Fixes
+
+- **BMAD module install — restore originally-intended default (FR123)**: Fixed a
+  defect where the install pipeline hardcoded `['bmm']` as the BMAD module list,
+  stranding the bundled `tea`, `bmb`, `cis`, and `gds` modules in
+  `~/.bmad/cache/external-modules/`. The originally-intended behavior — install
+  every non-retired module from the cache manifest — is now the default. Users
+  can scope down with `--bmad-modules <csv>` (e.g. `--bmad-modules tea,bmb`) or
+  open a multiselect prompt with bare `--bmad-modules`. `bmm` is force-included
+  in every path. Retired modules (currently `wds`) are filtered out.
+  - `bin/cli.js`: replaced four hardcoded `['bmm']` literals with a new
+    `selectBmadModules()` helper; added `--bmad-modules` optional-value flag
+    parsing in `parseFlags()`; updated `--help` and examples.
+  - `lib/bmad.js`: added `BMAD_MODULE_DESCRIPTIONS`, `getInstallableBmadModules()`,
+    `getInstalledBmadModules()`, `resolveBmadModules()` helpers and exported them.
+  - `_bmad-output/planning-artifacts/{prd,architecture}.md`: refined FR123 and
+    the parameter-mapping table to make the `--modules` default explicit.
+
+### Tests
+
+- `test/bmad-module-selection.test.js`: 28 new tests covering the helpers, both
+  `--bmad-modules` flag forms (CSV and bare), and validation.
+
 ## [3.12.0] - 2026-05-02
 
 ### Bug Fixes
