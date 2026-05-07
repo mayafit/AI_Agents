@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.2] - 2026-05-05
+
+### Bug Fixes
+
+- **Offline install regression in 3.12.1**: 3.12.1's "install all bundled modules
+  by default" fix exposed a latent bug: bmad-method's `cloneExternalModule()`
+  resolves the latest stable tag from GitHub's API, and on an air-gapped machine
+  it falls back to reading `<moduleCacheDir>/.bmad-channel.json` — a marker file
+  ma-agents never wrote when pre-populating the cache. Result: a fresh offline
+  install of any external module (bmb, cis, gds, tea) failed at the first
+  module with `Could not resolve stable tag for '<module>'`. (Pre-3.12.1 the bug
+  was masked because ma-agents only ever requested `--modules bmm`, which ships
+  built into bmad-method and skips the external-cache resolution.)
+  - `lib/bmad.js`: added `ensureCacheMarker(moduleDir, manifestEntry)` that
+    writes a `.bmad-channel.json` matching bmad-method's `writeChannelMarker()`
+    schema (`channel: 'stable'`, `version` from manifest branch, `sha` from
+    manifest commitSha). Called from `prePopulateBmadCache` after each module
+    copy (and on the skip path, to repair caches left wedged by 3.12.1).
+    Existing markers are never overwritten.
+
+### Tests
+
+- `test/bmad-module-selection.test.js`: 5 new tests for `ensureCacheMarker`
+  covering schema correctness, idempotency, and no-op safety on missing
+  manifest data. Total 33 tests, all passing.
+
 ## [3.12.1] - 2026-05-05
 
 ### Bug Fixes

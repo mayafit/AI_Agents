@@ -1,6 +1,6 @@
 {
   "name": "ma-agents",
-  "version": "3.12.1",
+  "version": "3.12.2",
   "description": "NPX tool to install skills for AI coding agents (Claude Code, Gemini, Copilot, Kilocode, Cline, Cursor, Roo Code)",
   "main": "index.js",
   "bin": {

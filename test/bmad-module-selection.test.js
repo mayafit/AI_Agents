@@ -37,6 +37,18 @@ function test(name, fn) {
   }
 }
 
+async function testAsync(name, fn) {
+  try {
+    await fn();
+    console.log(`  ✓ ${name}`);
+    passed++;
+  } catch (err) {
+    console.error(`  ✗ ${name}: ${err.message}`);
+    failed++;
+    errors.push({ name, error: err.message });
+  }
+}
+
 const bmad = require('../lib/bmad');
 const { parseFlags } = require('../bin/cli.js');
 
@@ -294,13 +306,91 @@ test('CSV with whitespace from --bmad-modules normalises correctly', () => {
   assert.deepStrictEqual(result, ['bmm', 'tea', 'bmb', 'gds']);
 });
 
-// ─── Summary ──────────────────────────────────────────────────────────────────
-console.log(`\n${passed} passed, ${failed} failed`);
-if (errors.length > 0) {
-  console.log('\nFailures:');
-  errors.forEach(({ name, error }) => {
-    console.log(`  ${name}:`);
-    console.log(`    ${error}`);
+// ─── lib/bmad.ensureCacheMarker (3.12.2 offline fallback) ─────────────────────
+
+(async () => {
+  console.log('\nlib/bmad.ensureCacheMarker()');
+
+  await testAsync('writes .bmad-channel.json with stable channel + branch + sha', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-marker-test-'));
+    try {
+      const wrote = await bmad.ensureCacheMarker(tmp, {
+        branch: 'main',
+        commitSha: 'abc123def456',
+      });
+      assert.strictEqual(wrote, true, 'should report it wrote the marker');
+      const markerPath = path.join(tmp, '.bmad-channel.json');
+      assert.ok(fs.existsSync(markerPath), 'marker file should exist on disk');
+      const parsed = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
+      assert.strictEqual(parsed.channel, 'stable', 'channel must be stable');
+      assert.strictEqual(parsed.version, 'main', 'version mirrors manifest branch');
+      assert.strictEqual(parsed.sha, 'abc123def456', 'sha mirrors manifest commitSha');
+      assert.ok(parsed.writtenAt, 'writtenAt timestamp present');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   });
-}
-process.exit(failed > 0 ? 1 : 0);
+
+  await testAsync('does NOT overwrite an existing marker', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-marker-test-'));
+    try {
+      const markerPath = path.join(tmp, '.bmad-channel.json');
+      const original = { channel: 'next', version: 'v9.9.9', sha: 'preserved-sha' };
+      fs.writeFileSync(markerPath, JSON.stringify(original));
+      const wrote = await bmad.ensureCacheMarker(tmp, {
+        branch: 'main',
+        commitSha: 'should-not-clobber',
+      });
+      assert.strictEqual(wrote, false, 'should report it did NOT write');
+      const after = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
+      assert.deepStrictEqual(after, original, 'existing marker is preserved verbatim');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('returns false when manifest entry is missing', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-marker-test-'));
+    try {
+      const wrote = await bmad.ensureCacheMarker(tmp, null);
+      assert.strictEqual(wrote, false);
+      assert.strictEqual(fs.existsSync(path.join(tmp, '.bmad-channel.json')), false);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('returns false when manifest entry has no commitSha', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-marker-test-'));
+    try {
+      const wrote = await bmad.ensureCacheMarker(tmp, { branch: 'main' });
+      assert.strictEqual(wrote, false);
+      assert.strictEqual(fs.existsSync(path.join(tmp, '.bmad-channel.json')), false);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('falls back to "main" version when manifest has no branch', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-marker-test-'));
+    try {
+      const wrote = await bmad.ensureCacheMarker(tmp, { commitSha: 'sha-only' });
+      assert.strictEqual(wrote, true);
+      const parsed = JSON.parse(fs.readFileSync(path.join(tmp, '.bmad-channel.json'), 'utf8'));
+      assert.strictEqual(parsed.version, 'main');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  // ─── Summary ──────────────────────────────────────────────────────────────
+  console.log(`\n${passed} passed, ${failed} failed`);
+  if (errors.length > 0) {
+    console.log('\nFailures:');
+    errors.forEach(({ name, error }) => {
+      console.log(`  ${name}:`);
+      console.log(`    ${error}`);
+    });
+  }
+  process.exit(failed > 0 ? 1 : 0);
+})();
