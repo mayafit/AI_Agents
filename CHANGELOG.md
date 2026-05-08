@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.3] - 2026-05-08
+
+### Bug Fixes
+
+- **Repo-layout local path no longer creates a nested `_bmad-output/<…>-artifacts/`
+  subtree**: When the user picks "Local path" for knowledgebase or sprint
+  management and provides e.g. `D:\foo\planning`, prior versions wrote
+  `planning_artifacts: "D:/foo/planning/_bmad-output/planning-artifacts"`,
+  causing bmad-method to create that nested directory inside the user's
+  knowledgebase folder. The wizard prompt phrasing ("Where is your
+  knowledgebase managed?") implies the answer IS the artifacts folder, not
+  a parent — the install behavior now matches that interpretation.
+  - `bin/cli.js writeRepoLayoutConfig`: drops the
+    `/_bmad-output/<…>-artifacts/` suffix when the user-supplied path is
+    not `.`. Single-repo (mode `same`, path `.`) continues to use the
+    canonical `_bmad-output/...` layout — no change to existing same-repo
+    installs.
+  - `bin/cli.js collectLocalPath`: prompt text clarified to
+    *"this is the literal folder; no extra subdirectories will be
+    created"* so the contract is explicit.
+
+### Tests
+
+- `test/cross-repo-validation.test.js` and `test/portable-paths.test.js`:
+  updated assertions to expect literal paths rather than the previous
+  `<path>/_bmad-output/<...>-artifacts` form.
+
+### Migration Notes
+
+- **Breaking for projects that previously configured a multi-repo layout
+  and committed artifacts to `<kbPath>/_bmad-output/planning-artifacts/`**.
+  Existing `_bmad/bmm/config.yaml` files are not rewritten on upgrade —
+  only **new installs** or runs through the layout wizard pick up the new
+  contract. To migrate an existing project: move the contents of
+  `<kbPath>/_bmad-output/planning-artifacts/` up into `<kbPath>/`, then
+  re-run the layout wizard (`npx ma-agents config layout`). Same for
+  sprint management.
+
 ## [3.12.2] - 2026-05-05
 
 ### Bug Fixes

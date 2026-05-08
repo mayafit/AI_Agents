@@ -290,7 +290,7 @@ async function collectLocalPath(concern) {
     const { localPath } = await prompts({
       type: 'text',
       name: 'localPath',
-      message: `Enter local path for ${concern}:`
+      message: `Enter local path for ${concern} (this is the literal folder; no extra subdirectories will be created):`
     });
 
     if (!localPath || !localPath.trim()) {
@@ -510,13 +510,19 @@ function writeRepoLayoutConfig(layout) {
     content = writeConfigField(content, 'knowledgebase_path', kbPath);
 
     const spMode = layout.sprintManagement.mode;
+    // 3.12.3: when the user provides a non-`.` path for knowledgebase /
+    // sprint management, treat that path as the literal artifacts directory
+    // — no nested `_bmad-output/<…>-artifacts/` subtree. The wizard prompt
+    // ("Where is your knowledgebase managed?") implies the path IS the
+    // artifacts folder, not a parent. Only `.` (current repo) gets the
+    // canonical `_bmad-output/...` layout because in single-repo mode
+    // there's no other folder semantics to honor.
     if (spMode === 'jira') {
       // Jira backend: write sprint_backend + Jira config; no sprint_management_path
       content = writeConfigField(content, 'sprint_backend', 'jira');
       content = writeConfigField(content, 'jira_url', layout.sprintManagement.jiraUrl);
       content = writeConfigField(content, 'jira_project_key', layout.sprintManagement.jiraProjectKey);
-      // Derive artifact paths from kb only
-      const planningArtifacts = kbPath === '.' ? '_bmad-output/planning-artifacts' : `${kbPath}/_bmad-output/planning-artifacts`;
+      const planningArtifacts = kbPath === '.' ? '_bmad-output/planning-artifacts' : kbPath;
       const implArtifacts = '_bmad-output/implementation-artifacts';
       content = writeConfigField(content, 'planning_artifacts', planningArtifacts);
       content = writeConfigField(content, 'implementation_artifacts', implArtifacts);
@@ -528,9 +534,8 @@ function writeRepoLayoutConfig(layout) {
       const spPath = spPortable.portable;
       content = writeConfigField(content, 'sprint_backend', 'file-system');
       content = writeConfigField(content, 'sprint_management_path', spPath);
-      // Derive workflow-consumable artifact paths from layout paths (relative when base is relative)
-      const planningArtifacts = kbPath === '.' ? '_bmad-output/planning-artifacts' : `${kbPath}/_bmad-output/planning-artifacts`;
-      const implArtifacts = spPath === '.' ? '_bmad-output/implementation-artifacts' : `${spPath}/_bmad-output/implementation-artifacts`;
+      const planningArtifacts = kbPath === '.' ? '_bmad-output/planning-artifacts' : kbPath;
+      const implArtifacts = spPath === '.' ? '_bmad-output/implementation-artifacts' : spPath;
       content = writeConfigField(content, 'planning_artifacts', planningArtifacts);
       content = writeConfigField(content, 'implementation_artifacts', implArtifacts);
       fs.writeFileSync(configPath, content, 'utf-8');

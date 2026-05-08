@@ -113,10 +113,12 @@ test('multi-repo: writes external artifact paths', () => {
       sprintManagement: { mode: 'local', path: 'd:\\Code\\sprint-repo' }
     });
     const content = fs.readFileSync(path.join(configDir, 'config.yaml'), 'utf-8');
-    assert.ok(content.includes('planning_artifacts: "d:/Code/kb-repo/_bmad-output/planning-artifacts"'),
-      `Expected external planning_artifacts. Got:\n${content}`);
-    assert.ok(content.includes('implementation_artifacts: "d:/Code/sprint-repo/_bmad-output/implementation-artifacts"'),
-      `Expected external implementation_artifacts. Got:\n${content}`);
+    // 3.12.3: external paths are literal — no nested _bmad-output/<...>-artifacts/.
+    // The user-supplied path IS the artifacts directory.
+    assert.ok(content.includes('planning_artifacts: "d:/Code/kb-repo"'),
+      `Expected external planning_artifacts to be literal. Got:\n${content}`);
+    assert.ok(content.includes('implementation_artifacts: "d:/Code/sprint-repo"'),
+      `Expected external implementation_artifacts to be literal. Got:\n${content}`);
   } finally {
     process.chdir(origCwd);
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -136,7 +138,8 @@ test('mixed mode: kb external, sprint same', () => {
       sprintManagement: { mode: 'same', path: '.' }
     });
     const content = fs.readFileSync(path.join(configDir, 'config.yaml'), 'utf-8');
-    assert.ok(content.includes('planning_artifacts: "/ext/kb/_bmad-output/planning-artifacts"'),
+    // 3.12.3: kb path is literal; sprint mgmt is "." so default applies.
+    assert.ok(content.includes('planning_artifacts: "/ext/kb"'),
       `Got:\n${content}`);
     assert.ok(content.includes('implementation_artifacts: "_bmad-output/implementation-artifacts"'),
       `Got:\n${content}`);

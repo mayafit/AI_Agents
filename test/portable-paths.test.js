@@ -188,8 +188,9 @@ test('derived artifact paths are relative when base is relative', () => {
       sprintManagement: { mode: 'same', path: '.' }
     });
     const content = fs.readFileSync(path.join(configDir, 'config.yaml'), 'utf-8');
-    assert.ok(content.includes('planning_artifacts: "../kb-repo/_bmad-output/planning-artifacts"'),
-      `planning_artifacts should be relative, got: ${content}`);
+    // 3.12.3: external kb path is literal — no nested _bmad-output/planning-artifacts/.
+    assert.ok(content.includes('planning_artifacts: "../kb-repo"'),
+      `planning_artifacts should be the literal portable path, got: ${content}`);
     assert.ok(content.includes('implementation_artifacts: "_bmad-output/implementation-artifacts"'),
       `impl_artifacts should use default for ".", got: ${content}`);
   } finally {
