@@ -9,6 +9,8 @@
 # updated: 2026-04-26 — Epic 24 (BMAD v6.5.0 Integration) added to backlog (10 stories, 24.1-24.10). Pre-epic bugs B1 and B2 registered.
 # updated: 2026-04-27 — Epic 24 revised after adversarial review: target bumped to v6.5.0; 24.1 reclassified Medium; 24.4 reframed (custom workflows, not forks); 24.7 reframed as Small (customize.toml); 24.8+24.9 merged; Stories 24.11 (.agents/skills/ routing) and 24.12 (persistent_facts spike) added. Net: 10 numbered stories (24.1-24.12, no 24.5/24.9) + 2 bugs (B1, B2) = 12 total.
 # updated: 2026-04-29 — Reconciled against git ground truth: Epic 24 fully released in v3.8.0 (PR #85) — all 10 stories + bugs B1/B2 marked done. Epic 14 redesigned (Jira backend, 4 stories replacing old 5-story list). Story 17.22 added as ready-for-dev (Jira Phase A routing). Stories 16.1/16.2 Jira enhancements added as ready-for-dev (FR139). Epic 19 corrected from in-progress to backlog.
+# updated: 2026-05-31 — Epic 26 (Inline Git Workflow Guardrails in Per-Tool Instruction Block) added to backlog (2 stories, 26.1–26.2). Closes guardrail gap surfaced by Workshop install adversarial review (2026-05-24): worktree/PR/Conventional-Commits rules currently reachable only via indirection.
+# updated: 2026-05-31 — Reconciled file/yaml drift: marked Epic 22 + all 10 stories (22.1-22.10) done (shipped v3.7.0, PR #72). Marked 17.22 done (shipped v3.9.0, PR #93 — file already in done/). Added Stories 25.3 (Cline workflow generation, v3.11.0) and 25.4 (clinerules as directory, v3.12.0) as done. Added 4 untracked bugs as done: jira-backend-first-run (v3.10.0), local-knowledge-nested (v3.12.3), bundled-modules-stranded (v3.12.1), offline-install-stable-tag (v3.12.2). 32 top-level story/bug files moved to implementation-artifacts/done/ (Epic 5: 2 files; Epic 22: 10 files; Epic 24: 10 files; Epic 25: 4 files; bugs: 6 files).
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system
@@ -26,7 +28,7 @@
 # Old Epic 17 stories (17.1-17.8) archived; replaced by 17.9-17.24.
 
 generated: 2026-03-15
-last_updated: "2026-05-01 — Epic 25 (BMAD v6.6.0 Integration) complete. Stories 25.1 and 25.2 done. bmad-method bumped to 6.6.0, empty-tools guard implemented and tested."
+last_updated: "2026-05-31 — Reconciled file/yaml drift against git ground truth. Epic 22 (all 10 stories) marked done (shipped v3.7.0). 17.22 marked done (shipped v3.9.0). Stories 25.3 and 25.4 added as done. Four untracked bugs added as done. 32 story/bug files moved to implementation-artifacts/done/. Epic 26 (added earlier today) remains backlog with 26.1 and 26.2 ready-for-dev."
 project: agents
 project_key: NOKEY
 tracking_system: file-system
@@ -35,8 +37,13 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   # ─── ACTIVE BUGS ──────────────────────────────────────────────────────────────
   # Standalone bug stories — discoverable via glob: _bmad-output/implementation-artifacts/bug-*.md
+  # (files relocated to done/ on 2026-05-31 reconciliation)
   bug-agent-flag-does-not-actually-scope-install: done
   bug-stale-copilot-skills-dir-not-cleaned-on-upgrade: done
+  bug-jira-backend-ignored-on-first-run: done                    # shipped v3.10.0 (commit 98cb888)
+  bug-local-knowledge-path-creates-nested-bmad-output-folder: done   # shipped v3.12.3 (commit 41a246d)
+  bug-ma-agents-installs-only-bmm-bundled-modules-stranded-in-cache: done   # shipped v3.12.1 (commit 0270f72)
+  bug-offline-install-fails-on-stable-tag-resolution-for-bundled-modules: done   # shipped v3.12.2 (commit 5f3672d)
 
   # ─── IN PROGRESS ──────────────────────────────────────────────────────────────
 
@@ -92,11 +99,13 @@ development_status:
   18-8-end-to-end-validation-test-coverage: done
   epic-18-retrospective: optional
 
-  # Epic 17 — Jira Phase A (new, post-archival redesign 2026-04-29)
+  # Epic 17 — Jira Phase A (post-archival redesign 2026-04-29, shipped 2026-04-30)
   # Story 17.22 was redesigned AFTER Epic 17 archival (2026-04-23). It ships the backend-routing
   # structure (tracking_system switch) in all 13 sprint skills as a Phase A placeholder.
-  # Epic 14 Story 14.3 later fills in the Jira operation body — it is blocked on this story.
-  17-22-embed-backend-routing-13-sprint-skills: ready-for-dev
+  # 2026-05-31 reconciliation: shipped in v3.9.0 (PR #93) together with 14.3 / 14.4 — Phase B body
+  # absorbed Phase A scope. CHANGELOG line 154 attributes the routing work to Stories 17.22, 14.3, 14.4.
+  # File: implementation-artifacts/done/17-22-jira-adapter-pattern.md (design-spec variant)
+  17-22-embed-backend-routing-13-sprint-skills: done
 
   # Epic 16 — Jira enhancement (post-archival, FR139)
   # Epic 16 was archived as done (2026-04-03). Stories 16.1 and 16.2 require enhancement to add
@@ -116,20 +125,23 @@ development_status:
   14-4-jira-onboarding-guidance-error-messages: done
   epic-14-retrospective: optional
 
-  # Epic 22: BMAD v6.3.0 Plugin Migration (Phase 4)
+  # Epic 22: BMAD v6.3.0 Plugin Migration (Phase 4) — SHIPPED v3.7.0 (PR #72, 2026-04-XX)
   # Dependencies: Epic 5 (bundled installation), Epic 15 (6.2.0 agent migration), Epic 17 + Epic 20 (skill catalog growth — coordinate rename sweep)
-  # Execution order: 22.1 → 22.3 (parallel with 22.1) → 22.2 → 22.5 → 22.4 → 22.6 → 22.7 (parallel with 22.6) → 22.8 → 22.9 → 22.10
-  epic-22: backlog
-  22-1-bump-bmad-method-and-rebuild-cache: backlog
-  22-2-skill-namespace-rename-sweep: backlog
-  22-3-retire-legacy-skills: backlog
-  22-4-build-plugin-script: backlog
-  22-5-plugin-manifests: backlog
-  22-6-replace-applycustomizations-with-stage-and-invoke: backlog
-  22-7-migrate-config-reads-to-bmm-config-yaml: backlog
-  22-8-gitignore-stage-directory: backlog
-  22-9-ci-offline-install-gate: backlog
-  22-10-multi-tool-smoke-verification: backlog
+  # Execution order delivered: 22.1 → 22.3 (parallel with 22.1) → 22.2 → 22.5 → 22.4 → 22.6 → 22.7 (parallel with 22.6) → 22.8 → 22.9 → 22.10
+  # 2026-05-31 reconciliation: per-story shipping commits — 22.1 b64b572, 22.2 470464f, 22.3 7af4960,
+  # 22.4 6cfc8ed, 22.5 5f1885f, 22.6 103874c, 22.7 92c55ca, 22.8 ddd156e, 22.9 61abdb7, 22.10 514f718.
+  # Release: 9dec9c5 chore(release): bump to 3.7.0 — Epic 22 + remediations (#72).
+  epic-22: done
+  22-1-bump-bmad-method-and-rebuild-cache: done
+  22-2-skill-namespace-rename-sweep: done
+  22-3-retire-legacy-skills: done
+  22-4-build-plugin-script: done
+  22-5-plugin-manifests: done
+  22-6-replace-applycustomizations-with-stage-and-invoke: done
+  22-7-migrate-config-reads-to-bmm-config-yaml: done
+  22-8-gitignore-stage-directory: done
+  22-9-ci-offline-install-gate: done
+  22-10-multi-tool-smoke-verification: done
   epic-22-retrospective: optional
 
   # Epic 23: Memory-Agent Conversion for Demerzel and Gad (Phase 4 — Deferred Follow-up)
@@ -164,12 +176,30 @@ development_status:
   24-12-persistent-facts-spike-marker-injection-replacement: done
   epic-24-retrospective: optional
 
-  # Epic 25: BMAD v6.6.0 Integration (Phase 5)
+  # Epic 25: BMAD v6.6.0 Integration (Phase 5) — and Cline follow-ups (25.3, 25.4)
   # Goal: Upgrade bmad-method v6.5.0 → v6.6.0. Fix --tools none breaking change guard,
   # rebuild cache, verify CI health, cut new ma-agents release.
+  # Stories 25.3 / 25.4 are follow-up Cline-specific fixes shipped in v3.11.0 / v3.12.0.
   # Dependencies: Epic 24 fully complete (released as v3.9.0)
-  # Execution order: 25.1 → 25.2 (25.1 must be merged before 25.2 exposes the breaking change)
+  # Execution order: 25.1 → 25.2; 25.3 (independent, v3.11.0); 25.4 (independent, v3.12.0)
+  # 2026-05-31 reconciliation: 25.3 commit af09267 (v3.11.0), 25.4 commit 7d99d7d (v3.12.0).
   epic-25: done
   25-1-guard-buildBmadArgs-empty-tools: done
   25-2-bump-bmad-method-to-6-6-0-rebuild-cache: done
+  25-3-cline-workflow-generation: done
+  25-4-clinerules-created-as-file-not-directory: done
   epic-25-retrospective: optional
+
+  # Epic 26: Inline Git Workflow Guardrails in Per-Tool Instruction Block (Phase 5)
+  # Goal: Inline worktree / Conventional-Commits / no-direct-merge-to-main rules into the universal
+  # MA-AGENTS-START block for every coding agent context file (CLAUDE.md, .cline/clinerules.md,
+  # .roo/rules/00-ma-agents.md, AGENTS.md). Closes the foundational guardrail gap surfaced by the
+  # Workshop install adversarial review (2026-05-24): rules today reachable only via indirection
+  # (always_load skill + BMAD-agent activation path), neither of which fires reliably.
+  # FR Coverage: FR204, FR205, FR206 (Architecture Decision P5-4)
+  # Dependencies: Epic 21 (universal + on-prem composer — already done)
+  # Execution order: 26.1 → 26.2
+  epic-26: backlog
+  26-1-add-git-instruction-block-template: ready-for-dev
+  26-2-integration-test-git-block-per-tool: ready-for-dev
+  epic-26-retrospective: optional
