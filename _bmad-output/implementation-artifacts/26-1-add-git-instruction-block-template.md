@@ -1,6 +1,6 @@
 # Story 26.1: Add Git Instruction-Block Template and Wire It Into the Composer
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -50,16 +50,16 @@ As an engineer running any coding agent (Claude Code, Cline, Roo Code, OpenCode,
 
 ## Tasks / Subtasks
 
-- [ ] Author the new template `lib/templates/instruction-block-git.template.md` (AC: #1)
-  - [ ] Use a single `## Git Workflow (ALL file-changing tasks)` heading
-  - [ ] Include all eight required bullet rules verbatim in intent (worktree, no-direct-commit, conventional prefixes, PR-only, self-run code-review, post-merge cleanup, full-procedure pointer, no-small-fix-exemption sentence)
-  - [ ] Keep the body free of any local-LLM-specific concept (`/no_think`, `str_replace_editor`, `~/.claude/`, `%APPDATA%`)
-- [ ] Wire the template into the composer in `lib/installer.js` (AC: #2)
-  - [ ] Add `GIT_INSTRUCTION_TEMPLATE_PATH` constant next to the existing `UNIVERSAL_INSTRUCTION_TEMPLATE_PATH` / `ONPREM_INSTRUCTION_TEMPLATE_PATH` at `lib/installer.js:14-15`
-  - [ ] Read the template via the same `fs.readFileSync` pattern
-  - [ ] Concatenate in order: `universal + git + (profile==='on-prem' ? on-prem : '')` — modify the existing composer in place, no new function
-  - [ ] Throw a clear missing-template error matching the existing on-prem pattern
-- [ ] Confirm marker-block rendering and idempotency are preserved across all four per-tool injection targets (AC: #3, #4)
+- [x] Author the new template `lib/templates/instruction-block-git.template.md` (AC: #1)
+  - [x] Use a single `## Git Workflow (ALL file-changing tasks)` heading
+  - [x] Include all eight required bullet rules verbatim in intent (worktree, no-direct-commit, conventional prefixes, PR-only, self-run code-review, post-merge cleanup, full-procedure pointer, no-small-fix-exemption sentence)
+  - [x] Keep the body free of any local-LLM-specific concept (`/no_think`, `str_replace_editor`, `~/.claude/`, `%APPDATA%`)
+- [x] Wire the template into the composer in `lib/installer.js` (AC: #2)
+  - [x] Add `GIT_INSTRUCTION_TEMPLATE_PATH` constant next to the existing `UNIVERSAL_INSTRUCTION_TEMPLATE_PATH` / `ONPREM_INSTRUCTION_TEMPLATE_PATH` at `lib/installer.js:14-15`
+  - [x] Read the template via the same `fs.readFileSync` pattern
+  - [x] Concatenate in order: `universal + git + (profile==='on-prem' ? on-prem : '')` — modify the existing composer in place, no new function
+  - [x] Throw a clear missing-template error matching the existing on-prem pattern
+- [x] Confirm marker-block rendering and idempotency are preserved across all four per-tool injection targets (AC: #3, #4)
 
 ## Dev Notes
 
@@ -85,8 +85,25 @@ As an engineer running any coding agent (Claude Code, Cline, Roo Code, OpenCode,
 
 ### Agent Model Used
 
+Claude Opus 4.8 (1M context) — claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- `npm test` (full suite): the only failures are 7 pre-existing MIL-498 byte-identity checks in `test/migration.test.js` (`mil498-*/template.md` vs `lib/mil498-templates/*.md`) caused by a line-ending/content divergence already present in this worktree's baseline (e.g. `.agents/skills/mil498-ocd/template.md` 11073B vs `lib/mil498-templates/OCD.md` 11242B). They are unrelated to Story 26.1 — this story touches only `lib/installer.js` and the new git template.
+- Affected test files pass fully: `test/instruction-block.test.js` 14/14, `test/onprem-layer.test.js` 12/12.
 
 ### Completion Notes List
 
+- Created `lib/templates/instruction-block-git.template.md` with a single `## Git Workflow (ALL file-changing tasks)` heading containing all eight required rules: worktree-first (`git worktree add ../<project>-<branch> -b <branch>` + `scripts/start-feature.sh`), never-commit-to-`main`/`dev`/`master`/trunk, Conventional Commits with all seven prefixes (`feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`), PR-only via `gh pr create` with no auto-merge without human approval, self-run `code-review` before PR, post-merge `git worktree remove` + branch delete, pointer to `skills/git-workflow-skill/SKILL.md` and `scripts/start-feature.sh`/`finish-feature.sh`, and a no-"small fix exemption" sentence. Body contains none of the on-prem-only literals (`/no_think`, `str_replace_editor`, `~/.claude/`, `%APPDATA%`).
+- Added `GIT_INSTRUCTION_TEMPLATE_PATH` constant at `lib/installer.js:15` next to the universal/on-prem constants, and exported it from `module.exports`.
+- Modified `composeInstructionBlock` in place (no new function): reads the git template via `fs.readFileSync`, throws `instruction-block-git.template.md is missing` if absent (mirrors the on-prem pattern), and composes in the exact order `universal + git + (on-prem ? on-prem : '')`, each piece trailing-whitespace-normalized and joined by a single blank line so the standard output is `universal + git` and on-prem is `universal + git + on-prem`. Trailing-whitespace normalization preserved for FR176/NFR46 byte-identity.
+- Verified via the composer: standard contains universal→git ordering with on-prem absent; on-prem contains universal→git→on-prem ordering; both profiles idempotent (byte-identical across calls); missing-template throw confirmed.
+
 ### File List
+
+- `lib/templates/instruction-block-git.template.md` (new)
+- `lib/installer.js` (modified — new `GIT_INSTRUCTION_TEMPLATE_PATH` constant, composer wiring, export)
+
+## Change Log
+
+- 2026-06-04 — Story 26.1 implemented: added git instruction-block template and wired it into `composeInstructionBlock` (universal + git + optional on-prem). All ACs met; instruction-block and onprem-layer suites green.
