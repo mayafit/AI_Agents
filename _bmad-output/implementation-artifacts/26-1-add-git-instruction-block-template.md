@@ -107,3 +107,4 @@ Claude Opus 4.8 (1M context) — claude-opus-4-8[1m]
 ## Change Log
 
 - 2026-06-04 — Story 26.1 implemented: added git instruction-block template and wired it into `composeInstructionBlock` (universal + git + optional on-prem). All ACs met; instruction-block and onprem-layer suites green.
+- 2026-06-04 — Post-review hardening (non-blocking): made the git-template load in `composeInstructionBlock` match the universal read — `fs.readFileSync` wrapped in try/catch surfacing a path-identifying "ma-agents installation may be corrupted" error (covers missing/EISDIR/permission cases), plus an empty/whitespace-only guard so the git guardrails can never silently vanish. Happy-path output bytes unchanged (FR176/NFR46 idempotency preserved); both affected suites still green.
