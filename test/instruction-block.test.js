@@ -46,6 +46,7 @@ const {
   formatBackupTimestamp,
   _testUpdateAgentInstructions: updateAgentInstructions,
   UNIVERSAL_INSTRUCTION_TEMPLATE_PATH,
+  GIT_INSTRUCTION_TEMPLATE_PATH,
   ONPREM_INSTRUCTION_TEMPLATE_PATH
 } = installerModule;
 const { setProfile } = require('../lib/profile');
@@ -165,6 +166,130 @@ async function runAll() {
     } finally {
       fs.renameSync(bak, UNIVERSAL_INSTRUCTION_TEMPLATE_PATH);
     }
+  });
+
+  // ----------------------------------------------------------------------------
+  // Story 26.1 — composer git-workflow guardrail layer (FR205 / FR176 / NFR46)
+  // The git block is appended to EVERY profile, ordered universal -> git (-> on-prem).
+  // ----------------------------------------------------------------------------
+
+  const UNIVERSAL_HEADING = '# AI Agent Skills - Planning Instruction';
+  const GIT_HEADING = '## Git Workflow (ALL file-changing tasks)';
+  const ONPREM_HEADING = '## On-Prem / Local-LLM Guardrails';
+
+  // 26.1a — standard profile: universal body THEN git body, ordered, no on-prem
+  await test('26.1a standard profile composes universal -> git (git heading after universal heading, no on-prem)', () => {
+    const out = composeInstructionBlock({ profile: 'standard', projectRoot: mktemp() });
+    const uIdx = out.indexOf(UNIVERSAL_HEADING);
+    const gIdx = out.indexOf(GIT_HEADING);
+    assert.ok(uIdx >= 0, 'universal heading present');
+    assert.ok(gIdx >= 0, 'git heading present');
+    assert.ok(uIdx < gIdx, 'universal heading must precede git heading (order: universal -> git)');
+    // No on-prem content for the standard profile.
+    assert.ok(!out.includes(ONPREM_HEADING), 'standard profile must not contain on-prem block');
+  });
+
+  // 26.1b — on-prem profile: universal -> git -> on-prem in exact order
+  await test('26.1b on-prem profile composes universal -> git -> on-prem in exact order', () => {
+    if (!fs.existsSync(ONPREM_INSTRUCTION_TEMPLATE_PATH)) {
+      throw new Error('on-prem template is required for this ordering test but is missing');
+    }
+    const out = composeInstructionBlock({ profile: 'on-prem', projectRoot: mktemp() });
+    const uIdx = out.indexOf(UNIVERSAL_HEADING);
+    const gIdx = out.indexOf(GIT_HEADING);
+    const oIdx = out.indexOf(ONPREM_HEADING);
+    assert.ok(uIdx >= 0 && gIdx >= 0 && oIdx >= 0, 'all three headings present');
+    assert.ok(uIdx < gIdx, 'universal precedes git');
+    assert.ok(gIdx < oIdx, 'git precedes on-prem');
+  });
+
+  // 26.1c — profile=undefined defaults to standard behavior (identical output)
+  await test('26.1c profile=undefined produces output identical to profile=standard', () => {
+    const dir = mktemp();
+    try {
+      const undef = composeInstructionBlock({ profile: undefined, projectRoot: dir });
+      const std = composeInstructionBlock({ profile: 'standard', projectRoot: dir });
+      assert.strictEqual(undef, std, 'undefined profile must match standard byte-for-byte');
+    } finally { cleanup(dir); }
+  });
+
+  // 26.1d — idempotency / FR176 / NFR46: repeated calls byte-identical (standard + on-prem)
+  await test('26.1d composer is byte-identical across repeated calls (standard and on-prem)', () => {
+    const dir = mktemp();
+    try {
+      const std1 = composeInstructionBlock({ profile: 'standard', projectRoot: dir });
+      const std2 = composeInstructionBlock({ profile: 'standard', projectRoot: dir });
+      assert.strictEqual(std1, std2, 'standard profile must be idempotent');
+      if (fs.existsSync(ONPREM_INSTRUCTION_TEMPLATE_PATH)) {
+        const op1 = composeInstructionBlock({ profile: 'on-prem', projectRoot: dir });
+        const op2 = composeInstructionBlock({ profile: 'on-prem', projectRoot: dir });
+        assert.strictEqual(op1, op2, 'on-prem profile must be idempotent');
+      }
+    } finally { cleanup(dir); }
+  });
+
+  // 26.1e — FR205 rule keywords present in the composed git body
+  await test('26.1e git body contains FR205 rule keywords (worktree, Conventional Commits, gh pr create, code-review, SKILL pointer, no-trunk-commit)', () => {
+    const out = composeInstructionBlock({ profile: 'standard', projectRoot: mktemp() });
+    // Restrict assertions to the git region so we are testing the git layer.
+    const gIdx = out.indexOf(GIT_HEADING);
+    assert.ok(gIdx >= 0, 'git heading present');
+    const gitBody = out.slice(gIdx);
+
+    assert.ok(gitBody.includes('git worktree add'), 'must reference `git worktree add`');
+
+    const has7Prefixes = ['feat', 'fix', 'chore', 'docs', 'refactor', 'test', 'ci']
+      .every(p => new RegExp('`' + p + '`').test(gitBody));
+    assert.ok(
+      gitBody.includes('Conventional Commits') || has7Prefixes,
+      'must mention "Conventional Commits" or list the 7 prefixes'
+    );
+
+    assert.ok(gitBody.includes('gh pr create'), 'must reference `gh pr create`');
+    assert.ok(gitBody.includes('code-review'), 'must mention the code-review skill');
+    assert.ok(
+      gitBody.includes('skills/git-workflow-skill/SKILL.md'),
+      'must point at skills/git-workflow-skill/SKILL.md'
+    );
+    // Explicit "never commit to main/dev/master" rule.
+    assert.ok(
+      gitBody.includes('main') && gitBody.includes('dev') && gitBody.includes('master'),
+      'must name the protected trunk branches main/dev/master'
+    );
+    assert.ok(
+      /never commit directly|do not commit|never .*commit.*trunk/i.test(gitBody),
+      'must contain an explicit never-commit-to-trunk rule'
+    );
+  });
+
+  // 26.1f — missing/unreadable git template throws a clear, path-identifying error
+  await test('26.1f composer throws a path-identifying error when the git template is missing', () => {
+    const bak = GIT_INSTRUCTION_TEMPLATE_PATH + '.bak-test';
+    fs.renameSync(GIT_INSTRUCTION_TEMPLATE_PATH, bak);
+    try {
+      assert.throws(
+        () => composeInstructionBlock({ profile: 'standard', projectRoot: mktemp() }),
+        (err) => {
+          assert.ok(/git instruction template/i.test(err.message), 'error must identify the git template');
+          assert.ok(err.message.includes(GIT_INSTRUCTION_TEMPLATE_PATH), 'error must include the git template path');
+          return true;
+        }
+      );
+    } finally {
+      fs.renameSync(bak, GIT_INSTRUCTION_TEMPLATE_PATH);
+    }
+  });
+
+  // 26.1g — git body contains NONE of the local-LLM-only tokens
+  await test('26.1g git body lacks local-LLM-only tokens (/no_think, str_replace_editor, ~/.claude/, %APPDATA%)', () => {
+    const out = composeInstructionBlock({ profile: 'standard', projectRoot: mktemp() });
+    const gIdx = out.indexOf(GIT_HEADING);
+    assert.ok(gIdx >= 0, 'git heading present');
+    const gitBody = out.slice(gIdx);
+    assert.ok(!gitBody.includes('/no_think'), 'git body must not contain /no_think');
+    assert.ok(!gitBody.includes('str_replace_editor'), 'git body must not contain str_replace_editor');
+    assert.ok(!gitBody.includes('~/.claude/'), 'git body must not contain ~/.claude/');
+    assert.ok(!gitBody.includes('%APPDATA%'), 'git body must not contain %APPDATA%');
   });
 
   // 5.7 — Marker-block replace preserves surrounding content across two installs
