@@ -201,5 +201,5 @@ development_status:
   # Execution order: 26.1 → 26.2
   epic-26: backlog
   26-1-add-git-instruction-block-template: done
-  26-2-integration-test-git-block-per-tool: ready-for-dev
+  26-2-integration-test-git-block-per-tool: in-progress
   epic-26-retrospective: optional
