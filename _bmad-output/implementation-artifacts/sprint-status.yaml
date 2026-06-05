@@ -200,6 +200,6 @@ development_status:
   # Dependencies: Epic 21 (universal + on-prem composer — already done)
   # Execution order: 26.1 → 26.2
   epic-26: backlog
-  26-1-add-git-instruction-block-template: review
+  26-1-add-git-instruction-block-template: done
   26-2-integration-test-git-block-per-tool: ready-for-dev
   epic-26-retrospective: optional
