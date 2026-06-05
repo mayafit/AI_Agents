@@ -41,21 +41,21 @@ so that a future refactor of the composer, the per-tool stamping in `lib/install
 
 ## Tasks / Subtasks
 
-- [ ] Set up the fixture project and test scaffold (AC: 1, 4)
-  - [ ] Reuse the existing fixture pattern from `test/onprem-injection.test.js` if present; otherwise create a fixture under `test/fixtures/git-block/`
-  - [ ] Create `test/instruction-block-git.test.js` (or extend an existing instruction-block test) so it is picked up by `npm test`
-  - [ ] Ensure the fixture and test perform no network calls and do not depend on a real `gh` binary, real GitHub remote, or any network call
-- [ ] Assert the git block lands in all four primary targets for profile=`standard` (AC: 1)
-  - [ ] Run `npx ma-agents install --yes` with Claude Code, Cline, Roo Code, OpenCode selected, profile=`standard`
-  - [ ] For each of `CLAUDE.md`, `.cline/clinerules.md`, `.roo/rules/00-ma-agents.md`, `AGENTS.md`, read via `fs.readFileSync` and assert (substring/regex on the marker-block region) the six required content elements: the `## Git Workflow (ALL file-changing tasks)` heading, `git worktree add`, Conventional Commits / prefix list, `gh pr create` or "open a PR", `skills/git-workflow-skill/SKILL.md`, and the never-commit-directly-to-main/dev/master rule
-- [ ] Assert idempotency and out-of-marker preservation (AC: 2)
-  - [ ] Run the installer a second time with the same flags
-  - [ ] Assert the marker-block content in every target is byte-identical to the first run
-  - [ ] Assert text written outside the markers between runs is preserved byte-for-byte
-- [ ] Assert on-prem composition order (AC: 3)
-  - [ ] Run the installer against a fixture with profile=`on-prem`
-  - [ ] Assert every target contains the git block AND the on-prem block within the marker
-  - [ ] Assert the git block appears before the on-prem block (composition order from FR206)
+- [x] Set up the fixture project and test scaffold (AC: 1, 4)
+  - [x] Reuse the existing fixture pattern from `test/onprem-injection.test.js` if present; otherwise create a fixture under `test/fixtures/git-block/`
+  - [x] Create `test/instruction-block-git.test.js` (or extend an existing instruction-block test) so it is picked up by `npm test`
+  - [x] Ensure the fixture and test perform no network calls and do not depend on a real `gh` binary, real GitHub remote, or any network call
+- [x] Assert the git block lands in all four primary targets for profile=`standard` (AC: 1)
+  - [x] Run `npx ma-agents install --yes` with Claude Code, Cline, Roo Code, OpenCode selected, profile=`standard`
+  - [x] For each of `CLAUDE.md`, `.cline/clinerules.md`, `.roo/rules/00-ma-agents.md`, `AGENTS.md`, read via `fs.readFileSync` and assert (substring/regex on the marker-block region) the six required content elements: the `## Git Workflow (ALL file-changing tasks)` heading, `git worktree add`, Conventional Commits / prefix list, `gh pr create` or "open a PR", `skills/git-workflow-skill/SKILL.md`, and the never-commit-directly-to-main/dev/master rule
+- [x] Assert idempotency and out-of-marker preservation (AC: 2)
+  - [x] Run the installer a second time with the same flags
+  - [x] Assert the marker-block content in every target is byte-identical to the first run
+  - [x] Assert text written outside the markers between runs is preserved byte-for-byte
+- [x] Assert on-prem composition order (AC: 3)
+  - [x] Run the installer against a fixture with profile=`on-prem`
+  - [x] Assert every target contains the git block AND the on-prem block within the marker
+  - [x] Assert the git block appears before the on-prem block (composition order from FR206)
 
 ## Dev Notes
 
@@ -102,8 +102,26 @@ This is an integration test story. It does not change product behavior; it locks
 
 ### Agent Model Used
 
+Claude Opus 4.8 (1M context) — Amelia (bmad-dev-story workflow).
+
 ### Debug Log References
+
+- `node test/instruction-block-git.test.js` → 4 passed, 0 failed.
+- Verified 26.1 dependency is merged: `lib/installer.js::composeInstructionBlock` appends the git block (universal + git + on-prem) and `lib/templates/instruction-block-git.template.md` is present with all six required content elements.
 
 ### Completion Notes List
 
+- New integration test `test/instruction-block-git.test.js` reuses the existing harness pattern (mktemp/cleanup, `_testUpdateAgentInstructions` + `stampExtraInstructionTemplates`, `extractMarkerBlock`) from `test/onprem-injection.test.js`. No new fixture file was needed — temp project dirs are created per-test.
+- Asserts the composed git block in ALL FOUR primary marker-block targets: `.claude/CLAUDE.md`, `.cline/clinerules.md`, `.roo/rules/00-ma-agents.md`, `AGENTS.md` (opencode → AGENTS.md via extraInstructionTemplates).
+  - Note: the spec lists `CLAUDE.md`; the claude-code agent actually writes `.claude/CLAUDE.md` (confirmed by existing tests). The test asserts the real path.
+- Six content checks per target: `## Git Workflow (ALL file-changing tasks)` heading, `git worktree add`, Conventional Commits / 7-prefix list, `gh pr create` / "open a PR", `skills/git-workflow-skill/SKILL.md`, and the explicit never-commit-directly-to-`main`/`dev`/`master` rule.
+- Idempotency: second install yields byte-identical marker-block content per target; out-of-marker user text appended after `MA-AGENTS-END` is preserved byte-for-byte; exactly one marker block remains.
+- on-prem (FR206): every target contains both the git block and the on-prem block, with the git heading appearing before the on-prem `/no_think` guardrail inside the marker.
+- Air-gapped (NFR44/NFR45): assertions are content-only; no process spawn, no socket, no real `gh`/`git`/network.
+- Wired into CI: appended `&& node test/instruction-block-git.test.js` to the `"test"` script in `package.json` (after `agents-md.test.js`), grouped with the other instruction-block tests. Only that one script line changed.
+- Source under test was NOT modified (26.1 composer is already merged/reviewed).
+
 ### File List
+
+- `test/instruction-block-git.test.js` (new)
+- `package.json` (modified — `test` script chain only)
