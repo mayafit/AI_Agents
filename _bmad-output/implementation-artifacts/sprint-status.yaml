@@ -11,6 +11,7 @@
 # updated: 2026-04-29 — Reconciled against git ground truth: Epic 24 fully released in v3.8.0 (PR #85) — all 10 stories + bugs B1/B2 marked done. Epic 14 redesigned (Jira backend, 4 stories replacing old 5-story list). Story 17.22 added as ready-for-dev (Jira Phase A routing). Stories 16.1/16.2 Jira enhancements added as ready-for-dev (FR139). Epic 19 corrected from in-progress to backlog.
 # updated: 2026-05-31 — Epic 26 (Inline Git Workflow Guardrails in Per-Tool Instruction Block) added to backlog (2 stories, 26.1–26.2). Closes guardrail gap surfaced by Workshop install adversarial review (2026-05-24): worktree/PR/Conventional-Commits rules currently reachable only via indirection.
 # updated: 2026-05-31 — Reconciled file/yaml drift: marked Epic 22 + all 10 stories (22.1-22.10) done (shipped v3.7.0, PR #72). Marked 17.22 done (shipped v3.9.0, PR #93 — file already in done/). Added Stories 25.3 (Cline workflow generation, v3.11.0) and 25.4 (clinerules as directory, v3.12.0) as done. Added 4 untracked bugs as done: jira-backend-first-run (v3.10.0), local-knowledge-nested (v3.12.3), bundled-modules-stranded (v3.12.1), offline-install-stable-tag (v3.12.2). 32 top-level story/bug files moved to implementation-artifacts/done/ (Epic 5: 2 files; Epic 22: 10 files; Epic 24: 10 files; Epic 25: 4 files; bugs: 6 files).
+# updated: 2026-06-05 — Epic 26 (Inline Git Workflow Guardrails) shipped: Stories 26.1 (git instruction-block template + composer wiring) and 26.2 (integration test, all four per-tool targets) done via PRs #98/#100; epic marked done.
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system
@@ -199,7 +200,7 @@ development_status:
   # FR Coverage: FR204, FR205, FR206 (Architecture Decision P5-4)
   # Dependencies: Epic 21 (universal + on-prem composer — already done)
   # Execution order: 26.1 → 26.2
-  epic-26: backlog
+  epic-26: done
   26-1-add-git-instruction-block-template: done
   26-2-integration-test-git-block-per-tool: done
-  epic-26-retrospective: optional
+  epic-26-retrospective: done
