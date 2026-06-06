@@ -45,6 +45,7 @@ development_status:
   bug-local-knowledge-path-creates-nested-bmad-output-folder: done   # shipped v3.12.3 (commit 41a246d)
   bug-ma-agents-installs-only-bmm-bundled-modules-stranded-in-cache: done   # shipped v3.12.1 (commit 0270f72)
   bug-offline-install-fails-on-stable-tag-resolution-for-bundled-modules: done   # shipped v3.12.2 (commit 5f3672d)
+  bug-marker-merge-orphan-start-drops-content: backlog   # discovered Epic 26 / Story 26.2 (PR #100), Phase 3e edge-case; pre-existing since Story 21.2 (FR176 marker idempotency)
 
   # ─── IN PROGRESS ──────────────────────────────────────────────────────────────
 
