@@ -46,6 +46,7 @@ development_status:
   bug-ma-agents-installs-only-bmm-bundled-modules-stranded-in-cache: done   # shipped v3.12.1 (commit 0270f72)
   bug-offline-install-fails-on-stable-tag-resolution-for-bundled-modules: done   # shipped v3.12.2 (commit 5f3672d)
   bug-marker-merge-orphan-start-drops-content: backlog   # discovered Epic 26 / Story 26.2 (PR #100), Phase 3e edge-case; pre-existing since Story 21.2 (FR176 marker idempotency)
+  bug-npm-test-windows-suite-health-chain: backlog   # discovered 2026-06-06 during Epic 26 follow-up / PR #104 verification; reconfigure.test.js 8.8 (scriptedPrompts exhausted) + chain of pre-existing failures masked by && test script (positions 33-52 unaudited)
 
   # ─── IN PROGRESS ──────────────────────────────────────────────────────────────
 
