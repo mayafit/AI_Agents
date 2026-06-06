@@ -11,3 +11,10 @@ lib/bmad-extension-plugin/** text eol=lf
 # script to read the same bytes on every checkout.
 scripts/build-plugin.js text eol=lf
 test/build-plugin.test.js text eol=lf
+
+# MIL-498 DID source templates must also stay LF. test/migration-validation.test.js
+# (Story 15.8, task 3.Na) asserts lib/mil498-templates/*.md is byte-identical to the
+# eol=lf-pinned skill copies under lib/bmad-extension/skills/mil498-*/template.md.
+# Without this pin, Windows autocrlf renders the source as CRLF on checkout and the
+# byte-identity assertion fails even though the committed blobs are identical (LF).
+lib/mil498-templates/** text eol=lf
