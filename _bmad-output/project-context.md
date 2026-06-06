@@ -23,7 +23,7 @@
 
 1. Create a fresh worktree: `git worktree add ../<project>-<branch> -b <branch>`
 2. ALL work happens inside that worktree — never in the main working tree
-3. Use conventional commits: `feat/fix/chore/docs/refactor`
+3. Use conventional commits: `feat/fix/chore/docs/refactor/test/ci`
 4. Open a PR to main — never commit directly to main, never auto-merge
 5. After human approval and merge: `git worktree remove ../<project>-<branch>`
 
