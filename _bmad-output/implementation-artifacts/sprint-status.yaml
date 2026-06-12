@@ -12,6 +12,7 @@
 # updated: 2026-05-31 — Epic 26 (Inline Git Workflow Guardrails in Per-Tool Instruction Block) added to backlog (2 stories, 26.1–26.2). Closes guardrail gap surfaced by Workshop install adversarial review (2026-05-24): worktree/PR/Conventional-Commits rules currently reachable only via indirection.
 # updated: 2026-05-31 — Reconciled file/yaml drift: marked Epic 22 + all 10 stories (22.1-22.10) done (shipped v3.7.0, PR #72). Marked 17.22 done (shipped v3.9.0, PR #93 — file already in done/). Added Stories 25.3 (Cline workflow generation, v3.11.0) and 25.4 (clinerules as directory, v3.12.0) as done. Added 4 untracked bugs as done: jira-backend-first-run (v3.10.0), local-knowledge-nested (v3.12.3), bundled-modules-stranded (v3.12.1), offline-install-stable-tag (v3.12.2). 32 top-level story/bug files moved to implementation-artifacts/done/ (Epic 5: 2 files; Epic 22: 10 files; Epic 24: 10 files; Epic 25: 4 files; bugs: 6 files).
 # updated: 2026-06-05 — Epic 26 (Inline Git Workflow Guardrails) shipped: Stories 26.1 (git instruction-block template + composer wiring) and 26.2 (integration test, all four per-tool targets) done via PRs #98/#100; epic marked done.
+# updated: 2026-06-08 — Epic 27 (BMAD v6.8.0 Integration) added to backlog (7 stories, 27.1-27.7). Driver: BMAD 6.7.0 retired the in-package module-registry YAML and 6.8.0 RELOCATED the external-module list to package-root bmad-modules.yaml (still YAML, same shape), breaking build-bmad-cache.js's REGISTRY_CANDIDATES and the air-gapped build. Bundle set = tea/bmb/cis/gds/wds (type: bmad-org); automator (experimental) excluded; wds is ACTIVE (not retired). 27.1 (confirmation spike, gate) and 27.4 (Cline wrapper reconciliation) are ready-for-dev; the rest are blocked per execution order. Added F23/FR207-FR210/NFR56-NFR57 to PRD; Architecture Decision P5-5. [Same-day correction: an initial draft wrongly said 6.8.0 ships the list as JavaScript and that wds is retired — corrected against the v6.8.0 source and a live install; story 27-2 key renamed off "official-modules-js".]
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system
@@ -29,7 +30,7 @@
 # Old Epic 17 stories (17.1-17.8) archived; replaced by 17.9-17.24.
 
 generated: 2026-03-15
-last_updated: "2026-05-31 — Reconciled file/yaml drift against git ground truth. Epic 22 (all 10 stories) marked done (shipped v3.7.0). 17.22 marked done (shipped v3.9.0). Stories 25.3 and 25.4 added as done. Four untracked bugs added as done. 32 story/bug files moved to implementation-artifacts/done/. Epic 26 (added earlier today) remains backlog with 26.1 and 26.2 ready-for-dev."
+last_updated: "2026-06-08 — Epic 27 (BMAD v6.8.0 Integration) added to backlog (7 stories, 27.1-27.7). Driver: BMAD 6.7.0 retired the in-package module-registry YAML and 6.8.0 relocated the external-module list to package-root bmad-modules.yaml (still YAML, same shape), breaking build-bmad-cache.js's REGISTRY_CANDIDATES and the air-gapped bundled-module build. Bundle set tea/bmb/cis/gds/wds; automator excluded; wds active. 27.1 (confirmation spike, gate) and 27.4 (Cline wrapper reconciliation) ready-for-dev; rest blocked. Added F23/FR207-FR210/NFR56-NFR57 to PRD; Architecture Decision P5-5. Same-day correction of an initial JavaScript/wds-retired misstatement; 27-2 key renamed."
 project: agents
 project_key: NOKEY
 tracking_system: file-system
@@ -205,3 +206,26 @@ development_status:
   26-1-add-git-instruction-block-template: done
   26-2-integration-test-git-block-per-tool: done
   epic-26-retrospective: done
+
+  # Epic 27: BMAD v6.8.0 Integration (Phase 5)
+  # Goal: Upgrade bmad-method v6.6.0 → v6.8.0. BMAD 6.7.0 retired the in-package module-registry YAML
+  # (tools/installer/modules/registry-fallback.yaml) and 6.8.0 RELOCATED the external-module list to
+  # package-root bmad-modules.yaml — still YAML, same modules: map shape (code/url/name/type). The
+  # builder's REGISTRY_CANDIDATES no longer find it, breaking the air-gapped bundled-module build
+  # (NFR2/NFR50/NFR54). Core work: small reader change — add the new path + swap built_in→type filter +
+  # thin-cache fail-loud guard. Bundle set = tea/bmb/cis/gds/wds (type: bmad-org); automator (experimental)
+  # excluded; bmm/core built-in. wds is ACTIVE at 6.8.0 (NOT retired). Secondary: reconcile generated Cline
+  # workflow wrappers against renamed/retired upstream skills, bump the pin, rebuild cache/plugin, verify
+  # offline install. Upstream skill renames (bmad-create-ux-design→bmad-ux, bmad-distillator→bmad-spec,
+  # PRD unification) are passthrough. FR Coverage: FR207-FR210, NFR56-NFR57 (Architecture Decision P5-5)
+  # Dependencies: Epic 25 (v6.6.0 integration — done); Epic 25 stories 25.3/25.4 supply deployClineWorkflows
+  # Execution order: 27.1 (gate) → 27.2 → 27.3 → 27.5 → 27.6 → 27.7; 27.4 parallel (verified after 27.5)
+  epic-27: backlog
+  27-1-spike-registry-reader-rework-6-8-0: ready-for-dev
+  27-2-point-build-bmad-cache-at-relocated-registry: backlog
+  27-3-update-registry-schema-tests-fail-loud: backlog
+  27-4-cline-workflow-wrapper-reconciliation: ready-for-dev
+  27-5-bump-bmad-method-6-8-0-rebuild-cache-plugin: backlog
+  27-6-verify-pluginresolver-skill-enumeration-passthrough: backlog
+  27-7-release-gate-offline-verification-semver-cut: backlog
+  epic-27-retrospective: optional

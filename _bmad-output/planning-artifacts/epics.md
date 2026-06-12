@@ -4,6 +4,8 @@ workflowStatus: 'complete'
 completedDate: '2026-03-08'
 lastEdited: '2026-04-07'
 phase5EditHistory:
+  - date: '2026-06-08'
+    changes: 'Added Epic 27: BMAD v6.8.0 Integration (Phase 5). 7 stories (27.1-27.7) covering the 6.6.0→6.8.0 jump. Headline: BMAD 6.7.0 retired the in-package module-registry YAML (tools/installer/modules/registry-fallback.yaml) and 6.8.0 RELOCATED the external-module list to package-root bmad-modules.yaml — still YAML, same modules: map shape (code/url/name/type); official-modules.js is unchanged loader code that reads it, NOT the list itself. build-bmad-cache.js''s REGISTRY_CANDIDATES no longer find the registry, breaking the air-gapped self-containment guarantee (NFR2/NFR50/NFR54). The fix is small: add the new path + swap built_in→type filter. Bundle set = tea/bmb/cis/gds/wds (type: bmad-org); automator (experimental) excluded; bmm/core built-in. wds is ACTIVE at v6.8.0 (was retired at 6.3.0, returned) — NOT skipped. Stories: 27.1 spike to CONFIRM the relocated-YAML path + type filter (gate), 27.2 point build-bmad-cache.js at the new path with type filter + thin-cache fail-loud guard (Small), 27.3 update bmad-version-bump.test.js (relocated-YAML tag, type filter, invert the two wds-retired tests, bundled-set assertion), 27.4 Cline workflow-wrapper reconciliation (generate-new + remove-stale) for renamed/retired upstream skills, 27.5 bump pin to v6.8.0 + rebuild cache/plugin + re-baseline bundle-drift + resolve CRLF + green suite, 27.6 PluginResolver/module-schema compat + per-tool skill-enumeration passthrough verification, 27.7 release gate (adversarial review + offline-install verification + semver cut + retrospective). Added F23 capability area, FR207-FR210 and NFR56-NFR57 to the PRD. Architecture Decision P5-5 covers the reader change. BMAD core skill renames (bmad-create-ux-design→bmad-ux), retirements (bmad-distillator→bmad-spec) and PRD unification are upstream-internal, inherited via passthrough — the only ma-agents-side propagation is the generated Cline wrappers (27.4). [Correction note: an initial same-day draft wrongly described the 6.8.0 source as JavaScript and wds as retired; corrected against the v6.8.0 source and a live install.]'
   - date: '2026-05-01'
     changes: 'Added Epic 25: BMAD v6.6.0 Integration (Phase 5). 2 stories (25.1-25.2): buildBmadArgs guard for --tools none breaking change, and bmad-method version bump + cache rebuild.'
 phase4EditHistory:
@@ -4820,3 +4822,160 @@ scripts/
 - Assert per-target file via `fs.readFileSync` + substring/regex on the marker-block region; do not parse markdown
 - Cursor, Kilocode, Copilot, Gemini are not in the per-target assertion list because they reuse the same composed marker-block content; covering the four primary marker-block targets (Claude Code, Cline, Roo Code, OpenCode) is the architectural boundary
 - The fixture must NOT depend on a real `gh` binary, real GitHub remote, or any network call — assertions are on the stamped instruction-file content, not on git or PR behavior
+
+---
+
+## Epic 27: BMAD v6.8.0 Integration (Phase 5)
+
+**Goal:** Upgrade bmad-method from v6.6.0 to v6.8.0. The headline work is a small reader change in `scripts/build-bmad-cache.js`: BMAD 6.7.0 retired the in-package module-registry YAML (`tools/installer/modules/registry-fallback.yaml`) and 6.8.0 relocated the external-module list to package-root `bmad-modules.yaml` — still YAML, same `modules:` map shape (`code`/`url`/`name`/`type`). The builder's `REGISTRY_CANDIDATES` no longer find the registry, so it `process.exit(1)`s and the bundled-module cache is never built — breaking the air-gapped self-containment guarantee (NFR2/NFR50/NFR54). The fix is to add the new package-root path and swap the now-removed `built_in` flag for the `type` field. The bundled set is **tea, bmb, cis, gds, wds** (every `type: bmad-org` module); `automator` (`type: experimental`) is excluded; `bmm`/`core` are built-in. Secondary work: reconcile the generated Cline workflow wrappers against the renamed/retired upstream skills, bump the pin, rebuild cache + plugin, and cut a release. The upstream skill renames themselves (bmad-create-ux-design→bmad-ux, bmad-distillator→bmad-spec, PRD facilitator unification, new bmad-investigate) are inherited transparently via passthrough deployment — ma-agents owns none of those skill bodies.
+
+**Value:** Keeps ma-agents aligned with the canonical BMAD release line (purpose: "as aligned with BMAD as possible"), restores and hardens the offline bundled-module build against a registry path that has now moved twice (YAML at three locations), and adopts upstream reliability fixes (6.7.1 orphaned-module installer fix) — all while preserving the air-gapped install guarantee that ma-agents' on-prem disconnected distribution depends on.
+
+**Dependencies:** Epic 25 (BMAD v6.6.0 Integration) complete — it is (shipped v3.x, marked done). Epic 22 (plugin staging) and the Cline workflow generation (F22, Epic 25 stories 25.3/25.4) supply the `deployClineWorkflows` code path that Story 27.4 extends.
+
+**Execution order:** 27.1 → 27.2 → 27.3 → 27.5 → 27.6 → 27.7. Story 27.4 (Cline wrapper reconciliation) is independent of the cache rework and can run in parallel from the start, but its end-to-end verification depends on 27.5 (the version bump that actually deploys the renamed/retired upstream skills). 27.1 is a hard gate: no implementation begins until the registry-reader approach is chosen and recorded as Architecture Decision P5-5.
+
+**FR Coverage:** FR207, FR208, FR209, FR210, NFR56, NFR57.
+
+**Architecture:** Decision P5-5 (Module-Registry Reader path update: relocated package-root `bmad-modules.yaml`, `type`-based filter, thin-cache fail-loud contract) in `_bmad-output/planning-artifacts/architecture.md`.
+
+**Out of scope:**
+- Re-authoring or forking any BMAD core skill (`bmad-ux`, `bmad-spec`, `bmad-investigate`, `bmad-prd`, etc.). ma-agents passes these through from `node_modules/bmad-method`; their rename/retirement/unification is upstream-internal. The only ma-agents-side reconciliation is generated artifacts (Story 27.4).
+- Surfacing the new upstream skills (`bmad-spec`, `bmad-ux`, `bmad-investigate`) as first-class entries in ma-agents' own MANIFEST routing / per-tool enumerations beyond what passthrough already provides. Deferred as a possible fast-follow; this epic is integration-only.
+- The companion `web-bundles-v1.0.0` release (Gemini Gems / ChatGPT Custom GPTs) — out of scope for ma-agents' IDE-skill distribution model.
+- Adopting `bmad-automator` (next channel) or `bmad-method-ui` (community alpha) — not on the stable channel.
+
+### Story 27.1: Spike — Confirm the Module-Registry Reader Path Update for v6.8.0
+
+**Status:** ready-for-dev
+**Size:** Small
+**Priority:** Critical (gate — blocks all other implementation)
+
+**User Story:** As the ma-agents maintainer, I need to confirm (against a live v6.8.0 install) the relocated module-registry path and the `type`-based filter mapping, and record it as Architecture Decision P5-5, so that Story 27.2 implements a known small reader change rather than discovering the shape mid-build.
+
+**Acceptance Criteria:**
+1. The v6.8.0 module source is confirmed: the external-module list is in package-root `bmad-modules.yaml` (a `modules:` map with `code`/`url`/`name`/`type` fields — same shape the current parser reads), NOT in `official-modules.js` (which is unchanged loader code that reads this YAML). The in-package `registry-fallback.yaml`/`external-official-modules.yaml` paths are confirmed absent at v6.8.0.
+2. The reader change is confirmed minimal: add the package-root `bmad-modules.yaml` path to `REGISTRY_CANDIDATES`, keep/adapt `parseModulesYaml()`, and swap the `built_in` filter for a `type` filter. (Approaches considered and rejected: `require()`-ing `official-modules.js` — it does not contain the list; shipping a static ma-agents copy — would diverge from upstream. Both recorded in P5-5.)
+3. P5-5 is confirmed/adjusted against the spike findings, and the stale `external-official-modules.yaml`/`official-modules.js`-as-source references in the architecture docs and `docs/architecture.md` are confirmed corrected.
+4. The decision explicitly states the **`type`-based filter**: include `type: bmad-org` (tea, bmb, cis, gds, **wds — now INCLUDED**), exclude `type: experimental` (**automator — EXCLUDED**); `bmm`/`core` are built-in (absent from the registry) and never cloned. Confirms `wds` is an active module at v6.8.0, not retired.
+5. The decision names the fail-loud contract Story 27.2 must implement (feeds NFR56): the **thin-cache** guard — resolved `type: bmad-org` set smaller than the known set (tea/bmb/cis/gds/wds), or no source at all, ⇒ non-zero exit, no partial manifest.
+
+**Technical notes:**
+- The current reader is `loadModuleDefinitions()` / `locateRegistry()` / `parseModulesYaml()` / `normalizeModules()` in `scripts/build-bmad-cache.js` (lines ~21-175). The `REGISTRY_CANDIDATES` list and the `normalizeModules()` filter are what change; the line-by-line YAML parser is reused/adapted, not replaced.
+- Confirm against an actual v6.8.0 install (`npm install bmad-method@6.8.0` in a scratch dir) — do not rely on release notes alone. Verify `bmad-modules.yaml` exists at the package root and lists tea/bmb/automator/cis/gds/wds with `type` values.
+
+### Story 27.2: Point build-bmad-cache.js at the Relocated v6.8.0 Registry (Type Filter + Fail-Loud)
+
+**Status:** backlog (blocked on 27.1)
+**Size:** Small
+**Priority:** Critical (breaking — restores the offline cache build)
+
+**User Story:** As a ma-agents user installing in an air-gapped environment, I get a complete bundled cache (bmm/core filtered as built-in; tea, bmb, cis, gds, **wds** cloned; automator excluded) built from BMAD v6.8.0, so that offline installs of the full module set keep working after the upstream registry relocated to package-root `bmad-modules.yaml`. (FR207, NFR56)
+
+**Acceptance Criteria:**
+1. `scripts/build-bmad-cache.js` adds the package-root `bmad-modules.yaml` path to `REGISTRY_CANDIDATES` (per Story 27.1) and reuses/adapts `parseModulesYaml()` — the YAML parser is NOT replaced.
+2. The normalized module set is unchanged in shape (`{ code, url, name, branch }`; `branch` defaults to `main` as today since the new YAML omits it). The filter is changed from the now-removed `built_in` flag to the `type` field: **include `type: bmad-org`, exclude `type: experimental`**; `bmm`/`core` are absent from the registry and never cloned. No `wds`-retired/skip logic — `wds` is a normal `type: bmad-org` clone.
+3. **Fail-loud (NFR56):** if the resolved `type: bmad-org` set is smaller than the known bundled set (tea, bmb, cis, gds, wds), or no module source can be located/parsed, the build exits non-zero with an actionable message and writes **no** partial/empty `cache-manifest.json`.
+4. A successful run against bmad-method v6.8.0 produces cache entries for **tea, bmb, cis, gds, wds** (network-permitting); `automator` is absent (experimental); `bmm`/`core` are absent (built-in); `cache-manifest.json` `bmadMethodVersion` reads `6.8.0`.
+5. The `registrySchema` manifest field is updated to a tag for the relocated package-root YAML source, rather than the now-impossible `v63`/`legacy` values.
+6. Existing offline behaviors (`.git` → `_git_preserved`, incremental SHA skip, `--force` retention stash) are preserved. (The AC #7 retained-module logic no longer applies to `wds` — it is now a live registry clone.)
+
+**Technical notes:**
+- Keep the security guards (`MODULE_CODE_PATTERN`, URL passthrough) intact.
+- This is a path + filter change, not a parser rewrite — expect a small diff localized to `REGISTRY_CANDIDATES` and `normalizeModules()`.
+
+### Story 27.3: Update Registry-Schema Tests + Add Offline-Cache and Fail-Loud Regression Tests
+
+**Status:** backlog (blocked on 27.2)
+**Size:** Medium
+**Priority:** High
+
+**User Story:** As the ma-agents maintainer, I want the test suite to pin the new module-source contract and to fail loudly if a future BMAD release moves the registry again, so that the offline guarantee is protected by a gate rather than discovered by an air-gapped user.
+
+**Acceptance Criteria:**
+1. `test/bmad-version-bump.test.js` is updated: the assertions pinning the `'v63'`/`'legacy'` registry schema are replaced with a tag for the relocated package-root YAML source, and the `built_in`-flag filter assertion is replaced with the `type`-based filter (include `type: bmad-org`, exclude `type: experimental`). The bmm/core exclusion invariant itself is retained (now via the registry simply not listing them).
+2. The two existing `wds`-as-retired tests are **inverted** to match v6.8.0 reality: the test `'wds module is NOT in the v6.6.0 upstream registry (retired)'` (~line 128) is rewritten to assert `wds` IS in the v6.8.0 registry (`type: bmad-org`) and is bundled; the test `'retired upstream modules (e.g. wds) are flagged in manifest when retained'` (~line 192) is rewritten — `wds` is now a normal live clone, not a retained relic.
+3. A new test asserts the **fail-loud** thin-cache contract (NFR56): given a fixture whose `type: bmad-org` set is smaller than the known set (or no source at all), the builder exits non-zero and writes no `cache-manifest.json`.
+4. A test asserts the expected bundled set resolves under v6.8.0: codes **tea, bmb, cis, gds, wds** present; `automator` absent (experimental); `bmm`/`core` absent from the externally-cloned set.
+5. Tests run without network access (consistent with the air-gapped CI gate) — module-source resolution is exercised against fixtures/the installed package, not live clones.
+6. `npm test` is green on Linux/CI.
+
+**Technical notes:**
+- Reuse the existing `bmad-version-bump.test.js` "Task 2" structure where practical.
+- The fail-loud test should drive the negative path without requiring an actual broken bmad-method install — stub/point the resolver at a fixture with a deficient module set.
+
+### Story 27.4: Cline Workflow-Wrapper Reconciliation for Renamed/Retired Upstream Skills
+
+**Status:** ready-for-dev
+**Size:** Medium
+**Priority:** High
+
+**User Story:** As a ma-agents user with Cline selected, after upgrading to BMAD v6.8.0 my `.clinerules/workflows/` contains wrappers for the current BMAD skills (including renamed/new ones like `bmad-ux`, `bmad-spec`, `bmad-investigate`, `bmad-prd`) and contains **no** dangling wrappers pointing at skills BMAD renamed away or retired (e.g. `bmad-create-ux-design`, `bmad-distillator`), so that `/`-invocation in Cline never offers a workflow whose underlying skill no longer exists. (FR209)
+
+**Acceptance Criteria:**
+1. `deployClineWorkflows()` in `lib/bmad.js` reconciles the generated `.clinerules/workflows/` set against the currently-deployed `.cline/skills/` set on every install/update: a wrapper `.md` whose corresponding `.cline/skills/<name>/` directory is absent is removed.
+2. Wrappers are (re)generated for all current skills, so renamed/new upstream skills appear after an update without manual intervention.
+3. Removal is scoped strictly to ma-agents-generated wrapper files under `.clinerules/workflows/` — user-authored files elsewhere under `.clinerules/` are never touched (mirror the safety scoping of the Bug B2 stale-tool-dir cleanup).
+4. The operation is idempotent: running install twice in a row leaves `.clinerules/workflows/` byte-identical.
+5. A new test asserts: (a) a stale wrapper (no backing skill dir) is removed; (b) a wrapper for a renamed/new skill is created; (c) a user file under `.clinerules/` is preserved.
+
+**Technical notes:**
+- Current `deployClineWorkflows()` (lib/bmad.js ~1481-1553) calls `fs.ensureDir(workflowsDir)` and only ever writes/overwrites — it never deletes. The reconciliation is the new behavior.
+- This is the same stale-artifact class as the already-fixed `bug-stale-copilot-skills-dir-not-cleaned-on-upgrade` — reuse that cleanup's scoping discipline.
+- Compute the live skill-name set from `.cline/skills/` subdirectories that contain `SKILL.md`, then delete any `<name>.md` in `workflows/` not in that set.
+
+### Story 27.5: Bump bmad-method to v6.8.0, Rebuild Cache + Plugin, Re-baseline Bundle Drift
+
+**Status:** backlog (blocked on 27.2, 27.3)
+**Size:** Small
+**Priority:** High
+
+**User Story:** As a ma-agents user, I get all upstream v6.7.0–v6.8.0 improvements (outcome-driven PRD/brief facilitators, bmad-investigate, bmad-spec, the 6.7.1 orphaned-module installer fix, strengthened skill activation guardrails, 19 new elicitation techniques) inherited transparently via the version bump, with no manual intervention. (FR208)
+
+**Acceptance Criteria:**
+1. `package.json` `bmad-method` field updated from `6.6.0` to `6.8.0`; `npm install` run and `package-lock.json` updated.
+2. `npm run build:bmad-cache` run successfully against v6.8.0 (depends on 27.2) — cache rebuilt; `cache-manifest.json` `bmadMethodVersion` is `6.8.0`.
+3. `npm run build:plugin` run; `lib/bmad-extension-plugin/` regenerated and committed verbatim; the CI Bundle Drift Guard passes, and the regenerated diff is reviewed line-by-line to confirm it contains only the expected version bump + ma-agents-owned changes (no unexplained drift).
+4. The pre-existing Windows CRLF drift is **resolved (the actual MIL-498 template CRLF drift fixed, not waived) and `npm test` is green on Windows before the bump**, so the regression is evaluated against a known-clean floor. (This is the same resolution 27.7 AC3 requires — no "run on CI to dodge Windows" escape hatch; see the Epic 26 CRLF-fix follow-up.)
+5. `npm test` green on Linux/CI; `project_name`/config auto-migration confirmed non-breaking (no ma-agents code change required).
+
+**Technical notes:**
+- Supersedes FR197's v6.6.0 pin.
+- Bundle-drift is honest but mechanical — satisfy it by regenerating and reading the diff, not by blindly re-running until green.
+
+### Story 27.6: Verify PluginResolver / Module-Schema Compatibility + Per-Tool Skill-Enumeration Passthrough
+
+**Status:** backlog (blocked on 27.5)
+**Size:** Small
+**Priority:** Medium
+
+**User Story:** As a ma-agents user on any supported tool, after the v6.8.0 bump the ma-agents extension plugin still installs cleanly and the renamed/retired upstream skills are correctly reflected wherever ma-agents enumerates the skill set, so that no tool ends up advertising a skill that no longer exists or missing one that now does. (FR210)
+
+**Acceptance Criteria:**
+1. The ma-agents extension plugin (`module.yaml`, `module-help.csv`, `.claude-plugin/marketplace.json`) installs without error under bmad-method v6.8.0's PluginResolver — confirmed by a multi-tool smoke install (at least Claude Code + Cline).
+2. Any ma-agents-owned enumeration of BMAD skills (per-tool pointer files, MANIFEST routing, docs) is verified to reflect the v6.8.0 skill set; orphaned references to `bmad-create-ux-design` / `bmad-distillator` are absent from ma-agents-owned files.
+3. The Cline reconciliation (27.4) is verified end-to-end against a real v6.8.0 deploy: renamed/new skills get wrappers, retired ones do not.
+4. No regression in the offline-install path (NFR57 — re-asserted, fully verified in 27.7).
+
+**Technical notes:**
+- This is a verification/reconciliation story, not a re-authoring story — most of the skill content is upstream passthrough.
+- Use the existing multi-tool smoke pattern from the Epic 22/24 verification stories.
+
+### Story 27.7: Release Gate — Adversarial Review, Offline-Install Verification, Semver Cut, Retrospective
+
+**Status:** backlog (blocked on 27.4, 27.5, 27.6)
+**Size:** Small
+**Priority:** High
+
+**User Story:** As the ma-agents maintainer, before publishing I have an adversarial review of the upgrade, a proven air-gapped install on v6.8.0, and a clean semver cut, so that the release cannot ship a silently-broken offline build.
+
+**Acceptance Criteria:**
+1. The `code-review` skill (and an adversarial pass) is run over the Epic 27 diff; findings are triaged and addressed.
+2. **Offline-install gate (NFR57/NFR50):** `npx ma-agents install` is run with all outbound network egress blocked (container/VM or CI with network disabled) and completes successfully with the full bundled module set built from v6.8.0 — zero network calls on the install path.
+3. The full test suite is green on both Linux/CI and Windows (the actual delivery target — the CRLF confounder must be resolved, not waived).
+4. A new ma-agents semver version is cut per the project's versioning strategy; `CHANGELOG.md` updated.
+5. An Epic 27 retrospective is captured (optional status permitted, per the project's retrospective convention).
+
+**Technical notes:**
+- The offline gate is the single most important acceptance check in this epic — it is the requirement the registry removal threatened.
+- Reuse the offline CI gate established in Epic 22 (NFR50).

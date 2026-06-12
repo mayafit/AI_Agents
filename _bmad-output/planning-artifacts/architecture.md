@@ -5,6 +5,8 @@ phase2CompletedAt: '2026-03-11'
 phase2cStepsCompleted: ['step-02-context', 'step-04-decisions', 'step-06-structure', 'step-07-validation', 'step-08-complete']
 phase2cCompletedAt: '2026-03-26'
 phase5EditHistory:
+  - date: '2026-06-08'
+    changes: 'Added P5-5: Module-Registry Reader path update for BMAD v6.8.0 Integration (FR207–FR210, NFR56–NFR57; Epic 27). Key decision: BMAD 6.7.0 retired the in-package module-registry YAML (tools/installer/modules/registry-fallback.yaml) and 6.8.0 relocated the external-module list to package-root bmad-modules.yaml — still YAML, same modules: map shape (code/url/name/type). (official-modules.js is unchanged loader code that reads this YAML; it does NOT contain the list.) build-bmad-cache.js''s REGISTRY_CANDIDATES no longer find the registry and abort — breaking the offline bundled-module build (NFR2/NFR50/NFR54). The fix is SMALL: add the new package-root path to REGISTRY_CANDIDATES (keep/adapt parseModulesYaml), and swap the now-removed built_in flag for the type field (include type: bmad-org = tea/bmb/cis/gds/wds; exclude type: experimental = automator; bmm/core are built-in, never cloned). Fail-loud contract retargeted at the THIN-CACHE risk (resolved bmad-org set smaller than known set ⇒ non-zero exit, no partial manifest; NFR56). wds is an ACTIVE bmad-org module at v6.8.0 and is bundled (it was retired at 6.3.0, returned at 6.8.0). Story 27.1 reframed as a confirmation gate, not open design. Corrected the P2-6 build-step note to YAML→YAML→YAML (path relocation, not a JS rewrite) and the --modules param table (wds bundled, automator excluded). Cline reconciliation (P5-3 extension): deployClineWorkflows must remove stale wrappers, not just generate. Technology stack bumped from bmad-method v6.6.0 to v6.8.0. [Correction note: an initial same-day draft wrongly described the 6.8.0 source as JavaScript and wds as retired; corrected against the v6.8.0 source and a live install.]'
   - date: '2026-05-05'
     changes: 'Bug fix clarification for P2-6: refined the parameter-mapping table for `--modules`. Default install set is every non-retired module from the bundled cache manifest (currently bmm, tea, bmb, cis, gds — wds is retired upstream and skipped). The optional-value `--bmad-modules` CLI flag overrides — bare opens a multiselect prompt; `--bmad-modules tea,bmb` installs exactly those. `bmm` is force-included in every path. Restores the originally-intended "full bundle" install behavior the hardcoded `[''bmm'']` literal in `bin/cli.js` had been suppressing — the bundled tea/bmb/cis/gds modules sat in `~/.bmad/cache/external-modules/` unused. Code-level changes localized to `bin/cli.js` (`parseFlags`, `selectBmadModules`, four call-site replacements) and `lib/bmad.js` (added helpers `getInstallableBmadModules`, `getInstalledBmadModules`, `resolveBmadModules`, plus `BMAD_MODULE_DESCRIPTIONS`).'
   - date: '2026-05-01'
@@ -433,7 +435,7 @@ function buildBmadArgs(installContext) {
 |---|---|---|
 | Project path | `--directory` | Detected from cwd / package.json / .git |
 | Selected platforms (claude-code, cursor, opencode...) | `--tools` | Interactive wizard or `--yes` defaults |
-| BMAD modules to install | `--modules` | Default: every non-retired module from the cache manifest (currently bmm,tea,bmb,cis,gds — `wds` is retired upstream and skipped). Override: `--bmad-modules <csv>` for an explicit subset; `--bmad-modules` (bare) opens a multiselect prompt. `bmm` is force-included in every path |
+| BMAD modules to install | `--modules` | Default: every bundled module from the cache manifest (bmm,tea,bmb,cis,gds,wds at v6.8.0 — `wds` is an active `type: bmad-org` module; `automator` is `type: experimental` and excluded). Override: `--bmad-modules <csv>` for an explicit subset; `--bmad-modules` (bare) opens a multiselect prompt. `bmm` is force-included in every path |
 | User name | `--user-name` | Wizard prompt or system username |
 | Communication language | `--communication-language` | Wizard prompt or "English" default |
 | Document output language | `--document-output-language` | Wizard prompt or "English" default |
@@ -460,7 +462,7 @@ function buildBmadArgs(installContext) {
 
 **Pre-cloned cache creation (build step):**
 A new `npm run build:bmad-cache` script:
-1. For each module in `external-official-modules.yaml`: `git clone --depth 1 <url> lib/bmad-cache/<code>/`
+1. For each external module in BMAD's bundled module registry: `git clone --depth 1 <url> lib/bmad-cache/<code>/`. **The registry's PATH has moved across BMAD versions, but it has stayed YAML throughout** — `tools/cli/external-official-modules.yaml` (≤6.2.x) → `tools/installer/modules/registry-fallback.yaml` (6.3.0–6.6.x) → package-root `bmad-modules.yaml` (6.8.0; the in-package `registry-fallback.yaml` was retired in 6.7.0). The reader for the current pin is defined by Architecture Decision **P5-5**; modules are classified by a `type` field (include `type: bmad-org`, exclude `type: experimental`), `bmm`/`core` are built-in (absent from the registry) and never cloned, and `wds` is an active `bmad-org` module that is bundled
 2. Run `npm install --omit=dev` in each cloned directory
 3. Remove `.git/` directories to reduce package size
 4. This script runs on a connected machine; the output is committed to the repo
@@ -2448,3 +2450,32 @@ The net effect: the most consequential rule in the system (no commits to `main`/
 - `test/instruction-block-git.test.js` (new — composition order, profile coverage, idempotency, and stamping into all four per-tool injection targets)
 
 **FR Coverage:** FR204, FR205, FR206. Builds on FR174 (universal block content), FR176 (marker idempotency), and the per-tool surface delivered by Story 21.2.
+
+---
+
+### Decision P5-5: Module-Registry Reader Rework for BMAD v6.8.0 Integration (FR207–FR210, NFR56–NFR57) (2026-06-08)
+
+**Context:** ma-agents' offline self-containment (P2-6; NFR2/NFR50/NFR54) depends on `scripts/build-bmad-cache.js` pre-cloning the external BMAD modules into `lib/bmad-cache/`. To know *which* modules to clone, the builder reads BMAD's bundled module registry. That registry's **path** has moved across versions, but it has stayed **YAML** throughout: `tools/cli/external-official-modules.yaml` (≤6.2.x) → `tools/installer/modules/registry-fallback.yaml` (6.3.0–6.6.x) → **package-root `bmad-modules.yaml` (6.8.0; the in-package `registry-fallback.yaml` was retired in 6.7.0)**. The 6.8.0 file is a `modules:` map with `code`/`url`/`name`/`type` fields — the *same shape* the existing parser reads. (`tools/installer/modules/official-modules.js` is unchanged loader code that delegates to `external-manager.js` → this YAML; it does **not** contain the module list.) The break is purely that both YAML paths in the builder's `REGISTRY_CANDIDATES` list now 404 at v6.8.0, so `locateRegistry()` calls `process.exit(1)` and the bundled cache is never built — breaking the air-gapped install of the full module set.
+
+**Decision:** Make a **small** reader change in `build-bmad-cache.js`: add the new package-root `bmad-modules.yaml` path to `REGISTRY_CANDIDATES` (keeping/adapting the existing `parseModulesYaml()` — *not* replacing it), and swap the module filter from the now-removed `built_in` flag to the `type` field. The bundle rule becomes **include every `type: bmad-org` module (tea, bmb, cis, gds, wds); exclude `type: experimental` (currently `automator`)**; `bmm`/`core` are built-in (loaded from bmad-method's local `module.yaml`, absent from the registry) and are never cloned. The **Story 27.1 spike** is a *confirmation* gate — confirm the path/shape against a live v6.8.0 install and confirm the type-filter mapping — not an open design question. Invariants preserved: the normalized `{ code, url, name, branch }` shape (no `branch` in the new YAML — default to `main` as today), and the bmm/core exclusion. **`wds` is an active `type: bmad-org` module at v6.8.0 and is bundled** (it had been retired upstream at 6.3.0, which is why the builder still carries AC #7 retention logic; that logic no longer applies to `wds` now that it is a normal registry clone).
+
+**Fail-loud contract (NFR56):** the guard targets the **thin-cache** risk, not just a missing source. If the resolved `type: bmad-org` set is smaller than the known bundled set (tea, bmb, cis, gds, wds) — or no module source can be located/parsed at all — the build exits non-zero with an actionable message and writes **no** partial/empty `cache-manifest.json`. (The zero-source path already exits today; the new risk is the registry path moving again and the reader silently resolving fewer modules.) A regression test pins this guard — the registry path has now moved twice, so silent degradation is a real, recurring risk.
+
+**Passthrough boundary (FR210):** the upstream skill renames/retirements/PRD-unification (`bmad-create-ux-design`→`bmad-ux`, `bmad-distillator`→`bmad-spec`, addition of `bmad-prd`/`bmad-investigate`) are internal to bmad-method and reach ma-agents users via passthrough deployment — ma-agents owns none of those skill bodies and makes no per-skill source change. The only ma-agents-side propagation is to *generated* artifacts and *ma-agents-owned enumerations*.
+
+**Cline reconciliation (extends P5-3, FR209):** `deployClineWorkflows()` currently only ever writes/overwrites `.clinerules/workflows/<skill>.md`; it never deletes. After the v6.8.0 renames, a stale wrapper for a renamed-away/retired skill (e.g. `bmad-create-ux-design.md`) would persist as a dangling `/`-invocable workflow pointing at a deleted `.cline/skills/` dir. The function is extended to reconcile: regenerate wrappers for all current skills and remove any wrapper whose backing `.cline/skills/<name>/` directory no longer exists, scoped strictly to ma-agents-generated files and idempotent — the same stale-artifact discipline as the Bug B2 stale-tool-dir cleanup.
+
+**Alternatives considered:**
+- *Ship our own static copy of the module list (pin the set in ma-agents):* Rejected — it would freeze the module set at a snapshot and silently diverge from upstream's actual module list on every future bump, defeating the "stay aligned with BMAD" goal. Reading the relocated upstream `bmad-modules.yaml` keeps us tracking upstream.
+- *Rip out the YAML parser and `require()` `official-modules.js`:* Rejected — based on the false premise that the list "became JavaScript." `official-modules.js` is loader code (unchanged since 6.6.0) that itself reads the YAML; requiring it would add side-effect risk for no benefit. The data is still YAML; only the path moved.
+- *Adopt the new upstream skills (`bmad-spec`/`bmad-ux`/`bmad-investigate`) as first-class ma-agents MANIFEST entries in this epic:* Deferred — passthrough already deploys them; first-class routing is a possible fast-follow, kept out of scope to keep the integration slice small.
+
+**Files affected:**
+- `scripts/build-bmad-cache.js` (modify — add the package-root `bmad-modules.yaml` path to `REGISTRY_CANDIDATES`, keep/adapt `parseModulesYaml()`, swap `built_in`→`type` filter; add the thin-cache fail-loud guard)
+- `lib/bmad.js` (modify `deployClineWorkflows` — add stale-wrapper reconciliation)
+- `test/bmad-version-bump.test.js` (modify — replace the `registry-fallback` schema invariants and the `built_in`/`wds-retired` assertions with the relocated-YAML source tag, the `type`-based filter, and `wds`-present-and-bundled)
+- new tests: offline-cache resolution + fail-loud guard; Cline reconciliation (stale-removal / new-generation / user-file-preservation)
+- `package.json` (`bmad-method` pin 6.6.0 → 6.8.0)
+- `lib/bmad-cache/cache-manifest.json` + `lib/bmad-extension-plugin/` (regenerated artifacts)
+
+**FR Coverage:** FR207, FR208, FR209, FR210, NFR56, NFR57. Supersedes the v6.6.0 pin in P5-2 / FR197.
