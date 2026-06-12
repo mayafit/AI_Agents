@@ -195,6 +195,24 @@ skills/<skill-name>/
 - **Modern C++** (6): cpp-memory-handling, cpp-robust-interfaces, cpp-modern-composition, cpp-const-correctness, cpp-concurrency-safety, cmake-best-practices
 - **Architecture** (5): logging-best-practices, opentelemetry-best-practices, vercel-react-best-practices, git-workflow-skill, self-signed-cert
 
+### 3.6 BMAD Cache & Offline Self-Containment (build-time)
+
+**Responsibility**: Pre-vendor BMAD's external modules so installs never touch the network.
+
+ma-agents bundles bmad-method as an npm dependency **and** pre-clones BMAD's external modules (`tea`, `bmb`, `cis`, `gds`) into `lib/bmad-cache/` at build time via `npm run build:bmad-cache` ([scripts/build-bmad-cache.js](../scripts/build-bmad-cache.js)). This is what lets `npx ma-agents install` run fully offline in air-gapped environments (NFR2/NFR50/NFR54) — the npm tarball already contains every module bmad-method would otherwise `git clone` from GitHub at install time.
+
+**Module discovery**: the builder reads BMAD's bundled module registry to learn which external modules to clone. **The registry source has moved across BMAD versions** and the reader must track it:
+
+| BMAD version | Module registry source | Format |
+|--------------|------------------------|--------|
+| ≤ 6.2.x | `tools/cli/external-official-modules.yaml` | YAML |
+| 6.3.0 – 6.6.x | `tools/installer/modules/registry-fallback.yaml` | YAML |
+| 6.8.0+ | `bmad-modules.yaml` (bmad-method **package root**) | YAML (`modules:` map; the in-package `registry-fallback.yaml` was retired in 6.7.0) |
+
+The registry has stayed **YAML** throughout — only its path has moved. (`tools/installer/modules/official-modules.js` is unchanged loader code that reads this YAML; it does not contain the module list.) Modules are classified by a `type` field: `type: bmad-org` modules are bundled (**tea, bmb, cis, gds, wds**) and `type: experimental` modules are excluded (currently `automator`). `bmm`/`core` are built-in (loaded from bmad-method's local `module.yaml`, absent from the registry) and are never cloned. The reader for the current pin and its fail-loud contract are defined by Architecture Decision **P5-5** (Epic 27) in `_bmad-output/planning-artifacts/architecture.md`. A companion build step, `npm run build:plugin` ([scripts/build-plugin.js](../scripts/build-plugin.js)), assembles the ma-agents extension plugin bundle (`lib/bmad-extension-plugin/`) deterministically; a CI Bundle Drift Guard enforces that the committed bundle matches a fresh build.
+
+> **Maintenance note:** because the registry path has now moved twice (YAML→YAML→YAML at three locations), the cache builder fails loud — if the resolved `type: bmad-org` set is smaller than the known bundled set, or no module source is found, it exits non-zero rather than producing a thin/empty cache, so a future BMAD registry move surfaces at build time, not as a broken air-gapped install.
+
 ## 4. Data Flow
 
 ### 4.1 Install Flow
