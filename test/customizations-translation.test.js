@@ -7,7 +7,7 @@
  *
  * Coverage:
  *   1. Integration: legacy user-edit string reaches deployed SKILL.md across
- *      all 5 tool dirs.
+ *      every live IDE tool dir (registry-driven, not a hard-coded count).
  *   2. Partial-translation: legacy persona field with no v6.3 equivalent
  *      triggers a warning AND preserves the original file.
  *   3. Idempotency: re-running translation does not duplicate content or
@@ -28,10 +28,25 @@ const fs = require('fs-extra');
 const os = require('os');
 
 const bmad = require('../lib/bmad');
+const agents = require('../lib/agents');
 
 let passed = 0;
 let failed = 0;
 const errors = [];
+
+/**
+ * The distinct IDE tool skill directories that `translateUserCustomizations`
+ * fans out to, derived live from the agent registry so this fixture stays in
+ * lockstep with `getDeployedSkillsRoots` (and never goes stale when routing
+ * changes — e.g. copilot/roo-code/kilocode were consolidated onto the shared
+ * `.agents/skills` target). BMAD-internal persona roots (`_bmad/skills/*`) are
+ * excluded; the tests below assert IDE-tool fan-out specifically.
+ */
+const IDE_SKILL_DIRS = [...new Set(
+    agents.getAllAgents()
+        .filter(a => a && a.skillsDir && !a.skillsDir.startsWith('_bmad/'))
+        .map(a => a.skillsDir)
+)].sort();
 
 async function testAsync(name, fn) {
     try {
@@ -72,19 +87,14 @@ function buildMockPostInstall(subdir, opts = {}) {
         fs.writeFileSync(path.join(backupDir, name), content, 'utf-8');
     }
 
-    // Simulate the deployed plugin layout across the 5 flagship tool dirs.
-    // A subset of per-persona SKILL.md files are created so we can assert
-    // which targets received the translated block.
-    const tools = opts.tools || [
-        '.claude/skills',
-        '.cline/skills',
-        // F2b — copilot's skill directory now matches bmad-method 6.3.0's
-        // `github-copilot` target_dir of `.github/skills` (was previously
-        // `.github/copilot/skills`).
-        '.github/skills',
-        '.roo/skills',
-        '.kilocode/skills',
-    ];
+    // Simulate the deployed plugin layout across the live IDE tool dirs. The
+    // list is derived from the agent registry (IDE_SKILL_DIRS) so it always
+    // matches what `getDeployedSkillsRoots` will enumerate — copilot/roo-code/
+    // kilocode now share the consolidated `.agents/skills` target, so the
+    // distinct-dir count is registry-driven, not a hard-coded 5.
+    // A per-persona SKILL.md is created in each so we can assert which targets
+    // received the translated block.
+    const tools = opts.tools || IDE_SKILL_DIRS;
     for (const toolRel of tools) {
         for (const skillDir of (opts.skills || [])) {
             const skillPath = path.join(projectRoot, toolRel, skillDir);
@@ -126,8 +136,8 @@ async function runAllTests() {
 
         const result = await bmad.translateUserCustomizations(projectRoot);
         assert.strictEqual(result.translated.length, 1, 'one file should translate');
-        assert.ok(result.translated[0].skillFiles.length >= 5,
-            `canary should reach >=5 SKILL.md (5 tool dirs); got ${result.translated[0].skillFiles.length}`);
+        assert.strictEqual(result.translated[0].skillFiles.length, IDE_SKILL_DIRS.length,
+            `canary should reach all ${IDE_SKILL_DIRS.length} IDE tool dirs; got ${result.translated[0].skillFiles.length}`);
 
         for (const f of result.translated[0].skillFiles) {
             const content = fs.readFileSync(f, 'utf-8');
@@ -275,7 +285,7 @@ async function runAllTests() {
     console.log('\nMulti-tool fan-out: reaches every deployed tool');
     setupTmpDir();
 
-    await testAsync('single legacy file reaches 5 tool dirs when all 5 have the skill', async () => {
+    await testAsync('single legacy file reaches every IDE tool dir when all have the skill', async () => {
         const projectRoot = buildMockPostInstall('multi-tool-1', {
             backupFiles: {
                 'bmm-devops.customize.yaml': [
@@ -288,9 +298,9 @@ async function runAllTests() {
 
         const result = await bmad.translateUserCustomizations(projectRoot);
         assert.strictEqual(result.translated.length, 1);
-        // 5 tool dirs × 1 matching skill = 5 SKILL.md files touched
-        assert.ok(result.translated[0].skillFiles.length >= 5,
-            `fan-out should reach 5+ files; got ${result.translated[0].skillFiles.length}`);
+        // N distinct IDE tool dirs × 1 matching skill = N SKILL.md files touched
+        assert.strictEqual(result.translated[0].skillFiles.length, IDE_SKILL_DIRS.length,
+            `fan-out should reach all ${IDE_SKILL_DIRS.length} IDE tool dirs; got ${result.translated[0].skillFiles.length}`);
     });
 
     cleanupTmpDir();

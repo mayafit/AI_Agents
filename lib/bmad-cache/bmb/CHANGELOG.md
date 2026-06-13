@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.8.1] - 2026-05-17
+
+### 🐛 Fixes
+
+* **Module help catalog header alignment** — Renamed `after`/`before` columns in all `module-help.csv` files (module-level, setup-skill, builder template, samples) to `preceded-by`/`followed-by` to match the canonical 13-column schema introduced in BMAD-METHOD v6.6.0. Warning-only fix; data was already loaded positionally (#89).
+
+## [1.8.0] - 2026-05-10
+
+### 🎁 Features
+
+* **New `bmad-eval-runner` skill** — Evaluates a skill's behavior in an isolated workspace (Docker preferred, local fallback) and grades against eval-author expectations. Current supports Claude Code - additional harness and model combinations will come soon.
+
+* **Workflow Builder scanner consolidation (7 → 4)** — Same quality, 7 separate scanners were overkill when 4 can cover the same content.
+
+* **User Experience promoted in HTML report** — User journey analysis now appears as a top-level section in the output.
+
+* **Headless contract for Workflow Builder** — Build process now supports a complete headless mode with structured JSON output, normalized path conventions, and a Conventions block (#85)
+
+### 💥 Breaking Changes
+
+* **Convert flow removed from Workflow Builder** — Switch to the edit flow - convert was redundant.
+
 ## [1.7.0] - 2026-04-23
 
 ### 📚 Documentation

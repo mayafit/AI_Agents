@@ -1,5 +1,56 @@
 # CHANGELOG
 
+## v0.6.0 - May 30, 2026 — sync with BMAD-METHOD v6.8.0
+
+Syncs game-content and skill changes from BMAD-METHOD v6.6.0 → v6.8.0, and adds Roblox as a first-class engine.
+
+### Engine support
+
+* **Roblox / Luau is now a first-class engine** in `gds-game-architecture`, on par with Unity, Unreal, Godot, and Phaser (#27). Adds a Luau-aware engine knowledge fragment (DataModel and service tree, script run contexts, the replication model, DataStore persistence with session locking, RemoteEvent networking, Parallel Luau, UI architecture, and the Rojo/Wally/TestEZ tooling ecosystem); the official Roblox Studio MCP; Roblox entries across all decision-catalog categories plus a `roblox_experience` stack and `roblox_new_place` starter; and Roblox rows in the engine-recommendation and data-access pattern tables.
+
+### New skill
+
+* `gds-ux` — spine-based UX skill ported from upstream `bmad-ux`. Produces two peer contracts: `DESIGN.md` (visual identity, per the Google Labs design.md spec) and `EXPERIENCE.md` (information architecture, menu/HUD behavior, states, interactions, player journeys). Carries game-specific EXPERIENCE.md sections (HUD/diegetic UI, controller/gamepad/touch input schemes, game feel/juice, console/handheld/PC/VR form-factors) and a game example pair. Replaces the former `gds-create-ux-design` and is wired into the designer agent menu (code `CU`).
+
+### Changed
+
+* `gds-prd` — re-ported the upstream PRD overhaul (#2385, #2378): Session Posture and voice rules, intent-detection signals, the Discovery restructure, PRD Discipline regroup, FR-N template funnel discipline (testable FRs, `Realizes UJ-X` / `Validates FR-X` cross-references, glossary exact-use, named-persona journeys), an expanded validation checklist, and `external_sources` / `external_handoffs` config. Adopted upstream's reference layout — added `references/validate.md` and `references/probing.md`; removed `facilitation-guide.md`, `validation-render.md`, and `scripts/render-validation-html.py`. The GDD-primary framing and From-GDD path are preserved.
+* `gds-create-game-brief` — streamlined into a lean intent-routed facilitator (create / update / validate) with a config-driven reviewer panel, `polish_passes`, real-time persistence, and a single `assets/brief-template.md`, replacing the 8-step scripted workflow (upstream #2370 / #2378 / `c19f6cd7`). All game-domain brief content (vision, genre, core loop, design pillars, scope/MVP, comparable titles, references, content) is preserved.
+* `gds-dev-story` — captures a baseline git commit before implementation begins (upstream #2403).
+* Activation guardrails strengthened across 24 workflow skills to prevent short-circuiting before activation completes (upstream #2398).
+* `gds-brainstorm-game` — ideation now develops ideas collaboratively with the user rather than batch-generating (mirrors upstream #2402).
+
+### Notes
+
+* `bmad-spec` (upstream #2417) is a `core-skills` skill supplied to GDS through the `core` module; it is not forked here. An optional game-adapted `gds-spec` is logged in `TODO.md` for a possible later sync.
+
+## v0.5.0 - May 15, 2026 — sync with BMAD-METHOD v6.6.0
+
+Syncs game-content and skill changes from BMAD-METHOD v6.3.0 → v6.6.0. The `customize.toml` architecture was already adopted in v0.4.0, so this release ports content, consolidates the PRD and GDD skill trios, and adds a new investigation skill.
+
+### PRD and GDD consolidation
+
+* The `gds-create-prd` / `gds-edit-prd` / `gds-validate-prd` trio is replaced by a single `gds-prd` skill that detects intent (create / update / validate) from one entry point, mirroring upstream BMAD-METHOD's consolidated `bmad-prd`. `gds-prd` ships a compact facilitator `SKILL.md`, a PRD template, a validation checklist, an HTML report renderer, and a From-GDD discovery path that builds the PRD from an existing GDD.
+* The `gds-create-gdd` / `gds-edit-gdd` / `gds-validate-gdd` trio is replaced by a single `gds-gdd` skill on the same pattern. The 24 genre guides, `game-types.csv`, and `genre-complexity.csv` move into `gds-gdd/assets/`; the former 13-step validation pipeline is distilled into `gdd-validation-checklist.md`, preserving the genre-compliance and game-type checks. `gds-gdd` is the canonical primary design document for GDS.
+
+### New skill
+
+* `gds-investigate` — forensic, evidence-graded case-file investigation ported from upstream `bmad-investigate`. Traces bugs, reconstructs incidents, and builds mental models of unfamiliar code. Added to the `gds-agent-game-dev` menu (code `IN`).
+
+### Content ports
+
+* `gds-create-epics-and-stories`: brownfield epic-scoping (upstream #1826) — an Implementation Efficiency principle, a file-churn example pair, a design-completeness assessment, a Review for File Overlap step, and a File Churn Check in final validation. Reduces unnecessary file churn when epics target the same core files.
+* `gds-create-story`: the workflow now reads every UPDATE-marked file before generating dev notes (upstream #2274), so the dev agent knows the current state of code it will modify.
+
+### Catalog and cleanup
+
+* `module-help.csv`: the `after` / `before` columns are renamed `preceded-by` / `followed-by`, matching the upstream catalog schema (#2360).
+* Removed three skills that were catalogued but never implemented — `gds-market-research`, `gds-technical-research`, `gds-quick-prototype` — and the `QP` menu entries pointing at the missing prototype skill. Rebuilding them is tracked in `TODO.md`.
+
+### Engine MCP catalog
+
+* Added an AI-Assisted Development section to the Unity and Godot architecture knowledge files, and three MCP server entries to `engine-mcps.yaml`: Unity's official MCP (noting its paid Unity AI subscription, so the free open-source servers stay preferred) plus the GoPeak and `tugcantopaloglu/godot-mcp` Godot servers. GoPeak is the new default Godot recommendation.
+
 ## v0.4.0 - Apr 21, 2026 — customize.toml pattern across agents and workflows
 
 ### Agent customization surface
