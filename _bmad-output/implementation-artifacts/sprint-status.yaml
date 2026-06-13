@@ -222,11 +222,11 @@ development_status:
   # Dependencies: Epic 25 (v6.6.0 integration — done); Epic 25 stories 25.3/25.4 supply deployClineWorkflows
   # Execution order: 27.1 (gate) → 27.2 → 27.3 → 27.5 → 27.6 → 27.7; 27.4 parallel (verified after 27.5)
   epic-27: backlog
-  27-1-spike-registry-reader-rework-6-8-0: ready-for-dev
-  27-2-point-build-bmad-cache-at-relocated-registry: review
-  27-3-update-registry-schema-tests-fail-loud: review
-  27-4-cline-workflow-wrapper-reconciliation: review
-  27-5-bump-bmad-method-6-8-0-rebuild-cache-plugin: backlog
+  27-1-spike-registry-reader-rework-6-8-0: done
+  27-2-point-build-bmad-cache-at-relocated-registry: done
+  27-3-update-registry-schema-tests-fail-loud: done
+  27-4-cline-workflow-wrapper-reconciliation: done
+  27-5-bump-bmad-method-6-8-0-rebuild-cache-plugin: review
   27-6-verify-pluginresolver-skill-enumeration-passthrough: backlog
   27-7-release-gate-offline-verification-semver-cut: backlog
   epic-27-retrospective: optional

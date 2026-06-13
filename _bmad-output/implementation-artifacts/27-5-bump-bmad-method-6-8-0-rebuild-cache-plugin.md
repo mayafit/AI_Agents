@@ -1,6 +1,6 @@
 # Story 27.5: Bump bmad-method to v6.8.0, Rebuild Cache + Plugin, Re-baseline Bundle Drift
 
-Status: backlog
+Status: review
 
 ## Story
 
@@ -54,3 +54,12 @@ So that I get them with no manual intervention.
 
 - Satisfy the Bundle Drift Guard by regenerating and reading the diff — not by blindly re-running `build:plugin` until green.
 - Check `test/plugin-manifests.test.js` for any `bmad_min_version` assertion to update.
+
+## Dev Agent Record
+
+- **Stage 1 — clean baseline (AC5):** Audited the &&-chained suite continue-on-failure on the pre-bump 6.6.0 tree. The MIL-498 CRLF byte-identity issue (position 13) was already fixed in PR #104 (`.gitattributes eol=lf`); the live blockers were `reconfigure.test.js` 8.8 plus stale assertions unmasked further down the chain. Fixed (test-only): `reconfigure.test.js` (seed the legacy dual-file Cline drift state explicitly with LF content + rely on the guard's whitespace normalization → deterministic on Windows/Linux), `customizations-translation.test.js`, `integration-verification.test.js`, `obsolete-tool-dirs.test.js`. Pre-bump `npm test` → green.
+- **Stage 2 — bump (AC1, AC2):** `package.json` bmad-method 6.6.0 → 6.8.0 (exact); `package-lock.json` + `node_modules/bmad-method` → 6.8.0; `BMAD_TARGET_VERSION = '6.8.0'`.
+- **Stage 3 — rebuild (AC3, AC4):** `build:bmad-cache` exit 0 → tea/bmb/cis/gds/wds cloned (automator/bmm/core excluded); manifest `bmadMethodVersion: 6.8.0`, `registrySchema: package-root-v68`. Updated `marketplace.json.template` `bmad_min_version` 6.6.0 → 6.8.0 (lockstep with pin per `plugin-manifests` F3 #4) and `build:plugin`; regenerated bundle diff is the single expected `bmad_min_version` line — otherwise drift-clean (Bundle Drift Guard passes).
+- **Stage 4 — verify (AC5, AC6):** Full `npm test` → exit 0, green end-to-end on Windows against the real 6.8.0 tree (27.3's fixture contract + the live 6.8.0 pin assertions both pass). EOL-robust fixes ⇒ Linux/CI parity. `project_name`/config auto-migration is transparent (bmad-method-side; migration + migration-validation suites green) — no ma-agents code change required.
+- **Version-pin tests:** Updated the three 6.6.0 value assertions in `bmad-version-bump.test.js` (package pin, installed version, manifest version) → 6.8.0. Version-stable CLI-flag compat tests keep their historical 6.6.0 labels and pass unchanged.
+- **sprint-status:** flipped merged 27.1–27.4 → `done`; 27.5 → `review`.
