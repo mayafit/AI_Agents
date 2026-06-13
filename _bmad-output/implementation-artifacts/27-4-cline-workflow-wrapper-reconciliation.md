@@ -1,6 +1,6 @@
 # Story 27.4: Cline Workflow-Wrapper Reconciliation for Renamed/Retired Upstream Skills
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -26,17 +26,47 @@ So that `/`-invocation in Cline never offers a workflow whose underlying skill n
 
 ### Task 1: Add reconciliation to deployClineWorkflows (AC: 1, 2, 3, 4)
 
-- [ ] 1.1 Compute the live skill-name set from `.cline/skills/` subdirectories that contain `SKILL.md`
-- [ ] 1.2 After (re)generating wrappers for all current skills, enumerate `.clinerules/workflows/*.md`
-- [ ] 1.3 Delete any `<name>.md` whose `<name>` is not in the live skill-name set
-- [ ] 1.4 Scope deletion strictly to the `workflows/` subdir wrapper files; never touch other `.clinerules/` content
-- [ ] 1.5 Confirm idempotency (no spurious rewrites/deletions on a second run)
+- [x] 1.1 Compute the live skill-name set from `.cline/skills/` subdirectories that contain `SKILL.md`
+- [x] 1.2 After (re)generating wrappers for all current skills, enumerate `.clinerules/workflows/*.md`
+- [x] 1.3 Delete any `<name>.md` whose `<name>` is not in the live skill-name set
+- [x] 1.4 Scope deletion strictly to the `workflows/` subdir wrapper files; never touch other `.clinerules/` content
+- [x] 1.5 Confirm idempotency (no spurious rewrites/deletions on a second run)
 
 ### Task 2: Test (AC: 5)
 
-- [ ] 2.1 Fixture with `.cline/skills/{bmad-ux, ...}` present and a stale `.clinerules/workflows/bmad-create-ux-design.md`
-- [ ] 2.2 Assert stale removed, new created, user file preserved
-- [ ] 2.3 Assert a second run is byte-identical
+- [x] 2.1 Fixture with `.cline/skills/{bmad-ux, ...}` present and a stale `.clinerules/workflows/bmad-create-ux-design.md`
+- [x] 2.2 Assert stale removed, new created, user file preserved
+- [x] 2.3 Assert a second run is byte-identical
+
+## Dev Agent Record
+
+### Implementation summary
+
+`deployClineWorkflows()` (`lib/bmad.js`) now reconciles `.clinerules/workflows/`
+after regenerating wrappers. A `liveSkillNames` set is built from every
+`.cline/skills/<name>/` that contains `SKILL.md`. A post-generation pass
+enumerates top-level `*.md` files in `workflows/` and removes any whose
+`<name>` is not live AND whose content matches the generated-wrapper
+fingerprint (a `.cline/skills/<name>/(SKILL|workflow).md` reference). A new
+helper `isGeneratedClineWrapper(content)` encapsulates that conservative
+match so user-authored files (including `.md` files placed directly in
+`workflows/` or anywhere else under `.clinerules/`) are never deleted.
+
+### Tests
+
+New focused suite `test/cline-workflow-reconciliation.test.js` (added to the
+`npm test` chain after `clinerules.test.js`): 7 cases covering stale removal,
+renamed/new wrapper creation, user-file preservation (both elsewhere under
+`.clinerules/` and as a non-wrapper `.md` inside `workflows/`), idempotency
+(byte-identical second run), the cline-not-selected no-op guard, and a unit
+test of the `isGeneratedClineWrapper` matcher. All 7 pass; `clinerules.test.js`
+(13) remains green.
+
+### Deferred
+
+Full end-to-end validation with real renamed/retired upstream skills present
+requires the v6.8.0 deploy from Story 27.5 — deferred to 27.6 verification per
+the story plan.
 
 ## Dev Notes
 
