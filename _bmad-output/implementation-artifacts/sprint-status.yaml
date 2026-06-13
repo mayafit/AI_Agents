@@ -223,7 +223,7 @@ development_status:
   # Execution order: 27.1 (gate) → 27.2 → 27.3 → 27.5 → 27.6 → 27.7; 27.4 parallel (verified after 27.5)
   epic-27: backlog
   27-1-spike-registry-reader-rework-6-8-0: ready-for-dev
-  27-2-point-build-bmad-cache-at-relocated-registry: backlog
+  27-2-point-build-bmad-cache-at-relocated-registry: review
   27-3-update-registry-schema-tests-fail-loud: backlog
   27-4-cline-workflow-wrapper-reconciliation: review
   27-5-bump-bmad-method-6-8-0-rebuild-cache-plugin: backlog
