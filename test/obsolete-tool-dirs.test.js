@@ -94,10 +94,20 @@ async function runAll() {
         '.github/copilot/skills should have been removed');
       assert.ok(fs.existsSync(newPath),
         '.github/skills must still exist');
-      assert.strictEqual(results.length, 1, 'Should return one result per registry entry');
-      assert.strictEqual(results[0].action, 'removed',
-        'action should be "removed"');
-      assert.strictEqual(results[0].error, null,
+      // One result per registry entry — the registry has grown beyond the
+      // single original copilot entry (now also covers the .agents/skills
+      // consolidation of .github/.roo/.kilocode), so assert against the
+      // registry size rather than a hard-coded 1.
+      assert.strictEqual(results.length, OBSOLETE_TOOL_SKILL_DIRS.length,
+        'Should return one result per registry entry');
+      const copilotResult = results.find(
+        r => r.entry.obsolete === '.github/copilot/skills'
+      );
+      assert.ok(copilotResult,
+        'expected a result for the .github/copilot/skills entry');
+      assert.strictEqual(copilotResult.action, 'removed',
+        'action should be "removed" for the seeded obsolete dir');
+      assert.strictEqual(copilotResult.error, null,
         'error should be null on a clean removal');
     } finally {
       cleanup(tmp);

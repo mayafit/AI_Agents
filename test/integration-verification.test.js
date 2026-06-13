@@ -118,23 +118,31 @@ console.log('\nTask 1 — End-to-end IDE agent test');
       assert.ok(result.includes('# Existing Instructions'), 'Existing content must survive re-install');
     });
 
-    // ── Task 1.4: Cline agent has TWO instruction files, both get top-injection ──
+    // ── Task 1.4: Cline agent instruction file(s) get top-injection ──
+    //
+    // Cline's layout was consolidated to a SINGLE instruction file
+    // (`.cline/clinerules.md`) in Story 25.4 — `.clinerules` is now Cline's
+    // directory, not a peer instruction file, so the old dual-file contract no
+    // longer holds. This test asserts the current `instructionFiles` set and
+    // that each file gets a top-injected, idempotent MA-AGENTS block.
 
-    await asyncTest('1.4: Cline install injects into BOTH instruction files at top', async () => {
+    await asyncTest('1.4: Cline install injects into instruction file(s) at top', async () => {
       const projectRoot = path.join(tmpDir, 'cline-test');
       await fs.ensureDir(path.join(projectRoot, '.cline'));
       await fs.ensureDir(path.join(projectRoot, '.cline', 'skills'));
 
-      // Create both Cline instruction files with frontmatter
-      const clineContent1 = '---\ntitle: Cline Rules\n---\n\n# Cline Project Rules\n\nRule 1: Be helpful.\n';
-      const clineContent2 = '---\nformat: clinerules\n---\n\n# Root Rules\n\nAnother rule set.\n';
-      await fs.writeFile(path.join(projectRoot, '.cline', 'clinerules.md'), clineContent1, 'utf-8');
-      await fs.writeFile(path.join(projectRoot, '.clinerules'), clineContent2, 'utf-8');
-
+      // Pre-create each declared Cline instruction file with frontmatter so we
+      // can assert the block lands AFTER the frontmatter (top-injection).
       const agent = getAgent('cline');
       assert.ok(agent, 'cline agent must exist');
-      assert.deepStrictEqual(agent.instructionFiles, ['.cline/clinerules.md', '.clinerules'],
-        'Cline must have two instruction files');
+      assert.deepStrictEqual(agent.instructionFiles, ['.cline/clinerules.md'],
+        'Cline now has a single instruction file (.cline/clinerules.md) after the Story 25.4 layout consolidation');
+
+      const clineContent = '---\ntitle: Cline Rules\n---\n\n# Cline Project Rules\n\nRule 1: Be helpful.\n';
+      for (const file of agent.instructionFiles) {
+        await fs.ensureDir(path.dirname(path.join(projectRoot, file)));
+        await fs.writeFile(path.join(projectRoot, file), clineContent, 'utf-8');
+      }
 
       await updateAgentInstructions(agent, projectRoot);
 

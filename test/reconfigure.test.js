@@ -280,20 +280,41 @@ async function runAll() {
   }));
 
   // 8.8 dual-file drift (Cline)
+  //
+  // The dual-file drift guard (installer.checkClinerulesDualFileDrift, AC #10)
+  // compares the in-marker content of `.cline/clinerules.md` against a peer
+  // `.clinerules` FILE. The current Cline layout writes only the single
+  // `.cline/clinerules.md` (Story 25.4 — `.clinerules` is now Cline's
+  // directory, not a peer file), so the installer alone no longer produces the
+  // two-file state. A LEGACY project upgraded from the old dual-file layout can
+  // still carry a `.clinerules` peer file, which is exactly the case this guard
+  // protects. We therefore seed that legacy state explicitly: stamp the live
+  // `.cline/clinerules.md`, then write a divergent `.clinerules` peer file with
+  // different in-marker content. The seed uses '\n' line endings and the guard
+  // normalizes whitespace before comparing, so it is deterministic on Windows
+  // (CRLF) and Linux (LF) alike.
   await test('8.8 ClinerulesDualFileDriftError raised; no --force override (AC #10)', silenceLogs(async () => {
     const dir = setupProject({ profile: 'standard', agents: ['cline'] });
     try {
-      // Seed with identical content first.
+      // Seed the live single-file layout via the installer.
       const agent = getAgent('cline');
       await installer._testUpdateAgentInstructions(agent, dir, { yesMode: true });
-      // Mutate ONE of the two files inside the markers to induce drift.
-      const fileA = path.join(dir, '.cline', 'clinerules.md');
-      const content = fs.readFileSync(fileA, 'utf-8');
-      const mutated = content.replace(
-        /<!-- MA-AGENTS-START -->[\s\S]*?<!-- MA-AGENTS-END -->/,
-        '<!-- MA-AGENTS-START -->\nCLI-NO-MATCHY\n<!-- MA-AGENTS-END -->'
+
+      // Simulate a legacy dual-file project: create a `.clinerules` peer FILE
+      // whose marker block diverges from `.cline/clinerules.md`. (If a stale
+      // `.clinerules` directory exists from prior layout work, the guard
+      // intentionally skips drift detection — so we assert we are seeding a
+      // FILE, not a directory.)
+      const peerPath = path.join(dir, '.clinerules');
+      assert.ok(
+        !fs.existsSync(peerPath) || !fs.statSync(peerPath).isDirectory(),
+        'expected .clinerules to be absent or a file before seeding the legacy peer'
       );
-      fs.writeFileSync(fileA, mutated, 'utf-8');
+      fs.writeFileSync(
+        peerPath,
+        '<!-- MA-AGENTS-START -->\nCLI-NO-MATCHY\n<!-- MA-AGENTS-END -->\n',
+        'utf-8'
+      );
 
       await assert.rejects(
         () => reconfigure({
