@@ -9,21 +9,55 @@ const CACHE_DIR = path.join(__dirname, '..', 'lib', 'bmad-cache');
 const MANIFEST_PATH = path.join(CACHE_DIR, 'cache-manifest.json');
 const force = process.argv.includes('--force');
 
-// bmad-method 6.3.0 replaced `tools/cli/external-official-modules.yaml` with
-// `tools/installer/modules/registry-fallback.yaml` (the bundled fallback that
-// mirrors the upstream marketplace `registry/official.yaml`). We read the
-// fallback because (a) it is deterministic across offline builds and (b) it
-// matches what bmad-method itself loads when the network registry is
-// unreachable. The new schema uses map keys with properties — crucially, it
-// no longer carries a `branch` field, and non-external `built_in: true`
-// modules (like `core` and `bmm`) are shipped inside bmad-method itself and
-// must not be cached as separate git clones.
+// The bundled module registry has stayed YAML throughout bmad-method's
+// history, but its PATH has moved across versions (see Decision P5-5 in
+// architecture.md):
+//
+//   ≤6.2.x   tools/cli/external-official-modules.yaml
+//   6.3.0    tools/installer/modules/registry-fallback.yaml  (retired in 6.7.0)
+//   6.8.0    bmad-modules.yaml  (package root)
+//
+// We read the bundled registry because (a) it is deterministic across offline
+// builds and (b) it matches what bmad-method itself loads when the network
+// registry is unreachable. The 6.8.0 file is a `modules:` map whose entries
+// carry `code`/`url`/`name`/`type` — the same shape the parser already reads.
+// Crucially the new schema carries no `branch` field (default to `main`) and
+// it expresses the bundle decision via a `type` field rather than the old
+// `built_in` flag: `type: bmad-org` modules (tea, bmb, cis, gds, wds) are
+// cloned; `type: experimental` (automator) is excluded; `bmm`/`core` are
+// built into the npm package itself and are absent from the registry entirely.
+//
+// Candidates are tried in order; the first that exists on disk wins. The
+// package-root path is listed first because it is the live 6.8.0+ location.
+//
+// The two older paths are retained only as diagnostics: they carry the
+// pre-6.8.0 `built_in` schema, which the `type: bmad-org` filter below does
+// NOT understand, so they resolve zero bundled modules. If one of them is the
+// only file present (i.e. someone downgraded bmad-method below 6.8.0), the
+// thin-cache guard in main() aborts with an actionable message rather than
+// silently shipping an empty cache. They are kept so `locateRegistry` reports
+// "found <old path>" instead of a bare "nothing found", which points the
+// maintainer at the version mismatch.
 const REGISTRY_CANDIDATES = [
-  // v6.3.0+
-  ['tools', 'installer', 'modules', 'registry-fallback.yaml'],
-  // legacy v6.2.x fallback (kept so a partial downgrade doesn't explode)
-  ['tools', 'cli', 'external-official-modules.yaml'],
+  // v6.8.0+ — relocated to the package root (the supported, filterable schema)
+  { parts: ['bmad-modules.yaml'], schema: 'package-root-v68' },
+  // v6.3.0–6.6.x bundled fallback (diagnostic only — pre-`type` schema)
+  { parts: ['tools', 'installer', 'modules', 'registry-fallback.yaml'], schema: 'registry-fallback' },
+  // legacy v6.2.x fallback (diagnostic only — pre-`type` schema)
+  { parts: ['tools', 'cli', 'external-official-modules.yaml'], schema: 'legacy' },
 ];
+
+// The set of modules ma-agents bundles for offline installs. At v6.8.0 these
+// are exactly the `type: bmad-org` registry entries. The fail-loud guard
+// (NFR56) treats a resolved set SMALLER than this as a thin-cache failure —
+// the registry path has moved twice, so silent degradation is a recurring
+// risk that must abort the build rather than ship an incomplete cache.
+const KNOWN_BUNDLED_MODULES = ['tea', 'bmb', 'cis', 'gds', 'wds'];
+
+// Registry `type` values that mark a module for bundling. `bmad-org` modules
+// are first-party expansions ma-agents clones; `experimental` (e.g. automator)
+// is deliberately excluded from the offline bundle.
+const BUNDLED_MODULE_TYPE = 'bmad-org';
 
 /**
  * Locate the bmad-method package on disk. Abort cleanly if missing so the
@@ -41,36 +75,54 @@ function locateBmadMethodDir() {
 
 /**
  * Locate the first registry YAML that exists on disk.
- * Returns { yamlPath, schema } where schema is 'v63' (new map format) or
- * 'legacy' (the pre-6.3 top-level map with `url`/`branch` fields).
+ *
+ * @param {string} bmadMethodDir Absolute path to the bmad-method package dir.
+ * @returns {{ yamlPath: string, schema: string }} The resolved registry path
+ *   and its schema tag (`package-root-v68` for the relocated 6.8.0 YAML,
+ *   `registry-fallback` for 6.3.0–6.6.x, or `legacy` for ≤6.2.x).
+ *
+ * Resolution is fail-loud: if no candidate exists, prints an actionable error
+ * and exits non-zero (NFR56) rather than returning a falsy result that a
+ * caller might silently treat as "zero modules".
  */
 function locateRegistry(bmadMethodDir) {
-  for (let i = 0; i < REGISTRY_CANDIDATES.length; i++) {
-    const parts = REGISTRY_CANDIDATES[i];
-    const candidate = path.join(bmadMethodDir, ...parts);
-    if (fs.existsSync(candidate)) {
-      return { yamlPath: candidate, schema: i === 0 ? 'v63' : 'legacy' };
+  for (const candidate of REGISTRY_CANDIDATES) {
+    const candidatePath = path.join(bmadMethodDir, ...candidate.parts);
+    if (fs.existsSync(candidatePath)) {
+      return { yamlPath: candidatePath, schema: candidate.schema };
     }
   }
   console.error('Error: no module registry YAML found in bmad-method.');
-  console.error(`  Searched: ${REGISTRY_CANDIDATES.map(p => p.join('/')).join(', ')}`);
+  console.error(`  Searched: ${REGISTRY_CANDIDATES.map(c => c.parts.join('/')).join(', ')}`);
+  console.error('  Expected the relocated package-root "bmad-modules.yaml" at bmad-method >= 6.8.0.');
   process.exit(1);
 }
 
 /**
  * Parse the bundled module registry YAML.
  *
- * Both the v6.3.0 (`registry-fallback.yaml`) and legacy
- * (`external-official-modules.yaml`) schemas use the same shape:
+ * Every registry version (legacy `external-official-modules.yaml`, the
+ * `registry-fallback.yaml`, and the relocated package-root `bmad-modules.yaml`
+ * at 6.8.0) uses the same `modules:` map shape, so a single parser serves all:
  *
  *     modules:
  *       <module-key>:
  *         url: "..."
  *         code: "..."
  *         name: "..."
- *         [branch: "..."]            # legacy only
- *         [built_in: true]           # v6.3.0 only — filter these out
- *         [module-definition: "..."] # v6.3.0 only — informational
+ *         type: "..."                # v6.8.0 — drives the bundle filter
+ *         [branch: "..."]            # legacy only (absent at 6.8.0 → main)
+ *         [built_in: true]           # 6.3.0–6.6.x only (superseded by `type`)
+ *         [module-definition: "..."] # informational, ignored
+ *
+ * The parser already captures arbitrary scalar properties (including `type`),
+ * so the 6.8.0 relocation needed no parser change — only the docblock and the
+ * downstream filter were updated.
+ *
+ * @param {string} content Raw UTF-8 YAML text.
+ * @returns {Array<Object>} One object per module entry; keys mirror the YAML
+ *   property names plus a synthetic `key` (the map key). No filtering is done
+ *   here — that is normalizeModules()'s job.
  *
  * We keep a minimal line-by-line parser (no js-yaml dep) since the file is
  * flat and well-formed.
@@ -128,19 +180,20 @@ function parseModulesYaml(content) {
  *   { code, url, name, branch }
  *
  * - Requires both `code` and `url`.
- * - Drops entries flagged `built_in: true` / `built_in: "true"` — those are
- *   first-party bmad-method modules (e.g. `core`, `bmm`) that live inside the
- *   npm package itself and must not be cached as external git clones. The
- *   test `'built_in' filter` under "Task 2" in bmad-version-bump.test.js pins
- *   this invariant.
- * - Defaults `branch` to `main` when absent (v6.3.0 schema omits it).
+ * - Keeps ONLY `type: bmad-org` modules (tea, bmb, cis, gds, wds) and drops
+ *   everything else. This replaces the pre-6.8.0 `built_in` exclusion: the
+ *   relocated registry no longer carries a `built_in` flag and instead tags
+ *   each module with a `type`. `type: experimental` (e.g. `automator`) is
+ *   excluded from the offline bundle; `bmm`/`core` are first-party modules
+ *   that ship inside the npm package and are absent from the registry, so they
+ *   are dropped here too (no `bmad-org` type → filtered out). There is NO
+ *   `wds`-retired/skip path — `wds` is an active `bmad-org` clone at 6.8.0.
+ * - Defaults `branch` to `main` when absent (the 6.8.0 schema omits it).
  * - Passes the URL through verbatim (git accepts both `repo` and `repo.git`).
+ *
+ * @param {Array<Object>} raw Entries from parseModulesYaml().
+ * @returns {Array<{code: string, url: string, name: string, branch: string}>}
  */
-// Values that YAML may use to express a truthy boolean. bmad-method uses
-// canonical `true`, but be generous so a future registry that emits `yes`/
-// `on`/`1` cannot accidentally cache a built-in module as an external clone.
-const TRUTHY_STRINGS = new Set(['true', 'yes', 'on', '1', 'y']);
-
 // Module `code` values are used as directory names under lib/bmad-cache.
 // Reject anything that could escape the cache dir or inject shell characters;
 // registry data is trusted today, but this is cheap defense-in-depth.
@@ -150,8 +203,10 @@ function normalizeModules(raw) {
   return raw
     .filter(m => m.code && m.url)
     .filter(m => {
-      const builtIn = String(m.built_in || '').toLowerCase();
-      return !TRUTHY_STRINGS.has(builtIn);
+      // Bundle only `type: bmad-org`. Compare case-insensitively and trim so
+      // minor upstream whitespace/casing drift cannot silently drop a module.
+      const type = String(m.type || '').trim().toLowerCase();
+      return type === BUNDLED_MODULE_TYPE;
     })
     .filter(m => {
       if (MODULE_CODE_PATTERN.test(m.code)) return true;
@@ -315,8 +370,40 @@ function main() {
   console.log('='.repeat(40));
 
   const { modules, schema } = loadModuleDefinitions();
-  if (modules.length === 0) {
-    console.error('Error: No modules found in registry YAML');
+
+  // Thin-cache fail-loud guard (NFR56). The registry path has moved twice;
+  // the real risk is no longer "zero modules" but the path moving again and
+  // the reader silently resolving FEWER than the known bundled set. Treat a
+  // deficient set as a hard error and abort BEFORE writing any manifest — a
+  // partial/empty cache-manifest.json would otherwise ship a broken offline
+  // bundle that "looks" successful.
+  const resolvedCodes = new Set(modules.map(m => m.code));
+
+  // Duplicate-code guard. Two registry entries sharing a `code` would clone
+  // into the same cache directory and silently overwrite each other's manifest
+  // entry (last-write-wins), and the Set above would mask the collision from
+  // the thin-cache check below. Fail loud instead.
+  if (modules.length !== resolvedCodes.size) {
+    const seen = new Set();
+    const dupes = new Set();
+    for (const m of modules) {
+      if (seen.has(m.code)) dupes.add(m.code);
+      seen.add(m.code);
+    }
+    console.error('Error: registry contains duplicate module codes — refusing to build an ambiguous cache.');
+    console.error(`  Duplicated: ${[...dupes].join(', ')}`);
+    process.exit(1);
+  }
+
+  const missing = KNOWN_BUNDLED_MODULES.filter(code => !resolvedCodes.has(code));
+  if (missing.length > 0) {
+    console.error('Error: registry resolved a thin module set — refusing to build a partial cache.');
+    console.error(`  Expected at least: ${KNOWN_BUNDLED_MODULES.join(', ')}`);
+    console.error(`  Resolved (type: ${BUNDLED_MODULE_TYPE}): ${[...resolvedCodes].join(', ') || '(none)'}`);
+    console.error(`  Missing: ${missing.join(', ')}`);
+    console.error('  Likely cause: bmad-method was downgraded below 6.8.0, the registry layout moved');
+    console.error('  again, or a bundled module was renamed/retired upstream. Update REGISTRY_CANDIDATES,');
+    console.error('  the type filter, or KNOWN_BUNDLED_MODULES in scripts/build-bmad-cache.js to match.');
     process.exit(1);
   }
   console.log(`Found ${modules.length} modules: ${modules.map(m => m.code).join(', ')}`);
@@ -491,4 +578,18 @@ function main() {
   }
 }
 
-main();
+// Run the build only when executed directly (`node scripts/build-bmad-cache.js`).
+// When required as a module (by unit tests), export the pure reader functions
+// instead so they can be exercised against fixtures without cloning anything.
+if (require.main === module) {
+  main();
+} else {
+  module.exports = {
+    parseModulesYaml,
+    normalizeModules,
+    locateRegistry,
+    KNOWN_BUNDLED_MODULES,
+    BUNDLED_MODULE_TYPE,
+    REGISTRY_CANDIDATES,
+  };
+}
