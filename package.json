@@ -30,7 +30,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "bmad-method": "6.6.0",
+    "bmad-method": "6.8.0",
     "chalk": "^4.1.2",
     "fs-extra": "^11.1.1",
     "js-yaml": "^4.1.1",

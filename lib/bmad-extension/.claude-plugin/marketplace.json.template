@@ -39,7 +39,7 @@
     "roo-code",
     "kilocode"
   ],
-  "bmad_min_version": "6.6.0",
+  "bmad_min_version": "6.8.0",
   "plugins": [
     {
       "name": "ma-skills",

@@ -5,6 +5,47 @@ All notable changes to the Test Architect (TEA) module will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- NFR workflow boundary clarified: `test-design` now owns NFR planning (thresholds, planned evidence, NFR-derived risks) and `nfr-assess` is reframed as NFR Evidence Audit — evaluating implementation evidence against planned thresholds after code exists.
+- `nfr-assess` step-02 now checks for an existing `test-design` NFR plan first and uses it as the primary threshold source, falling back to raw documents only for missing or UNKNOWN thresholds.
+- TEA agent menu gains a `GATE` routing intent that guides users through the release gate sequence (optional test-review → optional nfr-assess → trace Phase 2 gate) without merging those workflows.
+- NFR domains in `nfr-assess` corrected from "maintainability" to "scalability" to match the four parallel subagent domains (security, performance, reliability, scalability).
+- TEA phase table updated: `nfr-assess` marked optional at the Release phase.
+- NFR planning items in `test-design` step-05 output checklist conditioned on NFR scope.
+- Engagement models table: TEA Solo row for NFR Evidence Audit updated from No to Optional.
+- GitHub Actions workflow dependencies upgraded to Node 24-compatible major versions:
+  - `actions/checkout@v5`
+  - `actions/setup-node@v6`
+  - `actions/create-github-app-token@v3`
+- Publish releases now use `[Unreleased]` changelog notes before falling back to generated GitHub release notes when an exact version section is missing.
+- Documented workflow-local knowledge resources as intentional self-contained skill packaging and added validation for workflow-local knowledge indexes.
+
+---
+
+## [1.16.0] - 2026-05-08
+
+### Added
+
+- Claude Cowork marketplace plugin support.
+- TEA Phase 3 command examples in the overview docs, including direct slash commands and Codex skill invocations.
+- System-level and per-epic `test-design` usage examples in the TEA overview docs.
+
+### Changed
+
+- Catalog dependency metadata now uses `preceded-by` and `followed-by` column names.
+- TEA overview command guidance now distinguishes workflow names, TEA menu codes, slash commands, and Codex skills.
+
+### Fixed
+
+- Normalized `module-help.csv` to the documented 13-column schema.
+- Clarified the exact `/bmad:tea:ci` command path for Phase 3 CI setup.
+- Clarified the difference between Phase 3 system-level `test-design` and Phase 4 per-epic `test-design`.
+
+---
+
 ## [1.2.4] - 2026-02-22
 
 ### Changed
@@ -15,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Affected workflows: `atdd`, `automate`, `ci`, `framework`, `nfr-assess`, `teach-me-testing`, `test-design`, `test-review`, `trace`
   - Removed redundant `web_bundle: false` from workflow.yaml files
 
-## [Unreleased]
+## [Historical Unreleased Notes]
 
 ### Added
 
