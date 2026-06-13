@@ -202,16 +202,16 @@ console.log('\nStory 24.1: Bump bmad-method to 6.6.0 and Audit fs-extra Compatib
 
 console.log('Task 1: package.json dependency');
 
-test('package.json pins bmad-method at 6.6.0 (exact, no caret/tilde)', () => {
+test('package.json pins bmad-method at 6.8.0 (exact, no caret/tilde)', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
-  assert.strictEqual(pkg.dependencies['bmad-method'], '6.6.0');
+  assert.strictEqual(pkg.dependencies['bmad-method'], '6.8.0');
 });
 
-test('installed bmad-method is version 6.6.0', () => {
+test('installed bmad-method is version 6.8.0', () => {
   const bmadPkg = JSON.parse(
     fs.readFileSync(path.join(projectRoot, 'node_modules', 'bmad-method', 'package.json'), 'utf8')
   );
-  assert.strictEqual(bmadPkg.version, '6.6.0');
+  assert.strictEqual(bmadPkg.version, '6.8.0');
 });
 
 test('require.resolve finds bmad-cli.js (6.6.0 entry point)', () => {
@@ -371,11 +371,11 @@ test('AC3/AC5/NFR56: a missing relocated YAML (registry moved again) exits non-z
   }
 });
 
-test('cache-manifest.json exists and records bmadMethodVersion 6.6.0', () => {
+test('cache-manifest.json exists and records bmadMethodVersion 6.8.0', () => {
   const manifestPath = path.join(projectRoot, 'lib', 'bmad-cache', 'cache-manifest.json');
   assert.ok(fs.existsSync(manifestPath), `Manifest not found at ${manifestPath}`);
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  assert.strictEqual(manifest.bmadMethodVersion, '6.6.0');
+  assert.strictEqual(manifest.bmadMethodVersion, '6.8.0');
 });
 
 test('cache-manifest.json contains at least the v6.6.0 official modules (bmb, cis, gds, tea)', () => {
