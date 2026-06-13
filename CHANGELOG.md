@@ -5,6 +5,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.13.0] - 2026-06-13
+
+BMAD-METHOD **v6.8.0** integration (Epic 27). Inherits upstream v6.8.0 features and
+reworks the bundled-module-registry reader to follow the registry's relocation, while
+preserving the air-gapped install guarantee (NFR57/NFR50). No breaking change to the
+ma-agents public CLI surface → MINOR bump.
+
+### Changed
+
+- **Bumped `bmad-method` 6.6.0 → 6.8.0** and rebuilt the bundled offline cache and the
+  plugin bundle against it. `lib/bmad.js` `BMAD_TARGET_VERSION` is now `6.8.0`. The
+  bundled module set is unchanged in membership — `tea`, `bmb`, `cis`, `gds`, `wds`
+  (all `type: bmad-org`) — and `wds` (Whiteport Design Studio) is an **active** module
+  at 6.8.0, not retired.
+- **Relocated-registry reader (FR207, P5-5)**: `scripts/build-bmad-cache.js` now reads
+  the bundled module registry from its v6.8.0 package-root location
+  (`bmad-modules.yaml`), trying candidate paths in order (package-root v6.8.0 →
+  `tools/installer/modules/registry-fallback.yaml` → legacy
+  `tools/cli/external-official-modules.yaml`) and reporting which schema it found. The
+  bundle decision now keys on the registry's `type: bmad-org` field (case-insensitive,
+  trimmed) instead of the pre-6.8.0 `built_in` flag; `type: experimental` (e.g.
+  `automator`) is excluded, and `branch` defaults to `main` (the 6.8.0 schema omits it).
+
+### Added
+
+- **Thin-cache fail-loud guard (FR208, NFR56)**: `build-bmad-cache.js` aborts the build
+  — before writing any `cache-manifest.json` — if the registry resolves *fewer* than the
+  known bundled set (`tea, bmb, cis, gds, wds`) or contains duplicate module codes. The
+  registry path has now moved twice across bmad-method versions, so silent degradation to
+  a partial/empty cache is a recurring risk; the guard converts that into a loud,
+  actionable failure instead of shipping a broken offline bundle that "looks" successful.
+- **Cline workflow-wrapper reconciliation (FR209)**: `deployClineWorkflows` now removes
+  stale `.clinerules/workflows/*.md` wrappers whose backing `.cline/skills/<name>/` no
+  longer exists (e.g. after an upstream skill rename/retirement), so Cline's `/`-menu
+  stops offering dead workflows. Deletion is scoped strictly to ma-agents-generated
+  wrappers via a conservative content fingerprint (`isGeneratedClineWrapper`);
+  user-authored files are never touched, and the operation is idempotent.
+
+### Fixed
+
+- **Offline `file://` origin URL hardened (release-gate review)**: `restoreGitDir` now
+  builds the local origin URL with `url.pathToFileURL()` instead of string concatenation,
+  producing a well-formed `file:///C:/...` (three-slash) URL on Windows and
+  percent-encoding paths that contain spaces or other reserved characters. The git call
+  switched from `execSync` (shell-interpolated) to `execFileSync` (arg array), matching
+  the rest of the codebase. This is the URL bmad-method's `cloneExternalModule()` uses to
+  satisfy `git fetch origin` offline; the previous `file://C:/...` form happened to work
+  with current git but was RFC-malformed and fragile on spaced paths.
+- **`wds` module description corrected**: was labelled "Web Dev Studio — retired
+  upstream"; it is in fact "Whiteport Design Studio" and an active `type: bmad-org` clone
+  at v6.8.0. The install wizard's module-selection prompt now shows the correct name and
+  no longer implies the module is retired.
+
+### Verification (Epic 27 release gate, Story 27.7)
+
+- **Offline install gate (NFR57/NFR50) — PASSED.** Ran the repo's CI offline harness
+  (`offline-install-verify.sh`) inside a Docker container with `--network none`
+  (kernel network-namespace isolation). Egress was proven blocked, then
+  `ma-agents install` completed successfully and pre-populated **all five** bundled
+  modules (bmb, cis, gds, tea, wds) from the v6.8.0 cache with **zero network calls** on
+  the install path; bmad-method reported BMad Core v6.8.0 and WDS installed, and all
+  post-install invariants held.
+- **Cross-platform suite — GREEN.** Full `npm test` chain passes on Windows; the fixes
+  are EOL-robust so Linux/CI parity holds (the CRLF suite-health confounder was resolved
+  in Story 27.5, not waived).
+- **PluginResolver / skill-enumeration passthrough** verified against v6.8.0 (Story 27.6).
+- **Plugin bundle** rebuilt at `3.13.0` via the build-time `${version}` placeholder (no
+  literal embedded); `plugin-manifests.test.js` and `build-plugin.test.js` green.
+
 ## [3.12.3] - 2026-05-08
 
 ### Bug Fixes
