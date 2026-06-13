@@ -3,7 +3,7 @@
  * Tests for Story 24.1: Bump bmad-method to 6.6.0 and Audit fs-extra Compatibility
  *
  * Task 1: Verify package.json dependency updated to 6.6.0
- * Task 2: Verify build:bmad-cache reads the v6.6.0 registry layout
+ * Task 2: Verify build:bmad-cache reads the relocated v6.8.0 registry contract
  * Task 3: Verify bmad.js CLI compatibility with bmad-cli.js entry point
  * Task 4: Verify prePopulateBmadCache compatibility
  *
@@ -12,12 +12,86 @@
  * (tools/installer/bmad-cli.js, tools/installer/modules/registry-fallback.yaml,
  * tools/installer/commands/install.js). fs-extra removed in 6.4.0 → replaced with
  * native node:fs in bmad-method internals; ma-agents continues to use its own fs-extra.
+ *
+ * Story 27.3 rewrote the "Task 2" registry-schema/filter assertions. The module
+ * source relocated to a package-root `bmad-modules.yaml` at v6.8.0 (Decision
+ * P5-5) and the bundle decision moved from a `built_in` flag to a `type` field
+ * (`type: bmad-org` cloned; `type: experimental` excluded). The reworked reader
+ * (Story 27.2, scripts/build-bmad-cache.js) tags that schema `package-root-v68`
+ * and fails loud (NFR56) if it ever resolves fewer than the known bundled set.
+ *
+ * IMPORTANT: this repo still PINS bmad-method 6.6.0 (the bump to 6.8.0 is Story
+ * 27.5), so the *installed* package and the committed cache-manifest.json still
+ * carry the pre-6.8.0 v63/registry-fallback shape. The 6.8.0 contract below is
+ * therefore driven entirely by in-repo FIXTURES + the pure reader functions
+ * exported by build-bmad-cache.js — never the live install or live manifest, and
+ * never the network or a live clone (AC5, air-gapped CI gate). The version-
+ * agnostic invariants (manifest shape, SHA format) continue to read the live
+ * committed manifest.
  */
 'use strict';
 
 const assert = require('assert');
 const fs = require('fs-extra');
+const os = require('os');
 const path = require('path');
+const { execFileSync } = require('child_process');
+
+// The pure reader functions (parseModulesYaml / normalizeModules / locateRegistry
+// + exported constants). Requiring the script exports them instead of running
+// the build (it guards on require.main === module), so the 6.8.0 contract can be
+// exercised against fixtures without cloning anything.
+const reader = require('../scripts/build-bmad-cache.js');
+
+// A faithful slice of the relocated v6.8.0 package-root bmad-modules.yaml: a
+// `modules:` map whose entries carry code/url/name/type, the url UNQUOTED and
+// the name quoted, plus extra fields the reader must tolerate and ignore. tea/
+// bmb/cis/gds/wds are `type: bmad-org` (bundled); automator is `experimental`
+// (excluded); bmm/core are built into the npm package and absent from the
+// registry entirely. There is NO `branch` field (defaults to main) and NO
+// `built_in` flag (superseded by `type`).
+const FIXTURE_V68 = `# Official module registry (relocated to package root at v6.8.0)
+modules:
+  bmad-method-test-architecture-enterprise:
+    url: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise
+    module-definition: src/module.yaml
+    code: tea
+    name: "BMad Test Architect"
+    type: bmad-org
+    default_channel: stable
+
+  bmad-builder:
+    url: https://github.com/bmad-code-org/bmad-builder
+    code: bmb
+    name: "BMad Builder"
+    type: bmad-org
+
+  bmad-automator:
+    url: https://github.com/bmad-code-org/bmad-automator
+    code: automator
+    name: "BMad Automator Experimental"
+    type: experimental
+    default_channel: next
+
+  bmad-creative-intelligence-suite:
+    url: https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite
+    code: cis
+    name: "BMad Creative Intelligence Suite"
+    type: bmad-org
+
+  bmad-game-dev-studio:
+    url: https://github.com/bmad-code-org/bmad-module-game-dev-studio.git
+    code: gds
+    name: "BMad Game Dev Studio"
+    type: bmad-org
+
+  bmad-method-wds-expansion:
+    url: https://github.com/bmad-code-org/bmad-method-wds-expansion
+    code: wds
+    plugin_name: bmad-wds
+    name: "Whiteport Design Studio"
+    type: bmad-org
+`;
 
 let passed = 0;
 let failed = 0;
@@ -36,6 +110,91 @@ function test(name, fn) {
 }
 
 const projectRoot = path.resolve(__dirname, '..');
+const SCRIPT_PATH = path.join(projectRoot, 'scripts', 'build-bmad-cache.js');
+
+// --- Fail-loud end-to-end harness (AC3/AC5/NFR56) ---------------------------
+//
+// The thin-cache / missing-registry assertions run the REAL build script
+// end-to-end against a FAKE bmad-method package on disk, so the negative path
+// is exercised without a genuinely broken install and without ever reaching a
+// git clone (the guards abort first). The script is copied under a temp root so
+// its CACHE_DIR (../lib/bmad-cache, relative to the copied script) resolves
+// inside the temp tree — the real repo cache is never touched.
+
+// Resolve a node_modules directory that actually contains fs-extra (and its
+// transitive deps). In a git worktree the worktree itself MAY have no
+// node_modules, so walk up from this test file until one is found — this is the
+// directory the spawned script must see on NODE_PATH so its `require('fs-extra')`
+// resolves. (AC5: no network, fixtures/installed package only.)
+function findRealNodeModules() {
+  let dir = __dirname;
+  for (let i = 0; i < 8; i++) {
+    const candidate = path.join(dir, 'node_modules', 'fs-extra', 'package.json');
+    if (fs.existsSync(candidate)) return path.join(dir, 'node_modules');
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new Error('Could not locate a node_modules containing fs-extra (run npm install).');
+}
+const REAL_NODE_MODULES = findRealNodeModules();
+
+/**
+ * Build an isolated package tree the spawned script runs inside:
+ *   <tmp>/scripts/build-bmad-cache.js   (a copy of the real script)
+ *   <tmp>/node_modules/bmad-method/...  (a FAKE bmad-method + registry YAML)
+ *
+ * The fake bmad-method sits in the temp tree's own node_modules so it wins the
+ * `bmad-method` specifier; fs-extra + transitive deps come via NODE_PATH
+ * pointing at the project's real node_modules. Pass `null` to skip writing the
+ * registry YAML (simulating the relocated path 404 / a downgrade below 6.8.0).
+ *
+ * @param {?string} registryYaml Contents to write as bmad-modules.yaml, or null.
+ * @returns {{ tmpRoot: string, scriptPath: string, env: Object }}
+ */
+function makeFakeBmadEnv(registryYaml) {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bmad-failloud-'));
+  const fakeBmad = path.join(tmpRoot, 'node_modules', 'bmad-method');
+  fs.mkdirSync(fakeBmad, { recursive: true });
+  fs.writeFileSync(
+    path.join(fakeBmad, 'package.json'),
+    JSON.stringify({ name: 'bmad-method', version: '6.8.0' }, null, 2)
+  );
+  if (registryYaml != null) {
+    fs.writeFileSync(path.join(fakeBmad, 'bmad-modules.yaml'), registryYaml);
+  }
+
+  const scriptsDir = path.join(tmpRoot, 'scripts');
+  fs.mkdirSync(scriptsDir, { recursive: true });
+  const scriptPath = path.join(scriptsDir, 'build-bmad-cache.js');
+  fs.copyFileSync(SCRIPT_PATH, scriptPath);
+
+  const env = {
+    ...process.env,
+    // Fake bmad-method first (wins the specifier), then the real node_modules
+    // for fs-extra + transitive deps.
+    NODE_PATH: [path.join(tmpRoot, 'node_modules'), REAL_NODE_MODULES].join(path.delimiter),
+  };
+  return { tmpRoot, scriptPath, env };
+}
+
+/**
+ * Spawn the copied build script and capture its exit code + stderr.
+ * @returns {{ code: number, stderr: string }}
+ */
+function runScript(scriptPath, env) {
+  try {
+    execFileSync(process.execPath, [scriptPath], {
+      encoding: 'utf8',
+      stdio: 'pipe',
+      timeout: 60000,
+      env,
+    });
+    return { code: 0, stderr: '' };
+  } catch (err) {
+    return { code: err.status == null ? -1 : err.status, stderr: String(err.stderr || '') };
+  }
+}
 
 console.log('\nStory 24.1: Bump bmad-method to 6.6.0 and Audit fs-extra Compatibility\n');
 
@@ -61,90 +220,155 @@ test('require.resolve finds bmad-cli.js (6.6.0 entry point)', () => {
   assert.ok(fs.existsSync(resolved), `File does not exist: ${resolved}`);
 });
 
-// ---- Task 2: build:bmad-cache compatibility ----
+// ---- Task 2: build:bmad-cache reads the relocated v6.8.0 registry contract ----
+//
+// Story 27.3 (AC1, AC2): these assertions used to pin the v6.6.0 reality — the
+// `registry-fallback.yaml` path, the `built_in`-flag filter, and wds-as-retired.
+// They now pin the relocated package-root YAML source tag (`package-root-v68`),
+// the `type`-based filter (bmad-org in / experimental out), and wds-as-active.
+// The 6.8.0 contract is driven by FIXTURE_V68 + the exported reader (see header)
+// because the tree still installs 6.6.0; no live registry, manifest, network, or
+// clone is touched here.
 
-console.log('\nTask 2: build:bmad-cache compatibility');
+console.log('\nTask 2: relocated v6.8.0 registry contract (fixture-driven)');
 
-test('registry-fallback.yaml exists in 6.6.0', () => {
-  const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
-  const yamlPath = path.join(bmadDir, 'tools', 'installer', 'modules', 'registry-fallback.yaml');
-  assert.ok(fs.existsSync(yamlPath), `YAML not found at ${yamlPath}`);
-});
-
-test('legacy external-official-modules.yaml is absent in 6.6.0', () => {
-  const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
-  const legacyPath = path.join(bmadDir, 'tools', 'cli', 'external-official-modules.yaml');
-  assert.ok(!fs.existsSync(legacyPath), `Legacy YAML unexpectedly found at ${legacyPath}`);
-});
-
-test('registry parser extracts 4 external modules from 6.6.0 (bmb, cis, gds, tea)', () => {
-  const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
-  const yamlPath = path.join(bmadDir, 'tools', 'installer', 'modules', 'registry-fallback.yaml');
-  const content = fs.readFileSync(yamlPath, 'utf8');
-
-  // Replicate the parser logic from scripts/build-bmad-cache.js
-  const modules = [];
-  const lines = content.split('\n');
-  let inModules = false;
-  let currentModule = null;
-
-  for (const line of lines) {
-    const trimmed = line.trimEnd();
-    if (trimmed === '' || trimmed.match(/^\s*#/)) continue;
-    if (trimmed === 'modules:') { inModules = true; continue; }
-    if (!inModules) continue;
-
-    const moduleKeyMatch = trimmed.match(/^\s{1,4}([a-zA-Z0-9_-]+):\s*$/);
-    if (moduleKeyMatch) {
-      if (currentModule) modules.push(currentModule);
-      currentModule = { key: moduleKeyMatch[1] };
-      continue;
-    }
-
-    if (currentModule) {
-      const propMatch = trimmed.match(/^\s{2,8}([a-zA-Z0-9_-]+):\s+"([^"]*)"$/);
-      if (propMatch) {
-        currentModule[propMatch[1]] = propMatch[2];
-      } else {
-        const unquotedMatch = trimmed.match(/^\s{2,8}([a-zA-Z0-9_-]+):\s+(.+)$/);
-        if (unquotedMatch) {
-          currentModule[unquotedMatch[1]] = unquotedMatch[2].trim();
-        }
-      }
-    }
+test('AC1: reader tags the relocated package-root YAML source as package-root-v68 (not v63/legacy)', () => {
+  // The schema tag flows into cache-manifest.json. The pre-6.8.0 v63/legacy tags
+  // are now impossible for the supported path — assert the relocated source tag
+  // and that the two retired tags are NOT what the package-root YAML resolves to.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bmad-vbump-locate-'));
+  try {
+    fs.writeFileSync(path.join(tmp, 'bmad-modules.yaml'), FIXTURE_V68);
+    const { yamlPath, schema } = reader.locateRegistry(tmp);
+    assert.strictEqual(schema, 'package-root-v68', `expected package-root-v68 source tag, got ${schema}`);
+    assert.strictEqual(path.basename(yamlPath), 'bmad-modules.yaml');
+    assert.notStrictEqual(schema, 'v63', 'the retired v63 schema tag must no longer be emitted for the supported path');
+    assert.notStrictEqual(schema, 'legacy', 'the retired legacy schema tag must no longer be emitted for the supported path');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
-  if (currentModule) modules.push(currentModule);
-
-  const parsed = modules
-    .filter(m => m.code && m.url)
-    .filter(m => String(m.built_in || '').toLowerCase() !== 'true')
-    .map(m => ({ code: m.code, url: m.url, name: m.name || m.key, branch: m.branch || 'main' }));
-
-  const codes = parsed.map(m => m.code).sort();
-  assert.deepStrictEqual(codes, ['bmb', 'cis', 'gds', 'tea'],
-    `Unexpected module list: ${codes.join(', ')}`);
 });
 
-test('wds module is NOT in the v6.6.0 upstream registry (retired)', () => {
-  const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
-  const yamlPath = path.join(bmadDir, 'tools', 'installer', 'modules', 'registry-fallback.yaml');
-  const content = fs.readFileSync(yamlPath, 'utf8');
-  assert.ok(!content.includes('code: wds'), 'wds code unexpectedly found in 6.6.0 registry');
-  assert.ok(!content.includes('bmad-method-wds-expansion'), 'wds repo URL unexpectedly found in 6.6.0 registry');
+test('AC1: the relocated package-root path is the FIRST registry candidate, tagged package-root-v68', () => {
+  // The supported 6.8.0 location must win resolution over the diagnostic-only
+  // pre-6.8.0 fallback paths.
+  const first = reader.REGISTRY_CANDIDATES[0];
+  assert.deepStrictEqual(first.parts, ['bmad-modules.yaml'],
+    `package-root bmad-modules.yaml must be the first candidate; got ${JSON.stringify(first.parts)}`);
+  assert.strictEqual(first.schema, 'package-root-v68');
 });
 
-test('built_in filter excludes core/bmm from external module list', () => {
-  // Simulated parse of a v6.6.0-style entry to confirm the normalize rule.
+test('AC1: type-based filter keeps type: bmad-org and excludes type: experimental', () => {
+  // Replaces the old `built_in`-flag filter. Drive the real normalizeModules over
+  // the 6.8.0-shaped fixture: the five bmad-org codes survive, experimental
+  // (automator) is dropped.
+  const codes = reader.normalizeModules(reader.parseModulesYaml(FIXTURE_V68)).map(m => m.code).sort();
+  assert.deepStrictEqual(codes, ['bmb', 'cis', 'gds', 'tea', 'wds'],
+    `expected the five bmad-org modules; automator (experimental) must be excluded. Got: ${codes.join(', ')}`);
+});
+
+test('AC1: bmm/core exclusion invariant retained (now via absence of a bmad-org type)', () => {
+  // bmm/core are first-party modules built into the npm package and are absent
+  // from the 6.8.0 registry. The exclusion invariant now holds structurally: any
+  // entry lacking `type: bmad-org` is dropped, so even a future registry that
+  // erroneously listed bmm/core (untyped or with a non-bundled type) would not
+  // pull them into the external clone set.
   const raw = [
-    { key: 'bmad-core', code: 'core', url: 'https://example.com/core', built_in: 'true' },
-    { key: 'bmad-method', code: 'bmm', url: 'https://example.com/bmm', built_in: 'true' },
-    { key: 'bmad-builder', code: 'bmb', url: 'https://example.com/bmb' },
+    { key: 'bmad-method', code: 'bmm', url: 'https://example.com/bmm' },            // untyped built-in
+    { key: 'bmad-core', code: 'core', url: 'https://example.com/core', type: 'core' }, // non-bundled type
+    { key: 'bmad-builder', code: 'bmb', url: 'https://example.com/bmb', type: 'bmad-org' },
   ];
-  const filtered = raw
-    .filter(m => m.code && m.url)
-    .filter(m => String(m.built_in || '').toLowerCase() !== 'true');
-  assert.strictEqual(filtered.length, 1);
-  assert.strictEqual(filtered[0].code, 'bmb');
+  const codes = reader.normalizeModules(raw).map(m => m.code);
+  assert.deepStrictEqual(codes, ['bmb'],
+    `bmm/core must be excluded from the external module set; got: ${codes.join(', ')}`);
+});
+
+test('AC2: wds IS in the v6.8.0 registry as an active type: bmad-org module (was: retired)', () => {
+  // Inverts the old `'wds module is NOT in the v6.6.0 upstream registry (retired)'`
+  // assertion. At v6.8.0 wds is a live, bundled bmad-org expansion — present in
+  // the registry with the bundled type, NOT a retired/absent entry.
+  const parsed = reader.parseModulesYaml(FIXTURE_V68);
+  const wdsRaw = parsed.find(m => m.code === 'wds');
+  assert.ok(wdsRaw, 'wds must be present in the v6.8.0 registry');
+  assert.strictEqual(wdsRaw.type, 'bmad-org', 'wds must carry type: bmad-org at v6.8.0');
+  assert.strictEqual(wdsRaw.url, 'https://github.com/bmad-code-org/bmad-method-wds-expansion');
+});
+
+test('AC2/AC4: wds is bundled — a normal bmad-org clone, not a retained relic', () => {
+  // Inverts the old `'retired upstream modules (e.g. wds) are flagged in manifest
+  // when retained'` assertion. After normalization wds is an ordinary cache entry
+  // (code/url/name/branch, branch defaulting to main) with NO retired/skip path
+  // and no retiredUpstream flag.
+  const out = reader.normalizeModules(reader.parseModulesYaml(FIXTURE_V68));
+  const wds = out.find(m => m.code === 'wds');
+  assert.ok(wds, 'wds must normalize to an active bundled module');
+  assert.strictEqual(wds.branch, 'main', '6.8.0 omits branch → must default to main');
+  assert.deepStrictEqual(Object.keys(wds).sort(), ['branch', 'code', 'name', 'url'],
+    'wds must be a normal clone entry with no retiredUpstream/retention fields');
+  assert.strictEqual(wds.retiredUpstream, undefined, 'wds must NOT be flagged retiredUpstream at v6.8.0');
+});
+
+test('AC4: bundled set is exactly tea/bmb/cis/gds/wds; automator/bmm/core absent', () => {
+  // The full bundled-set assertion for the externally-cloned modules: the five
+  // bmad-org codes present, experimental automator absent, and the built-in
+  // bmm/core absent (never in the registry). Also pin KNOWN_BUNDLED_MODULES so a
+  // future edit to the bundled set is caught here too.
+  const codes = reader.normalizeModules(reader.parseModulesYaml(FIXTURE_V68)).map(m => m.code).sort();
+  for (const required of ['tea', 'bmb', 'cis', 'gds', 'wds']) {
+    assert.ok(codes.includes(required), `bundled set missing ${required}; got: ${codes.join(', ')}`);
+  }
+  assert.ok(!codes.includes('automator'), 'automator (experimental) must be absent from the bundled set');
+  assert.ok(!codes.includes('bmm'), 'bmm (built-in) must be absent from the externally-cloned set');
+  assert.ok(!codes.includes('core'), 'core (built-in) must be absent from the externally-cloned set');
+  assert.deepStrictEqual([...reader.KNOWN_BUNDLED_MODULES].sort(), ['bmb', 'cis', 'gds', 'tea', 'wds'],
+    'KNOWN_BUNDLED_MODULES must stay aligned with the bundled set the cache build guards on');
+});
+
+test('AC3/NFR56: a deficient bmad-org set exits non-zero and writes NO cache-manifest.json', () => {
+  // Thin-cache fail-loud regression: drive the negative path with a FIXTURE that
+  // resolves a single bmad-org module (a deficient set) against a fake
+  // bmad-method package — never a genuinely broken install, never the network.
+  // The real script runs end-to-end via spawn and must abort BEFORE writing any
+  // manifest so a partial/empty cache cannot ship looking successful.
+  const deficient = `modules:
+  bmad-method-test-architecture-enterprise:
+    url: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise
+    code: tea
+    name: "BMad Test Architect"
+    type: bmad-org
+`;
+  const { tmpRoot, scriptPath, env } = makeFakeBmadEnv(deficient);
+  try {
+    const result = runScript(scriptPath, env);
+    assert.notStrictEqual(result.code, 0,
+      `expected non-zero exit on a thin set, got ${result.code}. stderr:\n${result.stderr}`);
+    assert.ok(/thin module set|Missing:/i.test(result.stderr),
+      `expected an actionable thin-cache message, got:\n${result.stderr}`);
+    const manifestPath = path.join(tmpRoot, 'lib', 'bmad-cache', 'cache-manifest.json');
+    assert.ok(!fs.existsSync(manifestPath),
+      `fail-loud path must NOT leave a partial cache-manifest.json (found ${manifestPath})`);
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test('AC3/AC5/NFR56: a missing relocated YAML (registry moved again) exits non-zero, no manifest', () => {
+  // The other half of the recurring-relocation risk: the package-root YAML is
+  // gone (the path moved a third time / downgrade below 6.8.0) and no candidate
+  // resolves. The build must abort with an actionable message and write nothing —
+  // exercised against a fake package with NO registry file, fully offline.
+  const { tmpRoot, scriptPath, env } = makeFakeBmadEnv(null);
+  try {
+    const result = runScript(scriptPath, env);
+    assert.notStrictEqual(result.code, 0,
+      `expected non-zero exit when no registry resolves, got ${result.code}. stderr:\n${result.stderr}`);
+    assert.ok(/no module registry YAML found|bmad-modules\.yaml/i.test(result.stderr),
+      `expected a 'registry not found' message, got:\n${result.stderr}`);
+    const manifestPath = path.join(tmpRoot, 'lib', 'bmad-cache', 'cache-manifest.json');
+    assert.ok(!fs.existsSync(manifestPath), 'no manifest must be written when the registry is missing');
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
 });
 
 test('cache-manifest.json exists and records bmadMethodVersion 6.6.0', () => {
@@ -189,30 +413,16 @@ test('all non-retired cached modules have _git_preserved directory', () => {
   }
 });
 
-test('retired upstream modules (e.g. wds) are flagged in manifest when retained', () => {
-  // AC #7: retired modules must be preserved in the manifest with an explicit
-  // flag until a maintainer confirms deletion. If the wds directory is still
-  // on disk, the manifest entry MUST carry retiredUpstream: true. If the
-  // directory has been removed, the manifest must not list wds at all.
-  const cacheDir = path.join(projectRoot, 'lib', 'bmad-cache');
-  const manifestPath = path.join(cacheDir, 'cache-manifest.json');
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-
-  const wdsDirExists = fs.existsSync(path.join(cacheDir, 'wds'));
-  const wdsManifest = manifest.modules.wds;
-
-  if (wdsDirExists) {
-    assert.ok(wdsManifest, 'wds is on disk but not in manifest');
-    assert.strictEqual(wdsManifest.retiredUpstream, true,
-      'wds directory exists but manifest does not flag it as retiredUpstream');
-  } else {
-    // Either wds was never cached or was removed after maintainer confirmation.
-    // Both states are acceptable — just ensure the manifest does not carry a
-    // dangling entry.
-    assert.ok(!wdsManifest || wdsManifest.retiredUpstream === true,
-      'wds in manifest but directory is missing (dangling entry)');
-  }
-});
+// NOTE (Story 27.3, AC2): the former `'retired upstream modules (e.g. wds) are
+// flagged in manifest when retained'` test was REMOVED here. It pinned the
+// pre-6.8.0 reality (wds retired upstream, retained with retiredUpstream: true
+// in the live 6.6.0 manifest). At v6.8.0 wds is a normal live `type: bmad-org`
+// clone, not a retained relic, so that assertion is inverted by the
+// fixture-driven 'AC2/AC4: wds is bundled — a normal bmad-org clone, not a
+// retained relic' test in the Task 2 section above. Keeping the old test would
+// directly contradict the inverted one (it still reads the live 6.6.0 manifest,
+// which the 27.5 bump will reshape), so it is retired together with the reality
+// it described.
 
 // ---- Task 3: bmad.js CLI compatibility ----
 
