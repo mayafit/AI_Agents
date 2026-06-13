@@ -1,6 +1,6 @@
 # Story 27.1: Spike — Confirm the Module-Registry Reader Path Update for v6.8.0
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -26,25 +26,37 @@ So that Story 27.2 implements a known small reader change rather than discoverin
 
 ### Task 1: Confirm the v6.8.0 module source (AC: 1)
 
-- [ ] 1.1 In a scratch dir, `npm install bmad-method@6.8.0`
-- [ ] 1.2 Confirm `bmad-modules.yaml` exists at the package root; read its `modules:` map and field names (`code`/`url`/`name`/`type`)
-- [ ] 1.3 Confirm `official-modules.js` is loader code that reads the YAML, not the data source
-- [ ] 1.4 Confirm `registry-fallback.yaml` / `external-official-modules.yaml` are absent at v6.8.0
+- [x] 1.1 In a scratch dir, `npm install bmad-method@6.8.0`
+- [x] 1.2 Confirm `bmad-modules.yaml` exists at the package root; read its `modules:` map and field names (`code`/`url`/`name`/`type`)
+- [x] 1.3 Confirm `official-modules.js` is loader code that reads the YAML, not the data source
+- [x] 1.4 Confirm `registry-fallback.yaml` / `external-official-modules.yaml` are absent at v6.8.0
 
 ### Task 2: Confirm the filter mapping (AC: 2, 4)
 
-- [ ] 2.1 Confirm the six registry entries and their `type` values: tea/bmb/cis/gds/wds = `bmad-org`; automator = `experimental`
-- [ ] 2.2 Confirm bmm/core are NOT in the registry (built-in via local module.yaml)
-- [ ] 2.3 Record the include/exclude rule and the wds-is-active correction
+- [x] 2.1 Confirm the six registry entries and their `type` values: tea/bmb/cis/gds/wds = `bmad-org`; automator = `experimental`
+- [x] 2.2 Confirm bmm/core are NOT in the registry (built-in via local module.yaml)
+- [x] 2.3 Record the include/exclude rule and the wds-is-active correction
 
 ### Task 3: Finalize the decision (AC: 3, 5)
 
-- [ ] 3.1 Confirm/adjust Architecture Decision P5-5 against the findings
-- [ ] 3.2 Confirm both architecture docs no longer claim a JS data source or wds retirement
-- [ ] 3.3 State the thin-cache fail-loud contract for 27.2
+- [x] 3.1 Confirm/adjust Architecture Decision P5-5 against the findings
+- [x] 3.2 Confirm both architecture docs no longer claim a JS data source or wds retirement
+- [x] 3.3 State the thin-cache fail-loud contract for 27.2
 
 ## Dev Notes
 
 - Reader to change: `loadModuleDefinitions()` / `locateRegistry()` / `normalizeModules()` in `scripts/build-bmad-cache.js` (~lines 21-175). `REGISTRY_CANDIDATES` and the `normalizeModules()` filter change; `parseModulesYaml()` is reused/adapted, not replaced.
 - The new YAML omits a `branch` field — default to `main` as the current `normalizeModules()` already does.
 - Do not rely on release notes — confirm against the installed package.
+
+## Spike Findings (Dev Agent Record)
+
+Confirmed against a **live `npm install bmad-method@6.8.0`** in a scratch dir outside the repo (LIVE_INSTALL: confirmed). The repo's own `node_modules` (still 6.6.0) was left untouched and inspected only to confirm the delta direction (6.6.0 carries `tools/installer/modules/registry-fallback.yaml`; the package-root `bmad-modules.yaml` is absent at 6.6.0).
+
+- **Registry source (AC1):** `bmad-modules.yaml` exists at the **package root** of bmad-method@6.8.0. It is a `modules:` map; each entry carries `code` / `url` / `name` / `type` (plus `module-definition`, `description`, `defaultSelected`, `npmPackage`, `default_channel`, and `plugin_name` on `wds`). Same shape the existing `parseModulesYaml()` reads.
+- **`official-modules.js` is loader code (AC1):** Zero hardcoded module URLs (0 `github.com` occurrences). It instantiates `ExternalModuleManager` (`external-manager.js`), which reads `path.join(getProjectRoot(), 'bmad-modules.yaml')` and `yaml.parse`s it. The module list is data in YAML, not in JS.
+- **Old paths absent (AC1):** `tools/installer/modules/registry-fallback.yaml` and `tools/cli/external-official-modules.yaml` are both **ABSENT** at v6.8.0.
+- **Type mapping (AC2, AC4):** Six registry entries — `tea`/`bmb`/`cis`/`gds`/`wds` = `type: bmad-org`; `automator` = `type: experimental`. `bmm`/`core` are NOT in the registry (built-in, loaded from local `module.yaml`). **`wds` is ACTIVE** (`type: bmad-org`, bundled) — not retired.
+- **No `branch` field (Dev Notes):** Confirmed absent from the YAML — `normalizeModules()` defaults to `main`.
+- **Decision P5-5 (AC3):** Confirmed accurate against the live install — **no architecture edit needed**. Both `_bmad-output/planning-artifacts/architecture.md` (P5-5 block ~2456, context lines 9/11/465) and `docs/architecture.md` (lines 208–212) already state the relocated package-root YAML, YAML-throughout history, `type` filter (bmad-org include / experimental exclude), `official-modules.js`-as-loader, wds-active, and the thin-cache fail-loud contract. No stale JS-as-data-source or wds-retired claims remain in current prose. (Historical revision-history row at line 11 records a pre-correction state and is intentionally left frozen.)
+- **Fail-loud contract handed to 27.2 (AC5):** resolved `type: bmad-org` set smaller than {tea, bmb, cis, gds, wds}, OR no module source located/parsed at all ⇒ non-zero exit, NO partial/empty `cache-manifest.json`.
