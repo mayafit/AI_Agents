@@ -50,7 +50,8 @@ async function testAsync(name, fn) {
 }
 
 const bmad = require('../lib/bmad');
-const { parseFlags } = require('../bin/cli.js');
+const { parseFlags, selectBmadModules } = require('../bin/cli.js');
+const { getBmadModules, setBmadModules } = require('../lib/profile');
 
 // ─── getInstallableBmadModules ────────────────────────────────────────────────
 console.log('\nlib/bmad.getInstallableBmadModules()');
@@ -378,6 +379,69 @@ test('CSV with whitespace from --bmad-modules normalises correctly', () => {
       assert.strictEqual(wrote, true);
       const parsed = JSON.parse(fs.readFileSync(path.join(tmp, '.bmad-channel.json'), 'utf8'));
       assert.strictEqual(parsed.version, 'main');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  // ─── Bug 27.13 — durable BMAD module selection ──────────────────────────────
+
+  await testAsync('27.13 setBmadModules/getBmadModules round-trip', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-27-13-'));
+    try {
+      assert.strictEqual(getBmadModules(tmp), undefined, 'undefined before any persist');
+      setBmadModules(tmp, ['bmm', 'tea', 'bmb', 'cis', 'wds']);
+      assert.deepStrictEqual(getBmadModules(tmp), ['bmm', 'tea', 'bmb', 'cis', 'wds']);
+      // Persisting preserves an existing profile field.
+      const manifest = JSON.parse(fs.readFileSync(path.join(tmp, '.ma-agents.json'), 'utf8'));
+      assert.ok('bmadModules' in manifest);
+      assert.ok('skills' in manifest, 'bootstrap shape preserved');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('27.13 selectBmadModules persists explicit CSV selection', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-27-13-'));
+    try {
+      const result = await selectBmadModules({ bmadModulesFlag: 'tea,bmb', projectRoot: tmp });
+      assert.ok(result.includes('bmm'), 'bmm force-included');
+      assert.ok(result.includes('tea') && result.includes('bmb'));
+      assert.ok(!result.includes('gds'), 'gds was not requested');
+      // The selection is now durable.
+      const persisted = getBmadModules(tmp);
+      assert.ok(persisted.includes('tea') && persisted.includes('bmb') && !persisted.includes('gds'),
+        'CSV selection must be persisted to .ma-agents.json');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('27.13 deselected module stays absent on a second no-flag run', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-27-13-'));
+    try {
+      // First run: user deselects gds via CSV (omits it).
+      const first = await selectBmadModules({ bmadModulesFlag: 'bmm,tea,bmb,cis,wds', projectRoot: tmp });
+      assert.ok(!first.includes('gds'), 'gds deselected in first run');
+
+      // Second run: NO flag passed. Without persistence this returned ALL
+      // installable modules (gds would return). With 27.13 it honors the
+      // persisted set.
+      const second = await selectBmadModules({ projectRoot: tmp });
+      assert.ok(!second.includes('gds'), 'deselected gds must NOT resurface on a no-flag run');
+      assert.ok(second.includes('bmm'), 'bmm still present');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('27.13 no-flag run with no persisted set installs everything (back-compat default)', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-27-13-'));
+    try {
+      const installable = bmad.getInstallableBmadModules().filter(m => !m.retired).map(m => m.id);
+      const result = await selectBmadModules({ projectRoot: tmp });
+      assert.deepStrictEqual([...result].sort(), [...installable].sort(),
+        'no persisted set → install every available module');
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }

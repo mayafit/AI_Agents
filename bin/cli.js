@@ -34,7 +34,7 @@ const path = require('path');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
 const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout, migrateRetiredSkills } = require('../lib/installer');
-const { getProfile, setProfile, resolveProfile } = require('../lib/profile');
+const { getProfile, setProfile, resolveProfile, getBmadModules, setBmadModules } = require('../lib/profile');
 const { reconfigure: runReconfigure, ReconfigureYesRejectedError, ManifestNotFoundError, RoomodesSlugDivergenceError } = require('../lib/reconfigure');
 const { uninstallProfileArtifacts } = require('../lib/uninstall');
 const bmad = require('../lib/bmad');
@@ -831,14 +831,26 @@ async function collectRepoLayout(flags, existingLayout = null) {
  * break without them. Retired modules (currently only `wds`) are filtered
  * out unconditionally.
  */
-async function selectBmadModules({ bmadModulesFlag, bmadModulesPrompt }) {
+async function selectBmadModules({ bmadModulesFlag, bmadModulesPrompt, projectRoot } = {}) {
   const installable = bmad.getInstallableBmadModules().filter(m => !m.retired);
+  const root = projectRoot || process.cwd();
+
+  // Bug 27.13 — persist the resolved selection so a deselection sticks across
+  // future installs/reconfigures that do not re-pass --bmad-modules.
+  const persist = (modules) => {
+    try {
+      setBmadModules(root, modules);
+    } catch (err) {
+      console.warn(chalk.yellow(`  Warning: could not persist BMAD module selection: ${err.message}`));
+    }
+    return modules;
+  };
 
   // Branch 1: explicit CSV — validate + use as-is.
   if (bmadModulesFlag) {
     const requested = bmadModulesFlag.split(',').map(s => s.trim()).filter(Boolean);
     try {
-      return bmad.resolveBmadModules({ requested, available: installable });
+      return persist(bmad.resolveBmadModules({ requested, available: installable }));
     } catch (err) {
       console.error(chalk.red(`Error: ${err.message}`));
       process.exit(1);
@@ -872,11 +884,25 @@ async function selectBmadModules({ bmadModulesFlag, bmadModulesPrompt }) {
 
     // Belt-and-suspenders: force bmm back in if the user managed to uncheck
     // it despite the (required) tag.
-    return bmad.resolveBmadModules({ requested: chosenModules, available: installable });
+    return persist(bmad.resolveBmadModules({ requested: chosenModules, available: installable }));
   }
 
-  // Branch 3: no flag → install everything available.
-  return installable.map(m => m.id);
+  // Branch 3: no flag → use the persisted selection from a prior run if present
+  // (bug 27.13 — a previous deselection must survive); otherwise fall back to
+  // the original "install every available module" default. The persisted set is
+  // intersected with the currently-installable set so a since-retired module
+  // does not resurface, and bmm is force-included via resolveBmadModules.
+  const persisted = getBmadModules(root);
+  if (persisted && persisted.length > 0) {
+    const availableIds = new Set(installable.map(m => m.id));
+    const stillInstallable = persisted.filter(id => availableIds.has(id));
+    try {
+      return persist(bmad.resolveBmadModules({ requested: stillInstallable, available: installable }));
+    } catch {
+      // If the persisted set somehow fails validation, fall through to default.
+    }
+  }
+  return persist(installable.map(m => m.id));
 }
 
 // --- Install wizard ---
@@ -1167,6 +1193,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
       const bmadModules = await selectBmadModules({
         bmadModulesFlag,
         bmadModulesPrompt,
+        projectRoot: process.cwd(),
       });
 
       if (!bmadInstalled) {
@@ -1683,4 +1710,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseFlags, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue };
+module.exports = { parseFlags, selectBmadModules, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue };
