@@ -12,6 +12,12 @@ lib/bmad-extension-plugin/** text eol=lf
 scripts/build-plugin.js text eol=lf
 test/build-plugin.test.js text eol=lf
 
+# Bug 27.10 — the instruction-block templates consumed by composeInstructionBlock
+# (lib/installer.js) are authored with CRLF on Windows. The composer normalizes to
+# LF at runtime, but pinning the sources to LF is defense-in-depth so the seams and
+# bodies are LF in the working tree regardless of core.autocrlf.
+lib/templates/instruction-block-*.template.md text eol=lf
+
 # MIL-498 DID source templates must also stay LF. test/migration-validation.test.js
 # (Story 15.8, task 3.Na) asserts lib/mil498-templates/*.md is byte-identical to the
 # eol=lf-pinned skill copies under lib/bmad-extension/skills/mil498-*/template.md.
