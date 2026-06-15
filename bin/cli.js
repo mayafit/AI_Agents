@@ -495,6 +495,19 @@ function writeConfigField(content, fieldName, value) {
   return content.trimEnd() + '\n' + newLine + '\n';
 }
 
+// Bug 27.15 — unify the path convention. config.toml (written by upstream
+// manifest-generator) declares artifact paths with a `{project-root}/` prefix;
+// previously writeRepoLayoutConfig emitted a THIRD variant: bare relative
+// `_bmad-output/...`. Emit the same `{project-root}/`-prefixed form here so
+// ma-agents stops adding a divergent third convention. config.toml is the
+// install-owned source of truth; the per-module config.yaml is the
+// upstream-stripped read copy. Fully aligning the upstream stripper
+// (official-modules.js) is a separate upstream follow-up; vendored node_modules
+// is not edited here.
+function canonicalArtifactPath(suffix) {
+  return `{project-root}/_bmad-output/${suffix}`;
+}
+
 function writeRepoLayoutConfig(layout) {
   const configPath = path.join(process.cwd(), '_bmad', 'bmm', 'config.yaml');
   try {
@@ -522,8 +535,8 @@ function writeRepoLayoutConfig(layout) {
       content = writeConfigField(content, 'sprint_backend', 'jira');
       content = writeConfigField(content, 'jira_url', layout.sprintManagement.jiraUrl);
       content = writeConfigField(content, 'jira_project_key', layout.sprintManagement.jiraProjectKey);
-      const planningArtifacts = kbPath === '.' ? '_bmad-output/planning-artifacts' : kbPath;
-      const implArtifacts = '_bmad-output/implementation-artifacts';
+      const planningArtifacts = kbPath === '.' ? canonicalArtifactPath('planning-artifacts') : kbPath;
+      const implArtifacts = canonicalArtifactPath('implementation-artifacts');
       content = writeConfigField(content, 'planning_artifacts', planningArtifacts);
       content = writeConfigField(content, 'implementation_artifacts', implArtifacts);
       fs.writeFileSync(configPath, content, 'utf-8');
@@ -534,8 +547,8 @@ function writeRepoLayoutConfig(layout) {
       const spPath = spPortable.portable;
       content = writeConfigField(content, 'sprint_backend', 'file-system');
       content = writeConfigField(content, 'sprint_management_path', spPath);
-      const planningArtifacts = kbPath === '.' ? '_bmad-output/planning-artifacts' : kbPath;
-      const implArtifacts = spPath === '.' ? '_bmad-output/implementation-artifacts' : spPath;
+      const planningArtifacts = kbPath === '.' ? canonicalArtifactPath('planning-artifacts') : kbPath;
+      const implArtifacts = spPath === '.' ? canonicalArtifactPath('implementation-artifacts') : spPath;
       content = writeConfigField(content, 'planning_artifacts', planningArtifacts);
       content = writeConfigField(content, 'implementation_artifacts', implArtifacts);
       fs.writeFileSync(configPath, content, 'utf-8');

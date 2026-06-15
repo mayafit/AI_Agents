@@ -90,9 +90,11 @@ test('single-repo: writes default artifact paths', () => {
       sprintManagement: { mode: 'same', path: '.' }
     });
     const content = fs.readFileSync(path.join(configDir, 'config.yaml'), 'utf-8');
-    assert.ok(content.includes('planning_artifacts: "_bmad-output/planning-artifacts"'),
+    // Bug 27.15 — default artifact paths now use the {project-root}/-prefixed
+    // convention matching config.toml (no longer the divergent bare-relative form).
+    assert.ok(content.includes('planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"'),
       `Expected default planning_artifacts. Got:\n${content}`);
-    assert.ok(content.includes('implementation_artifacts: "_bmad-output/implementation-artifacts"'),
+    assert.ok(content.includes('implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"'),
       `Expected default implementation_artifacts. Got:\n${content}`);
   } finally {
     process.chdir(origCwd);
@@ -141,7 +143,8 @@ test('mixed mode: kb external, sprint same', () => {
     // 3.12.3: kb path is literal; sprint mgmt is "." so default applies.
     assert.ok(content.includes('planning_artifacts: "/ext/kb"'),
       `Got:\n${content}`);
-    assert.ok(content.includes('implementation_artifacts: "_bmad-output/implementation-artifacts"'),
+    // Bug 27.15 — default impl artifacts uses the {project-root}/-prefixed form.
+    assert.ok(content.includes('implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"'),
       `Got:\n${content}`);
   } finally {
     process.chdir(origCwd);
@@ -165,9 +168,10 @@ test('single-repo config matches pre-Epic-16 defaults', () => {
       sprintManagement: { mode: 'same', path: '.' }
     });
     const content = fs.readFileSync(path.join(configDir, 'config.yaml'), 'utf-8');
-    // These are the default relative paths that workflows used before Epic 16
-    assert.ok(content.includes('planning_artifacts: "_bmad-output/planning-artifacts"'));
-    assert.ok(content.includes('implementation_artifacts: "_bmad-output/implementation-artifacts"'));
+    // Bug 27.15 — default artifact paths use the {project-root}/-prefixed
+    // convention matching config.toml (the install-owned source of truth).
+    assert.ok(content.includes('planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"'));
+    assert.ok(content.includes('implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"'));
     assert.ok(content.includes('knowledgebase_path: "."'));
     assert.ok(content.includes('sprint_management_path: "."'));
   } finally {

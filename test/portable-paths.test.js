@@ -191,7 +191,8 @@ test('derived artifact paths are relative when base is relative', () => {
     // 3.12.3: external kb path is literal — no nested _bmad-output/planning-artifacts/.
     assert.ok(content.includes('planning_artifacts: "../kb-repo"'),
       `planning_artifacts should be the literal portable path, got: ${content}`);
-    assert.ok(content.includes('implementation_artifacts: "_bmad-output/implementation-artifacts"'),
+    // Bug 27.15 — default impl artifacts uses the {project-root}/-prefixed convention.
+    assert.ok(content.includes('implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"'),
       `impl_artifacts should use default for ".", got: ${content}`);
   } finally {
     cleanup();
