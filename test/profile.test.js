@@ -290,6 +290,37 @@ async function runAll() {
     }
   });
 
+  // 6.16 — Bug 27.9: setProfile bootstrap must not write `agent: null` / `agents: [null]`
+  await test('6.16 setProfile bootstrap produces empty agents array, never [null] (bug 27.9)', () => {
+    const dir = mktemp();
+    try {
+      setProfile(dir, 'standard');
+      const parsed = JSON.parse(fs.readFileSync(path.join(dir, '.ma-agents.json'), 'utf-8'));
+      assert.ok(Array.isArray(parsed.agents), 'agents must be an array');
+      assert.deepStrictEqual(parsed.agents, [], 'agents must be [] when bootstrapped before any agent');
+      assert.ok(!parsed.agents.includes(null), 'agents must never contain a null element');
+      assert.strictEqual(parsed.agent, null, 'agent must be null (not the string "null") when unknown');
+    } finally { cleanup(dir); }
+  });
+
+  // 6.17 — Bug 27.9: ensureManifest create branch with null agentId
+  await test('6.17 ensureManifest(root, null, "project") yields agents: [] (bug 27.9)', () => {
+    const dir = mktemp();
+    try {
+      const { ensureManifest } = require('../lib/installer');
+      const m = ensureManifest(dir, null, 'project');
+      assert.deepStrictEqual(m.agents, [], 'create branch must yield empty agents array for null agentId');
+      assert.strictEqual(m.agent, null);
+      // And a real agentId still populates correctly.
+      const dir2 = mktemp();
+      try {
+        const m2 = ensureManifest(dir2, 'claude-code', 'project');
+        assert.deepStrictEqual(m2.agents, ['claude-code']);
+        assert.strictEqual(m2.agent, 'claude-code');
+      } finally { cleanup(dir2); }
+    } finally { cleanup(dir); }
+  });
+
   // ─── Report ───
   console.log(`\n  ${passed} passed, ${failed} failed\n`);
   if (failed > 0) {
