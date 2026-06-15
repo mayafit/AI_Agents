@@ -33,8 +33,8 @@ const chalk = require('chalk');
 const path = require('path');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
-const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout, migrateRetiredSkills } = require('../lib/installer');
-const { getProfile, setProfile, resolveProfile } = require('../lib/profile');
+const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout, migrateRetiredSkills, reconcileAgentsSharedSkills } = require('../lib/installer');
+const { getProfile, setProfile, resolveProfile, getBmadModules, setBmadModules } = require('../lib/profile');
 const { reconfigure: runReconfigure, ReconfigureYesRejectedError, ManifestNotFoundError, RoomodesSlugDivergenceError } = require('../lib/reconfigure');
 const { uninstallProfileArtifacts } = require('../lib/uninstall');
 const bmad = require('../lib/bmad');
@@ -495,6 +495,19 @@ function writeConfigField(content, fieldName, value) {
   return content.trimEnd() + '\n' + newLine + '\n';
 }
 
+// Bug 27.15 — unify the path convention. config.toml (written by upstream
+// manifest-generator) declares artifact paths with a `{project-root}/` prefix;
+// previously writeRepoLayoutConfig emitted a THIRD variant: bare relative
+// `_bmad-output/...`. Emit the same `{project-root}/`-prefixed form here so
+// ma-agents stops adding a divergent third convention. config.toml is the
+// install-owned source of truth; the per-module config.yaml is the
+// upstream-stripped read copy. Fully aligning the upstream stripper
+// (official-modules.js) is a separate upstream follow-up; vendored node_modules
+// is not edited here.
+function canonicalArtifactPath(suffix) {
+  return `{project-root}/_bmad-output/${suffix}`;
+}
+
 function writeRepoLayoutConfig(layout) {
   const configPath = path.join(process.cwd(), '_bmad', 'bmm', 'config.yaml');
   try {
@@ -522,8 +535,8 @@ function writeRepoLayoutConfig(layout) {
       content = writeConfigField(content, 'sprint_backend', 'jira');
       content = writeConfigField(content, 'jira_url', layout.sprintManagement.jiraUrl);
       content = writeConfigField(content, 'jira_project_key', layout.sprintManagement.jiraProjectKey);
-      const planningArtifacts = kbPath === '.' ? '_bmad-output/planning-artifacts' : kbPath;
-      const implArtifacts = '_bmad-output/implementation-artifacts';
+      const planningArtifacts = kbPath === '.' ? canonicalArtifactPath('planning-artifacts') : kbPath;
+      const implArtifacts = canonicalArtifactPath('implementation-artifacts');
       content = writeConfigField(content, 'planning_artifacts', planningArtifacts);
       content = writeConfigField(content, 'implementation_artifacts', implArtifacts);
       fs.writeFileSync(configPath, content, 'utf-8');
@@ -534,8 +547,8 @@ function writeRepoLayoutConfig(layout) {
       const spPath = spPortable.portable;
       content = writeConfigField(content, 'sprint_backend', 'file-system');
       content = writeConfigField(content, 'sprint_management_path', spPath);
-      const planningArtifacts = kbPath === '.' ? '_bmad-output/planning-artifacts' : kbPath;
-      const implArtifacts = spPath === '.' ? '_bmad-output/implementation-artifacts' : spPath;
+      const planningArtifacts = kbPath === '.' ? canonicalArtifactPath('planning-artifacts') : kbPath;
+      const implArtifacts = spPath === '.' ? canonicalArtifactPath('implementation-artifacts') : spPath;
       content = writeConfigField(content, 'planning_artifacts', planningArtifacts);
       content = writeConfigField(content, 'implementation_artifacts', implArtifacts);
       fs.writeFileSync(configPath, content, 'utf-8');
@@ -831,14 +844,26 @@ async function collectRepoLayout(flags, existingLayout = null) {
  * break without them. Retired modules (currently only `wds`) are filtered
  * out unconditionally.
  */
-async function selectBmadModules({ bmadModulesFlag, bmadModulesPrompt }) {
+async function selectBmadModules({ bmadModulesFlag, bmadModulesPrompt, projectRoot } = {}) {
   const installable = bmad.getInstallableBmadModules().filter(m => !m.retired);
+  const root = projectRoot || process.cwd();
+
+  // Bug 27.13 — persist the resolved selection so a deselection sticks across
+  // future installs/reconfigures that do not re-pass --bmad-modules.
+  const persist = (modules) => {
+    try {
+      setBmadModules(root, modules);
+    } catch (err) {
+      console.warn(chalk.yellow(`  Warning: could not persist BMAD module selection: ${err.message}`));
+    }
+    return modules;
+  };
 
   // Branch 1: explicit CSV — validate + use as-is.
   if (bmadModulesFlag) {
     const requested = bmadModulesFlag.split(',').map(s => s.trim()).filter(Boolean);
     try {
-      return bmad.resolveBmadModules({ requested, available: installable });
+      return persist(bmad.resolveBmadModules({ requested, available: installable }));
     } catch (err) {
       console.error(chalk.red(`Error: ${err.message}`));
       process.exit(1);
@@ -872,11 +897,25 @@ async function selectBmadModules({ bmadModulesFlag, bmadModulesPrompt }) {
 
     // Belt-and-suspenders: force bmm back in if the user managed to uncheck
     // it despite the (required) tag.
-    return bmad.resolveBmadModules({ requested: chosenModules, available: installable });
+    return persist(bmad.resolveBmadModules({ requested: chosenModules, available: installable }));
   }
 
-  // Branch 3: no flag → install everything available.
-  return installable.map(m => m.id);
+  // Branch 3: no flag → use the persisted selection from a prior run if present
+  // (bug 27.13 — a previous deselection must survive); otherwise fall back to
+  // the original "install every available module" default. The persisted set is
+  // intersected with the currently-installable set so a since-retired module
+  // does not resurface, and bmm is force-included via resolveBmadModules.
+  const persisted = getBmadModules(root);
+  if (persisted && persisted.length > 0) {
+    const availableIds = new Set(installable.map(m => m.id));
+    const stillInstallable = persisted.filter(id => availableIds.has(id));
+    try {
+      return persist(bmad.resolveBmadModules({ requested: stillInstallable, available: installable }));
+    } catch {
+      // If the persisted set somehow fails validation, fall through to default.
+    }
+  }
+  return persist(installable.map(m => m.id));
 }
 
 // --- Install wizard ---
@@ -1167,6 +1206,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
       const bmadModules = await selectBmadModules({
         bmadModulesFlag,
         bmadModulesPrompt,
+        projectRoot: process.cwd(),
       });
 
       if (!bmadInstalled) {
@@ -1311,6 +1351,20 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
       await installSkill(skillId, selectedAgentIds, installPath, installScope, { force: !!forceFlag, yes: yesFlag, batchState });
     } catch (error) {
       console.error(chalk.red(`\n Failed to install ${skillId}:`), error.message);
+    }
+  }
+
+  // Bug 27.16 — if BMAD populated the shared `.agents/skills` dir but no
+  // .agents-targeting agent (copilot/kilocode/roo-code) was selected, the
+  // standalone catalog + MANIFEST.yaml were never written there. Backfill them
+  // so the dir is never BMAD-only without the MANIFEST.yaml the instruction
+  // block points agents at. No-op when an .agents agent was selected or no
+  // shared dir exists.
+  if (installScope === 'project') {
+    try {
+      await reconcileAgentsSharedSkills(process.cwd(), selectedAgentIds, installScope);
+    } catch (err) {
+      console.log(chalk.yellow(` .agents/skills reconciliation skipped: ${err.message}`));
     }
   }
 
@@ -1683,4 +1737,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseFlags, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue };
+module.exports = { parseFlags, selectBmadModules, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue };

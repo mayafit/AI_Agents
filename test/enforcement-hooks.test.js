@@ -90,6 +90,69 @@ asyncTest('1.1: creates settings.json with hook when file does not exist', async
   }
 }).then(() =>
 
+// Bug 27.8 — the hook command must resolve in a real install. The installer
+// copies the dependency-free hook into the target's .claude/hooks/ and points
+// the command at $CLAUDE_PROJECT_DIR/.claude/hooks/verify-manifest.js (NOT the
+// package's own lib/ which is never copied into the target).
+asyncTest('1.1b: copies hook into target .claude/hooks and points command there', async () => {
+  const tmpDir = createTempDir();
+  try {
+    await deployClaudeCodeHook(tmpDir);
+
+    const hookTarget = path.join(tmpDir, '.claude', 'hooks', 'verify-manifest.js');
+    assert.ok(fs.existsSync(hookTarget), 'verify-manifest.js should be copied into target .claude/hooks');
+
+    const settings = JSON.parse(fs.readFileSync(path.join(tmpDir, '.claude', 'settings.json'), 'utf-8'));
+    const cmd = settings.hooks.SessionStart[0].hooks[0].command;
+    assert.ok(
+      cmd.includes('$CLAUDE_PROJECT_DIR/.claude/hooks/verify-manifest.js'),
+      `command should point at the copied target, got: ${cmd}`
+    );
+    assert.ok(!cmd.includes('lib/hooks'), 'command must NOT reference the package lib/hooks path');
+  } finally {
+    fs.removeSync(tmpDir);
+  }
+})).then(() =>
+
+// Bug 27.8 — migrate an install that still carries the dead legacy command.
+asyncTest('1.1c: migrates legacy lib/hooks command to the copied-target command', async () => {
+  const tmpDir = createTempDir();
+  try {
+    const settingsDir = path.join(tmpDir, '.claude');
+    await fs.ensureDir(settingsDir);
+    await fs.writeFile(
+      path.join(settingsDir, 'settings.json'),
+      JSON.stringify({
+        hooks: {
+          SessionStart: [
+            {
+              matcher: 'startup',
+              hooks: [
+                {
+                  type: 'command',
+                  command: 'node "$CLAUDE_PROJECT_DIR/lib/hooks/claude-code/verify-manifest.js"',
+                  _id: 'ma-agents-verify-manifest'
+                }
+              ]
+            }
+          ]
+        }
+      }, null, 2),
+      'utf-8'
+    );
+
+    await deployClaudeCodeHook(tmpDir);
+
+    const settings = JSON.parse(fs.readFileSync(path.join(settingsDir, 'settings.json'), 'utf-8'));
+    assert.strictEqual(settings.hooks.SessionStart.length, 1, 'legacy entry should be migrated in place, not duplicated');
+    const cmd = settings.hooks.SessionStart[0].hooks[0].command;
+    assert.ok(cmd.includes('.claude/hooks/verify-manifest.js'), 'legacy command should be rewritten to the copied target');
+    assert.ok(!cmd.includes('lib/hooks'), 'legacy lib/hooks command should be gone');
+  } finally {
+    fs.removeSync(tmpDir);
+  }
+})).then(() =>
+
 asyncTest('1.2: preserves existing settings when adding hook', async () => {
   const tmpDir = createTempDir();
   try {
@@ -215,6 +278,11 @@ asyncTest('2.2: cleans up empty hooks object when last hook removed', async () =
     const settingsPath = path.join(tmpDir, '.claude', 'settings.json');
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
     assert.ok(!settings.hooks, 'hooks key should be removed when empty');
+    // Bug 27.8 — the copied hook file must be removed on uninstall too.
+    assert.ok(
+      !fs.existsSync(path.join(tmpDir, '.claude', 'hooks', 'verify-manifest.js')),
+      'copied verify-manifest.js should be removed on uninstall'
+    );
   } finally {
     fs.removeSync(tmpDir);
   }

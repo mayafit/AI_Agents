@@ -77,6 +77,19 @@ async function runAll() {
     } finally { cleanup(dir); }
   });
 
+  // 5.1b — Bug 27.10: composed block must be pure-LF (no CRLF seams from CRLF templates)
+  await test('5.1b composed block contains no carriage returns (bug 27.10)', () => {
+    const dir = mktemp();
+    try {
+      const standard = composeInstructionBlock({ profile: 'standard', projectRoot: dir });
+      assert.ok(!standard.includes('\r'), 'standard profile block must not contain any \\r');
+      if (fs.existsSync(ONPREM_INSTRUCTION_TEMPLATE_PATH)) {
+        const onprem = composeInstructionBlock({ profile: 'on-prem', projectRoot: dir });
+        assert.ok(!onprem.includes('\r'), 'on-prem profile block must not contain any \\r');
+      }
+    } finally { cleanup(dir); }
+  });
+
   // 5.2 — standard profile returns universal only even when on-prem template exists
   await test('5.2 standard profile returns universal-only content', () => {
     const dir = mktemp();

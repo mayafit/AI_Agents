@@ -89,8 +89,8 @@ async function runAll() {
     } finally { cleanup(dir); }
   });
 
-  // 6.4 — setProfile creates file with standard schema when absent
-  await test('6.4 setProfile creates .ma-agents.json with standard schema when absent', () => {
+  // 6.4 — setProfile creates a PROFILE-ONLY root manifest when absent (bug 27.12)
+  await test('6.4 setProfile creates a profile-only .ma-agents.json when absent (bug 27.12)', () => {
     const dir = mktemp();
     try {
       setProfile(dir, 'standard');
@@ -99,9 +99,12 @@ async function runAll() {
       const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
       assert.strictEqual(parsed.profile, 'standard');
       assert.strictEqual(parsed.manifestVersion, '1.2.0', 'new file should be bumped to 1.2.0');
-      assert.ok('agents' in parsed, 'agents array should be initialized');
-      assert.ok('skills' in parsed, 'skills object should be initialized');
-      assert.strictEqual(parsed.scope, 'project');
+      // Bug 27.12 — the root manifest is a profile/settings store, NOT a skill
+      // inventory. It must NOT carry a skills/agents shape it never owns, and it
+      // carries the 'project-root' scope discriminator.
+      assert.ok(!('skills' in parsed), 'root manifest must NOT carry a skills map');
+      assert.ok(!('agents' in parsed), 'root manifest must NOT carry an agents array');
+      assert.strictEqual(parsed.scope, 'project-root');
     } finally { cleanup(dir); }
   });
 
@@ -288,6 +291,39 @@ async function runAll() {
       console.log = originalLog;
       cleanup(dir);
     }
+  });
+
+  // 6.16 — Bug 27.12: setProfile root bootstrap must not write any agent/skills
+  // shape (which previously was the source of the malformed `agents: [null]` of
+  // bug 27.9). With the profile-only root manifest there is simply no agents
+  // field at the root at all.
+  await test('6.16 setProfile bootstrap writes no agent/agents/skills shape at root (bug 27.12)', () => {
+    const dir = mktemp();
+    try {
+      setProfile(dir, 'standard');
+      const parsed = JSON.parse(fs.readFileSync(path.join(dir, '.ma-agents.json'), 'utf-8'));
+      assert.ok(!('agents' in parsed), 'root must not carry an agents array');
+      assert.ok(!('agent' in parsed), 'root must not carry an agent field');
+      assert.ok(!('skills' in parsed), 'root must not carry a skills map');
+    } finally { cleanup(dir); }
+  });
+
+  // 6.17 — Bug 27.9: ensureManifest create branch with null agentId
+  await test('6.17 ensureManifest(root, null, "project") yields agents: [] (bug 27.9)', () => {
+    const dir = mktemp();
+    try {
+      const { ensureManifest } = require('../lib/installer');
+      const m = ensureManifest(dir, null, 'project');
+      assert.deepStrictEqual(m.agents, [], 'create branch must yield empty agents array for null agentId');
+      assert.strictEqual(m.agent, null);
+      // And a real agentId still populates correctly.
+      const dir2 = mktemp();
+      try {
+        const m2 = ensureManifest(dir2, 'claude-code', 'project');
+        assert.deepStrictEqual(m2.agents, ['claude-code']);
+        assert.strictEqual(m2.agent, 'claude-code');
+      } finally { cleanup(dir2); }
+    } finally { cleanup(dir); }
   });
 
   // ─── Report ───

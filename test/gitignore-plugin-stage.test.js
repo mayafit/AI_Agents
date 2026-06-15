@@ -13,10 +13,11 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-const { ensurePluginStageIgnored } = require('../lib/installer');
+const { ensurePluginStageIgnored, ensureBmadDirIgnored } = require('../lib/installer');
 const { PLUGIN_STAGE_DIR_NAME, ensurePluginStageGitignoredForProject } = require('../lib/bmad');
 
 const CANONICAL_ENTRY = `${PLUGIN_STAGE_DIR_NAME}/`;
+const BMAD_CANONICAL_ENTRY = '_bmad/';
 
 function makeProject(gitignoreContent) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-22-8-'));
@@ -266,6 +267,77 @@ test('F2a regression — re-running orchestrator wrapper does not duplicate the 
     }).length;
   assert.strictEqual(matches, 1,
     'three orchestrator-wrapper calls must produce exactly one entry');
+});
+
+// ─── Bug 27.11 — ensureBmadDirIgnored() behaviour ────────────────────────────
+
+test('27.11 — appends _bmad/ when .gitignore exists without it', () => {
+  const dir = makeProject('node_modules/\n');
+  ensureBmadDirIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  assert.ok(written.includes(BMAD_CANONICAL_ENTRY), '_bmad/ must be appended');
+  assert.ok(written.includes('node_modules/'), 'existing entry preserved');
+});
+
+test('27.11 — creates .gitignore with _bmad/ when absent', () => {
+  const dir = makeProject(null);
+  ensureBmadDirIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  assert.ok(written.includes(BMAD_CANONICAL_ENTRY));
+  assert.ok(written.endsWith('\n'));
+});
+
+test('27.11 — idempotent: re-run does not duplicate _bmad/', () => {
+  const dir = makeProject('node_modules/\n');
+  ensureBmadDirIgnored(dir);
+  ensureBmadDirIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const count = written.split(/\r?\n/).filter(l => {
+    const t = l.trim();
+    if (!t || t.startsWith('#')) return false;
+    return ['_bmad', '_bmad/', '/_bmad', '/_bmad/'].includes(t);
+  }).length;
+  assert.strictEqual(count, 1, '_bmad/ must appear exactly once after re-run');
+});
+
+test('27.11 — ignores _bmad/ but NOT _bmad-output/ (distinct entries)', () => {
+  // Critical: _bmad-output is tracked project knowledge and must never be matched
+  // by the _bmad/ policy.
+  const dir = makeProject('node_modules/\n');
+  ensureBmadDirIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const active = written.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  assert.ok(active.includes('_bmad/'), '_bmad/ must be ignored');
+  assert.ok(!active.some(l => l.startsWith('_bmad-output')), '_bmad-output must NOT be added to .gitignore');
+});
+
+test('27.11 — does not re-add _bmad/ when _bmad-output/ already present (no false match)', () => {
+  // A project that tracks _bmad-output (not gitignored) but the test sets up a
+  // pre-existing unrelated _bmad-output line; ensure we still add _bmad/ since
+  // _bmad-output is a different entry and must not satisfy the _bmad/ check.
+  const dir = makeProject('node_modules/\n_bmad-output/build/\n');
+  ensureBmadDirIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const active = written.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  assert.ok(active.includes('_bmad/'), '_bmad/ must be added even when an unrelated _bmad-output line exists');
+});
+
+test('27.11 — wrapper ensurePluginStageGitignoredForProject adds both entries', () => {
+  const dir = makeProject('node_modules/\n');
+  ensurePluginStageGitignoredForProject(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const active = written.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  assert.ok(active.includes(CANONICAL_ENTRY), 'plugin-stage entry present');
+  assert.ok(active.includes(BMAD_CANONICAL_ENTRY), '_bmad/ entry present');
+  assert.ok(!active.some(l => l.startsWith('_bmad-output')), '_bmad-output must remain tracked');
+});
+
+test('27.11 — invalid projectRoot is a no-op', () => {
+  assert.doesNotThrow(() => {
+    ensureBmadDirIgnored(undefined);
+    ensureBmadDirIgnored(null);
+    ensureBmadDirIgnored('');
+  });
 });
 
 // ─── F2a regression — wrapper survives non-fatal write failures ─────────────

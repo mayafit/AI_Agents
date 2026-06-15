@@ -14,6 +14,7 @@
 # updated: 2026-06-05 — Epic 26 (Inline Git Workflow Guardrails) shipped: Stories 26.1 (git instruction-block template + composer wiring) and 26.2 (integration test, all four per-tool targets) done via PRs #98/#100; epic marked done.
 # updated: 2026-06-08 — Epic 27 (BMAD v6.8.0 Integration) added to backlog (7 stories, 27.1-27.7). Driver: BMAD 6.7.0 retired the in-package module-registry YAML and 6.8.0 RELOCATED the external-module list to package-root bmad-modules.yaml (still YAML, same shape), breaking build-bmad-cache.js's REGISTRY_CANDIDATES and the air-gapped build. Bundle set = tea/bmb/cis/gds/wds (type: bmad-org); automator (experimental) excluded; wds is ACTIVE (not retired). 27.1 (confirmation spike, gate) and 27.4 (Cline wrapper reconciliation) are ready-for-dev; the rest are blocked per execution order. Added F23/FR207-FR210/NFR56-NFR57 to PRD; Architecture Decision P5-5. [Same-day correction: an initial draft wrongly said 6.8.0 ships the list as JavaScript and that wds is retired — corrected against the v6.8.0 source and a live install; story 27-2 key renamed off "official-modules-js".]
 # updated: 2026-06-13 — Epic 27 (BMAD v6.8.0 Integration) CLOSED: release gate (Story 27.7) passed. Adversarial + edge-case review of the cumulative diff (2 must-fix folded in: file:// origin URL hardened via pathToFileURL/execFileSync; wds description/docblock corrected from "retired" to active Whiteport Design Studio). Offline-install gate re-proven under Docker --network none — all 5 bundled modules (tea/bmb/cis/gds/wds) pre-populated from the v6.8.0 cache with zero network calls (NFR57/NFR50). Full npm test green on Windows (EOL-robust → Linux/CI parity). Cut v3.12.3 → v3.13.0 (MINOR), CHANGELOG updated, plugin bundle rebuilt at 3.13.0. Epic-27 retrospective captured. 27.5/27.6 review→done; epic-27 → done; 27.7 → review.
+# updated: 2026-06-15 — Epic 27 REOPENED (in-progress) for Workshop-install adversarial-review follow-ups. Root-caused against source via 3 parallel investigators. Added 9 stories: 27.8-27.11 CODING (dead verify-manifest hook path; null-agentId → agents:[null]; mixed CRLF/LF in composed instruction block; _bmad/ not gitignored), 27.12-27.16 ARCHITECTURE (dual .ma-agents.json source-of-truth → skills:{}; no durable BMAD-module exclude → GDS always reinstalled; upstream endsWith('_output_folder') suffix-match bleeds bmb skills/ into gds artifact paths; .yaml-relative vs .toml-{project-root} convention split; .agents/skills dual-pipeline gap missing 34 standalone skills + MANIFEST.yaml). Confirmed NON-issues: no plugin bundle in target (package-resident by design), opencode 45/175 skills/commands split (by design).
 # project: agents
 # project_key: NOKEY
 # tracking_system: file-system
@@ -222,7 +223,7 @@ development_status:
   # PRD unification) are passthrough. FR Coverage: FR207-FR210, NFR56-NFR57 (Architecture Decision P5-5)
   # Dependencies: Epic 25 (v6.6.0 integration — done); Epic 25 stories 25.3/25.4 supply deployClineWorkflows
   # Execution order: 27.1 (gate) → 27.2 → 27.3 → 27.5 → 27.6 → 27.7; 27.4 parallel (verified after 27.5)
-  epic-27: done
+  epic-27: in-progress
   27-1-spike-registry-reader-rework-6-8-0: done
   27-2-point-build-bmad-cache-at-relocated-registry: done
   27-3-update-registry-schema-tests-fail-loud: done
@@ -230,4 +231,16 @@ development_status:
   27-5-bump-bmad-method-6-8-0-rebuild-cache-plugin: done
   27-6-verify-pluginresolver-skill-enumeration-passthrough: done
   27-7-release-gate-offline-verification-semver-cut: review
+  # ── REOPENED 2026-06-15 — Workshop (D:\Code\Workshop) install adversarial review follow-ups ──
+  # Root-caused against source (3 parallel investigators). Verdicts: CODING = 27.8/27.9/27.10/27.11;
+  # ARCHITECTURE = 27.12/27.13/27.14/27.15/27.16. #8 (no plugin bundle in target) confirmed WORKING-AS-INTENDED, no story.
+  27-8-fix-dead-verify-manifest-hook: ready-for-dev          # CODING — lib/installer.js:1928,1970 hardcode $CLAUDE_PROJECT_DIR/lib/... never copied to target
+  27-9-guard-null-agentid-in-manifest-bootstrap: ready-for-dev  # CODING — ensureManifest create-branch unguarded → agents:[null]
+  27-10-normalize-eol-in-composed-instruction-block: ready-for-dev  # CODING — composeInstructionBlock LF joins over CRLF templates
+  27-11-gitignore-regenerated-bmad-tree: ready-for-dev       # CODING — no ensureBmadDirIgnored sibling to ensurePluginStageIgnored
+  27-12-single-source-of-truth-ma-agents-manifest: ready-for-dev  # ARCHITECTURE — root vs per-agent .ma-agents.json (skills:{})
+  27-13-persist-bmad-module-selection-durable-exclude: ready-for-dev  # ARCHITECTURE — bin/cli.js:878-879 "install everything" default, no persisted exclude (GDS)
+  27-14-output-folder-propagation-normalize-module-paths: ready-for-dev  # ARCHITECTURE + UPSTREAM — bmad-method endsWith('_output_folder') suffix-match bleeds bmb skills/ into gds
+  27-15-unify-config-path-convention-yaml-vs-toml: ready-for-dev  # ARCHITECTURE — two upstream generators + writeRepoLayoutConfig third variant
+  27-16-agents-skills-full-population-and-manifest: ready-for-dev  # ARCHITECTURE — dual-pipeline gap; .agents/skills missing 34 standalone skills + MANIFEST.yaml
   epic-27-retrospective: done
