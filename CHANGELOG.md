@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.13.1] - 2026-06-15
+
+Epic 27 follow-ups (stories 27.8–27.16) — fixes surfaced by an adversarial review of a
+real `D:\Code\Workshop` install, root-caused against source. No breaking change to the
+public CLI surface → PATCH.
+
+### Fixed
+
+- **verify-manifest SessionStart hook now works in real installs (27.8)**: the hook is
+  copied into the target's `.claude/hooks/verify-manifest.js` and the command points
+  there, instead of the dead `$CLAUDE_PROJECT_DIR/lib/...` package-relative path that
+  only resolved inside the ma-agents dev repo. Legacy command strings are migrated on
+  upgrade and the copied file is removed on uninstall.
+- **Malformed `agents: [null]` in the project-root manifest (27.9)**: `ensureManifest`'s
+  create branch now guards a null `agentId`, writing `agents: []` instead of `[null]`.
+- **Mixed CRLF/LF in the composed instruction block (27.10)**: `composeInstructionBlock`
+  normalizes EOL at the single return point; instruction-block templates pinned to
+  `eol=lf` via `.gitattributes`.
+- **Regenerated `_bmad/` tree left tracked (27.11)**: the installer now ignores `_bmad/`
+  in `.gitignore` (via a new `ensureBmadDirIgnored` mirroring the plugin-stage helper);
+  `_bmad-output/` remains intentionally tracked.
+- **Custom output folder not propagated to every module (27.14)**: a post-install pass
+  normalizes module artifact paths whose output-folder segment diverged from
+  `[core] output_folder` — working around an upstream `bmad-method` `endsWith('_output_folder')`
+  suffix-match that bled bmb's `skills/` default into gds artifact paths. (Upstream patch
+  tracked separately; vendored code untouched.)
+- **`.agents/skills` missing the standalone catalog + `MANIFEST.yaml` (27.16)**: when a
+  BMAD-populated `.agents/skills` exists but no `.agents`-targeting agent was selected,
+  the standalone catalog and `MANIFEST.yaml` are now backfilled so the dir is consistent.
+
+### Changed
+
+- **BMAD module selection is now persisted (27.13)**: the selected module set is recorded
+  in `.ma-agents.json`, so a deselected module (e.g. `gds`) stays excluded across
+  subsequent installs/reconfigures instead of silently returning. No persisted set →
+  install-all fallback (back-compat).
+- **Config path convention unified (27.15)**: `writeRepoLayoutConfig` emits the
+  `{project-root}/`-prefixed form (matching `config.toml`) instead of adding a third
+  bare-relative variant.
+- **Project-root `.ma-agents.json` is now profile-only (27.12)**: it stores only
+  profile/settings (no empty `skills: {}` / `agents: []` shape it never owned); per-agent
+  skills manifests remain the authoritative inventory and `getStatus` skips the
+  root-scoped manifest. (Minimum-change fix; full single-manifest redesign deferred.)
+
 ## [3.13.0] - 2026-06-13
 
 BMAD-METHOD **v6.8.0** integration (Epic 27). Inherits upstream v6.8.0 features and
