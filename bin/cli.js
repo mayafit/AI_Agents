@@ -33,7 +33,7 @@ const chalk = require('chalk');
 const path = require('path');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
-const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout, migrateRetiredSkills } = require('../lib/installer');
+const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout, migrateRetiredSkills, reconcileAgentsSharedSkills } = require('../lib/installer');
 const { getProfile, setProfile, resolveProfile, getBmadModules, setBmadModules } = require('../lib/profile');
 const { reconfigure: runReconfigure, ReconfigureYesRejectedError, ManifestNotFoundError, RoomodesSlugDivergenceError } = require('../lib/reconfigure');
 const { uninstallProfileArtifacts } = require('../lib/uninstall');
@@ -1351,6 +1351,20 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
       await installSkill(skillId, selectedAgentIds, installPath, installScope, { force: !!forceFlag, yes: yesFlag, batchState });
     } catch (error) {
       console.error(chalk.red(`\n Failed to install ${skillId}:`), error.message);
+    }
+  }
+
+  // Bug 27.16 — if BMAD populated the shared `.agents/skills` dir but no
+  // .agents-targeting agent (copilot/kilocode/roo-code) was selected, the
+  // standalone catalog + MANIFEST.yaml were never written there. Backfill them
+  // so the dir is never BMAD-only without the MANIFEST.yaml the instruction
+  // block points agents at. No-op when an .agents agent was selected or no
+  // shared dir exists.
+  if (installScope === 'project') {
+    try {
+      await reconcileAgentsSharedSkills(process.cwd(), selectedAgentIds, installScope);
+    } catch (err) {
+      console.log(chalk.yellow(` .agents/skills reconciliation skipped: ${err.message}`));
     }
   }
 
