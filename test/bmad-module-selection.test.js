@@ -395,7 +395,10 @@ test('CSV with whitespace from --bmad-modules normalises correctly', () => {
       // Persisting preserves an existing profile field.
       const manifest = JSON.parse(fs.readFileSync(path.join(tmp, '.ma-agents.json'), 'utf8'));
       assert.ok('bmadModules' in manifest);
-      assert.ok('skills' in manifest, 'bootstrap shape preserved');
+      // Bug 27.12 — root manifest is a profile/settings store; it must NOT carry
+      // a skills map. The scope discriminator marks its role.
+      assert.ok(!('skills' in manifest), 'root manifest must not carry a skills map');
+      assert.strictEqual(manifest.scope, 'project-root');
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }

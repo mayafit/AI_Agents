@@ -54,3 +54,45 @@ manifests as the inventory source.
 > `config-layout.test.js`, `config-path-migration.test.js`. If the preferred redesign
 > risks broad test breakage, implement the minimum-change alternative and record the
 > deferral here rather than forcing a risky rewrite.
+
+## Deferral note
+
+**Implemented: the minimum-change alternative. Deferred: the preferred root-authoritative redesign.**
+
+What was done (Epic 27 follow-up commit):
+
+- `lib/profile.js` — added a profile-only root bootstrap (`bootstrapRootManifest`)
+  that emits ONLY `manifestVersion` + a `scope: 'project-root'` discriminator. Both
+  `setProfile` and `setBmadModules` now use it instead of
+  `ensureManifest(root, null, 'project')`. The root `.ma-agents.json` therefore no
+  longer carries the empty `skills: {}` / `agents: []` shape it never owned or
+  back-filled — it can no longer masquerade as a (empty) skill inventory. It stores
+  profile/settings only (`profile`, `bmadModules`, plus any preserved custom fields).
+- `lib/installer.js` (`getStatus`) — added a defensive guard: any manifest carrying
+  `scope === 'project-root'` is explicitly skipped as an inventory source. The
+  per-agent skills manifests (`<tool>/skills/.ma-agents.json`) remain the
+  authoritative inventory, which is what `getStatus`/`uninstall`/reconcile already
+  read via each agent's `getProjectPath()`.
+- Tests updated to the new profile-only root schema: `profile.test.js` (6.4, 6.16),
+  `bmad-module-selection.test.js` (27.13 round-trip). No assertions were weakened —
+  they were re-pointed at the intended new shape. `ensureManifest`'s per-agent
+  create branch (and its 27.9 null-guard) is unchanged and still tested (6.17).
+
+Why the preferred redesign was deferred:
+
+- The "preferred" option makes the project-root `.ma-agents.json` the single
+  authoritative manifest (profile + agents + skills) and reduces per-agent dirs to
+  `MANIFEST.yaml` only, with `installSkill` recording skills into the root. That is a
+  cross-cutting change to skill recording, status, uninstall, reconcile, retired/rename
+  migration, and per-agent manifest readers — exactly the broad-breakage rewrite the
+  story flagged. The minimum-change alternative removes the masquerade defect (the
+  concrete bug: root reports `skills: {}` while skills are installed) without that risk.
+
+Verification: no production reader consults the project-root `.ma-agents.json` for a
+skills inventory (`readManifest` is only ever called with per-agent install paths;
+`getManifestAgents` is only applied to per-agent manifests). The latent defect was the
+root file's *shape* inviting misuse — that shape is now gone, and `getStatus` ignores
+the root-scoped manifest defensively.
+
+Follow-up (not done here): if the team later wants a single authoritative root
+manifest, that is the larger redesign above and should be scoped as its own story.
