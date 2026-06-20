@@ -1,6 +1,10 @@
 # Story 4.1: Visual Studio Agent Registry Entry
 
-Status: ready-for-dev
+Status: Cancelled
+
+<!-- Cancelled 2026-06-20: Epic 4 (Visual Studio Agent Integration) closed with no implementation.
+     Visual Studio agent support was de-scoped; this story is cancelled, not deferred. No code shipped. -->
+
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
