@@ -1,5 +1,5 @@
 ---
-name: Document Revision History
+name: document-revision-history
 description: Manages a revision history table at the beginning of generated documents, tracking changes per version.
 ---
 # Document Revision History

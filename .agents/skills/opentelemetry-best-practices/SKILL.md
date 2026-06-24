@@ -1,5 +1,5 @@
 ---
-name: OpenTelemetry Best Practices
+name: opentelemetry-best-practices
 description: Standardizes distributed tracing, metrics, and semantic conventions for high-quality system observability.
 ---
 # OpenTelemetry Best Practices

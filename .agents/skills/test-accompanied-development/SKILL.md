@@ -1,5 +1,5 @@
 ---
-name: Test-Accompanied Development
+name: test-accompanied-development
 description: Enforces writing unit tests for every new public method created by the agent.
 ---
 # Test-Accompanied Development (TAD)

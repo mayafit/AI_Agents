@@ -1,5 +1,5 @@
 ---
-name: Docker Hardening Verification
+name: docker-hardening-verification
 description: Audits Docker images for security best practices, least privilege, and OpenShift compliance.
 ---
 # Docker Hardening Verification

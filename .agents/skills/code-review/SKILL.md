@@ -1,5 +1,5 @@
 ---
-name: Code Review
+name: code-review
 description: Performs comprehensive code reviews with best practices
 ---
 # Code Review

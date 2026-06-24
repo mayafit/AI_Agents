@@ -1,5 +1,5 @@
 ---
-name: Python Best Practices
+name: python-best-practices
 description: Comprehensive Python coding standards covering PEP 8 conventions, type hinting (3.10+), modern patterns (match/case, exception groups), async, and packaging best practices. Cross-references security-focused Python skills.
 ---
 # Python Best Practices

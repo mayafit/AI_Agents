@@ -1,5 +1,5 @@
 ---
-name: Self-Signed Certificate Generator
+name: self-signed-cert
 description: Generates secure self-signed certificates and Root CAs using OpenSSL.
 ---
 # Self-Signed Certificate Generator

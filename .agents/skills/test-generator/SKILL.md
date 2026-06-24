@@ -1,5 +1,5 @@
 ---
-name: Test Generator
+name: test-generator
 description: Generates comprehensive unit and integration tests
 ---
 # Test Generator

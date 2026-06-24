@@ -1,5 +1,5 @@
 ---
-name: C++ Safe Memory Handling
+name: cpp-memory-handling
 description: Enforces Modern C++ practices (RAII, Smart Pointers) to prevent memory leaks, dangling pointers, and buffer overflows.
 ---
 # C++ Safe Memory Handling

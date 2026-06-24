@@ -1,5 +1,5 @@
 ---
-name: Modern CMake Best Practices
+name: cmake-best-practices
 description: Enforce target-based, property-oriented CMake patterns (CMake 3.0+).
 ---
 # Modern CMake Best Practices (Target-Based Approach)

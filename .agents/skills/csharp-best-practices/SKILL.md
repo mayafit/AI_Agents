@@ -1,5 +1,5 @@
 ---
-name: C# Best Practices
+name: csharp-best-practices
 description: Comprehensive C# coding standards covering modern C# (C# 10-12), async/await, LINQ, dependency injection basics, nullable reference types, and testing conventions.
 ---
 # C# Best Practices

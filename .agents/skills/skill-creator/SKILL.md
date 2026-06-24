@@ -1,5 +1,5 @@
 ---
-name: Skill Creator
+name: skill-creator
 description: Guide for creating effective skills that extend Claude's capabilities with specialized knowledge, workflows, and tool integrations
 ---
 # Skill Creator

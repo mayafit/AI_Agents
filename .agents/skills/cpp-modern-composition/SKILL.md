@@ -1,5 +1,5 @@
 ---
-name: C++ Modern Composition
+name: cpp-modern-composition
 description: Replace legacy C patterns with STL, Ranges, and modern C++ abstractions (C++14+).
 ---
 # C++ Modern Composition (Core Guidelines Section STL, CPL, ES)
