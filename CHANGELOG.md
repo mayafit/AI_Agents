@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.13.2] - 2026-06-26
+
+Skill-discovery fixes surfaced by a real multi-agent install (cline + GitHub Copilot),
+root-caused against source. No breaking change to the public CLI surface → PATCH.
+
+### Fixed
+
+- **SKILL.md frontmatter `name` now matches the skill folder id (#120)**: the installer
+  injected `skill.json`'s human-readable display name (e.g. `Git Workflow`) as the
+  generated SKILL.md frontmatter `name`, while the directory uses the kebab id
+  (`git-workflow-skill`). Strict validators such as cline require the frontmatter name
+  to match the containing directory, so 31 of 44 standalone skills failed to load.
+  `performInstall` now emits `name: <skillId>` for every agent target; `skill.json`
+  keeps its display name for listings/wizard UI.
+- **GitHub Copilot now discovers installed skills (#121)**: the skill-bootstrap
+  instruction (the "read `.agents/skills/MANIFEST.yaml`" block) was written to
+  `.github/copilot/copilot.md`, a path Copilot does not read. It now lands in
+  `.github/copilot-instructions.md` — the repository custom-instructions file Copilot
+  actually loads (VS Code, Visual Studio, github.com), as the PRD specifies. Skills were
+  installed correctly under `.agents/skills/` all along; only the bootstrap pointer was
+  misplaced.
+
 ## [3.13.1] - 2026-06-15
 
 Epic 27 follow-ups (stories 27.8–27.16) — fixes surfaced by an adversarial review of a
