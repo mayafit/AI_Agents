@@ -176,7 +176,7 @@ async function runAll() {
         '.roo/rules/00-ma-agents.md',
         '.cursor/cursor.md',
         '.kilocode/kilocode.md',
-        '.github/copilot/copilot.md',
+        '.github/copilot-instructions.md',
         '.gemini/gemini.md',
         '.antigravity/antigravity.md',
         '.roomodes'
@@ -233,7 +233,7 @@ async function runAll() {
         '.roo/rules/00-ma-agents.md',
         '.cursor/cursor.md',
         '.kilocode/kilocode.md',
-        '.github/copilot/copilot.md',
+        '.github/copilot-instructions.md',
         '.gemini/gemini.md',
         '.antigravity/antigravity.md',
         'AGENTS.md',

@@ -166,7 +166,7 @@ Skills can be installed into any of these AI coding agents:
 |------|-------------|----------|------------------|
 | Claude Code | `.claude/skills/` | `claude-code` | `.claude/CLAUDE.md` |
 | Google Gemini | `.gemini/skills/` | `generic` | `.gemini/gemini.md` |
-| GitHub Copilot | `.github/skills/` | `generic` | `.github/copilot/copilot.md` |
+| GitHub Copilot | `.agents/skills/` | `generic` | `.github/copilot-instructions.md` |
 | Cursor | `.cursor/skills/` | `generic` | `.cursor/cursor.md` |
 | Kilocode | `.kilocode/skills/` | `generic` | `.kilocode/kilocode.md` |
 | Cline | `.cline/skills/` | `cline` | `.cline/clinerules.md` |
