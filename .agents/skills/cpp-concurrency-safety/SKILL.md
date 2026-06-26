@@ -1,5 +1,5 @@
 ---
-name: C++ Safety-First Concurrency
+name: cpp-concurrency-safety
 description: Enforce safe multi-threading patterns using RAII locking and task-based parallelism (C++14+).
 ---
 # C++ Safety-First Concurrency (Core Guidelines Section CP)

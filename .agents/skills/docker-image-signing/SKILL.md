@@ -1,5 +1,5 @@
 ---
-name: Docker Image Signing
+name: docker-image-signing
 description: Automates the signing of Docker images using certificates and Cosign/Notary.
 ---
 # Docker Image Signing

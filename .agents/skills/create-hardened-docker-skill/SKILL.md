@@ -1,5 +1,5 @@
 ---
-name: Create Hardened Docker
+name: create-hardened-docker-skill
 description: Creates production-ready hardened Docker configurations following CIS, OWASP, and NIST standards
 ---
 # Create Hardened Docker

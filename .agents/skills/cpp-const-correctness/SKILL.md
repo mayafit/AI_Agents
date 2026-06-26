@@ -1,5 +1,5 @@
 ---
-name: C++ Const-Correctness & Logic
+name: cpp-const-correctness
 description: Enforce immutability-by-default and push logic to compile-time using constexpr (C++14+).
 ---
 # C++ Const-Correctness & Logic (Core Guidelines Section Con & ES)

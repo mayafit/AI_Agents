@@ -1,5 +1,5 @@
 ---
-name: Python Security Best Practices
+name: python-security-skill
 description: Enforce secure Python coding standards following OWASP Top 10 2025.
 ---
 # Python Security Best Practices (OWASP 2025 aligned)

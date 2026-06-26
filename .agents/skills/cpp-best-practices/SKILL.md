@@ -1,5 +1,5 @@
 ---
-name: C++ Best Practices
+name: cpp-best-practices
 description: Comprehensive C++ coding standards covering naming conventions, modern C++ idioms (C++17/20/23), error handling, and build guidelines. Cross-references domain-specific C++ skills for deep-dives.
 ---
 # C++ Best Practices

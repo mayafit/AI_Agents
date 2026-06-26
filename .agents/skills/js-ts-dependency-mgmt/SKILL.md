@@ -1,5 +1,5 @@
 ---
-name: JS/TS Dependency Management
+name: js-ts-dependency-mgmt
 description: Standardize package management and security across NPM, Yarn, and PNPM.
 ---
 # JS/TS Dependency Management (NPM, Yarn, PNPM)

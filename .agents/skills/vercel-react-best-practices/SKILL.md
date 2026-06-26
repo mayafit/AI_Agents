@@ -1,5 +1,5 @@
 ---
-name: Vercel React Best Practices
+name: vercel-react-best-practices
 description: Performance optimization framework for React and Next.js projects with 57 actionable rules across 8 categories
 ---
 # Vercel React Best Practices

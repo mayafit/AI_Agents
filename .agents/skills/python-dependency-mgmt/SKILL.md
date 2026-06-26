@@ -1,5 +1,5 @@
 ---
-name: Python Dependency Management
+name: python-dependency-mgmt
 description: Standardize Python dependency handling using uv and pip (requirements.txt).
 ---
 # Python Dependency Management (uv & pip)

@@ -1,5 +1,5 @@
 ---
-name: Code Documentation Best Practices
+name: code-documentation
 description: Standardize file headers and method documentation across C++, C#, JS, TS, and Python.
 ---
 # Code Documentation Best Practices

@@ -286,6 +286,38 @@ async function runAll() {
     } finally { cleanup(dir); }
   });
 
+  // 7.2.13 — performInstall injects a SPEC-COMPLIANT frontmatter `name:` that
+  // matches the skill's directory id (kebab-case), NOT the human-readable
+  // display name from skill.json. Strict validators (e.g. cline) reject a
+  // SKILL.md whose frontmatter name differs from its folder, so the injected
+  // name must equal skillId. Regression guard for the "Git Workflow" vs
+  // "git-workflow-skill" mismatch bug.
+  await test('7.2.13 performInstall injects frontmatter name matching the skill folder id', async () => {
+    const { performInstall } = installer;
+    assert.strictEqual(typeof performInstall, 'function', 'performInstall must be exported');
+
+    // Pick a real skill whose display name differs from its id so the test
+    // would catch a regression to "inject display name".
+    const skill = listSkills().find(s => s.name !== s.id);
+    assert.ok(skill, 'expected at least one skill whose display name differs from its id');
+
+    const agent = getAllAgents()[0];
+    const dir = mktemp();
+    try {
+      const ok = await performInstall(skill.id, skill, agent, dir);
+      assert.strictEqual(ok, true, 'performInstall should succeed for a real skill');
+
+      const content = fs.readFileSync(path.join(dir, skill.id, 'SKILL.md'), 'utf-8');
+      const m = content.match(/^---\s*\n([\s\S]*?)\n---/);
+      assert.ok(m, 'installed SKILL.md must have a YAML frontmatter block');
+      const nameLine = m[1].split('\n').find(l => l.startsWith('name:'));
+      assert.ok(nameLine, 'frontmatter must contain a name field');
+      const injected = nameLine.slice('name:'.length).trim();
+      assert.strictEqual(injected, skill.id,
+        `injected frontmatter name must equal the folder id '${skill.id}', got '${injected}'`);
+    } finally { cleanup(dir); }
+  });
+
   // ─── Report ───
   console.log(`\n  ${passed} passed, ${failed} failed\n`);
   if (failed > 0) {

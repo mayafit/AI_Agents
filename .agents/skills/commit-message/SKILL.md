@@ -1,5 +1,5 @@
 ---
-name: Commit Message Generator
+name: commit-message
 description: Generates conventional commit messages from code changes
 ---
 # Commit Message Generator

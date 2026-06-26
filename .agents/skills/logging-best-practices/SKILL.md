@@ -1,5 +1,5 @@
 ---
-name: Logging Best Practices
+name: logging-best-practices
 description: Standardizes structured logging across Backend, Frontend, Realtime, and Algorithmic domains with mandatory exception handling.
 ---
 # Logging Best Practices

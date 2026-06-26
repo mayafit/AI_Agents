@@ -1,5 +1,5 @@
 ---
-name: C++ Robust Interfaces
+name: cpp-robust-interfaces
 description: Enforce contract-based design and strong typing in C++ interfaces (C++14+).
 ---
 # C++ Robust Interfaces (Core Guidelines Section I & E)

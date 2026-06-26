@@ -1,5 +1,5 @@
 ---
-name: Git Workflow
+name: git-workflow-skill
 description: MANDATORY worktree-based workflow for ALL file-changing activities. Enforces isolated feature branches, conventional commits, and PR-based merging.
 ---
 # Mandatory Usage Policy (CRITICAL)

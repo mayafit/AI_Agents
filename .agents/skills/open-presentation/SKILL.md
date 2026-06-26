@@ -1,5 +1,5 @@
 ---
-name: Open Presentation
+name: open-presentation
 description: Opens the BMAD-METHOD AI Development Training presentation from _bmad-output/methodology/
 ---
 # Open Presentation Skill

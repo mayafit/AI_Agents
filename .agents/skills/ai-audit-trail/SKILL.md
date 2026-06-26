@@ -1,5 +1,5 @@
 ---
-name: AI Audit Trail
+name: ai-audit-trail
 description: Tracks AI agent session activity, time spent, and token usage in a project-level AiAudit.md log file.
 ---
 # AI Audit Trail

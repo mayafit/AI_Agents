@@ -1,5 +1,5 @@
 ---
-name: Verify Hardened Docker
+name: verify-hardened-docker-skill
 description: Comprehensive security verification for Docker configurations against CIS, OWASP, and NIST standards
 ---
 # Verify Hardened Docker
