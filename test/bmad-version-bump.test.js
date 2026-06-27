@@ -1,33 +1,36 @@
 #!/usr/bin/env node
 /**
- * Tests for Story 24.1: Bump bmad-method to 6.6.0 and Audit fs-extra Compatibility
+ * Tests for Story 28.1: Bump bmad-method to 6.9.0 + Rebuild Cache and Plugin (Gate)
  *
- * Task 1: Verify package.json dependency updated to 6.6.0
- * Task 2: Verify build:bmad-cache reads the relocated v6.8.0 registry contract
+ * Task 1: Verify package.json dependency + live install pinned at 6.9.0
+ * Task 2: Verify build:bmad-cache reads the package-root registry contract
  * Task 3: Verify bmad.js CLI compatibility with bmad-cli.js entry point
  * Task 4: Verify prePopulateBmadCache compatibility
  *
- * Originally authored for Story 15.1 (6.2.2). Rewritten for Story 22.1 (6.3.0),
- * updated for Story 24.1 (6.6.0). The installer layout remains the same as 6.3.0
- * (tools/installer/bmad-cli.js, tools/installer/modules/registry-fallback.yaml,
- * tools/installer/commands/install.js). fs-extra removed in 6.4.0 → replaced with
- * native node:fs in bmad-method internals; ma-agents continues to use its own fs-extra.
+ * Lineage: originally Story 15.1 (6.2.2); rewritten for Story 22.1 (6.3.0);
+ * updated for Story 24.1 (6.6.0); Story 27.3/27.5 moved the pin to 6.8.0 and
+ * reworked the registry contract; Story 28.1 bumps the pin to 6.9.0. The
+ * installer layout is unchanged since 6.3.0 (tools/installer/bmad-cli.js,
+ * tools/installer/commands/install.js). fs-extra removed in 6.4.0 → replaced
+ * with native node:fs in bmad-method internals; ma-agents keeps its own fs-extra.
  *
- * Story 27.3 rewrote the "Task 2" registry-schema/filter assertions. The module
- * source relocated to a package-root `bmad-modules.yaml` at v6.8.0 (Decision
- * P5-5) and the bundle decision moved from a `built_in` flag to a `type` field
- * (`type: bmad-org` cloned; `type: experimental` excluded). The reworked reader
- * (Story 27.2, scripts/build-bmad-cache.js) tags that schema `package-root-v68`
- * and fails loud (NFR56) if it ever resolves fewer than the known bundled set.
+ * The module source lives in a package-root `bmad-modules.yaml` (relocated at
+ * v6.8.0, Decision P5-5; UNCHANGED at v6.9.0, Decision P5-6) and the bundle
+ * decision is a `type` field (`type: bmad-org` cloned; `type: experimental`
+ * excluded). The reader (scripts/build-bmad-cache.js) tags that schema
+ * `package-root-v68` and fails loud (NFR56) if it ever resolves fewer than the
+ * known bundled set.
  *
- * IMPORTANT: this repo still PINS bmad-method 6.6.0 (the bump to 6.8.0 is Story
- * 27.5), so the *installed* package and the committed cache-manifest.json still
- * carry the pre-6.8.0 v63/registry-fallback shape. The 6.8.0 contract below is
- * therefore driven entirely by in-repo FIXTURES + the pure reader functions
- * exported by build-bmad-cache.js — never the live install or live manifest, and
- * never the network or a live clone (AC5, air-gapped CI gate). The version-
- * agnostic invariants (manifest shape, SHA format) continue to read the live
- * committed manifest.
+ * v6.9.0 GATE NOTE (Story 28.1 / P5-6): unlike the 27.x cycle — when this repo
+ * still pinned an older bmad-method so the registry contract could only be
+ * exercised against in-repo FIXTURES — the tree now genuinely installs 6.9.0.
+ * The reader-contract assertions below remain fixture-driven (they test the pure
+ * reader in isolation, offline), and a dedicated LIVE-INSTALL assertion now
+ * re-confirms, against the npm-installed bmad-method@6.9.0 on disk, that the
+ * package-root `bmad-modules.yaml` path AND schema are unchanged versus v6.8.0
+ * — the hard verification gate that the "registry unchanged ⇒ no reader change"
+ * claim (verified out-of-tree via tag clone + `gh` compare) actually holds for
+ * the shipped package. No network or live clone is performed (air-gapped CI gate).
  */
 'use strict';
 
@@ -196,25 +199,60 @@ function runScript(scriptPath, env) {
   }
 }
 
-console.log('\nStory 24.1: Bump bmad-method to 6.6.0 and Audit fs-extra Compatibility\n');
+console.log('\nStory 28.1: Bump bmad-method to 6.9.0 + Rebuild Cache and Plugin\n');
 
 // ---- Task 1: package.json dependency ----
 
 console.log('Task 1: package.json dependency');
 
-test('package.json pins bmad-method at 6.8.0 (exact, no caret/tilde)', () => {
+test('package.json pins bmad-method at 6.9.0 (exact, no caret/tilde)', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
-  assert.strictEqual(pkg.dependencies['bmad-method'], '6.8.0');
+  assert.strictEqual(pkg.dependencies['bmad-method'], '6.9.0');
 });
 
-test('installed bmad-method is version 6.8.0', () => {
+test('installed bmad-method is version 6.9.0', () => {
   const bmadPkg = JSON.parse(
     fs.readFileSync(path.join(projectRoot, 'node_modules', 'bmad-method', 'package.json'), 'utf8')
   );
-  assert.strictEqual(bmadPkg.version, '6.8.0');
+  assert.strictEqual(bmadPkg.version, '6.9.0');
 });
 
-test('require.resolve finds bmad-cli.js (6.6.0 entry point)', () => {
+// ---- Story 28.1 AC3 (P5-6 hard verification gate): LIVE-INSTALL registry check ----
+//
+// The "registry unchanged at v6.9.0 ⇒ no build-bmad-cache.js reader change" claim
+// was verified OUT-OF-TREE (shallow tag clone + `gh` tag-to-tag compare). This
+// assertion re-confirms it against the npm-INSTALLED bmad-method@6.9.0 on disk:
+// it resolves the package root via require.resolve and asserts the shipped
+// `bmad-modules.yaml` exists there (path unchanged) with a `modules:` map whose
+// entries carry code/url/name/type (schema unchanged), and that the bundled
+// `type: bmad-org` set is exactly tea/bmb/cis/gds/wds with automator excluded.
+// Fully offline (reads the installed file; no network, no clone). If the path or
+// schema ever drifts, THIS is the gate that fails — not a silently thin cache.
+test('AC3 (P5-6 gate): live-installed bmad-modules.yaml is at the package root, schema unchanged vs v6.8.0', () => {
+  const bmadRoot = path.dirname(require.resolve('bmad-method/package.json'));
+  const registryPath = path.join(bmadRoot, 'bmad-modules.yaml');
+  assert.ok(
+    fs.existsSync(registryPath),
+    `HALT (P5-6 drift): bmad-modules.yaml not at the package root (${registryPath}). The registry may have relocated at v6.9.0 — build-bmad-cache.js's reader would need rework; do not paper over.`
+  );
+  const yaml = require('js-yaml');
+  const doc = yaml.load(fs.readFileSync(registryPath, 'utf8'));
+  assert.ok(doc && doc.modules && typeof doc.modules === 'object',
+    'live registry must expose a `modules:` map (the v6.8.0 schema shape)');
+  const entries = Object.values(doc.modules);
+  for (const e of entries) {
+    assert.ok(e.code && e.url && e.name && e.type,
+      `every live registry entry must carry code/url/name/type (got ${JSON.stringify(e)})`);
+  }
+  const bundled = entries.filter(e => e.type === 'bmad-org').map(e => e.code).sort();
+  assert.deepStrictEqual(bundled, ['bmb', 'cis', 'gds', 'tea', 'wds'],
+    `live bundled type: bmad-org set must be tea/bmb/cis/gds/wds; got ${bundled.join(', ')}`);
+  const experimental = entries.filter(e => e.type === 'experimental').map(e => e.code);
+  assert.ok(experimental.includes('automator'),
+    'automator must remain type: experimental (excluded from the bundle) at v6.9.0');
+});
+
+test('require.resolve finds bmad-cli.js (6.9.0 entry point)', () => {
   const resolved = require.resolve('bmad-method/tools/installer/bmad-cli.js');
   assert.ok(resolved.includes('bmad-cli.js'), `Unexpected path: ${resolved}`);
   assert.ok(fs.existsSync(resolved), `File does not exist: ${resolved}`);
@@ -226,9 +264,10 @@ test('require.resolve finds bmad-cli.js (6.6.0 entry point)', () => {
 // `registry-fallback.yaml` path, the `built_in`-flag filter, and wds-as-retired.
 // They now pin the relocated package-root YAML source tag (`package-root-v68`),
 // the `type`-based filter (bmad-org in / experimental out), and wds-as-active.
-// The 6.8.0 contract is driven by FIXTURE_V68 + the exported reader (see header)
-// because the tree still installs 6.6.0; no live registry, manifest, network, or
-// clone is touched here.
+// These reader-contract assertions stay driven by FIXTURE_V68 + the exported
+// reader (see header) so the pure reader logic is exercised in isolation, offline
+// — no network or clone. The LIVE-installed registry (now bmad-method@6.9.0) is
+// re-confirmed separately by the Task 1 "AC3 (P5-6 gate)" assertion above.
 
 console.log('\nTask 2: relocated v6.8.0 registry contract (fixture-driven)');
 
@@ -371,11 +410,20 @@ test('AC3/AC5/NFR56: a missing relocated YAML (registry moved again) exits non-z
   }
 });
 
-test('cache-manifest.json exists and records bmadMethodVersion 6.8.0', () => {
+test('cache-manifest.json exists and records bmadMethodVersion 6.9.0', () => {
   const manifestPath = path.join(projectRoot, 'lib', 'bmad-cache', 'cache-manifest.json');
   assert.ok(fs.existsSync(manifestPath), `Manifest not found at ${manifestPath}`);
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  assert.strictEqual(manifest.bmadMethodVersion, '6.8.0');
+  assert.strictEqual(manifest.bmadMethodVersion, '6.9.0');
+});
+
+test('cache-manifest.json registrySchema is unchanged (package-root-v68) at v6.9.0', () => {
+  // P5-6: the registry path/schema did not move at v6.9.0, so the schema tag the
+  // reader stamps is carried forward verbatim — a drift here would signal the
+  // reader resolved a different (relocated) source.
+  const manifestPath = path.join(projectRoot, 'lib', 'bmad-cache', 'cache-manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  assert.strictEqual(manifest.registrySchema, 'package-root-v68');
 });
 
 test('cache-manifest.json contains at least the v6.6.0 official modules (bmb, cis, gds, tea)', () => {
@@ -430,7 +478,7 @@ console.log('\nTask 3: bmad.js CLI compatibility');
 
 const bmad = require('../lib/bmad');
 
-test('getBmadCommand resolves bmad-cli.js from 6.6.0', () => {
+test('getBmadCommand resolves bmad-cli.js from 6.9.0', () => {
   const result = bmad.buildBmadArgs({
     projectRoot: '/test',
     modules: ['bmm'],
@@ -468,73 +516,73 @@ function readInstallCommand() {
   throw new Error(`install.js not found in any known location: ${candidates.join(', ')}`);
 }
 
-test('6.6.0 CLI accepts --directory flag', () => {
+test('6.9.0 CLI accepts --directory flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--directory'), '6.6.0 install.js missing --directory flag');
+  assert.ok(content.includes('--directory'), '6.9.0 install.js missing --directory flag');
 });
 
-test('6.6.0 CLI accepts --modules flag', () => {
+test('6.9.0 CLI accepts --modules flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--modules'), '6.6.0 install.js missing --modules flag');
+  assert.ok(content.includes('--modules'), '6.9.0 install.js missing --modules flag');
 });
 
-test('6.6.0 CLI accepts --tools flag', () => {
+test('6.9.0 CLI accepts --tools flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--tools'), '6.6.0 install.js missing --tools flag');
+  assert.ok(content.includes('--tools'), '6.9.0 install.js missing --tools flag');
 });
 
-test('6.6.0 CLI accepts the current custom-module flag', () => {
+test('6.9.0 CLI accepts the current custom-module flag', () => {
   // bmad-method 6.3.0 renamed --custom-content to --custom-source.
   // Accept either so the test survives both versions during bisects and
   // documents the rename.
   const { content } = readInstallCommand();
   const hasFlag = content.includes('--custom-source') || content.includes('--custom-content');
-  assert.ok(hasFlag, '6.6.0 install.js missing both --custom-source and --custom-content flags');
+  assert.ok(hasFlag, '6.9.0 install.js missing both --custom-source and --custom-content flags');
 });
 
-test('buildBmadArgs uses --custom-source on v6.6.0 (was --custom-content on v6.2.x)', () => {
+test('buildBmadArgs uses --custom-source on v6.9.0 (was --custom-content on v6.2.x)', () => {
   // Verify the dynamic flag resolver picks the right name for the installed
-  // bmad-method. On v6.6.0 it must be --custom-source; on v6.2.x it stays
+  // bmad-method. On v6.9.0 it must be --custom-source; on v6.2.x it stays
   // --custom-content. This is what makes AC #6 (scratch install) work.
   const flag = bmad.resolveCustomContentFlag();
   assert.ok(['--custom-source', '--custom-content'].includes(flag),
     `Unexpected flag returned: ${flag}`);
-  // Since we pin 6.6.0 in this repo, assert the specific value:
+  // Since we pin 6.9.0 in this repo, assert the specific value:
   assert.strictEqual(flag, '--custom-source',
-    `Expected --custom-source for bmad-method 6.6.0, got ${flag}`);
+    `Expected --custom-source for bmad-method 6.9.0, got ${flag}`);
 });
 
-test('6.6.0 CLI accepts --action flag', () => {
+test('6.9.0 CLI accepts --action flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--action'), '6.6.0 install.js missing --action flag');
+  assert.ok(content.includes('--action'), '6.9.0 install.js missing --action flag');
 });
 
-test('6.6.0 CLI accepts --yes flag', () => {
+test('6.9.0 CLI accepts --yes flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--yes'), '6.6.0 install.js missing --yes flag');
+  assert.ok(content.includes('--yes'), '6.9.0 install.js missing --yes flag');
 });
 
-test('6.6.0 CLI accepts --user-name flag', () => {
+test('6.9.0 CLI accepts --user-name flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--user-name'), '6.6.0 install.js missing --user-name flag');
+  assert.ok(content.includes('--user-name'), '6.9.0 install.js missing --user-name flag');
 });
 
-test('6.6.0 CLI accepts --communication-language flag', () => {
+test('6.9.0 CLI accepts --communication-language flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--communication-language'), '6.6.0 install.js missing --communication-language flag');
+  assert.ok(content.includes('--communication-language'), '6.9.0 install.js missing --communication-language flag');
 });
 
-test('6.6.0 CLI accepts --document-output-language flag', () => {
+test('6.9.0 CLI accepts --document-output-language flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--document-output-language'), '6.6.0 install.js missing --document-output-language flag');
+  assert.ok(content.includes('--document-output-language'), '6.9.0 install.js missing --document-output-language flag');
 });
 
-test('6.6.0 CLI accepts --output-folder flag', () => {
+test('6.9.0 CLI accepts --output-folder flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--output-folder'), '6.6.0 install.js missing --output-folder flag');
+  assert.ok(content.includes('--output-folder'), '6.9.0 install.js missing --output-folder flag');
 });
 
-test('module.yaml custom-content format is still referenced by 6.6.0 installer', () => {
+test('module.yaml custom-content format is still referenced by 6.9.0 installer', () => {
   // 6.3.0 consolidated the custom-module flow into
   // tools/installer/modules/custom-module-manager.js (the legacy
   // tools/cli/installers/lib/custom/handler.js was removed). This structure
