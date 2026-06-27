@@ -4979,3 +4979,108 @@ scripts/
 **Technical notes:**
 - The offline gate is the single most important acceptance check in this epic — it is the requirement the registry removal threatened.
 - Reuse the offline CI gate established in Epic 22 (NFR50).
+
+---
+
+## Epic 28: BMAD v6.9.0 Integration (Phase 5)
+
+**Goal:** Upgrade bmad-method from v6.8.0 to v6.9.0 as a **lean pin bump with NO cache-reader change** — the deliberate contrast with Epic 27. A verified source diff of the v6.8.0…v6.9.0 tags confirms the module registry `bmad-modules.yaml` is **UNCHANGED**: both **path** (package-root) and **schema** (the `modules:` map with `code`/`url`/`name`/`type`) are identical to v6.8.0, so the Story 27.2 reader, the `type: bmad-org` filter, and the NFR56 thin-cache fail-loud guard all still resolve verbatim. The v6.8.0 registry-relocation break (FR207) **does not recur** and `scripts/build-bmad-cache.js` needs no change — but the bump still **re-verifies** the registry path + schema as a confirmation gate so a future silent relocation is caught, not assumed away. The only **behavioral** upstream change touching ma-agents' code path is in the installer: v6.9.0 replaces the legacy `python3`-presence probe with a `uv` environment check that is **warn-don't-block** (new stdout text + a "uv recommended" banner, but same CLI flags and same exit codes; the install proceeds when `uv` is absent). Everything else — the `bmad-forge-idea` core skill, the `bmad-architecture` lean-spine rewrite (with `bmad-create-architecture` kept as a forwarding shim until BMAD v7), the `src/scripts/memlog.py` working-memory primitive, party-mode/brainstorming enhancements, the Astro 6 security upgrade, the WSL-runs-Windows-Node installer guard, empty-skill-group cleanup, and the new installer platform targets hermes-agent + CodeWhale — is upstream-internal passthrough.
+
+**Value:** Keeps ma-agents aligned with the canonical BMAD release line (purpose: "as aligned with BMAD as possible") and adopts upstream v6.9.0 features and reliability fixes transparently, while preserving the air-gapped self-containment guarantee the on-prem disconnected distribution depends on. Because the registry is unchanged, the integration is right-sized as a lean bump — no churn to the P5-5 reader — with the cost concentrated in a small set of regression guards that pin the upstream installer's `uv`-transition behavior and the ma-agents-owned-Python scoping boundary so neither can silently regress later.
+
+**Dependencies:** Epic 27 (BMAD v6.8.0 Integration) complete — it is (cut v3.13.0, marked done). Epic 27 supplies the relocated-YAML cache reader, the `type: bmad-org` filter, the NFR56 thin-cache fail-loud guard, and the `deployClineWorkflows` reconcile-and-prune logic (FR209/FR210) that this epic carries forward verbatim and reuses without modification.
+
+**Execution order:** 28.1 → (28.2 ∥ 28.3) → 28.4. Story 28.1 is the **hard gate**: it bumps the pin, re-verifies the registry path/schema is unchanged, and rebuilds the cache + plugin from v6.9.0 — no other story's verification is meaningful until the v6.9.0 tree is actually on disk. Stories 28.2 (uv-transition guardrails) and 28.3 (passthrough reconciliation) are independent of each other and run in parallel once 28.1 lands. Story 28.4 is the release gate and depends on all three.
+
+**FR Coverage:** FR211, FR212, FR213, FR214, NFR58, NFR59.
+
+**Architecture:** Decision P5-6 (BMAD v6.9.0 Integration — Pin Bump (No Reader Change) + Installer-Output Resilience) in `_bmad-output/planning-artifacts/architecture.md`. Supersedes the v6.8.0 pin in P5-5 / FR208.
+
+**Out of scope:**
+- Any change to `scripts/build-bmad-cache.js`'s reader, `REGISTRY_CANDIDATES`, `parseModulesYaml()`, or the `type`-based filter. The registry path AND schema are unchanged at v6.9.0; touching the P5-5 reader would be churn with no upstream driver. The bump re-verifies the path/schema (read-only confirmation) — it does not rework it.
+- Re-authoring or forking any BMAD core skill (`bmad-forge-idea`, `bmad-architecture`, `bmad-create-architecture`, etc.). ma-agents passes these through from `node_modules/bmad-method`; the new skill, the architecture rewrite, and the forwarding shim are upstream-internal. The only ma-agents-side reconciliation is generated artifacts (Story 28.3).
+- Migrating ma-agents **control-plane / tooling** Python (the `scripts/build-bmad-cache.js` Python peers and the agent-skill activation steps that invoke `python3 {project-root}/_bmad/scripts/resolve_customization.py`) to `uv run`. The upstream `uv` change is an installer-environment probe governing BMAD-installed skill scripts, which ma-agents neither owns nor modifies. Migrating ma-agents control-plane Python would add a `uv` runtime dependency to the air-gapped install surface (NFR58) for no benefit. Explicitly forbidden (FR213) and pinned by a regression guard (Story 28.2). **Note:** the `ml-experiment`/`ml-infra`/`ml-eda` skills' `uv run python` guidance is *not* in scope here — that guidance runs the **user's** ML-project scripts in the user's own `uv` environment, not ma-agents tooling, and is intentionally retained.
+- Adding the new installer platform targets **hermes-agent** and **CodeWhale** to ma-agents' own platform registry (`lib/agents.js`). Passthrough already deploys upstream support; first-class adoption pulls in the full per-tool routing / instruction-injection / skill-resolution stack for two platforms with no current demand. Deferred to a future story if demand appears (Story 28.3 asserts the deferral).
+- Adding new stdout-string parsing to surface a richer ma-agents-side `uv` message. Stdout-string parsing is exactly the fragility FR212 forbids — exit-code-only decisioning is the durable contract.
+
+### Story 28.1: Bump bmad-method to v6.9.0 + Rebuild Cache and Plugin (Gate)
+
+**Status:** backlog
+**Size:** Small
+**Priority:** Critical (gate — blocks all other implementation)
+
+**User Story:** As a ma-agents user, I get all upstream v6.9.0 additions (`bmad-forge-idea`, the `bmad-architecture` rewrite, `memlog.py`, party-mode/brainstorming enhancements, the Astro 6 security upgrade, the WSL-runs-Windows-Node installer guard) inherited transparently via the version bump, with no manual intervention, and the bundled offline cache is rebuilt from v6.9.0 with the full module set intact. (FR211, NFR58)
+
+**Acceptance Criteria:**
+1. `package.json` `bmad-method` field is updated from `6.8.0` to `6.9.0` (exact pin, no caret/tilde); `npm install` is run; `package-lock.json` and `node_modules/bmad-method/package.json` both show `6.9.0`.
+2. `BMAD_TARGET_VERSION` in `lib/bmad.js` reads `'6.9.0'`, and `bmad_min_version` in `lib/bmad-extension-plugin/.claude-plugin/marketplace.json` (via its `marketplace.json.template`) reads `6.9.0` (lockstep with the pin, per the `plugin-manifests` convention).
+3. **Registry re-verification gate (the P5-6 key contrast):** on the bump, it is confirmed against the installed v6.9.0 package that `bmad-modules.yaml` is unchanged versus v6.8.0 — same package-root **path** and same **schema** (a `modules:` map with `code`/`url`/`name`/`type`). `scripts/build-bmad-cache.js` is changed **NOT at all** (no edit to `REGISTRY_CANDIDATES`, `parseModulesYaml()`, or the `type`-based filter). If the path or schema is found to differ, the bump halts and the discrepancy is escalated (guard against silent drift) rather than papered over.
+4. `npm run build:bmad-cache` exits 0 against v6.9.0 and resolves the full `type: bmad-org` bundled set — **tea, bmb, cis, gds, wds** — with `bmm`/`core` absent (built-in, never cloned) and `automator` absent (`type: experimental`); the NFR56 thin-cache fail-loud guard is confirmed still intact (a resolved set smaller than the known set, or no locatable source, would exit non-zero with no partial manifest).
+5. `lib/bmad-cache/cache-manifest.json` is regenerated: `bmadMethodVersion` reads `6.9.0`; `registrySchema` is unchanged from v6.8.0 (`package-root-v68` carried forward, since the source path/schema did not move).
+6. `npm run build:plugin` is run; `lib/bmad-extension-plugin/` is regenerated and committed verbatim; the CI Bundle Drift Guard passes, and the regenerated diff is reviewed line-by-line to confirm it contains only the expected version bump + ma-agents-owned changes (no unexplained drift).
+7. `npm test` is green on Linux/CI; the version-pin assertions in `test/bmad-version-bump.test.js` are updated to `6.9.0` and a new assertion pins that the registry path + schema are unchanged versus v6.8.0; `project_name`/config auto-migration is confirmed non-breaking (no ma-agents code change required).
+
+**Technical notes:**
+- Supersedes FR208's v6.8.0 pin (FR211).
+- This is a pin bump, **not** a reader rework — the contrast with Story 27.1/27.2 is the whole point of P5-6. Re-verification is a read-only confirmation gate, not a refactor.
+- Carry the P5-5 reader, `type` filter, and thin-cache guard forward verbatim; `registrySchema` stays `package-root-v68` because the source did not relocate.
+- Satisfy the Bundle Drift Guard by regenerating and reading the diff — not by blindly re-running `build:plugin` until green.
+
+### Story 28.2: uv-Transition Resilience and Python-Scoping Guardrails
+
+**Status:** backlog (blocked on 28.1)
+**Size:** Medium
+**Priority:** High
+
+**User Story:** As the ma-agents maintainer, I want the test suite to pin that v6.9.0's `uv`-environment-check installer change cannot break the ma-agents install path and that ma-agents-owned Python is never accidentally migrated to `uv`, so that the warn-don't-block upstream change and the python-not-uv scoping boundary are protected by gates rather than discovered by a regression. (FR212, FR213, NFR59)
+
+**Acceptance Criteria:**
+1. **uv-missing install succeeds (NFR59a, FR212):** a regression test asserts the install/recompile flow returns its **success** path when `uv` is absent from PATH — the v6.9.0 missing-`uv` warning is non-fatal, the BMAD installer's exit code is unchanged, and ma-agents' success/failure decision (which keys off the **exit code**, not stdout text) is therefore unaffected. The test exercises a uv-missing condition (e.g. `uv` removed from PATH, or a stubbed installer that emits the warn-only banner with exit 0) and asserts ma-agents reports success.
+2. **Confirm-the-negative against the retired probe (NFR59b, FR212):** a **repo-wide grep guard** asserts that no `lib/` code path inspects installer stdout for the retired `python3`-probe strings (nor for `uv` / version-banner text). The durable resilience comes from exit-code-based decisioning: the live install/update/migration paths (`installBmad`/`updateBmad`/`runMigration`) wrap `runCommand(...)` in a try/catch whose success/failure rides on `execSync` **throwing** on a non-zero exit — never on stdout text — so the v6.9.0 warn-only (exit 0) uv banner is inert. Note the offline/EBUSY classifiers (`looksLikeOfflineFailure`/`looksLikeEbusyFailure`, `classifyRecompileFailure` in `lib/bmad.js`) are **test-only / unreferenced on the live path** (their former caller `applyCustomizations()` was removed in Story 22.6), so they are *not* the live guard and must not be described as such. This is a regression **guard** proving a standing negative — **not** a code fix to `bmad.js`.
+3. **Python-scoping guard (NFR59c, FR213):** a guard asserts that ma-agents **control-plane / tooling** Python is invoked via the `python`/`python3` interpreter and **not** via `uv run`. Scope = ma-agents-owned control-plane sites: its own `scripts/*` Python peers and the agent-skill activation steps that invoke `python3 {project-root}/_bmad/scripts/resolve_customization.py`. Explicitly **exempt** the `ml-experiment`/`ml-infra`/`ml-eda` skills' `uv run python` lines (they run the user's ML-project scripts in the user's `uv` env, not ma-agents tooling) and vendored `node_modules/bmad-method` / `lib/bmad-cache/` content (not ma-agents-owned). The guard must scope to control-plane sites so it does not false-fail on the ML skills.
+4. **Scoping boundary documented:** the python-not-uv scoping boundary (BMAD's `uv` standardization governs BMAD-installed skill scripts, NOT ma-agents control-plane Python; the ML skills' `uv run` is an intentional user-project exception) is documented where a contributor will see it before touching the scripts — e.g. a comment at the ma-agents-authored `resolve_customization.py` activation-invocation site and/or the relevant contributor/architecture doc — referencing P5-6 / FR213.
+5. `npm test` is green on Linux/CI (and Windows), and the new guards run without network access.
+
+**Technical notes:**
+- This story adds **regression guards only** — there is no behavior change to ship. FR212 is confirm-the-negative: ma-agents already decisions off exit code, so the uv-transition is an invariant to pin, not a bug to fix.
+- Do not add stdout parsing for the new `uv` banner — that is the exact fragility FR212 forbids (it is why the `python3` probe text it replaced was a problem).
+- For AC1, prefer a stubbed/injected installer over mutating the real PATH where the test framework allows, to keep the test deterministic and offline.
+
+### Story 28.3: Passthrough Reconciliation — bmad-forge-idea, Architecture Shim, Deferred Platforms
+
+**Status:** backlog (blocked on 28.1)
+**Size:** Small
+**Priority:** Medium
+
+**User Story:** As a ma-agents user with Cline selected, after upgrading to BMAD v6.9.0 my `.clinerules/workflows/` gains a `bmad-forge-idea` wrapper and tolerates the `bmad-architecture`/`bmad-create-architecture` shim pair without any dangling wrapper, and any ma-agents-owned enumeration of the skill set surfaces the new skill without breaking on the shim — all via the existing reconcile-and-prune logic, with no new mechanism. (FR214)
+
+**Acceptance Criteria:**
+1. After the v6.9.0 bump, `deployClineWorkflows()` (the existing P5-5 reconcile-and-prune logic, `lib/bmad.js`) generates a `.clinerules/workflows/bmad-forge-idea.md` wrapper (the new skill has a backing `.cline/skills/bmad-forge-idea/` directory). **No new reconciliation mechanism is introduced** — the existing reconcile-and-prune already covers additions.
+2. The `bmad-architecture` (new) / `bmad-create-architecture` (forwarding shim retained until BMAD v7) pair is tolerated: each has a backing `.cline/skills/<name>/` directory, so each gets a wrapper and **neither** produces a dangling wrapper; the shim does not cause a stale-wrapper removal of either.
+3. Any ma-agents-owned enumeration of the skill set (e.g. `MANIFEST.yaml` routing, per-tool pointer files, docs) surfaces `bmad-forge-idea` and does not break on the `bmad-architecture`/`bmad-create-architecture` shim pair (it neither advertises a non-existent skill nor omits the new one).
+4. **Deferral asserted (FR214):** it is explicitly asserted that **hermes-agent** and **CodeWhale** are **NOT** added to ma-agents' platform registry (`lib/agents.js`) in this epic — `lib/agents.js` shows no hermes-agent / CodeWhale entry — with a one-line note in the code/docs pointing to a future story should demand appear. (Passthrough already deploys upstream support for them.)
+5. A test asserts: (a) the `bmad-forge-idea` wrapper is created; (b) the architecture shim pair leaves no dangling wrapper; (c) `lib/agents.js` contains no hermes-agent / CodeWhale platform entry.
+
+**Technical notes:**
+- This is a verification/reconciliation story, not a re-authoring story — the skill bodies, the architecture rewrite, and the shim are upstream passthrough.
+- Reuse the existing P5-5 (Story 27.4) `deployClineWorkflows` reconcile-and-prune logic and its scoping discipline (removal scoped strictly to ma-agents-generated wrappers; user content under `.clinerules/` never touched). Confirm idempotency holds for the new skill set.
+- Compute the live skill-name set from `.cline/skills/` subdirectories containing `SKILL.md`; the forwarding shim is a normal backing dir, so it is treated like any other live skill.
+
+### Story 28.4: Release Gate — Offline-Install Verification, Multi-Tool Smoke, Semver Cut
+
+**Status:** backlog (blocked on 28.1, 28.2, 28.3)
+**Size:** Small
+**Priority:** High
+
+**User Story:** As the ma-agents maintainer, before publishing I have a proven air-gapped install on v6.9.0, a multi-tool smoke across the flagship platforms, a fully green suite, and a clean semver cut, so that the release cannot ship a silently-broken offline build. (NFR58, FR211)
+
+**Acceptance Criteria:**
+1. **Offline-install gate (NFR58, re-asserts NFR2/NFR54/NFR57):** `npx ma-agents install` is run with all outbound network egress blocked (container/VM or CI with network disabled) and completes successfully with the full bundled module set (**tea, bmb, cis, gds, wds**) built from v6.9.0 — zero network calls on the install path; the NFR56 thin-cache fail-loud guard is confirmed still holding for the v6.9.0 cache build.
+2. **Multi-tool smoke:** an install smoke is run for the flagship five tools — **claude-code, copilot, cline, roo-code, kilocode** — and each installs cleanly against the v6.9.0 cache + the ma-agents extension plugin (no PluginResolver error, no orphaned-skill reference, `bmad-forge-idea` present).
+3. The full `npm test` suite is green on **both** Linux/CI and Windows (the CRLF confounder remains resolved from Epic 27, not waived).
+4. A new ma-agents semver version is cut per the project's versioning strategy and `CHANGELOG.md` is updated (a v6.9.0 feature-inheriting integration with no breaking change to the ma-agents public CLI surface — consistent with prior integration epics' MINOR cut).
+
+**Technical notes:**
+- Mirrors Story 27.7. The offline gate is the single most important acceptance check in this epic — it is the air-gapped guarantee the bump must not regress.
+- Reuse the repo's actual offline CI harness (the Epic 22 / NFR50 / `offline-install.yml` gate) — egress-blocked run, not simulated.
+- Reuse the existing multi-tool smoke pattern from the Epic 22/24/27 verification stories.
