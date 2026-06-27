@@ -128,10 +128,13 @@ async function runAll() {
   // ─── AC1: PluginResolver / module-schema smoke ──────────────────────────
   console.log('--- AC1: PluginResolver / module-schema smoke (multi-tool, offline) ---');
 
-  await test('AC1-1 bmad-method is pinned to 6.8.0 (the version under verification)', () => {
+  await test('AC1-1 bmad-method is pinned to 6.9.0 (the version under verification)', () => {
+    // Introduced at v6.8.0 (Story 27.6); re-verified at v6.9.0 (Story 28.1 bump /
+    // Story 28.3 passthrough). The PluginResolver layout + enumeration-passthrough
+    // contract this suite checks is unchanged at v6.9.0 (Decision P5-6).
     const ver = require('bmad-method/package.json').version;
-    assert.strictEqual(ver, '6.8.0',
-      `expected bmad-method@6.8.0, found ${ver} — Story 27.6 verifies against 6.8.0`);
+    assert.strictEqual(ver, '6.9.0',
+      `expected bmad-method@6.9.0, found ${ver} — this suite verifies passthrough against the current pin`);
   });
 
   await test('AC1-2 committed bundle resolves via Strategy 1 under v6.8.0 PluginResolver', async () => {

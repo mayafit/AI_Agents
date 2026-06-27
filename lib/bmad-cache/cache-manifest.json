@@ -1,6 +1,6 @@
 {
-  "generated": "2026-06-13T15:11:45.601Z",
-  "bmadMethodVersion": "6.8.0",
+  "generated": "2026-06-27T14:28:18.113Z",
+  "bmadMethodVersion": "6.9.0",
   "registrySchema": "package-root-v68",
   "modules": {
     "tea": {
@@ -12,8 +12,8 @@
     "bmb": {
       "url": "https://github.com/bmad-code-org/bmad-builder",
       "branch": "main",
-      "commitSha": "7cfa7711778f04c5df56f7ae895fabc942fd920c",
-      "clonedAt": "2026-06-13T15:11:41.069Z"
+      "commitSha": "e6935f2776c34ffd9b18f4ef1e334584ef10a50f",
+      "clonedAt": "2026-06-27T14:28:16.693Z"
     },
     "cis": {
       "url": "https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite",

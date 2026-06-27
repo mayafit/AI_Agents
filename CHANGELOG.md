@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.14.0] - 2026-06-27
+
+BMAD v6.9.0 integration (Epic 28). A lean, feature-inheriting bump: the v6.9.0 module
+registry path **and** schema are unchanged from v6.8.0 (verified against the npm-installed
+package), so the offline cache reader needed no change; the only upstream behavioral change
+that touches the wrapper — the installer's `python3`→`uv` environment check — is
+warn-don't-block, and ma-agents already decides success/failure off the `execSync` exit
+status, never installer stdout. No breaking change to the public CLI surface → MINOR.
+
+### Changed
+
+- **Bumped bmad-method 6.8.0 → 6.9.0** (FR211, supersedes FR208) and rebuilt the bundled
+  offline cache (`bmadMethodVersion: 6.9.0`, `registrySchema` unchanged at `package-root-v68`)
+  and the ma-agents extension plugin. Upstream v6.9.0 additions are inherited via passthrough:
+  the `bmad-forge-idea` core idea-validation skill, the `bmad-architecture` lean-spine rewrite
+  (with `bmad-create-architecture` retained as a forwarding shim until BMAD v7), the canonical
+  `memlog.py` working-memory primitive, party-mode/brainstorming enhancements, the Astro 6
+  security upgrade, and the WSL-runs-Windows-Node installer guard. `scripts/build-bmad-cache.js`
+  is untouched — the registry did not relocate as it did at v6.8.0.
+
+### Added
+
+- **uv-transition resilience + python-scoping regression guards** (`test/uv-transition-resilience.test.js`,
+  FR212/FR213/NFR59): pin that v6.9.0's warn-don't-block `uv` check cannot break the install path
+  (the decision rides on the `execSync` exit status, never installer stdout), and that ma-agents
+  control-plane Python stays on `python`/`python3` and is never migrated to `uv run`. The
+  `ml-experiment`/`ml-infra`/`ml-eda` skills' `uv run python` guidance — which runs the user's
+  ML-project scripts in the user's own `uv` env — is the documented, intentional exception.
+- **Passthrough-reconciliation guards** (`test/passthrough-reconciliation-6-9-0.test.js`, FR214):
+  the existing `deployClineWorkflows` reconcile generates a `bmad-forge-idea` Cline wrapper and
+  tolerates the `bmad-architecture`/`bmad-create-architecture` shim pair with no dangling wrapper.
+  The new `hermes-agent` and `CodeWhale` installer platforms are intentionally **not** added to
+  ma-agents' platform registry (deferred per Decision P5-6(d); passthrough already deploys
+  upstream support).
+
 ## [3.13.2] - 2026-06-26
 
 Skill-discovery fixes surfaced by a real multi-agent install (cline + GitHub Copilot),

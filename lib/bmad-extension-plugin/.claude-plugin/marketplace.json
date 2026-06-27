@@ -31,13 +31,13 @@
     "roo-code",
     "kilocode"
   ],
-  "bmad_min_version": "6.8.0",
+  "bmad_min_version": "6.9.0",
   "plugins": [
     {
       "name": "ma-skills",
       "source": "./",
       "description": "ma-agents extension module providing enterprise SDLC personas and operational workflow skills.",
-      "version": "3.13.2",
+      "version": "3.14.0",
       "author": {
         "name": "Alon Mayaffit"
       },
