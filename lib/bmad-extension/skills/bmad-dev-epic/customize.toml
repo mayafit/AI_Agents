@@ -1,0 +1,54 @@
+# DO NOT EDIT -- overwritten on every update.
+#
+# Workflow customization surface for bmad-dev-epic. Mirrors the workflow
+# customization shape under the [workflow] namespace. Override in
+# {project-root}/_bmad/custom/bmad-dev-epic.toml (team) or
+# {project-root}/_bmad/custom/bmad-dev-epic.user.toml (personal).
+
+[workflow]
+
+activation_steps_prepend = []
+activation_steps_append = []
+
+persistent_facts = [
+  "file:{project-root}/**/project-context.md",
+]
+
+on_complete = ""
+
+# ── Orchestration defaults ──────────────────────────────────────────────────
+# These are PROPOSED defaults the intake step shows the user; the user can
+# override every one of them at runtime. They are tier-abstract on purpose so
+# the skill works on disconnected networks and with non-Claude runtimes.
+#
+# All keys below are scalars, so a team/user override TOML replaces them by the
+# normal scalar-override merge rule (override wins over base).
+
+[workflow.defaults]
+
+# Model tiers are ABSTRACT. The intake step maps each tier to a concrete model
+# that the runtime actually exposes (Claude Opus/Sonnet, Gemini, a local model,
+# etc.). If only one model is available, both tiers collapse to it.
+#   review_tier  → deep reasoning: create-story, code-review, edge-case-hunter,
+#                  epic adversarial review.
+#   exec_tier    → implementation: dev-story, fix loops, e2e generation.
+review_tier_model = "claude-opus"          # proposed; ask at runtime
+exec_tier_model   = "claude-sonnet"        # proposed; ask at runtime
+
+# Max story pipelines running concurrently within a single wave.
+max_parallel_stories = 3
+
+# Max review→fix→re-review rounds before a story is escalated as blocked.
+fix_loop_cap = 2
+
+# Parallelization strategy: "waves" (dependency-aware) | "sequential" | "full".
+parallelism_strategy = "waves"
+
+# Human gates. Dev + review run unattended; these two are always confirmed.
+gate_before_publish = true
+gate_before_pr      = true
+
+# Release behavior at the publish gate.
+npm_dist_tag        = "beta"
+version_bump        = "prerelease"         # npm version <bump> --preid=beta
+pack_ignore_scripts = true                 # avoid Windows prepare tarball leak

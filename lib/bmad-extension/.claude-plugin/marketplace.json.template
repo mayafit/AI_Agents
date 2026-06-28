@@ -99,6 +99,7 @@
         "./skills/ml-techspec",
         "./skills/add-sprint",
         "./skills/add-to-sprint",
+        "./skills/bmad-dev-epic",
         "./skills/bmad-dev-story",
         "./skills/bmad-sprint-planning",
         "./skills/bmad-sprint-status",
