@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BMAD Knowledge Atlas · Architecture (P5-7)</title>
+<style>
+  :root{
+    --paper:#0f1226; --surface:#FFFFFF; --surface-2:#F5F6FB;
+    --ink:#15182b; --muted:#5a607a; --faint:#8b91a8;
+    --line:#E1E3EE; --line-strong:#C7CADD;
+    --indigo:#4f46e5; --indigo-deep:#3b34b8; --indigo-wash:#ECEBFB;
+    --teal:#0E8C8C; --teal-deep:#0A6B6B; --teal-wash:#E2F0F0;
+    --sand:#F1E9DA; --sand-line:#DDCDB0; --sand-ink:#6B5829;
+    --ok:#2F8F5B; --ok-wash:#E5F1EA;
+    --warn:#B6800F; --warn-wash:#F6EED8;
+    --gap:#BC4A3C; --gap-wash:#F6E3E0;
+    --mono:ui-monospace,"Cascadia Code","Cascadia Mono",Consolas,"Liberation Mono",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface-2);color:var(--ink);font-family:var(--sans);
+    line-height:1.6;-webkit-font-smoothing:antialiased;font-size:16px}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 24px}
+  a{color:var(--indigo-deep)}
+  section{padding:42px 0;border-top:1px solid var(--line)}
+  section:first-of-type{border-top:none}
+  h2{font-size:1.55rem;letter-spacing:-.01em;margin:0 0 8px}
+  h3{font-size:1.1rem;letter-spacing:-.005em;margin:30px 0 10px}
+  p{margin:0 0 14px;max-width:70ch}
+  .lead{font-size:1.12rem;color:#2a2f49;max-width:66ch}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--indigo-deep);margin:0 0 10px}
+  .sec-no{font-family:var(--mono);font-size:.72rem;color:var(--faint);letter-spacing:.12em}
+  code,.mono{font-family:var(--mono);font-size:.88em}
+  code{background:var(--surface-2);border:1px solid var(--line);padding:.06em .38em;border-radius:3px;color:#33375a}
+
+  header.hero{background:var(--paper);color:#E8EAF6;padding:58px 0 50px;
+    background-image:radial-gradient(circle at 86% 16%, rgba(79,70,229,.40), transparent 44%),
+                     radial-gradient(circle at 10% 90%, rgba(14,140,140,.22), transparent 40%);}
+  header.hero .eyebrow{color:#9b95f5}
+  header.hero h1{font-size:2.5rem;line-height:1.1;letter-spacing:-.02em;margin:0 0 16px;max-width:20ch}
+  header.hero p{color:#b7bcd6;max-width:62ch;font-size:1.06rem}
+  .meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:26px;
+    font-family:var(--mono);font-size:.74rem;color:#878dac;letter-spacing:.04em}
+  .meta b{color:#d3d7ee;font-weight:500}
+
+  .verdict{background:var(--surface);border:1px solid var(--line-strong);
+    border-left:4px solid var(--indigo);padding:22px 24px;margin:22px 0;border-radius:0 6px 6px 0}
+  .verdict p{margin:0;font-size:1.06rem;max-width:none}
+  .verdict .big{font-weight:600}
+
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 4px}
+  .pill{font-family:var(--mono);font-size:.72rem;letter-spacing:.04em;padding:4px 10px;border-radius:100px;
+    border:1px solid;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+  .pill::before{content:"";width:8px;height:8px;border-radius:2px;display:inline-block}
+  .pill.ok{color:#1d5d3a;background:var(--ok-wash);border-color:#B6DCC6}.pill.ok::before{background:var(--ok)}
+  .pill.warn{color:#7a5708;background:var(--warn-wash);border-color:#E6D199}.pill.warn::before{background:var(--warn)}
+  .pill.gap{color:#8d3127;background:var(--gap-wash);border-color:#E8BDB6}.pill.gap::before{background:var(--gap)}
+  .pill.idx{color:var(--indigo-deep);background:var(--indigo-wash);border-color:#C9C5F3}.pill.idx::before{background:var(--indigo)}
+
+  .scroll{overflow-x:auto;margin:8px 0 4px;padding-bottom:6px}
+
+  /* numbered pipeline */
+  .pipe{list-style:none;margin:14px 0 0;padding:0}
+  .pipe li{display:grid;grid-template-columns:34px 1fr;gap:16px;padding:0 0 4px}
+  .pipe li .bar{display:flex;flex-direction:column;align-items:center}
+  .pipe li .num{width:30px;height:30px;border-radius:50%;background:var(--indigo);color:#fff;
+    font-family:var(--mono);font-size:.82rem;display:flex;align-items:center;justify-content:center;flex:none}
+  .pipe li .stem{width:2px;flex:1;background:var(--line-strong);margin:4px 0}
+  .pipe li:last-child .stem{display:none}
+  .pipe li .body{padding:2px 0 22px}
+  .pipe li .t{font-weight:600;margin:3px 0 4px}
+  .pipe li .t .where{font-family:var(--mono);font-size:.74rem;font-weight:500;color:var(--indigo-deep);
+    background:var(--indigo-wash);padding:2px 7px;border-radius:4px;margin-left:8px;letter-spacing:.02em}
+  .pipe li p{margin:0;color:#3a4055;font-size:.95rem;max-width:66ch}
+  .pipe li.seam .num{background:var(--teal)}
+  .pipe li.seam .t .where{color:var(--teal-deep);background:var(--teal-wash)}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:18px 0}
+  .card{border:1px solid var(--line);background:var(--surface);padding:20px 22px;border-radius:6px}
+  .card h4{margin:0 0 4px;font-size:1rem}
+  .card .tag{font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--muted);display:block;margin-bottom:12px}
+  .card.now{border-top:3px solid var(--indigo)}
+  .card.vision{background:var(--sand);border-color:var(--sand-line);border-top:3px solid var(--warn)}
+  .card.vision .tag{color:var(--sand-ink)}
+  .card ul{margin:8px 0 0;padding-left:18px}.card li{margin:6px 0;font-size:.93rem}
+
+  pre{background:var(--paper);color:#d7d9ef;font-family:var(--mono);font-size:.82rem;line-height:1.55;
+    padding:18px 20px;border-radius:6px;overflow-x:auto;margin:14px 0}
+  pre .k{color:#9b95f5}pre .s{color:#D9B679}pre .c{color:#7782a0}pre .n{color:#E89A85}
+
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:.9rem}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  thead th{font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);border-bottom:1px solid var(--line-strong)}
+  tbody tr:hover{background:var(--surface-2)}
+  .fr{font-family:var(--mono);font-size:.78rem;color:var(--indigo-deep);white-space:nowrap}
+  .st{font-family:var(--mono);font-size:.7rem;font-weight:600;letter-spacing:.04em;padding:3px 8px;border-radius:4px;white-space:nowrap}
+  .st.ok{color:#1d5d3a;background:var(--ok-wash)}.st.warn{color:#7a5708;background:var(--warn-wash)}.st.gap{color:#8d3127;background:var(--gap-wash)}
+
+  /* invariant blocks */
+  .ad{border:1px solid var(--line);border-left:3px solid var(--teal);background:var(--surface);
+    padding:14px 18px;margin:12px 0;border-radius:0 6px 6px 0}
+  .ad .h{font-weight:600;margin:0 0 4px}
+  .ad .p{margin:0;font-size:.92rem;color:#3a4055}
+  .ad .prev{display:block;margin-top:6px;font-size:.84rem;color:var(--gap)}
+  .ad .prev b{font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase}
+
+  .note{background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:16px 18px;margin:16px 0;font-size:.94rem}
+  .note .lab{font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--indigo-deep);display:block;margin-bottom:6px}
+  .note.sand{background:var(--sand);border-color:var(--sand-line)}.note.sand .lab{color:var(--sand-ink)}
+
+  /* seam diagram */
+  .seamfig{min-width:620px;display:grid;grid-template-columns:1fr 120px 1fr;align-items:stretch;gap:0;
+    border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+  .seamfig .half{padding:18px}
+  .seamfig .disc{background:var(--indigo-wash)}
+  .seamfig .rend{background:var(--teal-wash)}
+  .seamfig .mid{background:var(--paper);color:#e8eaf6;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:14px 8px}
+  .seamfig .mid .m{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;color:#9b95f5}
+  .seamfig h5{margin:0 0 8px;font-size:.95rem}
+  .seamfig .role{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:block;margin-bottom:8px}
+  .seamfig ul{margin:0;padding-left:16px}.seamfig li{font-size:.86rem;margin:5px 0;color:#3a4055}
+
+  footer{padding:34px 0 60px;color:var(--muted);font-size:.85rem;border-top:1px solid var(--line)}
+  footer .mono{color:var(--faint)}
+
+  @media (max-width:700px){
+    .split{grid-template-columns:1fr}
+    header.hero h1{font-size:2rem}
+    .seamfig{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">ma-agents · Architecture · Decision P5-7</p>
+    <h1>BMAD Knowledge Atlas</h1>
+    <p>The human-facing visualization tier of the BMAD Knowledge Graph: a pre-bundled, fully offline static-site generator that turns any project's <code>_bmad-output</code> into an interconnected, navigable, analyst-grade knowledge site — generated on demand, sealed for air-gapped on-prem networks.</p>
+    <div class="meta">
+      <span><b>Decision</b> P5-7 · extends P3-1</span>
+      <span><b>Covers</b> FR215–FR234 · NFR60–NFR69</span>
+      <span><b>Scope</b> v1 = deterministic core</span>
+      <span><b>Basis</b> PRD · brief + addendum · brainstorming</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section>
+    <p class="eyebrow">The headline</p>
+    <h2>You have a graph backbone — this adds the map you travel</h2>
+    <div class="verdict">
+      <p>P3-1 gave BMAD a <span class="big">knowledge-graph data model</span> (<code>knowledge-graph.json</code>) and a single graph renderer (<code>open-graph</code>). But it is populated only by <span class="big">forward skill emission</span> — blind to brownfield knowledge, version upgrades, and edits made outside any skill — and it renders one generic graph, not a <em>site</em>. The Atlas closes both gaps: an <b>authoritative scan</b> that sees everything on disk, distilled into a manifest, rendered as a cross-linked, multi-view, searchable knowledge site — and it stays a strict superset of the P3-1 model, not a fork.</p>
+    </div>
+    <p class="lead">Everything is generated offline from a pre-bundled engine. No server to view, no per-project install, no network at any point — the same self-containment discipline as the bundled BMAD cache (P2-6).</p>
+    <div class="legend" aria-label="status legend">
+      <span class="pill ok">v1 — deterministic core</span>
+      <span class="pill warn">deferred tier</span>
+      <span class="pill idx">invariant (AD)</span>
+    </div>
+  </section>
+
+  <section>
+    <p class="sec-no">01 — Pipeline</p>
+    <h2>How a folder of markdown becomes a knowledge site</h2>
+    <p>One pre-built engine, invoked by the <code>bmad-knowledge</code> skill. The order is load-bearing — note step 3, the manifest, which is the seam the whole design pivots on.</p>
+    <ol class="pipe">
+      <li><div class="bar"><div class="num">1</div><div class="stem"></div></div><div class="body">
+        <div class="t">Authoritative scan <span class="where">bmad-knowledge skill</span></div>
+        <p>Enumerate every document under <code>_bmad-output</code> (planning + implementation + project-context), tolerant of missing types. A scan is authoritative — not an event hook — so brownfield, upgraded, and out-of-band-edited knowledge is all seen (FR216).</p></div></li>
+      <li><div class="bar"><div class="num">2</div><div class="stem"></div></div><div class="body">
+        <div class="t">Parse &amp; extract entities <span class="where">deterministic</span></div>
+        <p>Frontmatter + body parsed for the stable BMAD vocabulary — <code>FR###</code>, <code>NFR##</code>, <code>F##</code>, <code>Epic N</code>, <code>Story N.M</code>, <code>bug-*</code>, <code>P#-#</code>, retros, statuses (FR218). ~90% of the graph, free and reproducible.</p></div></li>
+      <li class="seam"><div class="bar"><div class="num">3</div><div class="stem"></div></div><div class="body">
+        <div class="t">Build manifest <span class="where">the seam — single source of truth</span></div>
+        <p>Typed nodes + edges on the P3-1 <code>file-id#anchor</code> identity, per-file content hashes, entities, edges. The manifest <b>is a superset of <code>knowledge-graph.json</code></b>; when that file is present it is read and reconciled (FR221, FR232, FR228).</p></div></li>
+      <li><div class="bar"><div class="num">4</div><div class="stem"></div></div><div class="body">
+        <div class="t">Cross-link + backlinks <span class="where">pure transform</span></div>
+        <p>Every entity token anywhere becomes a hyperlink to its canonical location; each entity gets its "referenced by" backlinks (FR219, FR220).</p></div></li>
+      <li><div class="bar"><div class="num">5</div><div class="stem"></div></div><div class="body">
+        <div class="t">Generate diagrams <span class="where">HTML/CSS/SVG</span></div>
+        <p>Where none are authored, draw them — the FR→Epic→Story→Bug→Retro traceability spine, epic→story trees, sprint/status board (FR224).</p></div></li>
+      <li><div class="bar"><div class="num">6</div><div class="stem"></div></div><div class="body">
+        <div class="t">Render self-contained site <span class="where">_bmad-output/knowledge-site/</span></div>
+        <p>Reading views, typed force-graph home, orphan/gap view, offline search, health snapshot — all assets embedded locally, graph data as a JS variable (never fetched). Open <code>index.html</code>; no server (FR222–FR227, FR229).</p></div></li>
+    </ol>
+  </section>
+
+  <section>
+    <p class="sec-no">02 — The seam</p>
+    <h2>The manifest splits the engine in two — and that solves air-gap</h2>
+    <p>Discovery may want a model (later, for enrichment); rendering must never need one. The manifest is the contract between them: write it on one side, read it on the other.</p>
+    <div class="scroll">
+      <div class="seamfig" role="img" aria-label="Diagram: discovery half writes the manifest; rendering half reads it. The manifest in the middle is the contract.">
+        <div class="half disc">
+          <h5>Discovery half</h5><span class="role">scan · parse · graph-build</span>
+          <ul><li>Runs at skill-invocation time</li><li>Model <em>may</em> be present (enrichment is a deferred tier)</li><li>Output: the manifest</li></ul>
+        </div>
+        <div class="mid"><span class="m">manifest.json</span><div style="margin:8px 0;font-size:1.4rem">⇄</div><span class="m">the contract</span></div>
+        <div class="half rend">
+          <h5>Rendering half</h5><span class="role">cross-link · diagrams · render</span>
+          <ul><li>Pure, <b>model-free</b>, no network</li><li>Reads only the manifest</li><li>Output: the static site</li></ul>
+        </div>
+      </div>
+    </div>
+    <div class="note"><span class="lab">Why it matters</span>The renderer's independence from any model or network is what makes a beautiful site and an air-gapped site the <em>same</em> deliverable. The manifest also doubles as the diff anchor (content-hash incremental rebuilds) and as the P3-1 graph data.</div>
+  </section>
+
+  <section>
+    <p class="sec-no">03 — Invariants</p>
+    <h2>The calls everything built from this must share</h2>
+    <p>The durable decisions — what a future builder can't safely read off the code. Each names the divergence it prevents.</p>
+    <div class="ad"><p class="h">Authoritative scan, not hooks</p><p class="p">Correctness comes from a full scan of on-disk artifacts; hooks are at most optional sugar that re-invoke the scan.<span class="prev"><b>Prevents</b> — a stale site after upgrades / brownfield / out-of-band edits.</span></p></div>
+    <div class="ad"><p class="h">Manifest = single source of truth &amp; superset of <code>knowledge-graph.json</code></p><p class="p">Shared <code>file-id#anchor</code> identity (P3-1); manifest nodes/edges are schema-compatible.<span class="prev"><b>Prevents</b> — two divergent graph models; identity drift from <code>emitToGraph</code>.</span></p></div>
+    <div class="ad"><p class="h">Discovery↔rendering contract</p><p class="p">The renderer consumes only the manifest and runs with no model and no network.<span class="prev"><b>Prevents</b> — coupling render quality to model availability; an air-gap break at view time.</span></p></div>
+    <div class="ad"><p class="h">Sealed offline packaging</p><p class="p">Engine + every generate/view dependency ship pre-built/vendored in the ma-agents distribution; no per-project <code>npm install</code>.<span class="prev"><b>Prevents</b> — any npm / git / CDN / host need on a disconnected network (NFR67; offline-install gate extended).</span></p></div>
+    <div class="ad"><p class="h">Zero-dependency-first rendering</p><p class="p">Curated views = self-contained HTML/CSS/SVG; force-graph + Mermaid bundled only where needed; graph data embedded, never fetched.<span class="prev"><b>Prevents</b> — a heavy/fragile bundle and the blank-screen failure mode (FR234 progressive enhancement).</span></p></div>
+    <div class="ad"><p class="h">Non-destructive, isolated output</p><p class="p">All output to a git-ignorable <code>_bmad-output/knowledge-site/</code>; sources never mutated.<span class="prev"><b>Prevents</b> — the Atlas corrupting the knowledge it reads.</span></p></div>
+    <div class="ad"><p class="h">Deterministic, cross-platform incremental build</p><p class="p">Content-hash change detection (mtime only a pre-filter); Windows path + CRLF safe; identical inputs → identical output.<span class="prev"><b>Prevents</b> — false diffs across git checkout/pull; platform-dependent output.</span></p></div>
+  </section>
+
+  <section>
+    <p class="sec-no">04 — Sealed offline</p>
+    <h2>Two dependency surfaces, both sealed</h2>
+    <p>"Works on a disconnected on-prem network, all packages installed as part of ma-agents" means closing <em>both</em> surfaces — the generated site and the engine that makes it.</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Surface</th><th>What ships</th><th>Guarantee</th></tr></thead>
+      <tbody>
+        <tr><td><b>View-time</b><br><span class="mono" style="color:var(--faint)">the generated site</span></td><td>All JS/CSS/fonts inlined or vendored; graph data embedded as a JS variable</td><td><span class="st ok">no fetch · file://</span> works with network blocked (NFR60)</td></tr>
+        <tr><td><b>Install + generate-time</b><br><span class="mono" style="color:var(--faint)">the engine</span></td><td>Pre-built engine bundle + vendored libs (force-graph, Mermaid, search, parser, build tooling) inside the ma-agents tarball — like <code>build:plugin</code> / <code>lib/bmad-cache/</code></td><td><span class="st ok">no npm/git/CDN</span> no per-project install (NFR61, NFR67)</td></tr>
+      </tbody>
+    </table></div>
+    <div class="note sand"><span class="lab">Verified, not asserted</span>The existing offline-install gate is extended to exercise Atlas <b>generation and viewing with all egress blocked</b> — re-asserting the air-gap guarantee of P2-6 / NFR2 / NFR50 / NFR54 / NFR57 for this new surface.</div>
+  </section>
+
+  <section>
+    <p class="sec-no">05 — Composition with Epic 19</p>
+    <h2>It composes with <code>emitToGraph</code>, it doesn't replace it</h2>
+    <p>Stories 19-1…19-4 build the <em>write</em> path (skills emit nodes/edges as they produce artifacts). The Atlas scan is the <em>backfill + render</em> path. Two halves of one model.</p>
+    <pre><span class="c">// write path (Epic 19) — skills emit as they run</span>
+create-prd, create-architecture, create-story, dev-story  <span class="k">→</span> emitToGraph()  <span class="k">→</span> knowledge-graph.json
+
+<span class="c">// backfill + render path (P5-7) — on-demand scan</span>
+bmad-knowledge  <span class="k">→</span> scan(_bmad-output)  <span class="k">→</span> manifest  <span class="k">⊇</span>  knowledge-graph.json
+                <span class="k">→</span> reconcile (union on file-id#anchor; scan wins for on-disk truth)
+                <span class="k">→</span> render knowledge-site/
+
+<span class="c">// when knowledge-graph.json is ABSENT (today): scan alone produces an equivalent manifest</span></pre>
+    <div class="split">
+      <div class="card now"><span class="tag">Recommended build order</span><h4>Atlas-first</h4><p style="margin:8px 0 0;font-size:.93rem;color:#3a4055">Ship scan + manifest + render first — it delivers value standalone, with or without Epic 19. Then wire <code>knowledge-graph.json</code> ingestion as a reconciliation fast-follow once 19-x lands.</p></div>
+      <div class="card vision"><span class="tag">[ASSUMPTION] to ratify</span><h4>Sequencing in epics</h4><p style="margin:8px 0 0;font-size:.93rem;color:var(--sand-ink)">Exact ordering vs. stories 19-1…19-4 is confirmed in epic/story planning — captured as an open item, not silently decided here.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="sec-no">06 — Scope</p>
+    <h2>What v1 ships, and what waits</h2>
+    <div class="split">
+      <div class="card now"><span class="tag">v1 — deterministic core</span><ul>
+        <li>Scan → manifest → generate + open self-contained site</li>
+        <li>Entity auto-linking + backlinks; typed force-graph nav</li>
+        <li>Reading views + rendered/auto-generated diagrams</li>
+        <li>Orphan/gap detection; offline search; health home</li>
+        <li>Content-hash incremental rebuild</li>
+        <li>Pre-bundled, sealed-offline engine</li>
+      </ul></div>
+      <div class="card vision"><span class="tag">Deferred tiers</span><ul>
+        <li>Model-assisted enrichment (brownfield classification, prose relationships, AI summaries) — the narrative layer</li>
+        <li>Auto-refresh BMAD-skill hooks (optional sugar)</li>
+        <li>Confluence target mode</li>
+        <li>Timeline / "what changed since last sprint" diff</li>
+        <li>Agent-facing query API over the manifest</li>
+      </ul></div>
+    </div>
+    <div class="note"><span class="lab">Honest calibration</span>v1 guarantees the reference artifact's <b>design polish, structure, and interlinking</b>. Its editorial <em>narrative</em> (verdict, "what this means", worked examples) is the deferred model-enrichment tier — not v1.</div>
+  </section>
+
+  <section>
+    <p class="sec-no">07 — Rejected</p>
+    <h2>Why not an off-the-shelf site generator</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Option</th><th>Why not (for embed + air-gap + run-on-any-folder)</th><th></th></tr></thead>
+      <tbody>
+        <tr><td><b>Quartz v5</b></td><td>Strongest features, but a per-repo build project — embedding means per-project <code>npm install</code> (dies offline) or vendoring a full node_modules</td><td><span class="st gap">rejected</span></td></tr>
+        <tr><td><b>Docusaurus</b></td><td>No native wikilinks/backlinks; community-only graph</td><td><span class="st gap">rejected</span></td></tr>
+        <tr><td><b>MkDocs Material</b></td><td>Maintenance mode; Mermaid via CDN by default → silent offline failure</td><td><span class="st gap">rejected</span></td></tr>
+        <tr><td><b>Hugo</b></td><td>No graph view; inline-text render hooks don't fire → can't auto-link <code>FR###</code></td><td><span class="st gap">rejected</span></td></tr>
+        <tr><td><b>Extend <code>open-graph</code> in place</b></td><td>Renders one graph from emitted JSON; no scan, manifest, multi-view site, or model-free renderer boundary</td><td><span class="st warn">kept as single-graph view</span></td></tr>
+        <tr><td><b>Purpose-built engine</b></td><td>Satisfies every hard constraint, reuses the P3-1 model, ships sealed in ma-agents</td><td><span class="st ok">chosen</span></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <footer class="wrap">
+    <p><b>Decision P5-7</b> · BMAD Knowledge Atlas · extends P3-1 (Knowledge Graph) · composes with Epic 19 <code>emitToGraph</code>.<br>
+    <span class="mono">Covers FR215–FR234, NFR60–NFR69 · v1 = deterministic core · full text in architecture.md · sources: prd.md, brief-knowledge-atlas-2026-06-27 (+addendum), brainstorming-session-2026-06-27-1352.</span></p>
+    <p class="mono">This document practices the standard it sets: one self-contained file, system fonts, hand-built CSS/SVG, zero external dependencies — open it on an air-gapped machine and it just works.</p>
+  </footer>
+
+</main>
+</body>
+</html>
