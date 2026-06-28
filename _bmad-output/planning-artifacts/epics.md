@@ -2,8 +2,10 @@
 stepsCompleted: [1, 2, 3, 4, 'phase2-step-01', 'phase2-step-02', 'phase2-step-03', 'phase2-step-04']
 workflowStatus: 'complete'
 completedDate: '2026-03-08'
-lastEdited: '2026-04-07'
+lastEdited: '2026-06-28'
 phase5EditHistory:
+  - date: '2026-06-28'
+    changes: 'Added Epic 29: BMAD Knowledge Atlas (Phase 5) — the visualization tier of the Knowledge Graph (Decision P5-7, extends P3-1; composes with Epic 19 emitToGraph as Atlas-first / reconciliation fast-follow). 6 stories: 29.1 engine skeleton + sealed packaging pipeline + bmad-knowledge skill entrypoint (GATE, ready-for-dev) — esbuild-bundled engine in lib/knowledge-atlas/, no per-project install, git-ignored knowledge-site/ output, MANIFEST registration; 29.2 authoritative scan + deterministic entity extraction → typed manifest (file-id#anchor, content-hash incremental, knowledge-graph.json merge-read, Windows/CRLF determinism); 29.3 reading views + entity cross-linking + backlinks + offline search + home (zero-dependency render, design system, progressive enhancement); 29.4 interactive force-graph view + auto-generated diagrams (traceability spine/epic-tree/sprint board) + orphan/gap view; 29.5 sealed offline packaging hardening (vendor force-graph/Mermaid/search; extend offline-install gate) + full knowledge-graph.json reconciliation; 29.6 release gate (offline generate+view egress-blocked, determinism, graceful degradation, output sanitization, real-project smoke, semver cut). Execution: 29.1 → 29.2 → (29.3 ∥ 29.4) → 29.5 → 29.6. Covers PRD FR215–FR234 / NFR60–NFR69. v1 deterministic core; model-enrichment, auto-refresh hooks, Confluence, timeline/diff, and agent query API explicitly deferred. Registered in sprint-status.yaml (epic-29 backlog; 29.1 ready-for-dev). [Note: Epic 28 (v6.9.0) lacks a phase5EditHistory entry and a sprint-status block — pre-existing PR #123 drift, not addressed here.]'
   - date: '2026-06-08'
     changes: 'Added Epic 27: BMAD v6.8.0 Integration (Phase 5). 7 stories (27.1-27.7) covering the 6.6.0→6.8.0 jump. Headline: BMAD 6.7.0 retired the in-package module-registry YAML (tools/installer/modules/registry-fallback.yaml) and 6.8.0 RELOCATED the external-module list to package-root bmad-modules.yaml — still YAML, same modules: map shape (code/url/name/type); official-modules.js is unchanged loader code that reads it, NOT the list itself. build-bmad-cache.js''s REGISTRY_CANDIDATES no longer find the registry, breaking the air-gapped self-containment guarantee (NFR2/NFR50/NFR54). The fix is small: add the new path + swap built_in→type filter. Bundle set = tea/bmb/cis/gds/wds (type: bmad-org); automator (experimental) excluded; bmm/core built-in. wds is ACTIVE at v6.8.0 (was retired at 6.3.0, returned) — NOT skipped. Stories: 27.1 spike to CONFIRM the relocated-YAML path + type filter (gate), 27.2 point build-bmad-cache.js at the new path with type filter + thin-cache fail-loud guard (Small), 27.3 update bmad-version-bump.test.js (relocated-YAML tag, type filter, invert the two wds-retired tests, bundled-set assertion), 27.4 Cline workflow-wrapper reconciliation (generate-new + remove-stale) for renamed/retired upstream skills, 27.5 bump pin to v6.8.0 + rebuild cache/plugin + re-baseline bundle-drift + resolve CRLF + green suite, 27.6 PluginResolver/module-schema compat + per-tool skill-enumeration passthrough verification, 27.7 release gate (adversarial review + offline-install verification + semver cut + retrospective). Added F23 capability area, FR207-FR210 and NFR56-NFR57 to the PRD. Architecture Decision P5-5 covers the reader change. BMAD core skill renames (bmad-create-ux-design→bmad-ux), retirements (bmad-distillator→bmad-spec) and PRD unification are upstream-internal, inherited via passthrough — the only ma-agents-side propagation is the generated Cline wrappers (27.4). [Correction note: an initial same-day draft wrongly described the 6.8.0 source as JavaScript and wds as retired; corrected against the v6.8.0 source and a live install.]'
   - date: '2026-05-01'
@@ -5084,3 +5086,158 @@ scripts/
 - Mirrors Story 27.7. The offline gate is the single most important acceptance check in this epic — it is the air-gapped guarantee the bump must not regress.
 - Reuse the repo's actual offline CI harness (the Epic 22 / NFR50 / `offline-install.yml` gate) — egress-blocked run, not simulated.
 - Reuse the existing multi-tool smoke pattern from the Epic 22/24/27 verification stories.
+
+## Epic 29: BMAD Knowledge Atlas (Phase 5)
+
+**Goal:** Ship the **Knowledge Atlas** — the human-facing visualization tier of the Knowledge Graph (Decision P5-7, extending P3-1). A **pre-bundled, fully offline static-site generator**, shipped inside ma-agents and invoked on demand by a `bmad-knowledge` skill, that performs an **authoritative scan** of any project's `_bmad-output`, distills a **knowledge manifest**, and renders a self-contained, cross-linked, graph-navigable knowledge **site** — at analyst-report visual quality, on a fully disconnected on-prem network. v1 is the **deterministic core**; model-assisted enrichment, auto-refresh hooks, Confluence output, timeline/diff views, and an agent query API are deferred (PRD Future Directions).
+
+**Value:** Turns BMAD's pile of loosely-coupled markdown into a navigable map where the *connections* (FR→Epic→Story→Bug→Retro, architecture decisions, statuses) are first-class — onboarding, review, and gap-spotting become clicks, not archaeology. Because the engine is pre-bundled and the output is self-contained, it works in the air-gapped on-prem environments the distribution targets, with no per-project install and no network at generate- or view-time.
+
+**Dependencies:** None hard — the Atlas works standalone via its scan. It **composes with Epic 19** (BMAD Knowledge Graph / `emitToGraph`, currently backlog): `emitToGraph` is the *write* path, the Atlas scan is the *backfill + render* path. When `_bmad-output/knowledge-graph.json` is present, the Atlas reconciles with it on the shared `file-id#anchor` identity (P3-1); when absent, the scan produces an equivalent manifest. Recommended sequencing: **Atlas-first**, with full `knowledge-graph.json` reconciliation as the Epic-19 fast-follow (Story 29.5).
+
+**Execution order:** 29.1 → 29.2 → (29.3 ∥ 29.4) → 29.5 → 29.6. Story 29.1 is the **gate** (engine skeleton + sealed packaging pipeline + skill entrypoint); 29.2 (scan→manifest) is the second foundation that 29.3 (reading/links/search) and 29.4 (graph/diagrams) both consume and which can then run in parallel; 29.5 hardens sealed offline packaging + F17 reconciliation; 29.6 is the release/verification gate.
+
+**FR Coverage:** FR215, FR216, FR217, FR218, FR219, FR220, FR221, FR222, FR223, FR224, FR225, FR226, FR227, FR228, FR229, FR230, FR231, FR232, FR233, FR234, NFR60, NFR61, NFR62, NFR63, NFR64, NFR65, NFR66, NFR67, NFR68, NFR69.
+
+**Architecture:** Decision P5-7 (BMAD Knowledge Atlas — Static Knowledge-Site Visualization Tier) in `_bmad-output/planning-artifacts/architecture.md`. Extends P3-1 (Knowledge Graph); composes with Epic 19.
+
+**Out of scope (deferred tiers — PRD Future Directions):**
+- Model-assisted discovery/enrichment (brownfield doc classification, prose-level relationship extraction, AI summaries). v1 discovery is deterministic only; the manifest is designed to cache model enrichment by content hash later.
+- Auto-refresh BMAD-skill hooks. The authoritative scan is the source of truth; hooks are optional sugar, not built here.
+- Confluence target mode; timeline/sprint-axis and "what changed since last sprint" diff views; an agent-facing query API over the manifest.
+- Replacing `emitToGraph` (Epic 19) or the `open-graph` single-graph renderer (P3-1). The Atlas composes with both; `open-graph` remains the lightweight single-graph view.
+
+### Story 29.1: Knowledge Atlas Engine Skeleton + Sealed Packaging Pipeline + Skill Entrypoint (Gate)
+
+**Status:** ready-for-dev
+**Size:** Medium
+**Priority:** Critical (gate — blocks all other stories)
+
+**User Story:** As a ma-agents user on any project, I can run a `bmad-knowledge` skill that invokes a pre-bundled Knowledge Atlas engine and produces a (minimal) self-contained output, with no per-project dependency install and no network access — so that every later capability lands on a packaging spine that is air-gapped by construction. (FR215, FR230; NFR61, NFR67)
+
+**Acceptance Criteria:**
+1. A new engine lives at `lib/knowledge-atlas/` (TypeScript) and is bundled to a single committed JS artifact via esbuild as a build step run at release time (alongside `build:plugin`); the consuming project never runs `npm install` for the Atlas — the engine and its (currently minimal) dependencies are vendored/bundled inside the ma-agents distribution.
+2. A `bmad-knowledge` skill (under `lib/bmad-extension/skills/bmad-knowledge/`, mirroring `open-graph`) resolves the project root + `_bmad-output`, invokes the engine, and opens the generated `index.html` (VSCode env detection with system-default-browser fallback, mirroring `open-graph`).
+3. Running the skill on a project produces a self-contained `_bmad-output/knowledge-site/index.html` (even if, in this story, it only renders a project title + a "generated at" placeholder) — proving the end-to-end pipeline; output is written **only** under `_bmad-output/knowledge-site/` and no source artifact is modified.
+4. `_bmad-output/knowledge-site/` is git-ignored by default (an `ensure…Ignored` step, mirroring the plugin-stage gitignore pattern).
+5. The engine bundle and skill run with **no network access** — verified by executing the generate step with egress blocked.
+6. The `bmad-knowledge` skill is registered in `MANIFEST.yaml` and surfaces in the skill enumeration without breaking existing entries.
+7. `npm test` is green on Linux/CI and Windows; a smoke test asserts the engine produces a non-empty `index.html` for a fixture `_bmad-output` and writes nothing outside the output folder.
+
+**Technical notes:**
+- This is the packaging spine. Establish the esbuild bundling + committed-artifact discipline now so every later story adds modules into a bundle that stays air-gapped — do not defer packaging to the end.
+- Mirror existing conventions: `open-graph` for skill placement/VSCode detection; `ensurePluginStageIgnored` for the gitignore step; `build:plugin` for the release-time bundle build + Bundle Drift discipline.
+- Keep dependencies minimal here; force-graph/Mermaid/search land in 29.3/29.4 and must be vendored, never CDN-loaded.
+
+### Story 29.2: Authoritative Scan + Deterministic Entity Extraction → Typed Knowledge Manifest
+
+**Status:** backlog (blocked on 29.1)
+**Size:** Large
+**Priority:** Critical
+
+**User Story:** As the Atlas engine, I scan a project's `_bmad-output`, deterministically extract the BMAD entity vocabulary, and build a typed knowledge manifest that is the single source of truth for rendering and a superset of `knowledge-graph.json` — so that every view is driven by one consistent, incrementally-rebuildable model. (FR216, FR217, FR218, FR221, FR224, FR228, FR232)
+
+**Acceptance Criteria:**
+1. The scanner enumerates all BMAD document types under `_bmad-output` — planning artifacts (product brief, PRD, architecture, epics), implementation artifacts (stories `NN-M-slug.md`, `bug-*.md`, `epic-N-retrospective.md`, `sprint-status.yaml`), `project-context.md`, and phase/stage reports — and tolerates missing types without failing.
+2. Deterministic extraction (regex/parse, no model) of the entity vocabulary from frontmatter and body: `FR###`, `NFR##`, `F##`, `Epic N`, `Story N.M` (and `NN-M-slug`), `bug-<slug>`, `P#-#`, retrospectives, and lifecycle statuses.
+3. A typed graph is built: nodes typed by kind (capability, requirement, non-functional requirement, epic, story, bug, architecture decision, retrospective) and edges typed by relationship (implements, derives-from/refines, blocks/depends-on, validates, addressed-by, shipped-in). Node identity uses the P3-1 `file-id#anchor` scheme, so the manifest is schema-compatible with — and a superset of — `knowledge-graph.json`.
+4. The manifest is persisted (per file: content hash, type, entities, edges; plus `meta` + normalized `nodes/edges`) under the output folder.
+5. Incremental rebuild: on re-run, change detection is by **content hash** (mtime only a pre-filter), and only added/changed/removed files are reprocessed; deletions and renames are reconciled against the prior manifest.
+6. When `_bmad-output/knowledge-graph.json` is present, its nodes/edges are read and merged on `file-id#anchor` identity (scan wins for on-disk truth); when absent, the scan alone yields an equivalent manifest. (Full reconciliation hardening is Story 29.5.)
+7. Generation is deterministic and cross-platform: identical inputs produce identical manifests across platforms; Windows paths and CRLF inputs are handled correctly (no CRLF-induced hash churn).
+8. `npm test` green on Linux/CI and Windows; tests cover extraction of each entity type, tolerant scan of a missing-doc fixture, content-hash incremental diff (changed/added/removed/renamed), and `knowledge-graph.json` merge.
+
+**Technical notes:**
+- The manifest is the discovery↔rendering seam (P5-7): this story is the *discovery* half and writes the manifest; rendering stories consume it and need no model.
+- Normalize line endings before hashing so CRLF/LF differences never produce false diffs (the known ma-agents Windows/CRLF gotcha).
+- Reuse the P3-1 heading→anchor slug algorithm so anchors match `knowledge-graph.json` and VSCode link resolution.
+
+### Story 29.3: Reading Views + Entity Cross-Linking + Backlinks + Offline Search + Home (Zero-Dependency Render)
+
+**Status:** backlog (blocked on 29.2)
+**Size:** Large
+**Priority:** High
+
+**User Story:** As a human onboarding to or reviewing a project, I open the Atlas and read every document with smooth navigation, click any entity token to jump to its definition, see what references it, search across all knowledge offline, and start from a project home with a health snapshot — all at analyst-report visual quality. (FR219, FR220, FR223, FR226, FR227, FR229, FR233, FR234)
+
+**Acceptance Criteria:**
+1. The renderer turns the manifest into per-document reading views with smooth scrolling, a table of contents, and entity status badges; authored Mermaid code fences are rendered (Mermaid bundled locally, never CDN).
+2. Every occurrence of an entity token, in any document, is rendered as a hyperlink to that entity's canonical location.
+3. Each entity displays its backlinks ("referenced by") — every location across all documents that references it.
+4. A project **home** page summarizes the project with entry points and a health snapshot (entity counts, statuses, orphan counts).
+5. Offline full-text search across all knowledge (bundled index/library — e.g. FlexSearch/lunr — no network).
+6. The site renders through a curated design system (typography scale, semantic color tokens incl. status colors, spacing rhythm, reusable components: cards, status pills, tables, syntax-highlighted code, callouts), responsive to mobile, system fonts only, ARIA on structural elements, `prefers-reduced-motion` honored — the quality bar is the design-reference artifact, not a default markdown render.
+7. Progressive enhancement: reading views, home, and search-by-link remain legible and navigable as static HTML/CSS even if scripted components fail to initialize; the site never shows a blank screen on a missing/failed script.
+8. The generated output is self-contained — all CSS/JS/search-index embedded locally, graph/search data embedded as JS variables (never `fetch`ed under `file://`).
+9. `npm test` green on Linux/CI and Windows; tests assert entity links resolve to real anchors, backlinks are symmetric, search returns expected hits offline, and HTML is sanitized.
+
+**Technical notes:**
+- Curated views are zero-runtime-JS-library HTML/CSS/SVG per NFR69; this story introduces no heavy JS lib (the force-graph lands in 29.4).
+- Model the design tokens/components on the saved design-reference (`briefs/brief-knowledge-atlas-2026-06-27/design-reference/elteye-rules-engine-report.html`).
+- Sanitize rendered markdown→HTML; never execute document content (NFR64).
+
+### Story 29.4: Interactive Typed Graph View + Generated Diagrams + Orphan/Gap View
+
+**Status:** backlog (blocked on 29.2)
+**Size:** Large
+**Priority:** High
+
+**User Story:** As a human exploring a project's structure, I navigate an interactive typed graph of the whole project, see auto-generated diagrams where none were authored, and get a view of disconnected knowledge — so I can travel the connections and spot gaps visually. (FR221, FR222, FR224, FR225)
+
+**Acceptance Criteria:**
+1. An interactive force-directed graph is the primary navigation surface: distinct node shape/color per entity type with a legend, directional edges, zoom from whole-project scope down to a single entity's neighborhood, click-to-navigate to the source location, and filter by node type and edge type. (force-graph bundled locally; graph data embedded as a JS variable, not fetched.)
+2. Where artifacts contain no authored diagrams, the engine auto-generates them as self-contained HTML/CSS/SVG (no heavy lib): the FR→Epic→Story→Bug→Retrospective **traceability spine**, **epic→story trees**, and a **sprint/status board**.
+3. An **orphan/gap view** surfaces disconnected knowledge: requirements with no implementing story, stories with no requirement, bugs with no root-cause link, epics with no retrospective.
+4. The graph view degrades gracefully — if its script fails, the curated views from 29.3 remain fully usable (no blank screen).
+5. All graph/diagram assets are bundled locally; nothing is fetched at view-time.
+6. `npm test` green on Linux/CI and Windows; tests assert the graph data matches the manifest (node/edge counts and types), generated diagrams render for a fixture, and the orphan/gap computation flags seeded orphans.
+
+**Technical notes:**
+- Prefer hand-built CSS/SVG for the structural diagrams (traceability spine, epic→story tree, sprint board) per the zero-dependency-first principle (NFR69); reserve `force-graph` for the one genuinely interactive graph and `Mermaid` for authored diagrams (29.3).
+- The orphan/gap computation is a pure manifest query — keep it in the rendering half (no model).
+
+### Story 29.5: Sealed Offline Packaging Hardening + Full Knowledge-Graph Reconciliation
+
+**Status:** backlog (blocked on 29.3, 29.4)
+**Size:** Medium
+**Priority:** High
+
+**User Story:** As the ma-agents maintainer, I want every Atlas dependency (force-graph, Mermaid, search, parser, build tooling, fonts) vendored into the distribution and the offline-install gate to exercise Atlas generate+view with egress blocked, plus full reconciliation with `knowledge-graph.json` — so the Atlas is provably air-gapped end-to-end and converges with Epic 19. (FR225, FR230, FR232; NFR60, NFR67)
+
+**Acceptance Criteria:**
+1. Every runtime and build dependency the Atlas needs to generate and to view (force-graph, Mermaid, search lib, markdown/parse libs, esbuild/build tooling, any fonts/icons) ships inside the ma-agents distribution as pre-built/vendored assets — no npm/git/CDN/host access is required to install ma-agents, generate an Atlas, or view it on a fully disconnected on-prem network.
+2. The existing offline-install gate (the Epic 22 / NFR50 / `offline-install.yml` harness) is extended to **generate and open an Atlas with all egress blocked** and assert success with no network calls.
+3. Full `knowledge-graph.json` reconciliation: when present, the merged manifest is consistent with P3-1 node identity and provenance; conflicts resolve deterministically (scan wins for on-disk truth) and are not silently dropped; when absent, behavior is unchanged from 29.2.
+4. No view-time asset is fetched — a static analyzer/test asserts the generated site contains no external URLs (CDN/font/script) and no `fetch`/XHR of sibling files.
+5. `npm test` green on Linux/CI and Windows; the offline gate runs in CI.
+
+**Technical notes:**
+- This is where the air-gap guarantee (NFR67, re-asserting NFR2/NFR50/NFR54/NFR57) is *proven*, mirroring the Epic 27/28 offline gates.
+- Reconciliation is the Epic-19 fast-follow: keep it additive and identity-stable so a later `emitToGraph` rollout does not require Atlas changes.
+
+### Story 29.6: Release Gate — Determinism, Degradation, Sanitization, Real-Project Smoke, Semver Cut
+
+**Status:** backlog (blocked on 29.5)
+**Size:** Small
+**Priority:** High
+
+**User Story:** As the ma-agents maintainer, before publishing I have proof the Atlas builds deterministically and offline on every platform, degrades gracefully, emits safe output, and works on a real project — and a clean semver cut — so the release cannot ship a silently-broken or unsafe Atlas. (NFR60, NFR62, NFR63, NFR64; FR234)
+
+**Acceptance Criteria:**
+1. **Offline generate+view gate** (re-asserts NFR60/NFR67): a full Atlas generate and open runs with all egress blocked and succeeds with zero network calls.
+2. **Determinism** (NFR62): the same `_bmad-output` produces byte-identical site output across Linux and Windows runs; CRLF/LF inputs do not change output.
+3. **Graceful degradation** (NFR63, FR234): malformed/unknown/missing document types are skipped with a surfaced note (never a crash), and a disabled-JS load of the site still presents legible, navigable content (no blank screen).
+4. **Output safety** (NFR64): a test confirms rendered HTML is sanitized and no document content is executed.
+5. **Real-project smoke:** the Atlas is generated against this repo's own `_bmad-output` and a second project's, and the output is spot-verified (entities link, graph renders, orphans listed).
+6. The `bmad-knowledge` skill is fully registered (MANIFEST + any per-tool enumeration) without breaking existing entries; a new ma-agents semver version is cut per the project's versioning strategy and `CHANGELOG.md` updated (a feature addition with no breaking change to the public CLI — MINOR, consistent with prior epics).
+7. Full `npm test` green on **both** Linux/CI and Windows.
+
+**Technical notes:**
+- Mirrors the Epic 27/28 release-gate stories (offline gate + multi-platform green + semver cut).
+- The disabled-JS check is the concrete test for FR234 progressive enhancement.
+
+### Epic 29 — Cross-Epic Notes
+
+- **Composition with Epic 19 (backlog):** the Atlas does not depend on Epic 19 shipping. `emitToGraph` (write path) and the Atlas scan (backfill+render path) converge on the same `file-id#anchor` model; Story 29.5 hardens reconciliation as the Epic-19 fast-follow.
+- **Reuses, doesn't replace, P3-1:** `open-graph` remains the lightweight single-graph renderer; the Atlas is the multi-view site tier over the same data.
+- **Deterministic v1:** model-assisted enrichment (the editorial-narrative tier) is explicitly deferred; v1 guarantees design polish, structure, and interlinking, not authored prose synthesis.

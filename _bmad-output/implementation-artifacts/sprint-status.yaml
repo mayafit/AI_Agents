@@ -35,6 +35,7 @@
 
 generated: 2026-03-15
 last_updated: "2026-06-20 — Epic 7 (Test Suite Foundation) CLOSED via module-level unit tests: 4 new test files (test/agents,installer,bmad,cli — 55 cases) adapted to current code (7.3 reframed off the removed applyCustomizations; 7.1 framework already existed), wired into npm test, no source change; dev+validation via BMAD subagents. Epic 4 (Visual Studio Agent Integration) CANCELLED with no implementation (stories 4.1/4.2 cancelled, de-scoped). Prior: 2026-06-19 — Reconciled against git ground truth: Epic 27 fully shipped. 27.7 done (v3.13.0, PR #115); 27.8-27.16 done (v3.13.1, PRs #116/#117 — implemented across bin/cli.js, lib/bmad.js, lib/installer.js, lib/profile.js + tests); epic-27 done. Corrected stale statuses (27.7 review→done, 27.8-27.16 ready-for-dev→done, epic-27 in-progress→done); yaml drift only, no code change. Prior: 2026-06-13 — Epic 27 CLOSED via release gate (Story 27.7): v6.8.0 pinned, relocated-registry reader + type filter + thin-cache fail-loud (NFR56), Cline wrapper reconciliation, offline install re-proven under --network none (zero network, all 5 modules from cache), full suite green on Windows, v3.13.0 cut + CHANGELOG, retro captured. epic-27 done; 27.7 review. Prior: 2026-06-08 — Epic 27 added to backlog (7 stories, 27.1-27.7). Driver: BMAD 6.7.0 retired the in-package module-registry YAML and 6.8.0 relocated the external-module list to package-root bmad-modules.yaml (still YAML, same shape), breaking build-bmad-cache.js's REGISTRY_CANDIDATES and the air-gapped bundled-module build. Bundle set tea/bmb/cis/gds/wds; automator excluded; wds active. 27.1 (confirmation spike, gate) and 27.4 (Cline wrapper reconciliation) ready-for-dev; rest blocked. Added F23/FR207-FR210/NFR56-NFR57 to PRD; Architecture Decision P5-5. Same-day correction of an initial JavaScript/wds-retired misstatement; 27-2 key renamed."
+# updated: 2026-06-28 — Epic 29 (BMAD Knowledge Atlas) added to backlog (6 stories, 29.1-29.6). The visualization tier of the Knowledge Graph (Decision P5-7, extends P3-1; composes with Epic 19 emitToGraph as the Atlas-first / reconciliation fast-follow). Pre-bundled offline static-site generator (bmad-knowledge skill): scan→manifest→render; sealed air-gap, no per-project install, zero-dependency-first rendering. v1 deterministic core (model-enrichment/hooks/Confluence/timeline/agent-API deferred). Execution: 29.1 (gate, ready-for-dev) → 29.2 → (29.3 ∥ 29.4) → 29.5 → 29.6. PRD FR215-FR234 / NFR60-NFR69. [Note: Epic 28 (v6.9.0) is present in epics.md but was not registered in this file by PR #123 — pre-existing drift, not addressed here.]
 project: agents
 project_key: NOKEY
 tracking_system: file-system
@@ -258,3 +259,15 @@ development_status:
   27-15-unify-config-path-convention-yaml-vs-toml: done  # ARCHITECTURE — two upstream generators + writeRepoLayoutConfig third variant
   27-16-agents-skills-full-population-and-manifest: done  # ARCHITECTURE — dual-pipeline gap; .agents/skills missing 34 standalone skills + MANIFEST.yaml
   epic-27-retrospective: done
+
+  # Epic 29: BMAD Knowledge Atlas (Phase 5)
+  # Decision P5-7; visualization tier of P3-1 (Knowledge Graph); composes with Epic 19 (emitToGraph).
+  # v1 deterministic core. Execution order: 29.1 (gate) → 29.2 → (29.3 ∥ 29.4) → 29.5 → 29.6.
+  epic-29: backlog
+  29-1-engine-skeleton-packaging-skill-entrypoint: ready-for-dev
+  29-2-scan-deterministic-extraction-typed-manifest: backlog
+  29-3-reading-views-cross-linking-backlinks-search-home: backlog
+  29-4-graph-view-generated-diagrams-orphan-gap: backlog
+  29-5-sealed-offline-packaging-knowledge-graph-reconciliation: backlog
+  29-6-release-gate-determinism-degradation-smoke-semver: backlog
+  epic-29-retrospective: optional
