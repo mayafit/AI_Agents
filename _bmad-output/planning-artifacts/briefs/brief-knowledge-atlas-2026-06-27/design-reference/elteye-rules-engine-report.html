@@ -1,0 +1,849 @@
+<!doctype html><html><head><script>(()=>{function F(b){if(window===top)return;if(b.type==="auxclick"&&b.button!==1)return;const j=b.composedPath?b.composedPath():[b.target];let m=null;for(let y=0;y<j.length;y++){const x=j[y];if(x&&x.matches&&x.matches("a[href],area[href]")){m=x;break}}if(!m&&b.target&&b.target.closest){m=b.target.closest("a[href],area[href]")}if(!m)return;const B=m.getAttribute("href");if(!B)return;let q,C;try{q=new URL(B,document.baseURI);C=new URL(document.baseURI).origin}catch{return}if((q.protocol==="http:"||q.protocol==="https:")&&q.origin!==C){b.preventDefault();parent.postMessage({__frame_nav:true,url:q.href},"*")}}addEventListener("click",F,true);addEventListener("auxclick",F,true);var D={};function z(b){if(window===top)return;const j=Date.now();if(j-(D[b]||0)<500)return;D[b]=j;parent.postMessage({__frame_engaged:true,kind:b},"*")}addEventListener("scroll",()=>z("scroll"),{capture:true,passive:true});addEventListener("pointermove",()=>z("pointer"),{capture:true,passive:true});addEventListener("click",()=>z("click"),{capture:true,passive:true});})();</script><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>EltEye · Rules Engine Embedding</title>
+<style>
+  :root{
+    --paper:#ECEFF1; --surface:#FFFFFF; --surface-2:#F4F6F7;
+    --ink:#16202A; --muted:#5C6B76; --faint:#8A98A2;
+    --line:#D3DBDF; --line-strong:#B6C2C8;
+    --teal:#0E8C8C; --teal-deep:#0A6B6B; --teal-wash:#E2F0F0;
+    --sand:#F1E9DA; --sand-line:#DDCDB0; --sand-ink:#6B5829;
+    --ok:#2F8F5B; --ok-wash:#E5F1EA;
+    --warn:#B6800F; --warn-wash:#F6EED8;
+    --gap:#BC4A3C; --gap-wash:#F6E3E0;
+    --mono:ui-monospace,"Cascadia Code","Cascadia Mono",Consolas,"Liberation Mono",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+    line-height:1.6;-webkit-font-smoothing:antialiased;font-size:16px}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 24px}
+  a{color:var(--teal-deep)}
+
+  /* ---- rhythm ---- */
+  section{padding:40px 0;border-top:1px solid var(--line)}
+  section:first-of-type{border-top:none}
+  h2{font-size:1.5rem;letter-spacing:-.01em;text-wrap:balance;margin:0 0 6px}
+  h3{font-size:1.08rem;letter-spacing:-.005em;margin:30px 0 10px}
+  p{margin:0 0 14px;max-width:68ch}
+  .lead{font-size:1.12rem;color:#28333d;max-width:64ch}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--teal-deep);margin:0 0 10px}
+  .sec-no{font-family:var(--mono);font-size:.72rem;color:var(--faint);
+    letter-spacing:.12em}
+  code,.mono{font-family:var(--mono);font-size:.88em}
+  code{background:var(--surface-2);border:1px solid var(--line);
+    padding:.06em .38em;border-radius:3px;color:#243947}
+
+  /* ---- header ---- */
+  header.hero{background:var(--ink);color:#E8EEF0;padding:56px 0 48px;
+    background-image:radial-gradient(circle at 88% 18%, rgba(14,140,140,.30), transparent 42%);}
+  header.hero .eyebrow{color:#5FC9C9}
+  header.hero h1{font-size:2.5rem;line-height:1.08;letter-spacing:-.02em;
+    margin:0 0 16px;max-width:18ch;text-wrap:balance}
+  header.hero p{color:#AEBEC5;max-width:60ch;font-size:1.06rem}
+  .meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:26px;
+    font-family:var(--mono);font-size:.74rem;color:#7E929B;letter-spacing:.04em}
+  .meta b{color:#CFE0E3;font-weight:500}
+
+  /* ---- verdict ---- */
+  .verdict{background:var(--surface);border:1px solid var(--line-strong);
+    border-left:4px solid var(--teal);padding:22px 24px;margin:24px 0}
+  .verdict p{margin:0;font-size:1.06rem;max-width:none}
+  .verdict .big{font-weight:600}
+
+  /* ---- legend ---- */
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 4px}
+  .pill{font-family:var(--mono);font-size:.72rem;letter-spacing:.04em;
+    padding:4px 10px;border-radius:100px;border:1px solid;display:inline-flex;
+    align-items:center;gap:7px;white-space:nowrap}
+  .pill::before{content:"";width:8px;height:8px;border-radius:2px;display:inline-block}
+  .pill.ok{color:#1d5d3a;background:var(--ok-wash);border-color:#B6DCC6}
+  .pill.ok::before{background:var(--ok)}
+  .pill.warn{color:#7a5708;background:var(--warn-wash);border-color:#E6D199}
+  .pill.warn::before{background:var(--warn)}
+  .pill.gap{color:#8d3127;background:var(--gap-wash);border-color:#E8BDB6}
+  .pill.gap::before{background:var(--gap)}
+
+  /* ---- swimlane topology ---- */
+  .scroll{overflow-x:auto;margin:8px 0 4px;padding-bottom:6px}
+  .stack{min-width:680px;display:flex;flex-direction:column;gap:0;
+    border:1px solid var(--line);background:var(--surface)}
+  .lane{display:grid;grid-template-columns:148px 1fr;align-items:stretch;
+    border-top:1px solid var(--line)}
+  .lane:first-child{border-top:none}
+  .lane .name{background:var(--surface-2);padding:14px 14px;border-right:1px solid var(--line);
+    font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--muted);display:flex;align-items:center}
+  .lane .row{display:flex;flex-wrap:wrap;gap:8px;padding:13px 14px;align-items:center}
+  .node{font-family:var(--mono);font-size:.78rem;padding:7px 11px;border-radius:4px;
+    border:1px solid var(--line-strong);background:#fff;color:#28333d;white-space:nowrap}
+  .node.infra{background:var(--surface-2);color:var(--muted)}
+  .node.focus{background:var(--teal);color:#fff;border-color:var(--teal-deep);font-weight:600;
+    box-shadow:0 1px 0 rgba(10,107,107,.4)}
+  .node.dim{opacity:.62}
+  .arrow-note{font-family:var(--mono);font-size:.68rem;color:var(--faint);
+    letter-spacing:.06em;align-self:center}
+  .lane-flow .name{background:#eef4f4}
+
+  /* ---- numbered pipeline ---- */
+  .pipe{list-style:none;margin:14px 0 0;padding:0;counter-reset:step}
+  .pipe li{counter-increment:step;display:grid;grid-template-columns:34px 1fr;
+    gap:16px;padding:0 0 4px}
+  .pipe li .bar{display:flex;flex-direction:column;align-items:center}
+  .pipe li .num{width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;
+    font-family:var(--mono);font-size:.82rem;display:flex;align-items:center;justify-content:center;
+    flex:none}
+  .pipe li .stem{width:2px;flex:1;background:var(--line-strong);margin:4px 0}
+  .pipe li:last-child .stem{display:none}
+  .pipe li .body{padding:2px 0 22px}
+  .pipe li .t{font-weight:600;margin:3px 0 4px}
+  .pipe li .t .where{font-family:var(--mono);font-size:.74rem;font-weight:500;
+    color:var(--teal-deep);background:var(--teal-wash);padding:2px 7px;border-radius:4px;
+    margin-left:8px;letter-spacing:.02em}
+  .pipe li p{margin:0;color:#3a4750;font-size:.95rem;max-width:64ch}
+  .pipe li.flag .num{background:var(--gap)}
+  .pipe li.flag .t .where{color:#8d3127;background:var(--gap-wash)}
+
+  /* ---- cards / split ---- */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:18px 0}
+  .card{border:1px solid var(--line);background:var(--surface);padding:20px 22px}
+  .card h4{margin:0 0 4px;font-size:1rem}
+  .card .tag{font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--muted);display:block;margin-bottom:12px}
+  .card.now{border-top:3px solid var(--teal)}
+  .card.vision{background:var(--sand);border-color:var(--sand-line);border-top:3px solid var(--warn)}
+  .card.vision .tag{color:var(--sand-ink)}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card li{margin:6px 0;font-size:.93rem}
+
+  /* ---- code block ---- */
+  pre{background:var(--ink);color:#D6E2E5;font-family:var(--mono);font-size:.82rem;
+    line-height:1.55;padding:18px 20px;border-radius:6px;overflow-x:auto;margin:14px 0}
+  pre .k{color:#5FC9C9}
+  pre .s{color:#D9B679}
+  pre .c{color:#6E8089}
+  pre .n{color:#E89A85}
+
+  /* ---- tables ---- */
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:.9rem}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);
+    vertical-align:top}
+  thead th{font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);border-bottom:1px solid var(--line-strong)}
+  tbody tr:hover{background:var(--surface-2)}
+  td .mono{color:#33454f}
+  .fr{font-family:var(--mono);font-size:.78rem;color:var(--teal-deep);white-space:nowrap}
+  .st{font-family:var(--mono);font-size:.7rem;font-weight:600;letter-spacing:.04em;
+    padding:3px 8px;border-radius:4px;white-space:nowrap}
+  .st.ok{color:#1d5d3a;background:var(--ok-wash)}
+  .st.warn{color:#7a5708;background:var(--warn-wash)}
+  .st.gap{color:#8d3127;background:var(--gap-wash)}
+  .tnum{font-variant-numeric:tabular-nums}
+
+  /* ---- matrix ---- */
+  .matrix td:first-child{font-weight:500}
+  .dot{display:inline-block;width:11px;height:11px;border-radius:3px}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.gap{background:var(--gap)}
+  .matrix td:not(:first-child){text-align:center}
+
+  /* ---- callout ---- */
+  .note{background:var(--surface-2);border:1px solid var(--line);border-radius:6px;
+    padding:16px 18px;margin:16px 0;font-size:.94rem}
+  .note .lab{font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--teal-deep);display:block;margin-bottom:6px}
+  .note.sand{background:var(--sand);border-color:var(--sand-line)}
+  .note.sand .lab{color:var(--sand-ink)}
+
+  ul.clean{padding-left:18px;max-width:68ch}
+  ul.clean li{margin:7px 0}
+  .kbd{font-family:var(--mono);font-size:.82em;background:var(--surface-2);
+    border:1px solid var(--line);border-radius:3px;padding:1px 5px}
+
+  footer{padding:34px 0 60px;color:var(--muted);font-size:.85rem;border-top:1px solid var(--line)}
+  footer .mono{color:var(--faint)}
+
+  @media (max-width:680px){
+    .split{grid-template-columns:1fr}
+    header.hero h1{font-size:2rem}
+    .lane{grid-template-columns:1fr}
+    .lane .name{border-right:none;border-bottom:1px solid var(--line)}
+  }
+  @media (prefers-reduced-motion:no-preference){
+    .node.focus{transition:transform .15s}
+  }
+</style>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">EltEye · System Analysis</p>
+    <h1>The Rules Engine, and how deeply it&nbsp;is wired into the system</h1>
+    <p>A state-of-the-embedding report: what the requirements promised, what the architecture designed, what the code actually does today — and the distance between that and a flexible spatial-rule platform where you define a rule once and instantiate it against concrete sites and live tracks.</p>
+    <div class="meta">
+      <span><b>Prepared by</b> Mary · Business Analyst</span>
+      <span><b>Scope</b> Epics 11 &amp; 12, FR51–FR74, FR82</span>
+      <span><b>Basis</b> PRD · architecture.md · live source</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- VERDICT -->
+  <section>
+    <p class="eyebrow">The headline</p>
+    <h2>You have a working event engine — but not a spatial rule platform</h2>
+    <div class="verdict">
+      <p>The rules engine is <span class="big">real, deployed, and generic</span> — it consumes any message stream and fires alerts when scalar field conditions match (<code>speed &gt; 500</code>, <code>severity == 1</code>). But every rule you described — <b>Track-in-Polygon</b>, <b>Line-Crossing</b>, <b>Convoy</b> — needs <span class="big">geometry, state, and entity-binding the engine does not have.</span> "Areas of Interest" exist only as a bounding-box ingestion filter; they are never evaluated <em>inside</em> a rule. And there is no notion of a reusable rule <em>template</em> you instantiate against a concrete site.</p>
+    </div>
+    <p class="lead">In short: the plumbing, persistence, messaging, alert lifecycle and UI are mature. The <em>rule language</em> is the gap. Your vision is mostly greenfield — but it lands on a strong foundation.</p>
+
+    <div class="legend" aria-label="status legend">
+      <span class="pill ok">Implemented &amp; running</span>
+      <span class="pill warn">Partial / designed-not-built</span>
+      <span class="pill gap">Missing — needed for your vision</span>
+    </div>
+  </section>
+
+  <!-- 1 — WHERE IT LIVES -->
+  <section>
+    <p class="sec-no">01 — Structure</p>
+    <h2>Where the rules engine sits in the system</h2>
+    <p>EltEye is a .NET microservice mesh behind a RabbitMQ backbone. Tracks flow in from external feeds, fan out across services, and the <code>rules-engine</code> is just one more consumer on the bus — which is exactly what makes it generic. Below, each lane is a tier; the highlighted node is the engine and its direct collaborators.</p>
+
+    <div class="scroll">
+      <div class="stack" role="img" aria-label="Architecture swimlane diagram showing sources, gateways, message bus, services and presentation tiers">
+        <div class="lane">
+          <div class="name">Sources</div>
+          <div class="row">
+            <span class="node infra">OpenSky (ADS-B)</span>
+            <span class="node infra">aisstream.io (AIS)</span>
+            <span class="arrow-note">→ external feeds, AOI bbox-scoped at source (FR61)</span>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="name">Gateways</div>
+          <div class="row">
+            <span class="node">adsb-gateway</span>
+            <span class="node">ais-gateway</span>
+            <span class="arrow-note">→ map to Track protobuf, publish</span>
+          </div>
+        </div>
+        <div class="lane lane-flow">
+          <div class="name">Message bus</div>
+          <div class="row">
+            <span class="node">track.data</span>
+            <span class="node">rules.events</span>
+            <span class="node">incidents.events</span>
+            <span class="node">resources.events</span>
+            <span class="arrow-note">RabbitMQ · topic exchanges · binary protobuf</span>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="name">Services</div>
+          <div class="row">
+            <span class="node">track-manager</span>
+            <span class="node">websocket-gateway</span>
+            <span class="node">aoi-manager</span>
+            <span class="node focus">rules-engine</span>
+            <span class="node">incident-manager</span>
+            <span class="node">resource-manager</span>
+            <span class="node dim">advisory-service</span>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="name">Presentation</div>
+          <div class="row">
+            <span class="node">Cesium globe shell</span>
+            <span class="node">AlertsPanel</span>
+            <span class="node">AoiPanel</span>
+            <span class="node dim">ais / adsb / eirms modules</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <span class="lab">How to read it</span>
+      The engine subscribes to <em>any</em> queue named in a rule (a <code>RuleConsumerManager</code> spins up one consumer per active queue). That is the system's real strength: the same engine that watches tracks also powers EIRMS incident/resource notifications (FR82). It is a generic <b>event → condition → action</b> machine, not a track-specific one.
+    </div>
+  </section>
+
+  <!-- 2 — RUNTIME -->
+  <section>
+    <p class="sec-no">02 — Runtime</p>
+    <h2>How a track becomes an alert, step by step</h2>
+    <p>This is the path that exists and works today. The order is load-bearing — note where evaluation happens (step 4) and where your spatial vision would have to plug in.</p>
+
+    <ol class="pipe">
+      <li>
+        <div class="bar"><div class="num">1</div><div class="stem"></div></div>
+        <div class="body">
+          <div class="t">Feed arrives <span class="where">adsb / ais-gateway</span></div>
+          <p>A gateway polls OpenSky / streams aisstream, maps the response into a <code>Track</code> protobuf, and publishes it to the <code>track.data</code> topic exchange. If an AOI is active, the gateway has already restricted the query to that bounding box (FR61).</p>
+        </div>
+      </li>
+      <li>
+        <div class="bar"><div class="num">2</div><div class="stem"></div></div>
+        <div class="body">
+          <div class="t">Fan-out on the bus <span class="where">RabbitMQ</span></div>
+          <p>Three competing consumers pick the message up: <code>track-manager</code> persists it, <code>websocket-gateway</code> pushes it live to browsers, and <code>rules-engine</code> evaluates it — but only if a rule targets that queue.</p>
+        </div>
+      </li>
+      <li>
+        <div class="bar"><div class="num">3</div><div class="stem"></div></div>
+        <div class="body">
+          <div class="t">Payload flattened <span class="where">MicrosoftRulesEngineAdapter</span></div>
+          <p>The engine deserializes the message into a flat <code>{ field → value }</code> dictionary. It is deliberately message-type-agnostic: no proto-specific code, so new message types need no engine change.</p>
+        </div>
+      </li>
+      <li class="flag">
+        <div class="bar"><div class="num">4</div><div class="stem"></div></div>
+        <div class="body">
+          <div class="t">Conditions evaluated <span class="where">where your vision must live</span></div>
+          <p>Each active rule becomes a lambda like <code>msg["speed"] &gt; 500 AND msg["source_type"] == "adsb"</code>. <b>Only scalar comparisons</b> (<code>&gt; &lt; == != &gt;= &lt;=</code>) on a single message. No geometry, no memory of other tracks, no clock window beyond a fragile in-memory buffer. This is the exact ceiling your three rules exceed.</p>
+        </div>
+      </li>
+      <li>
+        <div class="bar"><div class="num">5</div><div class="stem"></div></div>
+        <div class="body">
+          <div class="t">Alert persisted, then published <span class="where">rules-engine → rules.events</span></div>
+          <p>On a match, an <code>Alert</code> row is written to PostgreSQL first (rule reference + a JSON snapshot of the triggering values + status <code>New</code>), <em>then</em> an <code>AlertEvent</code> is published. Persist-before-publish prevents ghost alerts.</p>
+        </div>
+      </li>
+      <li>
+        <div class="bar"><div class="num">6</div><div class="stem"></div></div>
+        <div class="body">
+          <div class="t">Operator sees and works it <span class="where">websocket-gateway → AlertsPanel</span></div>
+          <p>The gateway tags the frame and pushes it over WSS; the browser badge increments and the alert appears in the panel, where it can be <b>Acknowledged</b> or <b>Resolved</b>. Target: under one second end-to-end (NFR-RE1).</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- 3 — RULE ANATOMY -->
+  <section>
+    <p class="sec-no">03 — The rule today</p>
+    <h2>What a rule actually is in the code</h2>
+    <p>A rule is a single flat record. Crucially, there is <b>no separation between a rule's <em>type</em> and a rule's <em>instance</em></b> — a rule already carries concrete values baked in, and it binds to a data stream by queue name, never to a concrete entity like "Haifa Port."</p>
+
+    <pre><span class="c">// rules table — the entire rule model</span>
+{
+  <span class="k">"name"</span>: <span class="s">"High-speed contact"</span>,
+  <span class="k">"target_proto_type"</span>: <span class="s">"elteye.icd.Track"</span>,
+  <span class="k">"queue_name"</span>: <span class="s">"track.ais"</span>,        <span class="c">// ← binds to a STREAM, not an entity</span>
+  <span class="k">"rule_category"</span>: <span class="s">"statistical"</span>,    <span class="c">// statistical | temporal | relational</span>
+  <span class="k">"evaluation_criteria"</span>: {
+    <span class="k">"conditions"</span>: [
+      { <span class="k">"field"</span>:<span class="s">"speed"</span>, <span class="k">"operator"</span>:<span class="s">"&gt;"</span>, <span class="k">"value"</span>:<span class="n">30</span> }   <span class="c">// ← scalar only</span>
+    ],
+    <span class="k">"logical_operator"</span>: <span class="s">"AND"</span>,
+    <span class="k">"window_seconds"</span>: <span class="n">null</span>            <span class="c">// temporal = in-memory buffer (lossy)</span>
+  },
+  <span class="k">"status"</span>: <span class="s">"active"</span>
+}</pre>
+
+    <div class="split">
+      <div class="card now">
+        <span class="tag">What this model can express</span>
+        <h4>Scalar thresholds on one message</h4>
+        <ul>
+          <li>"Any aircraft faster than 500 kts" — <code>speed &gt; 500</code></li>
+          <li>"AIS contact of ship-type tanker" — <code>ship_type == "tanker"</code></li>
+          <li>"Critical incident opened" — <code>severity &lt;= 2</code> (powers EIRMS notifications)</li>
+          <li>Combine a few with <code>AND</code> / <code>OR</code></li>
+        </ul>
+      </div>
+      <div class="card vision">
+        <span class="tag">What it cannot express</span>
+        <ul>
+          <li><b>Geometry</b> — "is this lat/lon <em>inside</em> a polygon?" There is no spatial operator and field names must be flat scalars.</li>
+          <li><b>Relationship to an entity</b> — a rule cannot reference "Site&nbsp;X" or its shape.</li>
+          <li><b>Cross-track state</b> — "are 3 tracks moving together?" needs memory the engine lacks.</li>
+          <li><b>Reliable time windows</b> — the buffer is per-replica and lost on restart.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 — REQUIREMENTS LEDGER -->
+  <section>
+    <p class="sec-no">04 — Requirements vs reality</p>
+    <h2>What the specs promised, and where each landed</h2>
+    <p>The rules-engine and AOI requirements (Epics 11 &amp; 12) are largely <em>built for the generic case</em>. None of them, however, actually specify spatial rule semantics — the gap is in the requirements too, not only the code.</p>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>FR</th><th>Requirement</th><th>State</th><th>Note</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="fr">FR64</td><td>Generic, engine-agnostic rule definition model</td><td><span class="st ok">Built</span></td><td>Flat field/operator/value, queue-bound</td></tr>
+          <tr><td class="fr">FR65</td><td>Statistical / temporal / relational categories</td><td><span class="st warn">Partial</span></td><td>Category is a label; only statistical truly works</td></tr>
+          <tr><td class="fr">FR66</td><td>Real-time evaluation on queue arrival</td><td><span class="st ok">Built</span></td><td>Dynamic per-queue consumers</td></tr>
+          <tr><td class="fr">FR67</td><td>Alert with data snapshot on match</td><td><span class="st ok">Built</span></td><td>JSON snapshot persisted</td></tr>
+          <tr><td class="fr">FR68</td><td>Swappable adapters (Microsoft / Kinetica / Drools)</td><td><span class="st warn">1 of 3</span></td><td>Microsoft built; Kinetica/Drools deferred (12.6/12.7)</td></tr>
+          <tr><td class="fr">FR69</td><td>Rule CRUD via REST</td><td><span class="st ok">Built</span></td><td>No authoring <em>UI</em>, REST only</td></tr>
+          <tr><td class="fr">FR70</td><td>MCP interface for LLM rule management</td><td><span class="st ok">Built</span></td><td>Natural-language rule creation possible</td></tr>
+          <tr><td class="fr">FR71–74</td><td>Alert persistence + lifecycle + Alerts UI</td><td><span class="st ok">Built</span></td><td>New → Acknowledged → Resolved, live panel</td></tr>
+          <tr><td class="fr">FR51–59</td><td>Draw / name / persist AOIs (bounding box)</td><td><span class="st ok">Built</span></td><td>Rectangles only — no freehand polygon</td></tr>
+          <tr><td class="fr">FR60–63</td><td>AOI as geographic <em>filter</em> on ingestion</td><td><span class="st ok">Built</span></td><td>Filter only — never a rule predicate</td></tr>
+          <tr><td class="fr">FR82</td><td>EIRMS notifications via the rules engine</td><td><span class="st ok">Built</span></td><td>Proves engine is a generic ECA platform</td></tr>
+          <tr><td class="fr">—</td><td>Track-in-Polygon / Line-Crossing / Convoy</td><td><span class="st gap">No requirement</span></td><td>Not specified anywhere; fully greenfield</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 5 — THE THREE RULES -->
+  <section>
+    <p class="sec-no">05 — Your three rules</p>
+    <h2>Mapping your vision onto what exists</h2>
+    <p>You gave three exemplars. Each needs a capability the current engine lacks. Here is exactly what each one requires and what is missing.</p>
+
+    <h3>① Track-in-Polygon — "alert when a track enters Site&nbsp;X"</h3>
+    <p>Needs a <b>point-in-polygon test</b> evaluated <em>inside</em> the rule, against a polygon attached to a concrete site, and entry/exit <b>state</b> (so you alert on the <em>crossing</em>, not every position report while inside).</p>
+    <ul class="clean">
+      <li><span class="pill ok" style="vertical-align:middle">have</span> &nbsp;Live track positions on the bus; an AOI store with shapes; PostGIS is already a dependency (incidents use <code>geometry(Point,4326)</code>).</li>
+      <li><span class="pill gap" style="vertical-align:middle">need</span> &nbsp;A spatial operator (<code>within</code> / <code>contains</code>); AOI shapes upgraded from bounding boxes to true polygons; enter/leave state per (track, zone); a rule that <em>references a site</em> rather than a queue.</li>
+    </ul>
+
+    <h3>② Line-Crossing — "alert when a track crosses a tripwire"</h3>
+    <p>Needs <b>segment-intersection between two consecutive positions and a line</b> — inherently stateful, because a single position can never cross anything; you need the previous fix too.</p>
+    <ul class="clean">
+      <li><span class="pill ok" style="vertical-align:middle">have</span> &nbsp;Sequential position stream per track id; geometry libraries available in the .NET/PostGIS stack.</li>
+      <li><span class="pill gap" style="vertical-align:middle">need</span> &nbsp;Per-track "last known position" memory; a line/tripwire geometry type; a crossing predicate; optional direction-of-crossing.</li>
+    </ul>
+
+    <h3>③ Convoy — "alert on a group of tracks moving together"</h3>
+    <p>The hardest: <b>multi-entity correlation over time</b> — proximity + common heading + common speed across several tracks, sustained over a window. This is full Complex Event Processing.</p>
+    <ul class="clean">
+      <li><span class="pill ok" style="vertical-align:middle">have</span> &nbsp;All tracks on one stream with heading/speed/position fields.</li>
+      <li><span class="pill gap" style="vertical-align:middle">need</span> &nbsp;A stateful CEP engine holding many tracks at once; spatial clustering; a durable time window. This is precisely what the <em>deferred</em> Kinetica/Drools adapters were meant to provide.</li>
+    </ul>
+  </section>
+
+  <!-- 6 — CAPABILITY MATRIX -->
+  <section>
+    <p class="sec-no">06 — Gap matrix</p>
+    <h2>Capabilities the rules need vs what exists</h2>
+    <div class="scroll">
+      <table class="matrix tnum">
+        <thead>
+          <tr><th>Capability</th><th>Track-in-Polygon</th><th>Line-Crossing</th><th>Convoy</th><th>Today</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Scalar field conditions</td><td><span class="dot ok"></span></td><td><span class="dot ok"></span></td><td><span class="dot ok"></span></td><td><span class="st ok">Built</span></td></tr>
+          <tr><td>Point-in-polygon / spatial operators</td><td><span class="dot gap"></span></td><td><span class="dot gap"></span></td><td><span class="dot gap"></span></td><td><span class="st gap">Missing</span></td></tr>
+          <tr><td>True polygon &amp; line geometry (not bbox)</td><td><span class="dot gap"></span></td><td><span class="dot gap"></span></td><td><span class="dot warn"></span></td><td><span class="st gap">Missing</span></td></tr>
+          <tr><td>Per-track state (previous position)</td><td><span class="dot warn"></span></td><td><span class="dot gap"></span></td><td><span class="dot gap"></span></td><td><span class="st gap">Missing</span></td></tr>
+          <tr><td>Enter / exit transition detection</td><td><span class="dot gap"></span></td><td><span class="dot warn"></span></td><td><span class="dot warn"></span></td><td><span class="st gap">Missing</span></td></tr>
+          <tr><td>Multi-track correlation (CEP)</td><td><span class="dot warn"></span></td><td><span class="dot warn"></span></td><td><span class="dot gap"></span></td><td><span class="st gap">Missing</span></td></tr>
+          <tr><td>Durable time windows</td><td><span class="dot warn"></span></td><td><span class="dot warn"></span></td><td><span class="dot gap"></span></td><td><span class="st warn">Lossy buffer</span></td></tr>
+          <tr><td>Rule bound to a concrete entity/site</td><td><span class="dot gap"></span></td><td><span class="dot gap"></span></td><td><span class="dot gap"></span></td><td><span class="st gap">Missing</span></td></tr>
+          <tr><td>Alert generation + lifecycle + UI</td><td><span class="dot ok"></span></td><td><span class="dot ok"></span></td><td><span class="dot ok"></span></td><td><span class="st ok">Built</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:.85rem;color:var(--muted)"><span class="dot ok"></span> already supports &nbsp;·&nbsp; <span class="dot warn"></span> partial / workaround &nbsp;·&nbsp; <span class="dot gap"></span> must be built</p>
+  </section>
+
+  <!-- 7 — THE MODEL YOU WANT -->
+  <section>
+    <p class="sec-no">07 — The shape of the solution</p>
+    <h2>The abstraction your vision actually needs</h2>
+    <p>What you described — define a generic rule, choose which properties take part, build it as a logical/functional expression, then <em>instantiate</em> and attach it to concrete entities and streams — is a three-layer model the current single-table design collapses into one. Making it real means introducing the missing layers:</p>
+
+    <h3>The expression model, as you've now specified it</h3>
+    <p>You confirmed two things that escalate the design from a configurator to a real language: predicates <b>return values that flow into other predicates</b> (functional piping), and rules <b>relate pairs and sets of entities</b> (relational joins) — binding a track to fixed geometry <em>or</em> to other live tracks. Concretely, that means a <b>typed functional expression language</b> over the system's entities, plus a <b>complex-event-processing runtime</b> to hold state for the relational cases.</p>
+
+    <div class="note">
+      <span class="lab">The type system</span>
+      Operands are typed — <code>Entity</code> (Track · Site · Line), <code>Geometry</code> (Point · Polygon · LineString), <code>Scalar</code>, <code>Boolean</code>, and <code>Set&lt;Entity&gt;</code> (the live population, for CEP). Functions carry typed signatures and nest: <code>WITHIN(Point,Polygon)→Bool</code>, <code>CROSSES(Segment,LineString)→Bool</code>, <code>site_of(Track)→Site</code>, <code>distance(Point,Point)→Scalar</code>, plus comparison, boolean, and windowed aggregates (<code>COUNT</code>, <code>AVG</code>).
+    </div>
+
+    <p>Your own three exemplars, written in that language — note how each needs a different binding mode and a different amount of state:</p>
+    <pre><span class="c">// ① Track-in-Polygon — Track × Site, stateless predicate</span>
+<span class="k">in_site</span>(T, S)  := <span class="n">WITHIN</span>(T.position, S.polygon)
+              <span class="c">// instantiate: S = "Haifa Port"; alert on transition false→true</span>
+
+<span class="c">// ② Line-Crossing — Track × Line, needs per-track memory</span>
+<span class="k">crossed</span>(T, L)  := <span class="n">CROSSES</span>( <span class="n">seg</span>(T.prev_pos, T.position), L.geometry )
+
+<span class="c">// ③ Convoy — Track × Track set, full CEP over a window</span>
+<span class="k">convoy</span>(G)     := <span class="n">COUNT</span>(G) &gt;= <span class="s">3</span>
+              <span class="k">AND</span> <span class="n">FORALL</span> (a,b) <span class="k">in</span> G:
+                    <span class="n">distance</span>(a.pos, b.pos) &lt; <span class="s">500m</span>
+                    <span class="k">AND</span> |a.heading - b.heading| &lt; <span class="s">10°</span>
+                    <span class="k">AND</span> |a.speed - b.speed| &lt; <span class="s">2kn</span>
+              <span class="k">SUSTAINED</span> <span class="k">over</span> <span class="s">120s</span>
+
+<span class="c">// and your k(A,B): f(g(B)) is now well-typed — g→Site, f(Site)→Bool, composed</span>
+<span class="k">k</span>(A, B)       := <span class="n">f</span>( <span class="n">g</span>(B) )    <span class="k">where</span> g(B) := <span class="n">site_of</span>(B),  f(s) := s.threat == <span class="s">HIGH</span></pre>
+
+    <p>The current flat condition list is the degenerate case of this language: a single entity, no value-returning functions, boolean-only, no binding. Everything you asked for is a strict superset built from the same parts — which is the good news. Below is how the rule <em>storage</em> reshapes to carry it:</p>
+
+    <div class="split" style="grid-template-columns:1fr;gap:14px">
+      <div class="card now">
+        <span class="tag">Layer 1 — Rule Template (the generic definition)</span>
+        <h4>e.g. "Track-in-Polygon"</h4>
+        <p style="margin:8px 0 0;font-size:.93rem;color:#3a4750">Declares the rule's <b>kind</b>, the <b>predicate</b> it evaluates (point-in-polygon), the <b>entity properties</b> it reads (track <code>lat/lon</code>), and the <b>parameters</b> it needs filled in (a polygon, optional dwell time). Authored once, reused many times.</p>
+      </div>
+      <div style="text-align:center;color:var(--faint);font-family:var(--mono);font-size:.8rem">▼ instantiate</div>
+      <div class="card now">
+        <span class="tag">Layer 2 — Rule Instance (the concrete binding)</span>
+        <h4>e.g. "Intruder at Haifa Port"</h4>
+        <p style="margin:8px 0 0;font-size:.93rem;color:#3a4750">Fills the template's parameters with <b>concrete values</b> — <em>this</em> polygon (Haifa Port's shape), <em>this</em> stream (<code>track.ais</code>), this severity. Many instances of one template can run at once, each on a different site.</p>
+      </div>
+      <div style="text-align:center;color:var(--faint);font-family:var(--mono);font-size:.8rem">▼ attach</div>
+      <div class="card vision">
+        <span class="tag">Layer 3 — Bindings (entities &amp; data streams)</span>
+        <h4>Concrete geometry + live feeds</h4>
+        <p style="margin:8px 0 0;font-size:.93rem;color:var(--sand-ink)">The site polygon (an upgraded AOI), the track stream, and the alert routing. This is where AOIs finally become rule <em>inputs</em> instead of mere ingestion filters — closing the loop your system was clearly built to eventually close.</p>
+      </div>
+    </div>
+
+    <div class="note sand">
+      <span class="lab">The pragmatic path — and an honest scope flag</span>
+      The functional-language + relational-CEP model is the <b>single largest item in the whole vision</b> — it adds three net-new sub-components: an <b>expression parser/validator</b> (the language + its type registry of functions), a <b>stateful CEP runtime</b> (per-track memory for line-crossing, the live population for convoy, durable windows), and a <b>spatial layer</b> (true polygons/lines + geometry operators). The good news is the <em>seam</em> already exists: the <code>IRuleEvaluator</code> adapter pattern is the home for it, and the <b>deferred Kinetica/Drools adapters</b> (stories 12.6/12.7) were chosen for exactly this native temporal + complex-event capability — the flat in-house Microsoft engine cannot reach convoy on its own. Build the language and a CEP-backed evaluator behind that interface, add the template/instance schema on top of today's rules table, and the bus, persistence, alert lifecycle and UI all stay as-is. Not a rewrite — a new evaluator and a new front-door grammar.
+    </div>
+  </section>
+
+  <!-- 8 — DISTRIBUTED EVALUATION -->
+  <section>
+    <style>
+      .dist{min-width:640px;display:flex;flex-direction:column;align-items:stretch;gap:0}
+      .dist .hub{border:1px solid var(--line-strong);background:var(--ink);color:#E8EEF0;
+        padding:16px 18px;border-radius:6px}
+      .dist .hub .lab{font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;
+        text-transform:uppercase;color:#5FC9C9;display:block;margin-bottom:5px}
+      .dist .hub p{margin:0;color:#AEBEC5;font-size:.9rem;max-width:none}
+      .conn{font-family:var(--mono);font-size:.72rem;color:var(--faint);text-align:center;
+        padding:9px 0;letter-spacing:.08em}
+      .ev-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+      .ev{border:1px solid var(--line);background:var(--surface);padding:15px 16px;border-top:3px solid var(--teal)}
+      .ev.geo{border-top-color:var(--warn)}
+      .ev.comm{border-top-color:var(--muted);background:var(--surface-2)}
+      .ev h5{margin:0 0 3px;font-size:.92rem}
+      .ev .role{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;
+        color:var(--muted);display:block;margin-bottom:9px}
+      .ev .impl{font-size:.82rem;color:#3a4750;margin:0}
+      .ev .wire{display:inline-block;margin-top:9px;font-family:var(--mono);font-size:.66rem;
+        padding:2px 7px;border-radius:4px;background:var(--teal-wash);color:var(--teal-deep)}
+      .ev.comm .wire{background:#e7ebed;color:var(--muted)}
+    </style>
+    <p class="sec-no">08 — Distributed evaluation</p>
+    <h2>Splitting one rule across specialized engines</h2>
+    <p>You want a rule's work decomposed by predicate kind and farmed to the engine best suited to it — the spatial part to a dedicated geospatial service, the scalar/temporal part to the regular engine, optionally a commercial accelerator for high-volume streams — then the partials recombined. Because the rule is already a typed expression tree, this is a clean <b>scatter-gather</b>:</p>
+
+    <div class="scroll">
+      <div class="dist" role="img" aria-label="Scatter-gather diagram: a coordinator splits a rule's expression tree across a regular evaluator, a geospatial service, and a commercial accelerator, then a combine step joins the partial results into an alert">
+        <div class="hub">
+          <span class="lab">Rule Coordinator / planner</span>
+          <p>Compiles the expression tree into an execution plan and dispatches each node to the evaluator that fits its type. Reads &amp; writes shared state in <b>Redis</b>.</p>
+        </div>
+        <div class="conn">▽ &nbsp; scatter — one rule, parallel sub-evaluations &nbsp; ▽</div>
+        <div class="ev-grid">
+          <div class="ev">
+            <h5>Regular evaluator</h5>
+            <span class="role">scalar · temporal</span>
+            <p class="impl"><code>type==X</code>, <code>speed&gt;Y</code>, windowed counts. Open-source, in-process (today's Microsoft engine, or its successor).</p>
+            <span class="wire">RMQ in · in-process</span>
+          </div>
+          <div class="ev geo">
+            <h5>Geospatial service</h5>
+            <span class="role">WITHIN · CROSSES · NEAR</span>
+            <p class="impl">Point-in-polygon, tripwire, proximity. Strong stable API; swappable backend, OSS default.</p>
+            <span class="wire">gRPC</span>
+          </div>
+          <div class="ev comm">
+            <h5>Commercial accelerator</h5>
+            <span class="role">high-volume · native CEP</span>
+            <p class="impl">Big online streams &amp; convoy-class correlation. <b>Kinetica</b> / <b>SingleStore</b> behind the same contract — optional.</p>
+            <span class="wire">gRPC</span>
+          </div>
+        </div>
+        <div class="conn">△ &nbsp; gather — join partial matches by entity-id + time window &nbsp; △</div>
+        <div class="hub" style="background:var(--teal-deep)">
+          <span class="lab" style="color:#CFF0F0">Combine → Alert</span>
+          <p style="color:#D6EEEE">Merge operator follows the boolean tree: <b>AND → intersect</b> the matching track-sets, <b>OR → union</b>. Result drives the existing alert pipeline unchanged.</p>
+        </div>
+      </div>
+    </div>
+
+    <h3>Your worked example, split</h3>
+    <p>"A rule checks a track's geography <em>and</em> its type <em>and</em> speed" decomposes as:</p>
+    <pre><span class="c">// rule:  WITHIN(track.pos, SITE)  AND  track.type == X  AND  track.speed &gt; Y</span>
+geospatial service  →  { tracks inside SITE }              <span class="c">// gRPC, OSS geo backend</span>
+regular evaluator   →  { tracks where type==X AND speed&gt;Y } <span class="c">// in-process / RMQ</span>
+combine (AND)       →  <span class="n">INTERSECT</span> by track_id within the same tick  <span class="c">// the "union" step, keyed</span>
+                    →  alert on the surviving set</pre>
+    <div class="note">
+      <span class="lab">On the word "union"</span>
+      The recombination operator is <b>dictated by the expression tree</b>, not fixed. For your AND-rule it is an <em>intersection</em> of the two engines' matching track-sets; a true union only applies to <code>OR</code> nodes. Either way the partials must be correlated by <b>entity-id within the same time window</b> so both engines reference the same track at the same instant — otherwise an AND-rule over-fires.
+    </div>
+
+    <h3>Pluggable engines — strong API, open-source default</h3>
+    <p>Every specialized engine sits behind a stable contract so implementations swap without touching rule definitions (the same principle as <code>IRuleEvaluator</code>, promoted to a service boundary):</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Layer</th><th>Open-source default</th><th>Commercial swap-in</th></tr></thead>
+        <tbody>
+          <tr><td>Geospatial ops (within / crosses / near)</td><td class="mono">NetTopologySuite + PostGIS index</td><td class="mono">Kinetica (GPU geo)</td></tr>
+          <tr><td>Streaming geofence (enter / exit / roam)</td><td class="mono">Tile38</td><td class="mono">Kinetica / SingleStore</td></tr>
+          <tr><td>High-volume scalar / CEP</td><td class="mono">in-house evaluator + Redis state</td><td class="mono">SingleStore · Drools</td></tr>
+          <tr><td>Shared in-memory state</td><td class="mono">Redis</td><td class="mono">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Transport &amp; state contract</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Channel</th><th>Used for</th><th>Direction</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">REST</td><td>Operator / LLM rule + alert management (C2B)</td><td>client → service</td></tr>
+          <tr><td class="mono">gRPC</td><td>Coordinator ↔ geo-service ↔ accelerator (synchronous B2B)</td><td>service ↔ service</td></tr>
+          <tr><td class="mono">RabbitMQ</td><td>Track / event ingestion &amp; alert fan-out (brokered, one-to-many)</td><td>pub / sub</td></tr>
+          <tr><td class="mono">Redis</td><td>Shared state across engine instances — windows, per-track prev-position, live population</td><td>shared cache</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note sand">
+      <span class="lab">This retires a known weakness</span>
+      The lossy, per-replica in-memory window flagged in §02 disappears once state lives in Redis: temporal rules become trustworthy under horizontal scale-out, and line-crossing / convoy gain the shared memory they require. Scaling a hot rule is then just running more coordinator/evaluator replicas against the same Redis + bus.
+    </div>
+  </section>
+
+  <!-- 9 — GEO-SERVICE API -->
+  <section>
+    <p class="sec-no">09 — Geo-service contract</p>
+    <h2>The gRPC API the spatial work hides behind</h2>
+    <p>This is the seam everything swaps behind, so it is worth pinning first. The design keeps the service <b>stateless</b> (pure functions of position + reference geometry) and pushes all memory — previous position, geofence membership, convoy windows — into Redis. The contract speaks <em>spatial intent</em> (contain / cross / cluster), never backend SQL, so an OSS implementation and a commercial one satisfy the same proto.</p>
+
+    <pre><span class="k">service</span> GeospatialEvaluator {
+  <span class="c">// unary — single predicate node, cheapest for on-demand dispatch</span>
+  rpc TestContainment        (ContainmentRequest)        returns (ContainmentResponse);
+  rpc TestLineCrossing       (LineCrossingRequest)        returns (LineCrossingResponse);
+  <span class="c">// unary batch — one Coordinator tick over a track-set, atomic to JOIN</span>
+  rpc EvaluateContainmentBatch (BatchContainmentRequest)  returns (BatchContainmentResponse);
+  rpc EvaluateProximityCluster (ProximityClusterRequest)  returns (ProximityClusterResponse);
+  <span class="c">// server-streaming — long-lived geofence push (ENTER / EXIT / CROSS)</span>
+  rpc SubscribeGeofence      (GeofenceSubscribeRequest)   returns (stream GeofenceEvent);
+  <span class="c">// bidi — realtime ingest: samples in, transition events out</span>
+  rpc EvaluateStream         (stream TrackSample)         returns (stream GeofenceEvent);
+}
+
+<span class="c">// THE JOIN KEY — stamped on every result so the Coordinator can recombine</span>
+<span class="k">message</span> EvalKey {
+  <span class="k">string</span> entity_id = <span class="s">1</span>;   <span class="k">Timestamp</span> tick = <span class="s">2</span>;   <span class="c">// Coordinator-assigned cycle</span>
+  <span class="k">string</span> rule_id   = <span class="s">3</span>;   <span class="k">string</span> predicate_id = <span class="s">4</span>;
+}</pre>
+
+    <div class="note">
+      <span class="lab">How the combine actually works</span>
+      The Coordinator stamps one <code>tick</code> into every sub-request — to this service <em>and</em> to the scalar evaluator. Both return matches keyed by <code>(entity_id, tick)</code>, so recombination is pure set algebra correlated by that key: <b>AND → intersect</b>, <b>OR → union</b>, <b>NOT → complement</b> against the candidate population. <code>predicate_id</code> lets one tick carry several spatial nodes from the same tree. This is the precise form of the "union" you described.
+    </div>
+
+    <h3>Stateless service · stateful Redis</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Computed statelessly by the service</th><th>Held in Redis (shared)</th></tr></thead>
+        <tbody>
+          <tr><td>Point-in-polygon containment (INSIDE / OUTSIDE)</td><td>Per-track previous position → hydrates crossing/transition</td></tr>
+          <tr><td>Segment intersection (line crossing)</td><td>Geofence membership set → turns INSIDE into the ENTER/EXIT <em>edge</em></td></tr>
+          <tr><td>Pairwise proximity, clusters, centroid/heading</td><td>Convoy sustain-window membership over time</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:.92rem;color:var(--muted)">Rule of thumb from the design: <b>the service answers "is it true now"; Redis + Coordinator answer "did it change" and "has it held."</b></p>
+
+    <div class="note">
+      <span class="lab">Open questions for a human</span>
+      <b>(1)</b> Does the ENTER/EXIT <em>edge</em> live in the service or the Coordinator? <b>(2)</b> What time-quantisation aligns streamed spatial events with polled scalar verdicts in the JOIN? <b>(3)</b> Is convoy "sustained over T" the Coordinator's job or a windowed RPC? <b>(4)</b> Geometry-cache invalidation — push or version-check? <b>(5)</b> Are any predicates genuinely 3D (altitude bands), or 2D-on-ground?
+    </div>
+  </section>
+
+  <!-- 10 — BACKEND BAKE-OFF -->
+  <section>
+    <p class="sec-no">10 — Backend bake-off</p>
+    <h2>What to build the default geo-engine on</h2>
+    <p>Researched against live-streaming needs: geofence enter/exit, tripwire crossing, convoy clustering, at thousands of updates/sec, from .NET, behind the swappable gRPC API. Verdict: <b>no single tool wins — the best OSS answer is a small stack.</b></p>
+
+    <div class="scroll">
+      <table class="tnum">
+        <thead><tr><th>Backend</th><th>Streaming geofence</th><th>Crossing / proximity</th><th>.NET fit</th><th>License</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td><b>NetTopologySuite</b></td><td>build it yourself</td><td>excellent (segment intersect, STRtree)</td><td><span class="st ok">native</span></td><td>BSD/EPL</td><td>default engine</td></tr>
+          <tr><td><b>PostGIS</b> <span class="mono" style="color:var(--faint)">(already in)</span></td><td>batch/query only</td><td>authoritative (ST_*, DBSCAN)</td><td><span class="st ok">excellent</span></td><td>GPL</td><td>geometry store-of-record</td></tr>
+          <tr><td><b>Tile38</b></td><td><span class="st ok">best-in-class</span> (enter/exit/roam)</td><td>roaming fence = convoy</td><td><span class="st warn">RESP</span></td><td>MIT</td><td>streaming geofence</td></tr>
+          <tr><td>H3 (Uber)</td><td>—</td><td>cheap cluster/neighbour keying</td><td><span class="st warn">bindings</span></td><td>Apache-2</td><td>optional pre-filter</td></tr>
+          <tr><td>Kinetica <span class="mono" style="color:var(--faint)">(comm.)</span></td><td>native CEP</td><td>GPU geo joins (~100×)</td><td>REST/SQL</td><td>commercial</td><td>accelerator</td></tr>
+          <tr><td>SingleStore <span class="mono" style="color:var(--faint)">(comm.)</span></td><td>build it yourself</td><td>distributed spatial SQL</td><td><span class="st warn">MySQL wire</span></td><td>commercial</td><td>scale-out store</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="split">
+      <div class="card now">
+        <span class="tag">Recommended OSS default</span>
+        <h4>NTS engine + Tile38 + PostGIS</h4>
+        <ul>
+          <li><b>NetTopologySuite</b> in-process — the math for tripwire crossing &amp; containment; only "as-good-as-possible" <em>native .NET</em> geometry lib, no network hop, permissive license.</li>
+          <li><b>Tile38</b> (optional but recommended) — battle-tested enter/exit/cross + <em>roaming</em> fences that map almost 1:1 onto convoy, instead of hand-rolling the state machine.</li>
+          <li><b>PostGIS</b> — durable site/line/AOI definitions (already deployed).</li>
+        </ul>
+      </div>
+      <div class="card vision">
+        <span class="tag">When to swap in commercial</span>
+        <ul>
+          <li>Sustained ingest outgrows a single node (Tile38 fences drop to ~6k SET/s with ~23k fences).</li>
+          <li>Fence × track cross-product explodes (thousands of fences × thousands of tracks/tick).</li>
+          <li>Correlated temporal CEP at scale ("formation held for M min").</li>
+          <li>Single-writer HA becomes the bottleneck.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="note">
+      <span class="lab">Top risks the research flagged</span>
+      <b>(1)</b> Tile38 throughput cliff with many active fences + single-writer — capacity-test with realistic fence counts. <b>(2)</b> With NTS you own the enter/exit state machine, dedup, and out-of-order/replay correctness. <b>(3)</b> SingleStore geo limits (no MULTIPOLYGON in columnstore; APPROX_* has false positives). <b>(4)</b> <b>Kinetica needs NVIDIA GPUs — which lindev3 does not currently have</b> — and neither commercial option has a first-class .NET SDK, so design the gRPC façade around eventual events + idempotency now or the swap leaks.
+    </div>
+  </section>
+
+  <!-- 11 — SITE ENTITY -->
+  <section>
+    <p class="sec-no">11 — The Site entity</p>
+    <h2>The missing first-class entity your rules bind to</h2>
+    <p>Spatial predicates need something concrete to point at — and today there isn't one. AOIs are bounding-box ingestion filters, too thin to be a rule target. The model needs a new first-class entity: the <b>Site</b> — a named place with real geometry and classification, the "S" in <code>WITHIN(track, S)</code>.</p>
+
+    <div class="split">
+      <div class="card now">
+        <span class="tag">The Site entity</span>
+        <h4>id · name · geography · classifications</h4>
+        <ul>
+          <li><b>id</b> — stable UUID, referenced by rule instances &amp; the geo-service</li>
+          <li><b>name</b> — human label ("TelAviv", "Haifa Port")</li>
+          <li><b>geography</b> — true <code>Polygon</code> / <code>MultiPolygon</code> (PostGIS, WGS84) — not a bounding box</li>
+          <li><b>classifications</b> — taxonomy/tags (port · airfield · city · restricted-zone) that become rule inputs themselves</li>
+        </ul>
+      </div>
+      <div class="card now">
+        <span class="tag">site-manager service</span>
+        <h4>Its own home, mirroring the house pattern</h4>
+        <ul>
+          <li>A dedicated <b>site-manager</b> service — like <code>aoi-manager</code>, but richer</li>
+          <li>Dedicated PostgreSQL <code>sites</code> schema with real PostGIS geometry</li>
+          <li><b>REST</b> CRUD for operators (C2B) + <b>MCP</b> for the AI chat</li>
+          <li>Resolved by the geo-service / coordinator via <code>GeometryRef</code> (load once, cache)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="note">
+      <span class="lab">Site vs. AOI</span>
+      They stay distinct: <b>AOIs</b> remain the ingestion bounding-box filter (what data enters the pipeline); <b>Sites</b> are the named reference geometries that rule instances <em>bind to</em> and that spatial predicates evaluate against. A Site's <em>classifications</em> open a further door — "alert in any <code>restricted-zone</code> Site" — without naming each one.
+    </div>
+  </section>
+
+  <!-- 12 — CONVERSATIONAL AUTHORING -->
+  <section>
+    <p class="sec-no">12 — Conversational authoring</p>
+    <h2>Speak a rule, and the system builds it</h2>
+    <p>The point of a typed language plus a Site entity is that an operator can author in plain words. "Alert if more than one Train in Tel-Aviv is going faster than 40 km/h" must become a complete, activated rule — combining a site, a track type, a speed threshold, and a count — bound to a concrete Site.</p>
+
+    <pre><span class="c">intent:  "more than one Train in Tel-Aviv faster than 40 km/h"</span>
+
+parse →   site   = resolve / create Site <span class="s">"TelAviv"</span>      <span class="c">// polygon</span>
+          type   = track.type == <span class="s">"Train"</span>             <span class="c">// ground-traffic / GTFS, Epic 21</span>
+          speed  = track.speed &gt; <span class="s">40 km/h</span>
+          count  = <span class="n">COUNT</span>(...) &gt; <span class="s">1</span>
+
+DSL  →    <span class="k">alert when</span>
+            <span class="n">COUNT</span>( T <span class="k">in</span> tracks :
+                   <span class="n">WITHIN</span>(T.pos, Site(<span class="s">"TelAviv"</span>))
+                   <span class="k">AND</span> T.type == <span class="s">"Train"</span>
+                   <span class="k">AND</span> T.speed &gt; <span class="s">40kmh</span> ) &gt; <span class="s">1</span>
+
+act  →    1 create template   <span class="k">CountInSiteByType</span>(site, type, speed, n)
+          2 instantiate        bind site=TelAviv, type=Train, speed=40, n=1
+          3 activate           on the ground-traffic stream
+          4 alert              <span class="s">"2 trains in TelAviv exceeding 40 km/h"</span></pre>
+
+    <div class="note">
+      <span class="lab">Why the typed language is what makes this work</span>
+      Natural-language authoring rides the existing <code>llm-backend</code> + <code>mcp-aggregator</code>. The typed DSL is precisely what makes intent tractable: the LLM maps words onto typed functions, and the engine <b>type-checks and dry-runs before activating</b> — so a malformed rule is caught, not fired. New MCP tools sit atop today's <code>rules.create/activate</code>: <code>sites.resolve/create</code> and <code>rules.author_from_intent</code> (compose template + instance). Operator-in-the-loop: preview and confirm before it goes live.
+    </div>
+  </section>
+
+  <!-- 13 — REQUIREMENTS & ROADMAP -->
+  <section>
+    <p class="sec-no">13 — Requirements &amp; roadmap</p>
+    <h2>The vision, written as requirements you can build from</h2>
+    <p>Drafted in the PRD's house style, continuing its numbering from <b>FR113</b> and extending the rules-engine NFR family as <b>NFR-RE4–RE9</b>. Everything is a backward-compatible superset — today's FR64–FR74 rules keep working.</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Theme</th><th>New FRs</th><th>What it adds</th></tr></thead>
+        <tbody>
+          <tr><td>Expression language</td><td class="fr">FR113–118</td><td>Typed, composable, value-returning functions; relational joins; type-checked tree</td></tr>
+          <tr><td>Template / Instance / Binding</td><td class="fr">FR119–122</td><td>The three-layer model, CRUD via REST + MCP</td></tr>
+          <tr><td>Spatial predicates</td><td class="fr">FR123–126</td><td><code>WITHIN</code> · <code>CROSSES</code> · <code>NEAR</code> + ENTER/EXIT transitions</td></tr>
+          <tr><td>Binding modes</td><td class="fr">FR127–128</td><td>Track × fixed-geometry <em>and</em> Track × Track (CEP)</td></tr>
+          <tr><td>Distributed evaluation</td><td class="fr">FR129–132</td><td>Coordinator split → scatter → gather/combine, fault-tolerant</td></tr>
+          <tr><td>Pluggable engines</td><td class="fr">FR133–135</td><td>gRPC geo contract; OSS default; commercial swap-ins by config</td></tr>
+          <tr><td>Authoring UX</td><td class="fr">FR136–138</td><td>Rule Builder UI, map-drawn bindings, dry-run before activate</td></tr>
+          <tr><td>Site entity &amp; service</td><td class="fr">FR139–142</td><td>First-class Site (id, name, geography, classifications) + dedicated site-manager CRUD service</td></tr>
+          <tr><td>Conversational authoring</td><td class="fr">FR143–145</td><td>Natural-language rule creation via AI chat / MCP, type-checked dry-run before activate</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Phased roadmap</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Phase</th><th>Theme</th><th>Exit criterion</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">1</td><td><b>Track-in-Polygon</b> vertical slice</td><td>Instance evaluates through Coordinator split → gRPC geo-service → combine, ENTER/EXIT state in Redis, alert within p95 ≤ 1s across ≥2 replicas</td></tr>
+          <tr><td class="mono">2</td><td>Line-Crossing</td><td>Tripwire canonical rule passes; segment intersection on OSS backend; no contract change</td></tr>
+          <tr><td class="mono">3</td><td>Convoy / CEP (Track × Track)</td><td>Convoy passes at ≥10,000 tracks; window/population state in Redis</td></tr>
+          <tr><td class="mono">4</td><td>Accelerators + Authoring UX</td><td>Commercial engine swapped by config, zero rule redefinition; all three rules authorable in the Rule Builder</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <span class="lab">Acceptance, in one line each</span>
+      <b>① Track-in-Polygon</b> — track crosses from outside to inside "Haifa Port" → ENTER derived from Redis prior-state → one alert, no duplicate while it stays inside. &nbsp; <b>② Line-Crossing</b> — track's prev→current segment intersects the tripwire → single alert with crossing point + direction; near-but-not-crossing fires nothing. &nbsp; <b>③ Convoy</b> — ≥N tracks mutually within radius on a coherent course for the window → one convoy alert naming the members; clears on EXIT.
+    </div>
+    <p style="font-size:.86rem;color:var(--muted)">Full FR/NFR text, traceability tags, and Given/When/Then scenarios were drafted in PRD voice and are ready to drop into a planning artifact on request.</p>
+  </section>
+
+  <!-- 14 — WHERE TO GO -->
+  <section>
+    <p class="sec-no">14 — Next moves</p>
+    <h2>Where the treasure is buried</h2>
+    <p>If you want to move from this report toward building it, these are the decision points I'd put in front of you next — each is a fork worth deciding deliberately before any code:</p>
+    <ul class="clean">
+      <li><b>The gRPC geo-service contract</b> — define the stable API first (within / crosses / near + enter-exit events). It is the seam everything else swaps behind, so it is the highest-leverage thing to pin down.</li>
+      <li><b>OSS geo backend</b> — confirm the default: NetTopologySuite + PostGIS for stored/ad-hoc spatial, and/or Tile38 for streaming geofence events. Kinetica / SingleStore stay as commercial swap-ins.</li>
+      <li><b>Redis state model</b> — design the shared keys (per-track last-position, window buffers, live population) that retire the in-memory buffer and unlock horizontal scale-out.</li>
+      <li><b>Expression language + planner</b> — the parser/validator/type-registry, and the coordinator that splits the tree and combines partials by the boolean operators.</li>
+      <li><b>Template/instance schema</b> — the two missing layers over today's flat rules table.</li>
+      <li><b>Authoring UX</b> — there is no rule-building UI at all today; a builder (pick template → pick entity/zone → set parameters) is net-new frontend work.</li>
+    </ul>
+    <div class="note">
+      <span class="lab">My recommendation as analyst</span>
+      Start with <b>Track-in-Polygon</b> — but build it through the full distributed path, not a shortcut. It is the smallest end-to-end proof of every load-bearing decision at once: the gRPC geo-service contract, the OSS backend, Redis-held enter/exit state, the coordinator's split-and-combine, and the template→instance→binding model (it turns AOIs from filters into predicates). Get that one rule flowing scatter-gather and the pattern for line-crossing and convoy is the same shape at higher state. Happy to facilitate a brainstorming or requirements session to spec the geo-service API — that is exactly the next hunt.
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p style="margin:0 0 6px"><b>EltEye Rules Engine — State of the Embedding.</b> Findings drawn from the PRD, <span class="mono">architecture.md</span>, and direct reading of <span class="mono">services/rules-engine</span>, <span class="mono">aoi-manager</span>, and the frontend.</p>
+    <p style="margin:0" class="mono">Status reflects the repository at analysis time · verify against current source before implementation.</p>
+  </div>
+</footer>
+
+</body></html>
