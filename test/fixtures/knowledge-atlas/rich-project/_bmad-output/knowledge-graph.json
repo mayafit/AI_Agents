@@ -1,0 +1,37 @@
+{
+  "meta": {
+    "generated": "2026-06-01T00:00:00Z",
+    "version": "1.0",
+    "source": "knowledge-graph.json fixture for Story 29.2 tests"
+  },
+  "nodes": [
+    {
+      "id": "_bmad-output/planning-artifacts/prd.md#fr101-user-authentication",
+      "kind": "requirement",
+      "label": "FR101",
+      "title": "FR101: User Authentication",
+      "fileId": "_bmad-output/planning-artifacts/prd.md",
+      "anchor": "fr101-user-authentication"
+    },
+    {
+      "id": "kg-only-node-from-legacy",
+      "kind": "capability",
+      "label": "F99",
+      "title": "Legacy capability only in knowledge-graph.json",
+      "fileId": "legacy-source",
+      "anchor": "f99"
+    }
+  ],
+  "edges": [
+    {
+      "from": "_bmad-output/implementation-artifacts/1-1-oauth2-integration.md",
+      "to": "_bmad-output/planning-artifacts/prd.md#fr101-user-authentication",
+      "kind": "implements"
+    },
+    {
+      "from": "kg-only-node-from-legacy",
+      "to": "_bmad-output/planning-artifacts/prd.md#fr101-user-authentication",
+      "kind": "derives-from"
+    }
+  ]
+}

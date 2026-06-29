@@ -2,6 +2,7 @@
  * lib/knowledge-atlas/src/generate.ts
  * ---------------------------------------------------------------------------
  * Story 29.1 — Core generate() function: discovery → manifest → render.
+ * Story 29.2 — Extended buildManifest() with full scan→extract→graph→persist.
  *
  * Architecture invariants (Decision P5-7):
  *   - Write ONLY under `_bmad-output/knowledge-site/`. Never touch source.
@@ -11,14 +12,24 @@
  *
  * Discovery ↔ rendering seam:
  *   buildManifest() is the discovery half; renderHtml() is the rendering half.
- *   Story 29.2 extends buildManifest() (adds scan of _bmad-output).
+ *   Story 29.2 extends buildManifest() with full _bmad-output scanning.
  *   Story 29.3+ extend renderHtml() with richer views.
  *   Neither half reaches into the other's domain.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { GenerateOptions, GenerateResult, KnowledgeManifest } from './types';
+import { GenerateOptions, GenerateResult, KnowledgeManifest, FileRecord } from './types.js';
+import { scanFiles } from './scan/scanner.js';
+import { parseFrontmatter } from './extract/frontmatter.js';
+import { extractEntities } from './extract/entities.js';
+import { buildNodes, buildEdges, buildCounts } from './graph/build.js';
+import { reconcileWithKgJson } from './graph/reconcile.js';
+import { readManifest, writeManifest } from './manifest/persist.js';
+import { computeDiff, mergeRecords } from './manifest/incremental.js';
+
+/** Current manifest schema version. Increment on breaking changes. */
+const MANIFEST_VERSION = 1;
 
 // ---------------------------------------------------------------------------
 // Timestamp resolution — NFR62 determinism contract
@@ -138,16 +149,103 @@ function deriveProjectTitle(projectRoot: string): string {
 // Story 29.2 extends this with actual _bmad-output scanning.
 // ---------------------------------------------------------------------------
 
+/**
+ * Extract a single file's content and produce a FileRecord.
+ * Reads the file, parses frontmatter, extracts entities.
+ */
+function extractFileRecord(absPath: string, fileId: string, docType: import('./types.js').DocType, contentHash: string): FileRecord {
+  let content = '';
+  try {
+    content = fs.readFileSync(absPath, 'utf-8');
+  } catch {
+    // Unreadable file — return empty record
+    return { path: fileId, contentHash, type: docType, entities: [], statuses: [], edges: [] };
+  }
+
+  const fm = parseFrontmatter(content, fileId);
+  const { entities, statuses, edges } = extractEntities(content, fileId, docType, fm);
+
+  return {
+    path: fileId,
+    contentHash,
+    type: docType,
+    entities,
+    statuses,
+    edges,
+  };
+}
+
+/**
+ * Build the full KnowledgeManifest from a project.
+ *
+ * Orchestration: scan → incremental diff → extract changed files → build graph → reconcile → return manifest.
+ * Does NOT write to disk (that's done in generate() after this returns).
+ *
+ * @param projectRoot    Absolute path to the project root.
+ * @param bmadOutputDir  Absolute path to _bmad-output.
+ * @param outDir         Absolute path to the knowledge-site output directory.
+ * @param generatedAt    ISO-8601 timestamp (already resolved).
+ * @returns The full KnowledgeManifest.
+ */
 function buildManifest(
   projectRoot: string,
   bmadOutputDir: string,
+  outDir: string,
   generatedAt: string,
 ): KnowledgeManifest {
+  const projectTitle = deriveProjectTitle(projectRoot);
+
+  // Step 1: Scan all BMAD files
+  const scannedFiles = scanFiles(projectRoot, bmadOutputDir, outDir);
+
+  // Step 2: Load prior manifest for incremental rebuild (version-guarded:
+  // a schema-mismatched or stub prior is ignored → full rebuild, item 19).
+  const priorManifest = readManifest(outDir, MANIFEST_VERSION);
+  const priorRecords = priorManifest?.files ?? [];
+
+  // Step 3: Compute incremental diff
+  const diff = computeDiff(
+    priorRecords,
+    scannedFiles.map(f => ({ fileId: f.fileId, contentHash: f.contentHash })),
+  );
+
+  // Step 4: Extract records for changed/added files
+  const toReprocessSet = new Set(diff.toReprocess);
+  const reprocessed: FileRecord[] = [];
+
+  for (const sf of scannedFiles) {
+    if (toReprocessSet.has(sf.fileId)) {
+      reprocessed.push(extractFileRecord(sf.absPath, sf.fileId, sf.type, sf.contentHash));
+    }
+  }
+
+  // Step 5: Merge unchanged + reprocessed, drop removed
+  const allRecords = mergeRecords(diff.unchanged, reprocessed, diff.removed);
+
+  // Step 6: Build typed graph (nodes + edges)
+  const nodes = buildNodes(allRecords);
+  const edges = buildEdges(allRecords, nodes);
+
+  // Step 7: Reconcile with knowledge-graph.json (if present)
+  const { nodes: mergedNodes, edges: mergedEdges } = reconcileWithKgJson(
+    nodes,
+    edges,
+    bmadOutputDir,
+  );
+
+  // Step 8: Build counts
+  const counts = buildCounts(allRecords, mergedNodes, mergedEdges);
+
   return {
-    projectTitle: deriveProjectTitle(projectRoot),
+    projectTitle,
     generatedAt,
     projectRoot,
     bmadOutputDir,
+    version: MANIFEST_VERSION,
+    files: allRecords,
+    nodes: mergedNodes,
+    edges: mergedEdges,
+    counts,
   };
 }
 
@@ -356,8 +454,8 @@ export function generate(opts: GenerateOptions): GenerateResult {
   // Resolve the timestamp (NFR62 determinism)
   const generatedAt = resolveTimestamp(opts.now);
 
-  // Discovery half
-  const manifest = buildManifest(projectRoot, bmadOutputDir, generatedAt);
+  // Discovery half: full scan→extract→graph→reconcile
+  const manifest = buildManifest(projectRoot, bmadOutputDir, outDir, generatedAt);
 
   // Rendering half
   const html = renderHtml(manifest);
@@ -369,9 +467,13 @@ export function generate(opts: GenerateOptions): GenerateResult {
   const indexPath = path.join(outDir, 'index.html');
   fs.writeFileSync(indexPath, html.replace(/\r\n/g, '\n'), { encoding: 'utf-8' });
 
+  // Write manifest.json (Story 29.2)
+  writeManifest(outDir, manifest);
+
   return {
     outDir,
     indexPath,
-    fileCount: 1,
+    // 2 files: index.html + manifest.json
+    fileCount: 2,
   };
 }
