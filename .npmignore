@@ -24,6 +24,11 @@ opencode.json
 test-security-project/
 coverage/
 dist/
+# Story 29.1 — the Knowledge Atlas engine bundle is the SHIPPED runtime artifact
+# (consuming `npm install` users require() it via require.resolve). The bare
+# `dist/` rule above would strip it from the tarball, so un-ignore it explicitly.
+!lib/knowledge-atlas/dist/
+!lib/knowledge-atlas/dist/atlas.cjs
 *.log
 npm-debug.log*
 .DS_Store
