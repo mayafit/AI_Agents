@@ -1,0 +1,23 @@
+generated: "2026-01-01T00:00:00Z"
+last_updated: "2026-01-01T00:00:00Z"
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+epics:
+  - id: epic-1
+    title: "Hello World Epic"
+    status: done
+
+backlog: []
+
+sprints:
+  sprint-1:
+    name: "Sprint 1"
+    status: closed
+    capacity: 5
+    items:
+      - id: 1-1-hello-world
+        type: story
+        epic: epic-1
+        title: "Hello World"
+        status: done

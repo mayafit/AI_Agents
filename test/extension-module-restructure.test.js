@@ -189,6 +189,8 @@ const expectedExtensionSkills = [
   'add-to-sprint', 'project-context-expansion', 'sprint-status-view',
   'cleanup-done', 'generate-backlog', 'prioritize-backlog', 'remove-from-sprint',
   'bmad-sprint-planning', 'bmad-sprint-status', 'close-sprint',
+  // Story 29.1 — Knowledge Atlas skill entrypoint (BMAD-extension pipeline copy).
+  'bmad-knowledge',
 ];
 
 const expectedMlSkills = [
@@ -208,11 +210,11 @@ const allExpectedSkills = [
   ...expectedSqaSkills,
 ];
 
-test('skills/ has exactly 61 subdirectories', () => {
+test('skills/ has exactly 62 subdirectories', () => {
   const entries = fs.readdirSync(skillsDir).filter(e =>
     fs.statSync(path.join(skillsDir, e)).isDirectory()
   );
-  assert.strictEqual(entries.length, 61, `Expected 61 skill dirs, found ${entries.length}`);
+  assert.strictEqual(entries.length, 62, `Expected 62 skill dirs, found ${entries.length}`);
 });
 
 test('all 5 agent skill directories exist', () => {
@@ -315,8 +317,8 @@ test('module-help.csv has correct header columns', () => {
   }
 });
 
-test('module-help.csv has 61 skill entries (excluding header)', () => {
-  assert.strictEqual(csvData.rows.length, 61, `Expected 61 rows, found ${csvData.rows.length}`);
+test('module-help.csv has 62 skill entries (excluding header)', () => {
+  assert.strictEqual(csvData.rows.length, 62, `Expected 62 rows, found ${csvData.rows.length}`);
 });
 
 test('all CSV entries use module code ma-skills', () => {
@@ -374,7 +376,7 @@ test('CSV has entries for all 7 Cyber skills', () => {
   }
 });
 
-test('CSV has entries for all 14 extension workflow skills', () => {
+test('CSV has entries for all 15 extension workflow skills', () => {
   const codeIdx = csvData.headers.indexOf('code');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedExtensionSkills) {

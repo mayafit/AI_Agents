@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    // node18 runtime target; esbuild (not tsc) emits the actual CJS bundle —
+    // tsc here is a NOEMIT typecheck pass only. `node16` module/resolution is
+    // the supported, non-deprecated way to typecheck CommonJS-style code under
+    // TypeScript 6+ (the legacy `moduleResolution: "node"` / node10 is
+    // deprecated and errors in TS 6). It still resolves our relative `./types`
+    // imports as CommonJS, matching the `format: 'cjs'` esbuild bundle.
+    "target": "ES2020",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
