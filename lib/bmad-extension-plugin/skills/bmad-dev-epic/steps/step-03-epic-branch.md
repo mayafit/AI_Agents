@@ -18,12 +18,15 @@ main
 
 ## Procedure
 
-1. Confirm a clean trunk and create the epic worktree + branch off `main`:
+All git here follows `git-workflow-skill`. The only epic-specific override is the **base branch**: the epic branch is cut from the **trunk** (`main`), not from `dev`.
+
+1. Follow `git-workflow-skill` to create the epic worktree + feature branch, with the base overridden to the trunk. Use its `start-feature.sh` if it accepts a base argument; otherwise use the skill's documented **manual** equivalent:
    ```bash
    git fetch origin
+   # git-workflow-skill manual form, base overridden to the trunk:
    git worktree add .worktrees/epic-<epic-id> -b feature/epic-<epic-id> main
    ```
-   (`.worktrees/` is gitignored in this repo. If `start-feature.sh` is preferred, use it but ensure the base is the trunk, not `dev`.)
+   (`.worktrees/` is gitignored in this repo. Confirm the trunk name first — `main` here. Ensure the skill's git hooks are installed so commit-message/branch protections apply.)
 2. Record the epic worktree path and branch in the Run Ledger.
 3. Story worktrees are created later, one per story, branched from `feature/epic-<epic-id>` — see step-04.
 

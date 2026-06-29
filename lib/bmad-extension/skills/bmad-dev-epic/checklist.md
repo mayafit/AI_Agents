@@ -12,12 +12,14 @@ A run is correct only if every box can be checked. Use this to self-audit mid-ru
 - [ ] Single go/no-go confirmation received.
 
 ## Planning (step-02 / step-03)
+- [ ] Every story checked against INVEST; oversized / multi-goal stories split into focused sub-stories (user-confirmed) before graphing.
 - [ ] Dependency DAG built; no cycles (or cycle resolved with the user).
 - [ ] Waves computed per the chosen strategy.
-- [ ] Epic branch `feature/epic-<id>` created off the trunk in its own worktree.
+- [ ] Epic branch `feature/epic-<id>` created off the trunk via `git-workflow-skill` (base overridden to trunk), in its own worktree.
 
 ## Per story (step-04 / story-pipeline)
-- [ ] Story branch cut from the epic branch in its own worktree.
+- [ ] Story branch cut from the epic branch in its own worktree, per `git-workflow-skill`.
+- [ ] Spec re-checked against INVEST/size after create-story; if too large/multi-goal, returned `needs-split` (not implemented) and the orchestrator split it.
 - [ ] create-story → dev-story → parallel code-review + edge-case-hunter executed.
 - [ ] Blocking findings fixed within the fix-loop cap (or story marked blocked, not papered over).
 - [ ] E2E tests generated and passing; test gate green on the story branch.

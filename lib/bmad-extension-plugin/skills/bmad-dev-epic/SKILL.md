@@ -80,12 +80,19 @@ Maintain a single source of truth for the run with, per story: `id`, `wave`, `st
 3. **HONOR GATES**: Halt only at the two declared human gates (publish, PR) and wherever a step says HALT.
 4. **LOAD NEXT**: When directed, read fully and follow the next step file.
 
+### Git discipline (defer to `git-workflow-skill`)
+
+**`git-workflow-skill` is the single authority for every git operation in this run** — worktree creation, branch naming, conventional commits, hooks, rebasing, PR creation, and cleanup. Do not hand-roll git flows that contradict it. Load and follow it.
+
+This epic uses a **nested-branch topology** (epic branch off the trunk; story branches off the epic branch; stories merge back to the epic branch; one PR to the trunk). Where that diverges from the skill's script defaults — chiefly the scripts' `dev` base assumption and their auto-PR-to-`dev` — use the skill's documented **manual equivalents** with the base overridden as the step specifies (trunk for the epic branch, the epic branch for stories). Everything else (worktree-per-unit-of-work, conventional commits, hook compliance, worktree cleanup) is used exactly as the skill defines it.
+
 ### Critical Rules (NO EXCEPTIONS)
 
 - **NEVER** load multiple step files simultaneously.
-- **NEVER** write any file outside a worktree on a feature branch (see `git-workflow-skill`). The trunk (`main`) is never modified directly.
+- **NEVER** perform any git action outside the `git-workflow-skill` conventions. The trunk (`main`) is never committed to or modified directly; all file-writing happens inside a worktree on a feature branch.
 - **NEVER** publish to npm or open the epic PR without explicit user confirmation at the gate.
 - **NEVER** treat the known pre-existing `npm test` CRLF failure as a regression — use the real package-integrity gate defined in step-05.
+- **ALWAYS** validate each story against INVEST and split oversized / multi-goal stories before implementing them (see step-02 and `references/story-pipeline.md`).
 - **ALWAYS** enforce the per-story Definition of Done before merging a story to the epic branch.
 - **ALWAYS** respect the configured fix-loop cap; escalate a non-converging story rather than looping forever.
 

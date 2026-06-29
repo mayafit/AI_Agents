@@ -22,7 +22,7 @@ Give each story subagent the full contract in `references/story-pipeline.md` (sk
 5. `bmad-qa-generate-e2e-tests` → generate e2e tests and run them.          [exec tier]
 6. Enforce the **Definition of Done** (review clean + e2e green + spec ACs met). Commit with Conventional Commits.
 
-The subagent returns a structured result: `{story_id, status: merged-ready|blocked, branch, worktree, commits, unresolved_findings[], e2e_status, notes}`. It must **not** merge to the epic branch itself — the orchestrator integrates (step below) to keep merges serialized.
+The subagent returns a structured result: `{story_id, status: merged-ready|blocked|needs-split, branch, worktree, commits, unresolved_findings[], split_proposal[], e2e_status, notes}`. It must **not** merge to the epic branch itself — the orchestrator integrates (step below) to keep merges serialized. A `needs-split` result means the story was found too large/multi-goal at spec time and was **not** implemented — the orchestrator handles the split (see below).
 
 ## Wave loop
 
@@ -30,14 +30,15 @@ For each wave in order:
 
 1. **Spawn** the wave's story subagents in parallel (respect `max_parallel_stories`; batch if larger). Mark each story `in-progress` in the Run Ledger.
 2. **Collect** results as subagents return. Update the Ledger per story.
-3. **Integrate** each `merged-ready` story into the epic branch, **one at a time** (serialized), from the epic worktree (use the epic worktree path recorded in the Run Ledger, not a re-derived guess):
+3. **Handle `needs-split` results**: the story was found too large/multi-goal and was not implemented. Apply its `split_proposal`: present the proposed sub-stories to the user and **HALT for confirmation** (splitting changes planned scope), then add the confirmed sub-stories to `sprint-status.yaml`, replace the parent in the Ledger, recompute affected dependencies/waves (re-enter step-02's §2–§4 for just the new stories), and schedule the sub-stories into the current wave (if independent) or a later wave. Discard the parent's unused story worktree/branch via `git-workflow-skill` cleanup.
+4. **Integrate** each `merged-ready` story into the epic branch, **one at a time** (serialized), from the epic worktree (use the epic worktree path recorded in the Run Ledger, not a re-derived guess). Use `git-workflow-skill` conventions; the merge into the epic branch is the epic-specific manual step:
    ```bash
    git -C <epic-worktree> merge --no-ff feature/epic-<epic-id>-story-<sid>
    ```
    - On a **merge conflict**: do not guess. Spawn an `{exec_model}` subagent scoped to resolve only that conflict against both stories' intent, or HALT and report if it cannot. Re-run that story's e2e after resolution.
    - After a successful merge, run the project build/test gate (the step-01 `test_gate`) on the epic branch to catch cross-story breakage early. If it breaks, treat as a blocking finding against the just-merged story.
-4. **Blocked stories**: a story that exhausts `fix_loop_cap` without converging, or whose e2e cannot pass, is marked `blocked` with its `unresolved_findings`. Do **not** silently drop it. Continue the epic with the rest, but record it for the step-05 report and the PR description. If a *downstream* story depends on a blocked story, mark the dependents `blocked (upstream)` and skip their wave entry.
-5. Clean up each story worktree after its merge: `git worktree remove .worktrees/epic-<epic-id>-story-<sid>`.
+5. **Blocked stories**: a story that exhausts `fix_loop_cap` without converging, or whose e2e cannot pass, is marked `blocked` with its `unresolved_findings`. Do **not** silently drop it. Continue the epic with the rest, but record it for the step-05 report and the PR description. If a *downstream* story depends on a blocked story, mark the dependents `blocked (upstream)` and skip their wave entry.
+6. Clean up each story worktree after its merge, per `git-workflow-skill` (manual form: `git worktree remove .worktrees/epic-<epic-id>-story-<sid>`).
 
 **Persist the Run Ledger to disk** (`{implementation_artifacts}/epic-runs/<epic-id>/run-ledger.md`) after integrating each story and again at the end of each wave, so a crashed run can be resumed without redoing merged stories.
 

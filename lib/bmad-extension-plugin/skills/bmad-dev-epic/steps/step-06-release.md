@@ -36,7 +36,7 @@ If the user declines GATE A: skip publish, continue to GATE B (the PR can still 
 
 Only if `{workflow.defaults.gate_before_pr}` (default ON). **HALT and ask the user to confirm** before opening the PR.
 
-On confirmation, push the epic branch and open ONE PR (`feature/epic-<epic-id>` → `main`):
+On confirmation, push the epic branch and open ONE PR (`feature/epic-<epic-id>` → `main`) following `git-workflow-skill`'s finish flow. The two epic-specific overrides vs. the skill's `finish-feature.sh` defaults: the PR **base is the trunk (`main`), not `dev`**, and there is **exactly one** PR for the whole epic (no per-story PRs). Use the skill's documented manual finish equivalent:
 
 ```bash
 git -C <epic-worktree> push -u origin feature/epic-<epic-id>   # <epic-worktree> = path from the Run Ledger

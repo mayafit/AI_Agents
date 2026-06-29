@@ -24,12 +24,17 @@ TEST_CMD        = <project test/build gate>
 
 ## Setup
 
-1. Create the worktree off the epic branch:
+All git follows `git-workflow-skill`; the only override is the base branch
+(the story branch is cut from `<EPIC_BRANCH>`, not `dev`).
+
+1. Create the worktree off the epic branch, per `git-workflow-skill` (manual
+   form shown, base overridden to the epic branch):
    ```bash
    git worktree add <WORKTREE> -b <STORY_BRANCH> <EPIC_BRANCH>
    ```
-2. Work **only** inside `<WORKTREE>`. Use Conventional Commit messages
-   (`feat`, `fix`, `test`, `docs`, `refactor`, `chore`, `ci`) scoped to the story.
+2. Work **only** inside `<WORKTREE>`. Use the Conventional Commit format the
+   skill enforces (`feat`, `fix`, `test`, `docs`, `refactor`, `chore`, `ci`),
+   scoped to the story. Honor the skill's git hooks.
 
 ## Pipeline
 
@@ -37,6 +42,17 @@ TEST_CMD        = <project test/build gate>
 Produce the context-filled spec for `<STORY_ID>`. If the spec already exists and
 is complete, validate it instead of regenerating. The spec's acceptance criteria
 (ACs) are the contract for the Definition of Done.
+
+**INVEST & size gate (before implementing).** Once the spec is fleshed out,
+re-check it against INVEST and the sizing/focus heuristics (same criteria as
+step-02): one focused goal, small enough to reach Definition of Done in this
+single pass, testable ACs. A spec often only reveals its true size here. **If
+the story is too large or pursues more than one goal, do NOT implement it** —
+return immediately with `status: needs-split` and a `split_proposal` (the
+smallest set of INVEST-compliant sub-stories, each with a focused goal, derived
+ids, and refined dependencies). The orchestrator owns the split because it
+affects the epic-wide wave plan (see step-04). Only proceed to step 2 when the
+story passes the gate.
 
 ### 2. Implement — `bmad-dev-story` [EXEC_MODEL]
 Implement strictly against the spec. Follow the repo's always-load skills
@@ -76,16 +92,21 @@ ALL must hold, or the story is `blocked`:
 ```
 {
   "story_id":            "<STORY_ID>",
-  "status":              "merged-ready" | "blocked",
+  "status":              "merged-ready" | "blocked" | "needs-split",
   "branch":              "<STORY_BRANCH>",
   "worktree":            "<WORKTREE>",
   "commits":             [ "<sha> <subject>", … ],
   "e2e_status":          "passing" | "failing" | "not-created",
   "unresolved_findings": [ "<blocking finding>", … ],
+  "split_proposal":      [ { "id": "<S3a>", "goal": "<focused goal>", "acs": [ … ], "depends_on": [ … ] }, … ],
   "fix_rounds_used":     <n>,
   "notes":               "<non-blocking findings, decisions, caveats>"
 }
 ```
+
+`split_proposal` is populated only when `status: needs-split` (empty/omitted
+otherwise). On `needs-split` the subagent has done **no** implementation — it
+returns the proposal and stops.
 
 **Do NOT** merge into `<EPIC_BRANCH>`. The orchestrator serializes all
 integration into the epic branch (step-04) to avoid parallel-merge races.
