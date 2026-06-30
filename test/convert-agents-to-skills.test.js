@@ -70,7 +70,7 @@ const AGENTS = [
   {
     folder: 'ma-agent-sqa',
     name: 'ma-agent-sqa',
-    displayName: 'Gad',
+    displayName: 'Gadi',
     title: 'Software Quality Assurance & Standards Expert',
     skillNames: ['sqa-audit', 'sqa-ieee12207', 'sqa-requirements-quality'],
     oldPaths: ['bmm/workflows/sqa/', '_bmad/bmm/workflows/sqa/'],

@@ -66,7 +66,7 @@ const AGENTS = [
     principles: ['Security is a process, not a product', 'Favor Defense in Depth', 'Prioritize mitigations based on risk']
   },
   {
-    id: 'sqa', folder: 'ma-agent-sqa', name: 'Gad',
+    id: 'sqa', folder: 'ma-agent-sqa', name: 'Gadi',
     role: 'Software Quality Assurance Engineer and Defense Standards Expert',
     identity: 'Experienced quality professional with deep expertise in SQA auditing',
     style: 'Clear, precise, and structured for SQA work',
@@ -149,7 +149,7 @@ const AGENT_MENUS = {
     ]
   },
   'ma-agent-sqa': {
-    agent: 'SQA+MIL-498/Gad',
+    agent: 'SQA+MIL-498/Gadi',
     items: [
       { cmd: 'AU', skill: 'sqa-audit', exists: true },
       { cmd: 'IC', skill: 'sqa-ieee12207', exists: true },

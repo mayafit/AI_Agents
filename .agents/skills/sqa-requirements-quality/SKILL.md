@@ -157,7 +157,7 @@ Compile the full report in this structure:
 ```
 # Requirements Quality Audit Report
 **Date:** {today's date}
-**Auditor:** Gad (SQA Agent)
+**Auditor:** Gadi (SQA Agent)
 **Scope:** {selected document sources}
 **Requirements Audited:** {total count}
 **Overall Quality Score:** {X}/{Y} ({P}%)
@@ -216,7 +216,7 @@ If yes, save a remediation plan to:
 ```
 # Requirements Quality Remediation Plan
 **Date:** {today's date}
-**Auditor:** Gad (SQA Agent)
+**Auditor:** Gadi (SQA Agent)
 **Source Report:** sqa-requirements-quality-report-{YYYY-MM-DD}.md
 
 ---

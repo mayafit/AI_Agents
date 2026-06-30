@@ -193,7 +193,7 @@ Evaluate each selected process group. For each process area, assign a compliance
 
 ### Group 4 — Organizational Project-Enabling Processes
 
-Note to Gad: For Group 4 items, briefly assess based on available evidence only. These are primarily organizational-scope and marked accordingly.
+Note to Gadi: For Group 4 items, briefly assess based on available evidence only. These are primarily organizational-scope and marked accordingly.
 
 #### 4.1 Life Cycle Model Management (6.2.1)
 - Is a defined software life cycle model being followed?
@@ -216,7 +216,7 @@ Compile the full compliance report.
 ```
 # IEEE/ISO/IEC 12207:2017 Compliance Report
 **Date:** {today's date}
-**Auditor:** Gad (SQA Agent)
+**Auditor:** Gadi (SQA Agent)
 **Standard:** IEEE/ISO/IEC 12207:2017 — Systems and software engineering — Software life cycle processes
 **Scope:** {selected process groups}
 **Overall Compliance Level:** COMPLIANT | PARTIAL | NON-COMPLIANT
@@ -332,7 +332,7 @@ If yes, generate and save a remediation plan to:
 ```
 # IEEE/ISO/IEC 12207 Remediation Plan
 **Date:** {today's date}
-**Auditor:** Gad (SQA Agent)
+**Auditor:** Gadi (SQA Agent)
 **Source Report:** sqa-ieee12207-report-{YYYY-MM-DD}.md
 **Standard:** IEEE/ISO/IEC 12207:2017
 

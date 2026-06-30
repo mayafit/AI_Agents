@@ -152,7 +152,7 @@ const expectedAgentSkills = [
   'ma-agent-cyber',
   'ma-agent-ml',
   'ma-agent-sqa',
-  // Note: ma-agent-mil498 retired in Epic 16 — MIL-STD-498 workflows absorbed into Gad (ma-agent-sqa)
+  // Note: ma-agent-mil498 retired in Epic 16 — MIL-STD-498 workflows absorbed into Gadi (ma-agent-sqa)
   // Story 22.2 renamed the bmad-ma-agent-* namespace to ma-agent-* to vacate the upstream-reserved bmad-* prefix.
 ];
 

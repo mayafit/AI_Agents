@@ -53,6 +53,10 @@ development_status:
   bug-marker-merge-orphan-start-drops-content: backlog   # discovered Epic 26 / Story 26.2 (PR #100), Phase 3e edge-case; pre-existing since Story 21.2 (FR176 marker idempotency)
   bug-npm-test-windows-suite-health-chain: backlog   # discovered 2026-06-06 during Epic 26 follow-up / PR #104 verification; reconfigure.test.js 8.8 (scriptedPrompts exhausted) + chain of pre-existing failures masked by && test script (positions 33-52 unaudited)
 
+  # ─── STANDALONE STORIES ───────────────────────────────────────────────────────
+  # Discoverable via glob: _bmad-output/implementation-artifacts/rename-*.md
+  rename-sqa-persona-gad-to-gadi: review   # 2026-06-30 — SQA persona display-name rename Gad → Gadi (spec docs + implementation + bundles); display-name-only, no id/path/behavior change. Created via correct-course (post-implementation change → new story, not edits to done Epic 20/22).
+
   # ─── IN PROGRESS ──────────────────────────────────────────────────────────────
 
   # Epic 5: Bundled BMAD Installation — all stories done (5.1-5.6)

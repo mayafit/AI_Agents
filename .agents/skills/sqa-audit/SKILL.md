@@ -172,7 +172,7 @@ After running all selected dimensions, compile a full audit report.
 ```
 # SQA Audit Report
 **Date:** {today's date}
-**Auditor:** Gad (SQA Agent)
+**Auditor:** Gadi (SQA Agent)
 **Scope:** {list of audited dimensions}
 **Overall Status:** PASS | WARNING | FAIL
 
@@ -246,7 +246,7 @@ If yes, generate and save a remediation plan to:
 ```
 # SQA Remediation Plan
 **Date:** {today's date}
-**Auditor:** Gad (SQA Agent)
+**Auditor:** Gadi (SQA Agent)
 **Source Report:** sqa-audit-report-{YYYY-MM-DD}.md
 **Scope:** {audited dimensions}
 
