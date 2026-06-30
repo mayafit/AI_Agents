@@ -5,6 +5,8 @@ phase2CompletedAt: '2026-03-11'
 phase2cStepsCompleted: ['step-02-context', 'step-04-decisions', 'step-06-structure', 'step-07-validation', 'step-08-complete']
 phase2cCompletedAt: '2026-03-26'
 phase5EditHistory:
+  - date: '2026-06-30'
+    changes: 'SQA persona renamed Gad → Gadi in Decision P3-2 (title + decision body + gap-remediation row), the module-folder structure diagram (ma-agent-sqa annotation), and the deferred Memory-agent follow-up references (P4 deferred-follow-up note + out-of-scope list). Display-name-only "how" change: agent host `bmm-qa`, skill folder/name `ma-agent-sqa`, report-naming conventions, and memory path `_bmad/memory/ma-agent-sqa/` are all unchanged. Mirrors the parallel PRD requirement rename; implemented via standalone story rename-sqa-persona-gad-to-gadi. Prior dated changelog entries (phase4 P4-1) left intact as history.'
   - date: '2026-06-28'
     changes: 'Added P5-7: BMAD Knowledge Atlas — static knowledge-site visualization tier (FR215–FR234, NFR60–NFR69), extending P3-1 (Knowledge Graph). Pre-bundled offline static-site generator shipped in ma-agents, invoked on demand by a bmad-knowledge skill; scan-first, manifest-centric pipeline (scan→parse→graph-build→cross-link+backlinks→diagram-gen→render). Invariants: authoritative scan not hooks (handles brownfield/upgrades/out-of-band edits); manifest is single source of truth AND a superset of knowledge-graph.json on the shared file-id#anchor identity; discovery↔rendering contract (model-capable discovery writes the manifest, pure model-free renderer reads it — resolves the air-gap tension); SEALED offline packaging (engine + all generate/view deps pre-built/vendored in the ma-agents dist like build:plugin/bmad-cache; no per-project npm install; offline-install gate extended, re-asserting NFR2/NFR50/NFR54/NFR57); zero-dependency-first rendering (curated views = HTML/CSS/SVG, force-graph + Mermaid bundled only where needed, graph data embedded not fetched, progressive enhancement / no blank screen); non-destructive isolated output to _bmad-output/knowledge-site/; deterministic content-hash incremental builds, Windows/CRLF-safe. Composes with Epic 19 emitToGraph (stories 19-1…19-4): emit = write path, Atlas scan = backfill+render path; reconciles with knowledge-graph.json when present, equivalent manifest when absent; recommended Atlas-first with reconciliation fast-follow. Rejected off-the-shelf SSGs (Quartz/Docusaurus/MkDocs/Hugo) for the embed+air-gap constraints. Design/visual bar set by a reference artifact (zero external deps, system fonts, hand-built CSS/SVG). Seed placement: lib/knowledge-atlas/ engine (TS→esbuild bundle) + lib/bmad-extension/skills/bmad-knowledge/. Updated requirements-coverage tables. [IDs renumbered from an earlier P5-6/FR211–FR230/NFR58–NFR67 draft to avoid collision with the v6.9.0 P5-6/FR211–FR214/NFR58–NFR59 merged on main.]'
   - date: '2026-06-27'
@@ -1876,11 +1878,11 @@ _bmad-output/
 - `_bmad-output/knowledge-graph.json` (new version-controlled file, created on first skill emission)
 - `_bmad-output/knowledge-graph.html` (new generated file, created/refreshed by open-graph skill)
 
-### Decision P3-2: Software Quality Assurance (SQA) Agent — Gad (FR158–FR171, NFR42–NFR43) (2026-04-08)
+### Decision P3-2: Software Quality Assurance (SQA) Agent — Gadi (FR158–FR171, NFR42–NFR43) (2026-04-08)
 
 **Problem:** The platform has no structured mechanism for auditing project quality across multiple dimensions (process compliance, traceability, standards conformance). Quality Engineers need purpose-built workflows to assess whether a project complies with its own planning artifacts and with recognized lifecycle standards such as IEEE/ISO/IEC 12207.
 
-**Decision:** Add a fifth specialized agent persona — Gad, the SQA Engineer — built on the existing BMAD 6.2.0 skill-based agent pattern established by Epic 15. Gad uses the `bmm-qa` BMAD agent persona as its host and delivers quality workflows as discrete BMAD extension skills. Two workflows are defined for the initial release:
+**Decision:** Add a fifth specialized agent persona — Gadi, the SQA Engineer — built on the existing BMAD 6.2.0 skill-based agent pattern established by Epic 15. Gadi uses the `bmm-qa` BMAD agent persona as its host and delivers quality workflows as discrete BMAD extension skills. Two workflows are defined for the initial release:
 
 1. **Project Audit** (`sqa-audit`) — a five-dimension quality audit (code-to-story traceability, stories-to-architecture/PRD alignment, process compliance, sprint health, release state)
 2. **IEEE/ISO/IEC 12207 Compliance** (`sqa-ieee12207`) — a 23-process-area compliance assessment against the international software lifecycle standard
@@ -1893,7 +1895,7 @@ _bmad-output/
 | Skill structure | Follows P2-9 (BMAD 6.2.0 Agent Architecture Migration) — `lib/bmad-extension/skills/bmad-ma-agent-sqa/` (agent) + `lib/bmad-extension/skills/sqa-audit/` + `lib/bmad-extension/skills/sqa-ieee12207/` (workflows) |
 | Read pattern | Workflows are read-only against project artifacts — no new file structures introduced. Inputs: `prd.md`, `architecture.md`, `epics.md`, `sprint-status.yaml`, test files, git history |
 | Write pattern | Each workflow produces one markdown report in `{output_folder}` using the `sqa-{workflow}-report-{YYYY-MM-DD}.md` naming convention — consistent with other agent report outputs |
-| Gap remediation | After any compliance workflow, Gad offers to invoke `create-bug-story` for each P1 gap — reusing existing bug story infrastructure (FR171) |
+| Gap remediation | After any compliance workflow, Gadi offers to invoke `create-bug-story` for each P1 gap — reusing existing bug story infrastructure (FR171) |
 | Registration | Both workflow skills and the agent skill are registered in `module-help.csv` under the `ma-skills` module, consistent with the registration pattern for all other specialized agent skills |
 | Test coverage | `test/extension-module-restructure.test.js` tracks the new skills in `expectedSqaSkills` and updates skill and CSV entry counts |
 
@@ -2011,7 +2013,7 @@ lib/bmad-extension-plugin/                        — BUILD OUTPUT (generated)
 │   ├── ma-agent-devops/                          — Amit
 │   ├── ma-agent-sre/                             — Alex
 │   ├── ma-agent-ml/                              — Demerzel (stateless in v6.3; memory-agent in follow-up)
-│   ├── ma-agent-sqa/                             — Gad (stateless in v6.3; memory-agent in follow-up)
+│   ├── ma-agent-sqa/                             — Gadi (stateless in v6.3; memory-agent in follow-up)
 │   └── ...workflow skills (mil498-*, sre-*, cyber-*, devops-*, ml-*)...
 ```
 
@@ -2037,7 +2039,7 @@ Net deletion: ~140 lines. Replacement: ~30 lines for stage-and-invoke.
 
 **Offline verification gate.** Add a CI job that runs `npm pack`, extracts the tarball into a clean container with egress blocked, and runs the installer end-to-end. Smoke-assert: plugin stages, bmad-method install completes, no outbound connections attempted. Gate every release candidate (NFR50).
 
-**Deferred follow-up (not in this epic).** Convert Demerzel and Gad to Memory-agent format at `_bmad/memory/<agent>/` after 6.3.0 lands. Stateless format is valid for v6.3 — conversion is an authoring improvement, not a compat requirement.
+**Deferred follow-up (not in this epic).** Convert Demerzel and Gadi to Memory-agent format at `_bmad/memory/<agent>/` after 6.3.0 lands. Stateless format is valid for v6.3 — conversion is an authoring improvement, not a compat requirement.
 
 **Rationale.**
 - Deletes ~140 lines of fragile manifest-surgery code whose underlying mechanism no longer exists upstream
@@ -2060,7 +2062,7 @@ Net deletion: ~140 lines. Replacement: ~30 lines for stage-and-invoke.
 - CI workflow (new offline install job)
 
 **Out of scope (deferred):**
-- Memory-agent conversion for Demerzel and Gad (FR193, FR194 — follow-up epic)
+- Memory-agent conversion for Demerzel and Gadi (FR193, FR194 — follow-up epic)
 - Restructure of stateless agent SKILL.md bodies into BMAD Builder "Stateless Agent" conventions if it changes anything beyond frontmatter
 
 ---

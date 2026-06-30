@@ -184,7 +184,7 @@ These domain-expert agents are installed alongside BMAD-METHOD and provide guide
 | DevOps Agent | Amit | `_bmad/skills/devops/` | `_bmad/bmm/agents/devops.md` |
 | Cyber Analyst | Yael | `_bmad/skills/cyber/` | `_bmad/bmm/agents/cyber.md` |
 | ML Scientist | Demerzel | `_bmad/skills/demerzel/` | `_bmad/bmm/agents/demerzel.md` |
-| SQA & Standards Expert | Gad | `_bmad/skills/sqa/` | `_bmad/bmm/agents/qa.md` |
+| SQA & Standards Expert | Gadi | `_bmad/skills/sqa/` | `_bmad/bmm/agents/qa.md` |
 
 ## Available Skills
 
@@ -247,7 +247,7 @@ These workflows are installed as part of the BMAD agent system and are invoked t
 | `ml-revision` | ML Scientist | Amend hypothesis and requirements based on experiment findings |
 | `ml-advise` | ML Scientist | Search past experiments, surface findings and failure warnings |
 | `ml-retrospective` | ML Scientist | Capture session learnings and update project context |
-| **SQA & MIL-STD-498 (Gad)** | | |
+| **SQA & MIL-STD-498 (Gadi)** | | |
 | `sqa-audit` | SQA & Standards Expert | Multi-dimensional project quality audit: code↔story traceability, stories↔architecture/PRD alignment, process compliance, sprint health, release state — saves audit report and optional remediation plan |
 | `sqa-ieee12207` | SQA & Standards Expert | IEEE/ISO/IEC 12207:2017 compliance assessment across 23 process areas in 4 groups — produces compliance matrix, gap analysis, and optional remediation plan |
 | `sqa-requirements-quality` | SQA & Standards Expert | Requirements quality audit against 14 criteria with scope selection (PRD FRs, NFRs, epics, stories) — per-requirement audit table, critical-fail detection, Overall Quality Score, and optional remediation plan |
@@ -357,7 +357,7 @@ npx ma-agents install --yes    # fully offline BMAD install — no network neede
    - **Focus**: Hypothesis-driven machine learning lifecycle with scientific rigor.
    - **Capabilities**: EDA, architecture design, locked TechSpec contracts, experiment execution, failure-cost analysis.
    - **Workflows**: 12-stage ML lifecycle from ideation through retrospective, with mandatory review gates.
-5. **Gad (SQA & Standards Expert)**:
+5. **Gadi (SQA & Standards Expert)**:
    - **Focus**: Software quality assurance and defense documentation standards — a unified persona covering SQA auditing and MIL-STD-498 document generation.
    - **SQA Capabilities**: Multi-dimensional project quality audits, IEEE/ISO/IEC 12207:2017 compliance assessments (23 process areas, 4 groups), requirements evaluation against 14 established quality criteria (scope-selectable: PRD FRs, NFRs, epics, stories).
    - **MIL-STD-498 Capabilities**: Full Data Item Description (DID) generation for SRS, SDD, SDP, OCD, SSS, STD, and SSDD. Requirements quality review tailored to MIL-STD-498 structure and military-standard terminology (CSCI, HWCI, IRS).
