@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.14.1] - 2026-06-30
+
+Cosmetic patch: rename the SQA & Standards Expert persona **Gad → Gadi**. Display-name
+only — no change to the agent id (`bmm-qa`), skill folder/name (`ma-agent-sqa`), install
+dir (`_bmad/skills/sqa/`), report-file naming, or memory path. No CLI/API surface change → PATCH.
+
+### Changed
+
+- **Renamed SQA persona `Gad` → `Gadi`** (#126) across the installed agent registry
+  (`lib/agents.js`), BMAD persona customization (`bmm-qa.customize.yaml`), the `ma-agent-sqa`
+  agent skill (`SKILL.md` + manifest `displayName`), the `sqa-audit` / `sqa-ieee12207` /
+  `sqa-requirements-quality` workflow report footers, `module-help.csv`, the plugin
+  `marketplace.json` description, and the README. Specification docs (`prd.md`,
+  `architecture.md`) updated in place with new revision-history entries; the change was
+  driven through the `bmad-correct-course` workflow and delivered under the standalone story
+  `rename-sqa-persona-gad-to-gadi`. Completed Epic 20/22 records and `done/*` history left intact.
+- Regenerated the bundled extension plugin (`lib/bmad-extension-plugin/`) and the
+  `.agents/skills/` standalone mirror to carry the new display name.
+
 ## [3.14.0] - 2026-06-27
 
 BMAD v6.9.0 integration (Epic 28). A lean, feature-inheriting bump: the v6.9.0 module
