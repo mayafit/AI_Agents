@@ -355,10 +355,13 @@ test('orphan count is a pure manifest read (nodes with no non-dangling edge)', (
   assert.strictEqual(Number(m[1]), orphans, 'rendered orphan count must equal manifest computation');
 });
 
-test('home omits a graph.html link when 29.4 has not written it', () => {
+test('home links graph.html when 29.4 has written it (integrated site)', () => {
+  // In the integrated epic, generate() always emits graph.html (Story 29.4),
+  // so the home nav must surface the interactive graph link. The graceful-omit
+  // branch (graph.html absent) is guarded by site.ts's fs.existsSync check.
   const home = read(siteDir, 'index.html');
-  assert.ok(!/href="graph\.html"/.test(home),
-    'graph link must be omitted gracefully when graph.html is absent');
+  assert.ok(/href="graph\.html"/.test(home),
+    'home must link graph.html when 29.4 emitted it');
 });
 
 // ─── AC 5: offline search ────────────────────────────────────────────────────
@@ -501,10 +504,21 @@ test('root pages (home, search) keep bare nav links (baseHref empty)', () => {
 console.log('\n--- AC 8: self-contained + sanitized (NFR64) ---');
 
 test('no http(s):// URLs anywhere in the generated site', () => {
+  // graph.html (Story 29.4) embeds the vendored force-graph bundle, which bakes
+  // W3C XML namespace URIs (e.g. http://www.w3.org/2000/svg) into its code —
+  // these are not network fetches. Strip that vendored block before scanning
+  // (mirrors the 29.4 graph test) so the assertion still catches any REAL
+  // external URL in application code.
+  const stripVendor = (txt, f) => {
+    if (!/graph\.html$/.test(f)) return txt;
+    const s = txt.indexOf('/* force-graph v');
+    const e = txt.indexOf('</script>', s);
+    return (s >= 0 && e >= 0) ? txt.slice(0, s) + txt.slice(e) : txt;
+  };
   for (const f of allFiles) {
     if (!/\.(html|js|json)$/.test(f)) continue;
     if (f.endsWith('manifest.json')) continue; // manifest holds absolute fs paths, not URLs
-    const txt = read(siteDir, f);
+    const txt = stripVendor(read(siteDir, f), f);
     const m = txt.match(/https?:\/\//);
     assert.ok(!m, `${f} must not contain http(s):// (found: ${m && m[0]})`);
   }

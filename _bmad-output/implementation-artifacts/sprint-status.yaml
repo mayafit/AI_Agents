@@ -267,7 +267,7 @@ development_status:
   29-1-engine-skeleton-packaging-skill-entrypoint: done
   29-2-scan-deterministic-extraction-typed-manifest: done
   29-3-reading-views-cross-linking-backlinks-search-home: backlog
-  29-4-graph-view-generated-diagrams-orphan-gap: backlog
+  29-4-graph-view-generated-diagrams-orphan-gap: done
   29-5-sealed-offline-packaging-knowledge-graph-reconciliation: backlog
   29-6-release-gate-determinism-degradation-smoke-semver: backlog
   epic-29-retrospective: optional

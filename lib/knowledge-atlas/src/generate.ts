@@ -28,6 +28,10 @@ import { reconcileWithKgJson } from './graph/reconcile.js';
 import { readManifest, writeManifest } from './manifest/persist.js';
 import { computeDiff, mergeRecords } from './manifest/incremental.js';
 import { renderSite } from './render/site.js';
+// --- 29.4 graph/diagram/orphan pages ---
+import { renderGraphPage } from './render/graph.js';
+import { renderDiagrams } from './render/diagrams.js';
+import { renderOrphanPage } from './render/orphan.js';
 
 /** Current manifest schema version. Increment on breaking changes. */
 const MANIFEST_VERSION = 1;
@@ -306,9 +310,35 @@ export function generate(opts: GenerateOptions): GenerateResult {
   // Ensure output directory exists
   fs.mkdirSync(outDir, { recursive: true });
 
+  // --- 29.4 graph/diagram/orphan pages ---
+  // Written BEFORE renderSite so the home page + nav can detect graph.html
+  // (via fs.existsSync in site.ts) and link the interactive graph view.
+  // Each renderer is wrapped INDIVIDUALLY (finding #6 / FR234): a failure in one
+  // page does not abort generate() or leave a partial site with dead nav links —
+  // the other pages and index.html still render; the failure is logged to stderr
+  // and that page is simply omitted from the file count.
+  const safeRender = (
+    label: string,
+    fn: () => string[],
+  ): string[] => {
+    try {
+      return fn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[atlas] WARN: ${label} failed to render — page omitted: ${msg}\n`);
+      return [];
+    }
+  };
+  const graphFiles = safeRender('graph.html', () => renderGraphPage(manifest, outDir));
+  const diagramFiles = safeRender('diagrams.html', () => renderDiagrams(manifest, outDir));
+  const orphanFiles = safeRender('orphans.html', () => renderOrphanPage(manifest, outDir));
+  const extraFileCount = graphFiles.length + diagramFiles.length + orphanFiles.length;
+  // --- end 29.4 ---
+
   // Rendering half (Story 29.3): renderSite writes index.html (home), one
-  // reading view per document, search assets, and (additively, 29.4) graph
-  // pages, returning the sorted list of relative paths written.
+  // reading view per document, and search assets, returning the sorted list of
+  // relative paths written. It detects the 29.4 pages written above and links
+  // the interactive graph from the home/nav.
   const written = renderSite(manifest, outDir);
 
   // Write manifest.json (Story 29.2)
@@ -319,7 +349,7 @@ export function generate(opts: GenerateOptions): GenerateResult {
   return {
     outDir,
     indexPath,
-    // All rendered pages/assets + manifest.json
-    fileCount: written.length + 1,
+    // 29.3 pages/assets + 29.4 graph/diagram/orphan pages + manifest.json
+    fileCount: written.length + extraFileCount + 1,
   };
 }

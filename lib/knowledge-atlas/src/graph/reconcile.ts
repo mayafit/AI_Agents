@@ -42,6 +42,7 @@ interface KGEdge {
   from: string;
   to: string;
   kind?: string;
+  dangling?: boolean;
   [key: string]: unknown;
 }
 
@@ -97,9 +98,13 @@ function coerceNode(kgNode: KGNode): GraphNode | null {
   // Derive fileId from id (everything before #)
   const hashIdx = kgNode.id.indexOf('#');
   const fileId = kgNode.fileId ?? (hashIdx >= 0 ? kgNode.id.slice(0, hashIdx) : kgNode.id);
-  // Only set anchor when the id actually contains a '#' separator
+  // Anchor precedence (finding #4): when the id carries a '#…' suffix, prefer an
+  // explicit `anchor` field over the id-derived suffix so a KG node that supplies
+  // a distinct anchor deep-links correctly. We only set anchor when the id has a
+  // '#' separator — this keeps the 29.2 invariant (anchor ⇒ id contains '#') and
+  // never invents an anchor for a file-level (anchorless) id.
   const anchor = hashIdx >= 0
-    ? (kgNode.anchor ?? kgNode.id.slice(hashIdx + 1))
+    ? ((typeof kgNode.anchor === 'string' && kgNode.anchor) ? kgNode.anchor : kgNode.id.slice(hashIdx + 1))
     : undefined;
 
   const node: GraphNode = {
@@ -127,7 +132,15 @@ function coerceEdge(kgEdge: KGEdge): GraphEdge | null {
     kind = kgEdge.kind as EdgeKind;
   }
 
-  return { from: kgEdge.from, to: kgEdge.to, kind };
+  // Preserve the dangling flag (finding #3): KG-sourced edges flagged dangling
+  // must keep the flag so the 29.4 orphan/gap view's Dangling References section
+  // surfaces KG-sourced gaps (AC3). Without this, the flag was silently dropped.
+  return {
+    from: kgEdge.from,
+    to: kgEdge.to,
+    kind,
+    ...(kgEdge.dangling === true ? { dangling: true } : {}),
+  };
 }
 
 /**
