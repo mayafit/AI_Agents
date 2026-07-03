@@ -167,9 +167,57 @@ async function main() {
     fail('esbuild produced no output');
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Story 29.3 — Vendor the lunr browser library into the bundle as a string.
+  //
+  // The search page (search.html) needs the lunr RUNTIME in the browser to
+  // load the embedded index. esbuild bundles lunr for Node (build-time index
+  // construction), but the generated HTML runs in a browser with no module
+  // system and no network. We therefore read lunr's browser source at BUILD
+  // time and inject it as a global string constant (`__ATLAS_LUNR_JS__`) that
+  // search.ts inlines verbatim into a <script> on search.html. This keeps the
+  // site fully offline / sealed (no CDN, no fetch, file:// safe).
+  //
+  // Determinism: the injected source is read from the pinned devDependency, LF
+  // normalized; identical inputs → identical bytes.
+  // ──────────────────────────────────────────────────────────────────────────
+  let lunrSrc = '';
+  const lunrPath = path.join(REPO_ROOT, 'node_modules', 'lunr', 'lunr.min.js');
+  // Sealed-packaging invariant: the offline search page is useless without the
+  // lunr runtime. If it is absent, FAIL the build loudly (exit 1) rather than
+  // silently shipping a search.html with no runtime.
+  if (!fs.existsSync(lunrPath)) {
+    fail('lunr.min.js not found — cannot vendor the offline search runtime',
+      `expected at ${lunrPath}; run \`npm install\` (lunr is a devDependency)`);
+  }
+  try {
+    lunrSrc = fs.readFileSync(lunrPath, 'utf-8').replace(/\r\n/g, '\n');
+  } catch (err) {
+    fail('could not read lunr.min.js', err.message);
+  }
+  // Strip the leading banner comment, which contains a documentation URL
+  // (http://lunrjs.com). The Atlas "sealed/offline" invariant forbids ANY
+  // http(s):// in the output — even a non-fetched comment. lunr.min.js is a
+  // single banner comment followed by minified code, so removing the leading
+  // /* … */ block leaves the runtime intact while eliminating the URL.
+  lunrSrc = lunrSrc.replace(/^\s*\/\*[\s\S]*?\*\/\s*/, '');
+  // Guard: assert the body is clean so a future lunr version can't silently
+  // smuggle an http(s):// URL back in.
+  if (/https?:\/\//.test(lunrSrc)) {
+    fail('vendored lunr runtime contains an http(s):// URL after banner strip',
+      'offline/sealed invariant would be violated');
+  }
+  if (lunrSrc.length === 0) {
+    fail('vendored lunr runtime is empty after banner strip', lunrPath);
+  }
+  info(`vendored lunr runtime (${lunrSrc.length} bytes, banner stripped)`);
+  const lunrPrelude = `var __ATLAS_LUNR_JS__ = ${JSON.stringify(lunrSrc)};\n`;
+
   // Normalize LF and write atomically (temp → rename) to prevent half-written
-  // output if the process is killed mid-run.
-  const bundleBuf = normalizeLf(result.outputFiles[0].contents);
+  // output if the process is killed mid-run. The lunr prelude is prepended so
+  // the global is defined before the bundle body executes.
+  const bundleStr = Buffer.from(result.outputFiles[0].contents).toString('utf8');
+  const bundleBuf = normalizeLf(lunrPrelude + bundleStr);
   const tmpPath = OUT_FILE + `.build-${process.pid}-${Date.now()}.tmp`;
   try {
     fs.writeFileSync(tmpPath, bundleBuf, { mode: 0o644 });
