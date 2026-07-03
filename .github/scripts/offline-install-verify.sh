@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Story 22.9 — Air-gapped install verifier.
+# Story 29.5 — Extended with Atlas generate-under-egress-block gate.
 #
 # Runs INSIDE a Docker container that has `--network none`. The script
 # performs a ma-agents install from a pre-built tarball and asserts the
-# post-install invariants from Stories 22.6 and 22.8.
+# post-install invariants from Stories 22.6 and 22.8, then generates an
+# Atlas site from a minimal fixture with all egress blocked.
 #
 # Environment contract (set by the caller):
 #   TARBALL           — filename of the ma-agents tarball, relative to /workspace
@@ -35,7 +37,7 @@ echo "    TARBALL=${TARBALL:?TARBALL env var required}"
 # this check SUCCEEDS, the egress block is misconfigured and we must fail
 # before running the install (otherwise a silent network call could slip
 # through unnoticed).
-echo "==> [1/5] Verifying egress block"
+echo "==> [1/7] Verifying egress block"
 if command -v curl >/dev/null 2>&1; then
   if curl --silent --max-time 2 https://registry.npmjs.org/ >/dev/null 2>&1; then
     echo "ERROR: network is reachable — --network none did not take effect" >&2
@@ -60,7 +62,7 @@ fi
 # ---------------------------------------------------------------------------
 # Step 2 — Unpack the tarball into a throwaway location.
 # ---------------------------------------------------------------------------
-echo "==> [2/5] Extracting tarball"
+echo "==> [2/7] Extracting tarball"
 mkdir -p /pkg
 tar -xzf "/workspace/${TARBALL}" -C /pkg
 # npm pack always extracts to ./package
@@ -89,7 +91,7 @@ echo "    OK: extracted to $PKG_DIR"
 # did, as part of `npm ci`), so the staged tarball itself already
 # contains the built plugin (build-plugin.js wrote inside the repo root
 # before `npm pack`).
-echo "==> [3/5] Wiring node_modules (offline, via symlink)"
+echo "==> [3/7] Wiring node_modules (offline, via symlink)"
 cd "$PKG_DIR"
 if [ ! -e node_modules ]; then
   ln -s /workspace/node_modules node_modules
@@ -99,7 +101,7 @@ echo "    OK: node_modules linked ($(ls node_modules | wc -l) top-level entries)
 # ---------------------------------------------------------------------------
 # Step 4 — Run the install against a fresh scratch project.
 # ---------------------------------------------------------------------------
-echo "==> [4/5] Running ma-agents install (offline)"
+echo "==> [4/7] Running ma-agents install (offline)"
 mkdir -p /scratch
 cd /scratch
 # git init so the installer's .gitignore logic (Story 22.8) engages.
@@ -116,7 +118,7 @@ node "$PKG_DIR/bin/cli.js" install --yes --force --agent claude-code
 # ---------------------------------------------------------------------------
 # Step 5 — Post-install invariants (Stories 22.6, 22.8).
 # ---------------------------------------------------------------------------
-echo "==> [5/5] Asserting post-install invariants"
+echo "==> [5/7] Asserting post-install invariants"
 
 fail=0
 assert() {
@@ -218,5 +220,130 @@ if [ "$fail" -ne 0 ]; then
   exit 30
 fi
 
+echo "    OK: all post-install invariants held"
+
+# ---------------------------------------------------------------------------
+# Step 6 — Atlas generate under egress-block (Story 29.5 / AC 2).
+# ---------------------------------------------------------------------------
+# Synthesize a minimal _bmad-output fixture inside the scratch project and
+# run the Atlas engine (node <pkg>/lib/knowledge-atlas/dist/atlas.cjs) to
+# prove it generates a full site without any network access.
+#
+# The Atlas engine (atlas.cjs) is a self-contained esbuild bundle that
+# carries all dependencies (markdown-it, js-yaml, lunr, force-graph UMD)
+# — no node_modules resolution needed in the consuming project.
+echo "==> [6/7] Atlas generate under egress-block (Story 29.5)"
+
+ATLAS_ENGINE="$PKG_DIR/lib/knowledge-atlas/dist/atlas.cjs"
+ATLAS_FIXTURE_ROOT="/scratch/atlas-fixture-offline"
+ATLAS_SITE_DIR="$ATLAS_FIXTURE_ROOT/_bmad-output/knowledge-site"
+
+# Verify the engine is present in the installed package
+if [ ! -f "$ATLAS_ENGINE" ]; then
+  echo "    FAIL: Atlas engine not found: $ATLAS_ENGINE" >&2
+  echo "    (ensure lib/knowledge-atlas/dist/atlas.cjs is in the package 'files')" >&2
+  fail=$((fail + 1))
+else
+  echo "    OK:   Atlas engine present: $ATLAS_ENGINE"
+
+  # Synthesize a minimal fixture _bmad-output with a PRD and a story.
+  mkdir -p "$ATLAS_FIXTURE_ROOT/_bmad-output/planning-artifacts"
+  mkdir -p "$ATLAS_FIXTURE_ROOT/_bmad-output/implementation-artifacts"
+
+  cat > "$ATLAS_FIXTURE_ROOT/package.json" <<'PKGJSON'
+{ "name": "offline-atlas-fixture", "version": "0.1.0" }
+PKGJSON
+
+  cat > "$ATLAS_FIXTURE_ROOT/_bmad-output/planning-artifacts/prd.md" <<'PRD'
+# Product Requirements Document
+
+## Capabilities
+- F1: Offline Operation
+- F2: Knowledge Management
+
+## Functional Requirements
+### FR101: Offline Install
+The system must install without network access.
+
+### FR102: Atlas Generate
+The Atlas must generate without network access.
+
+## Non-Functional Requirements
+### NFR50: Air-gap compatibility
+Must work on fully disconnected networks.
+PRD
+
+  cat > "$ATLAS_FIXTURE_ROOT/_bmad-output/implementation-artifacts/1-1-offline-install.md" <<'STORY'
+---
+status: done
+epic: epic-1
+---
+# Story 1.1: Offline Install
+
+Implements FR101.
+Derives from Epic 1.
+Shipped v1.0.0.
+STORY
+
+  # Pin SOURCE_DATE_EPOCH for deterministic output
+  export SOURCE_DATE_EPOCH=1700000000
+
+  # Run the Atlas engine — no network access available (--network none)
+  if node "$ATLAS_ENGINE" "$ATLAS_FIXTURE_ROOT"; then
+    echo "    OK:   Atlas generate exited 0"
+  else
+    echo "    FAIL: Atlas generate exited non-zero" >&2
+    fail=$((fail + 1))
+  fi
+
+  # Assert all required output files exist and are non-empty
+  REQUIRED_PAGES=("index.html" "graph.html" "diagrams.html" "orphans.html" "search.html" "manifest.json")
+  for page in "${REQUIRED_PAGES[@]}"; do
+    page_path="$ATLAS_SITE_DIR/$page"
+    if [ -f "$page_path" ] && [ -s "$page_path" ]; then
+      echo "    OK:   $page exists and is non-empty"
+    else
+      echo "    FAIL: $page is missing or empty: $page_path" >&2
+      fail=$((fail + 1))
+    fi
+  done
+
+  # Re-check egress block after Atlas generate (proves no network was used)
+  if command -v curl >/dev/null 2>&1; then
+    if curl --silent --max-time 2 https://registry.npmjs.org/ >/dev/null 2>&1; then
+      echo "    FAIL: egress block lifted during Atlas generate — network is now reachable" >&2
+      fail=$((fail + 1))
+    else
+      echo "    OK:   egress block still holding after Atlas generate"
+    fi
+  else
+    if node -e "
+      const net = require('net');
+      const s = net.connect({ host: '1.1.1.1', port: 443, timeout: 2000 });
+      s.on('connect', () => process.exit(0));
+      s.on('error',   () => process.exit(1));
+      s.on('timeout', () => process.exit(1));
+    " >/dev/null 2>&1; then
+      echo "    FAIL: TCP probe succeeded after Atlas generate — egress block lifted" >&2
+      fail=$((fail + 1))
+    else
+      echo "    OK:   egress block still holding after Atlas generate (TCP probe)"
+    fi
+  fi
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo "" >&2
+  echo "$fail invariant(s) violated (Atlas gate) — offline install gate FAILED" >&2
+  exit 30
+fi
+
+echo "    OK: Atlas generate under egress-block: all assertions passed"
+
+# ---------------------------------------------------------------------------
+# Step 7 — Final summary.
+# ---------------------------------------------------------------------------
+echo "==> [7/7] All invariants held"
 echo ""
 echo "==> offline-install-verify.sh: all invariants held"
+echo "    Atlas generate under egress-block: OK"

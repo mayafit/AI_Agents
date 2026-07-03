@@ -50,8 +50,20 @@ function sortReplacer(_key: string, value: unknown): unknown {
 export function writeManifest(outDir: string, manifest: KnowledgeManifest): string {
   fs.mkdirSync(outDir, { recursive: true });
 
+  // Determinism across machines (NFR62 / Story 29.6 cross-platform byte-identity gate):
+  // the PERSISTED manifest must never embed machine-specific ABSOLUTE paths, otherwise
+  // the same `_bmad-output` at `/home/u/proj` (Linux) vs `C:\proj` (Windows) would yield
+  // a byte-different manifest.json. Relativize projectRoot -> "." and bmadOutputDir to a
+  // POSIX path relative to projectRoot ("_bmad-output"). The IN-MEMORY manifest is left
+  // untouched (renderers use its absolute projectRoot during generate, before this call).
+  let relBmad = '_bmad-output';
+  if (manifest.projectRoot && manifest.bmadOutputDir) {
+    relBmad = path.relative(manifest.projectRoot, manifest.bmadOutputDir).split(path.sep).join('/') || '_bmad-output';
+  }
+  const persisted: KnowledgeManifest = { ...manifest, projectRoot: '.', bmadOutputDir: relBmad };
+
   // Serialize with stable key order
-  let json = stableStringify(manifest);
+  let json = stableStringify(persisted);
   // Normalize to LF
   json = json.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   // Ensure trailing newline
