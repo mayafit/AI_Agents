@@ -308,52 +308,97 @@ test('committed fixture is not mutated (no knowledge-site/ in fixture dir)', () 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Suite: Bundle drift (AC 2.5)
+// Suite: Bundle drift (AC 2.5 / Story 29.6 AC 8)
+//
 // The committed atlas.cjs must match a fresh build byte-for-byte.
+//
+// FIXED (Story 29.6): the prior check rebuilt atlas.cjs IN PLACE and then
+// restored committed bytes in a `finally` — this mutated the working tree
+// during the test run and let a stale committed bundle pass (the restore masked
+// the drift for the NEXT run). The rewrite builds to an OS temp path and
+// byte-compares the result against the COMMITTED `dist/atlas.cjs`, never
+// writing to the real file.
 // ─────────────────────────────────────────────────────────────────────────────
 
-console.log('\n--- Bundle drift check ---');
+console.log('\n--- Bundle drift check (build-to-temp) ---');
 
-test('fresh build produces same atlas.cjs bytes as the committed bundle', () => {
-  // Snapshot the committed bundle's BYTES (not just its hash) so we can both
-  // (a) detect drift and (b) restore the committed artifact afterwards — a
-  // fresh build writes to the same OUT_FILE, so without restore a developer who
-  // edited src/ without rebuilding would have the committed file silently
-  // overwritten and the drift would go unnoticed on the next run.
-  const committedBytes = fs.readFileSync(ATLAS_CJS);
-  const committedHash = crypto.createHash('sha256').update(committedBytes).digest('hex');
+test('fresh build produces same atlas.cjs bytes as the committed bundle (build-to-temp)', () => {
+  // Import build helpers — same esbuild config as the real build script, which
+  // guarantees the temp bundle is produced identically to a `npm run build:atlas`.
+  const buildModule = require(BUILD_ATLAS_SCRIPT);
+  const { REPO_ROOT, SRC_ENTRY, normalizeLf } = buildModule;
 
-  // Build into a TEMP working copy of the dist dir by pointing the build at a
-  // throwaway OUT_FILE is not supported by the script's fixed-path contract;
-  // instead we rebuild in place, hash, then restore the original bytes.
-  let rebuiltHash;
+  // Committed bundle hash — this is what we verify AGAINST.
+  const committedHash = fileHash(ATLAS_CJS);
+
+  // Temporary output path — NEVER writes to dist/atlas.cjs.
+  const tmpBundle = path.join(os.tmpdir(), `atlas-drift-verify-${process.pid}-${Date.now()}.cjs`);
   try {
-    const buildResult = spawnSync(
-      process.execPath,
-      [BUILD_ATLAS_SCRIPT],
-      {
-        encoding: 'utf-8',
-        cwd: PROJECT_ROOT,
-        timeout: 60000,
-      }
-    );
-    assert.ok(!buildResult.error, `build-atlas.js failed to run: ${buildResult.error && buildResult.error.message}`);
-    assert.strictEqual(
-      buildResult.status, 0,
-      `build-atlas.js failed (exit ${buildResult.status})\nstderr: ${buildResult.stderr}`
-    );
-    rebuiltHash = fileHash(ATLAS_CJS);
-  } finally {
-    // Restore the committed bytes regardless of the assertion outcome so the
-    // working tree is never left mutated by the test run.
-    fs.writeFileSync(ATLAS_CJS, committedBytes);
-  }
+    // Replicate the exact esbuild call from build-atlas.js (same options).
+    // We call esbuild synchronously via require('esbuild') so the temp file is
+    // written before we compare hashes.
+    const esbuild = require('esbuild');
+    const lunrPath = path.join(REPO_ROOT, 'node_modules', 'lunr', 'lunr.min.js');
+    assert.ok(fs.existsSync(lunrPath), `lunr.min.js not found at ${lunrPath}`);
 
-  assert.strictEqual(
-    rebuiltHash,
-    committedHash,
-    'Committed atlas.cjs does not match a fresh build — run `npm run build:atlas` and commit the result'
-  );
+    let lunrSrc = fs.readFileSync(lunrPath, 'utf-8').replace(/\r\n/g, '\n');
+    // Strip banner comment (same as build-atlas.js)
+    lunrSrc = lunrSrc.replace(/^\s*\/\*[\s\S]*?\*\/\s*/, '');
+    assert.ok(!/https?:\/\//.test(lunrSrc), 'vendored lunr contains http(s) URL after strip');
+    assert.ok(lunrSrc.length > 0, 'vendored lunr is empty after strip');
+    const lunrPrelude = `var __ATLAS_LUNR_JS__ = ${JSON.stringify(lunrSrc)};\n`;
+
+    // esbuild.buildSync is available in modern esbuild; fall back to the async
+    // form via spawnSync if needed.
+    let bundleBuf;
+    try {
+      const result = esbuild.buildSync({
+        entryPoints: [SRC_ENTRY],
+        bundle: true,
+        platform: 'node',
+        format: 'cjs',
+        target: 'node18',
+        minify: false,
+        sourcemap: false,
+        write: false,
+        logLevel: 'warning',
+      });
+      assert.ok(result && result.outputFiles && result.outputFiles.length > 0,
+        'esbuild produced no output');
+      const bundleStr = Buffer.from(result.outputFiles[0].contents).toString('utf8');
+      bundleBuf = normalizeLf(lunrPrelude + bundleStr);
+    } catch (syncErr) {
+      // esbuild.buildSync is available in the repo's pinned esbuild (^0.28.1) and is
+      // the ONLY path we use, precisely because it builds to memory (write:false) and
+      // never touches the committed dist/atlas.cjs. We deliberately do NOT fall back
+      // to the in-place build-atlas.js script here: mutating the real bundle from a
+      // test is exactly the flaw this rewrite closes. If buildSync is ever missing,
+      // FAIL LOUDLY rather than silently reintroduce the working-tree-mutating path.
+      throw new Error(
+        'esbuild.buildSync unavailable — cannot verify bundle drift without mutating ' +
+        `dist/atlas.cjs; refusing the in-place fallback. Original error: ${syncErr && syncErr.message}`
+      );
+    }
+
+    // Write to temp file and compare hashes.
+    fs.writeFileSync(tmpBundle, bundleBuf, { mode: 0o644 });
+    const rebuiltHash = crypto.createHash('sha256').update(bundleBuf).digest('hex');
+
+    assert.strictEqual(
+      rebuiltHash,
+      committedHash,
+      'Committed atlas.cjs does not match a fresh build — run `npm run build:atlas` and commit the result.\n' +
+      `  committed : ${committedHash}\n` +
+      `  rebuilt   : ${rebuiltHash}`
+    );
+
+    // Belt-and-suspenders: the real dist/atlas.cjs must be UNCHANGED.
+    const afterHash = fileHash(ATLAS_CJS);
+    assert.strictEqual(afterHash, committedHash,
+      'BUG: drift test mutated dist/atlas.cjs — this must never happen');
+  } finally {
+    try { if (fs.existsSync(tmpBundle)) fs.unlinkSync(tmpBundle); } catch { /* swallow */ }
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

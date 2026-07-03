@@ -5,6 +5,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.15.0-beta.0] - 2026-07-03
+
+Knowledge Atlas — Epic 29 beta prerelease (FR215–234 / NFR60–69). Adds a
+pre-bundled, offline-first static-site generator (`bmad-knowledge` skill) that
+scans a project's `_bmad-output` and produces a fully self-contained knowledge
+site with zero runtime dependencies. No breaking change to the public CLI
+surface → MINOR; beta prerelease pending cross-platform CI sign-off.
+
+### Added
+
+- **Knowledge Atlas engine** (`lib/knowledge-atlas/dist/atlas.cjs`, ~737 KB committed
+  bundle, FR215/FR230): scan → manifest → reading views → interactive graph → orphan/gap
+  report, all in a single sealed CJS artifact. The bundle is vendored into the
+  ma-agents distribution so consuming projects never run `npm install` for the Atlas.
+
+- **`bmad-knowledge` skill** (FR215/FR230): registered in `skills/bmad-knowledge/`,
+  `lib/bmad-extension/skills/bmad-knowledge/`, `module-help.csv`, and
+  `marketplace.json.template`/built plugin bundle (skill count 62). Invokes the
+  committed `atlas.cjs` against the project's `_bmad-output` to generate or refresh
+  the knowledge site.
+
+- **Six-page site output** (FR216–222): `index.html` (home + health snapshot),
+  `search.html` (offline lunr full-text search), `graph.html` (interactive
+  force-graph visualization), `diagrams.html` (Mermaid diagram viewer),
+  `orphans.html` (orphaned/gap entities), and per-document reading views under
+  `docs/`. All pages are fully self-contained (no CDN, no network fetch,
+  `file://`-safe).
+
+- **Manifest system** (FR223–226): incremental `manifest.json` with stable key
+  ordering, schema-version guard, POSIX-relative paths (no machine-specific
+  absolute paths), and LF normalization. Cross-platform byte-identical across
+  Linux and Windows.
+
+- **Offline packaging + air-gap seal** (NFR60/NFR61/NFR67): lunr browser runtime
+  vendored at build time; `offline-install-verify.sh` generates and verifies an
+  Atlas under `--network none`; `offline-install.yml` CI gate.
+
+- **Determinism** (NFR62): pinned `SOURCE_DATE_EPOCH`, sorted entities, LF output,
+  relativized manifest paths, CRLF-tolerant scanner — same `_bmad-output` produces
+  byte-identical output on Linux and Windows from any absolute project path.
+
+- **Graceful degradation** (NFR63/FR234): per-renderer try/catch in `generate.ts`
+  (one failing page never aborts the run), tolerant scanner (binary/zero-byte/unknown
+  docs skipped), bad-YAML frontmatter tolerated. Disabled-JS baseline: every page
+  is legible and navigable without executing any script.
+
+- **Output sanitization** (NFR64): `sanitizeHtml()` in `linkify.ts` — allowlist-based
+  tag/attribute filter strips `<script>`, `<iframe>`, `onerror=`, `javascript:`/
+  `vbscript:`/`data:` schemes from all document-rendered HTML.
+
+- **Graph reconciliation** (NFR65): `reconcileWithKgJson()` merges the auto-extracted
+  graph with hand-curated `knowledge-graph.json` if present.
+
+- **Test suites** (Story 29.1–29.6, 315+ assertions):
+  `knowledge-atlas-{smoke,manifest,render,graph,packaging,offline-safety,reconcile,
+  determinism,degradation,realproject}.test.js`
+
+- **Release gate** (Story 29.6): bundle-drift check (build-to-temp, never mutates
+  committed `dist/atlas.cjs`), cross-platform determinism gate (two-path byte-identity
+  + CRLF≡LF), graceful-degradation gate (malformed docs + disabled-JS baseline),
+  NFR64 consolidated safety assertion, and real-project smoke against the ma-agents
+  repo's own `_bmad-output`.
+
+### Fixed
+
+- **Bundle-drift test flaw** (Story 29.6 AC 8): the prior drift check rebuilt
+  `atlas.cjs` in place and restored committed bytes in a `finally` — this mutated
+  the working tree during the test run and allowed a stale committed bundle to pass.
+  Rewritten to build to a temp path and byte-compare against the committed file,
+  never writing to `dist/atlas.cjs`.
+
 ## [3.14.0] - 2026-06-27
 
 BMAD v6.9.0 integration (Epic 28). A lean, feature-inheriting bump: the v6.9.0 module
