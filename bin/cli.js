@@ -1346,6 +1346,41 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
   if (yesFlag) {
     batchState.globalAction = 'update';
   }
+
+  // Cleaner update/reinstall UX — when re-running against a project that already
+  // has some of the selected skills installed, offer a SINGLE batch decision up
+  // front instead of prompting once per skill. Setting batchState.globalAction
+  // here makes installSkill() apply it to every skill without prompting (the
+  // same mechanism --yes uses). Skipped in --yes mode (already resolved above)
+  // and on a fresh install (nothing already present). Picking 'per-skill' leaves
+  // globalAction unset, preserving the existing per-skill prompts (which now
+  // include "…all remaining" shortcuts as a fallback).
+  if (!yesFlag && !batchState.globalAction) {
+    const alreadyInstalled = new Set();
+    for (const entry of existingStatus) {
+      for (const id of Object.keys(entry.skills)) alreadyInstalled.add(id);
+    }
+    const overlapCount = selectedSkillIds.filter(id => alreadyInstalled.has(id)).length;
+    if (overlapCount > 0) {
+      const { batchChoice } = await prompts({
+        type: 'select',
+        name: 'batchChoice',
+        message: `${overlapCount} of the selected skills are already installed. What would you like to do with all of them?`,
+        choices: [
+          { title: 'Update all (refresh to packaged version)', value: 'update' },
+          { title: 'Clean reinstall all (remove + install)', value: 'reinstall' },
+          { title: 'Skip all (keep current)', value: 'skip' },
+          { title: 'Decide per-skill', value: 'per-skill' }
+        ],
+        initial: 0
+      });
+      // Escape / Ctrl+C → undefined → fall through to per-skill (safe default).
+      if (batchChoice && batchChoice !== 'per-skill') {
+        batchState.globalAction = batchChoice;
+      }
+    }
+  }
+
   for (const skillId of selectedSkillIds) {
     try {
       await installSkill(skillId, selectedAgentIds, installPath, installScope, { force: !!forceFlag, yes: yesFlag, batchState });
