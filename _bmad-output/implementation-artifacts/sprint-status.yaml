@@ -269,5 +269,5 @@ development_status:
   29-3-reading-views-cross-linking-backlinks-search-home: backlog
   29-4-graph-view-generated-diagrams-orphan-gap: done
   29-5-sealed-offline-packaging-knowledge-graph-reconciliation: done
-  29-6-release-gate-determinism-degradation-smoke-semver: backlog
+  29-6-release-gate-determinism-degradation-smoke-semver: done
   epic-29-retrospective: optional
