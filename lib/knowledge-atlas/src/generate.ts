@@ -27,6 +27,10 @@ import { buildNodes, buildEdges, buildCounts } from './graph/build.js';
 import { reconcileWithKgJson } from './graph/reconcile.js';
 import { readManifest, writeManifest } from './manifest/persist.js';
 import { computeDiff, mergeRecords } from './manifest/incremental.js';
+// --- 29.4 graph/diagram/orphan pages ---
+import { renderGraphPage } from './render/graph.js';
+import { renderDiagrams } from './render/diagrams.js';
+import { renderOrphanPage } from './render/orphan.js';
 
 /** Current manifest schema version. Increment on breaking changes. */
 const MANIFEST_VERSION = 1;
@@ -470,10 +474,38 @@ export function generate(opts: GenerateOptions): GenerateResult {
   // Write manifest.json (Story 29.2)
   writeManifest(outDir, manifest);
 
+  // --- 29.4 graph/diagram/orphan pages ---
+  // Rendered additively alongside the existing index.html + manifest.json flow.
+  // This block is intentionally isolated so the 29.3 merge (which adds renderSite)
+  // can be applied cleanly: 29.3 replaces/wraps renderHtml, this block stays below.
+  // Each renderer returns relative paths written; we count them for fileCount.
+  //
+  // Degradation (finding #6 / FR234): each renderer is wrapped INDIVIDUALLY so a
+  // failure in one page does not abort generate() and leave a partial site with
+  // dead nav links — the other pages and index.html still render. A failure is
+  // logged to stderr and that page is simply omitted from the file count.
+  const safeRender = (
+    label: string,
+    fn: () => string[],
+  ): string[] => {
+    try {
+      return fn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[atlas] WARN: ${label} failed to render — page omitted: ${msg}\n`);
+      return [];
+    }
+  };
+  const graphFiles = safeRender('graph.html', () => renderGraphPage(manifest, outDir));
+  const diagramFiles = safeRender('diagrams.html', () => renderDiagrams(manifest, outDir));
+  const orphanFiles = safeRender('orphans.html', () => renderOrphanPage(manifest, outDir));
+  const extraFileCount = graphFiles.length + diagramFiles.length + orphanFiles.length;
+  // --- end 29.4 ---
+
   return {
     outDir,
     indexPath,
-    // 2 files: index.html + manifest.json
-    fileCount: 2,
+    // 2 base files (index.html + manifest.json) + 3 new pages (graph/diagrams/orphans)
+    fileCount: 2 + extraFileCount,
   };
 }
