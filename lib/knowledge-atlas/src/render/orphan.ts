@@ -54,13 +54,29 @@ function safePath(p: string): string {
 // Node link helper
 // ---------------------------------------------------------------------------
 
+// Set of rendered document paths (manifest.files[].path), populated by
+// renderOrphanPage before any nodeLink call. A node whose fileId is NOT a
+// rendered doc page — e.g. a KG-only node from knowledge-graph.json — must not
+// emit a live href, or the browser would 404 on click. Such nodes render as
+// non-clickable text instead (finding: KG-only orphan link → 404).
+let RENDERED_DOC_PATHS: Set<string> = new Set();
+
 function nodeLink(node: GraphNode, extra?: string): string {
   const base = safePath(node.fileId);
-  const href = base === '#invalid' ? base : base + (node.anchor ? '#' + node.anchor : '');
   const extraStr = extra ? ` ${esc(extra)}` : '';
+  const meta = `<span class="node-meta">[${esc(node.kind)}${extraStr}]</span>`;
+  const hasDoc = RENDERED_DOC_PATHS.has(node.fileId);
+  if (base === '#invalid' || !hasDoc) {
+    // Unsafe or no rendered doc page (KG-only): non-clickable, never a dead link.
+    return (
+      `<span class="node-link node-link-nodoc" aria-label="${esc(node.label)} (${esc(node.kind)}, no page)">` +
+      `${esc(node.label)}</span>${meta}`
+    );
+  }
+  const href = base + (node.anchor ? '#' + node.anchor : '');
   return (
     `<a href="${esc(href)}" class="node-link" aria-label="${esc(node.label)} (${esc(node.kind)})">` +
-    `${esc(node.label)}</a><span class="node-meta">[${esc(node.kind)}${extraStr}]</span>`
+    `${esc(node.label)}</a>${meta}`
   );
 }
 
@@ -432,6 +448,9 @@ const ORPHAN_CSS = `
  * @returns Array of relative paths written (always ['orphans.html']).
  */
 export function renderOrphanPage(manifest: KnowledgeManifest, outDir: string): string[] {
+  // Populate the rendered-doc-path set so nodeLink can suppress dead links to
+  // KG-only nodes that have no generated reading-view page.
+  RENDERED_DOC_PATHS = new Set(manifest.files.map(f => f.path));
   const report = computeOrphans(manifest);
   const title = esc(manifest.projectTitle);
 

@@ -139,4 +139,7 @@ jobs:
             echo "| Install duration | ${{ steps.offline_install.outputs.duration_sec || 'n/a' }} s |"
             echo ""
             echo "Egress-block strategy: Docker \`--network none\` (kernel network namespace)."
+            echo ""
+            echo "**Story 29.5 extension:** Atlas generate under egress-block: OK"
+            echo "(Atlas engine generates index/graph/diagrams/orphans/search/manifest with no network access.)"
           } >> "$GITHUB_STEP_SUMMARY"

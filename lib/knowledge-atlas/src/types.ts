@@ -106,6 +106,17 @@ export type EdgeKind =
   | 'shipped-in';     // entity shipped-in version
 
 /**
+ * Provenance tag indicating where a node/edge originated.
+ * Added in Story 29.5 for full reconciliation hardening.
+ *   'scan'  — derived from filesystem scan only
+ *   'kg'    — present only in knowledge-graph.json (KG-only)
+ *   'both'  — present in both scan and knowledge-graph.json
+ * Omitted when knowledge-graph.json is absent (scan-only, absence-equivalence
+ * with 29.2 output).
+ */
+export type ProvenanceSource = 'scan' | 'kg' | 'both';
+
+/**
  * A typed node in the knowledge graph.
  * Identity scheme: `file-id#anchor` (P3-1 heading→anchor slug).
  * Anchors match knowledge-graph.json and VSCode markdown link resolution.
@@ -124,6 +135,12 @@ export interface GraphNode {
   fileId: string;
   /** Heading anchor slug within the file, if applicable. */
   anchor?: string;
+  /**
+   * Provenance: where this node came from (Story 29.5).
+   * Present only when knowledge-graph.json was processed during reconciliation.
+   * Renderers must remain correct when this field is undefined.
+   */
+  source?: ProvenanceSource;
 }
 
 /**
@@ -137,6 +154,12 @@ export interface GraphEdge {
   kind: EdgeKind;
   /** True if `to` target node id was not found in the graph (orphan/gap). */
   dangling?: boolean;
+  /**
+   * Provenance: where this edge came from (Story 29.5).
+   * Present only when knowledge-graph.json was processed during reconciliation.
+   * Renderers must remain correct when this field is undefined.
+   */
+  source?: ProvenanceSource;
 }
 
 // ---------------------------------------------------------------------------
