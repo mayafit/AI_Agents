@@ -27,6 +27,7 @@ import { buildNodes, buildEdges, buildCounts } from './graph/build.js';
 import { reconcileWithKgJson } from './graph/reconcile.js';
 import { readManifest, writeManifest } from './manifest/persist.js';
 import { computeDiff, mergeRecords } from './manifest/incremental.js';
+import { renderSite } from './render/site.js';
 
 /** Current manifest schema version. Increment on breaking changes. */
 const MANIFEST_VERSION = 1;
@@ -250,164 +251,9 @@ function buildManifest(
 }
 
 // ---------------------------------------------------------------------------
-// Design-system CSS tokens (seeded for 29.3 extension)
-//
-// Token inventory mirrors the brief-knowledge-atlas-2026-06-27 design reference:
-//   --ink         text
-//   --paper       page background
-//   --surface     card / panel background
-//   --ok          success / green accent
-//   --warn        warning / amber accent
-//   --gap         spacing unit
-//   --ink-wash    muted text
-//   --surface-alt alternate surface (hover, zebra)
-//   --accent      teal primary accent
-//   --accent-dk   darker teal (hover)
-//
-// Rule: NO external URLs, NO web fonts, system font stack only.
-// NO <script> in this story (29.3 may add vendored JS, never CDN).
+// Rendering half: delegated to render/site.ts (Story 29.3)
+// The CSS const and renderHtml() have been replaced by renderSite().
 // ---------------------------------------------------------------------------
-
-const CSS = `\
-/* Knowledge Atlas — design system tokens (Story 29.1 seed) */
-:root {
-  --ink:         #1a1a2e;
-  --paper:       #f8f9fb;
-  --surface:     #ffffff;
-  --surface-alt: #f1f4f8;
-  --ok:          #2e7d32;
-  --warn:        #e65100;
-  --gap:         1rem;
-  --ink-wash:    #5c6a7a;
-  --accent:      #00897b;
-  --accent-dk:   #00695c;
-  --border:      #d0d9e4;
-  --radius:      6px;
-  --font:        system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-}
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  font-family: var(--font);
-  background: var(--paper);
-  color: var(--ink);
-  line-height: 1.6;
-  padding: var(--gap);
-}
-
-header {
-  background: var(--accent);
-  color: #fff;
-  padding: calc(var(--gap) * 1.5) calc(var(--gap) * 2);
-  border-radius: var(--radius);
-  margin-bottom: calc(var(--gap) * 1.5);
-}
-
-header h1 {
-  font-size: 1.6rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-header .subtitle {
-  font-size: 0.9rem;
-  opacity: 0.85;
-  margin-top: 0.25rem;
-}
-
-main {
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: calc(var(--gap) * 1.25);
-  margin-bottom: var(--gap);
-}
-
-.card h2 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--accent-dk);
-  margin-bottom: 0.5rem;
-}
-
-.meta {
-  font-size: 0.85rem;
-  color: var(--ink-wash);
-}
-
-footer {
-  margin-top: calc(var(--gap) * 2);
-  font-size: 0.8rem;
-  color: var(--ink-wash);
-  text-align: center;
-  border-top: 1px solid var(--border);
-  padding-top: var(--gap);
-}
-`;
-
-// ---------------------------------------------------------------------------
-// Rendering half: renderHtml()
-// Produces a fully self-contained HTML document — no external URLs,
-// no <script src>, no web fonts.
-// ---------------------------------------------------------------------------
-
-function renderHtml(manifest: KnowledgeManifest): string {
-  const { projectTitle, generatedAt } = manifest;
-
-  // Escape user-supplied strings for HTML
-  const esc = (s: string) =>
-    s
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-
-  const title = esc(projectTitle);
-
-  // LF-normalized: join lines with \n, never \r\n
-  const lines: string[] = [
-    '<!DOCTYPE html>',
-    '<html lang="en">',
-    '<head>',
-    '<meta charset="utf-8">',
-    `<meta name="viewport" content="width=device-width, initial-scale=1">`,
-    `<title>${title} — Knowledge Atlas</title>`,
-    `<meta name="description" content="Knowledge Atlas for ${title}">`,
-    '<style>',
-    CSS.trimEnd(),
-    '</style>',
-    '</head>',
-    '<body>',
-    '<header>',
-    `<h1>${title}</h1>`,
-    `<p class="subtitle">Knowledge Atlas</p>`,
-    '</header>',
-    '<main>',
-    '<div class="card">',
-    '<h2>Project</h2>',
-    `<p class="meta">Title: ${title}</p>`,
-    '</div>',
-    '<div class="card">',
-    '<h2>Generation</h2>',
-    `<p class="meta">Generated at: ${esc(generatedAt)}</p>`,
-    '</div>',
-    '</main>',
-    '<footer>',
-    `Knowledge Atlas &bull; generated at ${esc(generatedAt)}`,
-    '</footer>',
-    '</body>',
-    '</html>',
-    '', // trailing newline
-  ];
-
-  return lines.join('\n');
-}
 
 // ---------------------------------------------------------------------------
 // Public API: generate()
@@ -457,23 +303,23 @@ export function generate(opts: GenerateOptions): GenerateResult {
   // Discovery half: full scan→extract→graph→reconcile
   const manifest = buildManifest(projectRoot, bmadOutputDir, outDir, generatedAt);
 
-  // Rendering half
-  const html = renderHtml(manifest);
-
   // Ensure output directory exists
   fs.mkdirSync(outDir, { recursive: true });
 
-  // Write index.html with LF line endings (normalize, just in case)
-  const indexPath = path.join(outDir, 'index.html');
-  fs.writeFileSync(indexPath, html.replace(/\r\n/g, '\n'), { encoding: 'utf-8' });
+  // Rendering half (Story 29.3): renderSite writes index.html (home), one
+  // reading view per document, search assets, and (additively, 29.4) graph
+  // pages, returning the sorted list of relative paths written.
+  const written = renderSite(manifest, outDir);
 
   // Write manifest.json (Story 29.2)
   writeManifest(outDir, manifest);
 
+  const indexPath = path.join(outDir, 'index.html');
+
   return {
     outDir,
     indexPath,
-    // 2 files: index.html + manifest.json
-    fileCount: 2,
+    // All rendered pages/assets + manifest.json
+    fileCount: written.length + 1,
   };
 }
