@@ -122,6 +122,19 @@ test('generate the reading site from a temp copy of rich-project', () => {
   // AC 8 / NFR64: inject a malicious doc to prove sanitization neutralizes it.
   // The heading text carries a </script> breakout payload so it flows into a
   // node label AND into the search index (search-index breakout test).
+  //
+  // MUST-FIX #1 (adversarial review) additions below: HTML-entity-obfuscated
+  // javascript: hrefs that decode to an executable scheme only AFTER the
+  // browser HTML-decodes the attribute — the raw-text scheme allowlist check
+  // used to miss these. NOTE: the markdown-LINK form of this payload
+  // (`[x](javascript` + a decimal char-reference for `:` + `alert(1))`) is
+  // deliberately NOT included in this fixture doc — markdown-it does not
+  // parse it as a link at all, so its decoded colon survives as inert
+  // DISPLAY TEXT (not inside an href=), which would spuriously trip this
+  // file's blanket no-"javascript:"-substring-anywhere assertions further
+  // below. That markdown-link variant is covered separately by
+  // knowledge-atlas-degradation.test.js's xss-injection-story.md fixture,
+  // whose checks are href-attribute-scoped rather than whole-page-substring.
   const xssDoc = [
     '---',
     'title: XSS Probe',
@@ -138,6 +151,12 @@ test('generate the reading site from a temp copy of rich-project', () => {
     'VBScript link: <a href="vbscript:MsgBox(1)">vb</a>',
     '',
     'An iframe: <iframe src="data:text/html,evil"></iframe>',
+    '',
+    'Raw HTML hex-entity tab obfuscation: <a href="jav&#x09;ascript:alert(1)">entity-tab</a>',
+    '',
+    'Raw HTML hex-entity leading char: <a href="&#x6a;avascript:alert(1)">entity-hex</a>',
+    '',
+    'Raw HTML decimal-entity leading char: <a href="&#106;avascript:alert(1)">entity-dec</a>',
     '',
     'This doc also references FR101 and Story 1.1.',
     '',
@@ -364,6 +383,60 @@ test('home links graph.html when 29.4 has written it (integrated site)', () => {
     'home must link graph.html when 29.4 emitted it');
 });
 
+// SHOULD-FIX #2 (adversarial review): diagrams.html and orphans.html were
+// unreachable from home or any reading/search page — the 29.3 shared nav only
+// linked Home/Search, the 29.4 pages hand-rolled a nav missing Search, and
+// home's entry points surfaced Graph but not Diagrams/Orphans. Assert every
+// page type now shares ONE nav set (Home · Graph · Diagrams · Orphans ·
+// Search) so no page is a dead end.
+console.log('\n--- SHOULD-FIX #2: unified nav / no unreachable page ---');
+
+test('home surfaces Graph, Diagrams, Orphans, and Search as entry points', () => {
+  const home = read(siteDir, 'index.html');
+  for (const page of ['graph.html', 'diagrams.html', 'orphans.html', 'search.html']) {
+    assert.ok(new RegExp(`href="${page.replace('.', '\\.')}"`).test(home),
+      `home (index.html) must link ${page}`);
+  }
+});
+
+test('every page type (doc, home, search, graph, diagrams, orphans) carries the full nav set', () => {
+  // A doc page's nav is baseHref-prefixed ("../graph.html"); the six
+  // top-level page types use bare hrefs ("graph.html"). Build a regex that
+  // accepts an optional "../" prefix so one check covers both.
+  const navLink = (page) => new RegExp(`href="(?:\\.\\./)?${page.replace('.', '\\.')}"`);
+  const expectedLinks = ['index.html', 'graph.html', 'diagrams.html', 'orphans.html', 'search.html'];
+
+  const samplePages = [
+    'index.html',
+    'search.html',
+    'graph.html',
+    'diagrams.html',
+    'orphans.html',
+    // One representative reading view (docs/ page, baseHref "../").
+    'docs/bmad-output-planning-artifacts-prd.html',
+  ];
+
+  for (const page of samplePages) {
+    const html = read(siteDir, page);
+    for (const expected of expectedLinks) {
+      // A page never needs to link itself; every OTHER page in the set must
+      // be reachable from here.
+      if (page === expected) continue;
+      assert.ok(navLink(expected).test(html),
+        `${page} must carry a nav link to ${expected} (unified nav, SHOULD-FIX #2)`);
+    }
+  }
+});
+
+test('Search is reachable from every page type (previously missing from graph/diagrams/orphans nav)', () => {
+  for (const page of ['graph.html', 'diagrams.html', 'orphans.html', 'index.html']) {
+    const html = read(siteDir, page);
+    assert.ok(/href="search\.html"/.test(html), `${page} must link search.html`);
+  }
+  const doc = read(siteDir, 'docs/bmad-output-planning-artifacts-prd.html');
+  assert.ok(/href="\.\.\/search\.html"/.test(doc), 'a reading view must link ../search.html');
+});
+
 // ─── AC 5: offline search ────────────────────────────────────────────────────
 console.log('\n--- AC 5: offline full-text search ---');
 
@@ -560,6 +633,60 @@ test('injected vbscript: href is neutralized (allowlist, not just javascript:)',
     assert.ok(!/^\s*(javascript|vbscript|data):/i.test(m[1]),
       `anchor href must not use an executable scheme: ${m[1]}`);
   }
+});
+
+// MUST-FIX #1 regression: HTML-entity-obfuscated javascript: hrefs. The old
+// isSafeUrl() tested the RAW attribute text; the browser HTML-decodes the
+// attribute value AFTER our sanitizer runs, so `jav&#x09;ascript:alert(1)`,
+// `&#x6a;avascript:alert(1)`, `&#106;avascript:alert(1)`, and the markdown
+// decimal-entity form `javascript&#58;alert(1)` all fired a javascript: URI
+// on click despite the "sanitized" output. This mirrors the browser's own
+// HTML-decoding of a raw href attribute value before asserting on scheme.
+function decodeHtmlEntitiesForUrlCheck(v) {
+  return v
+    .replace(/&#x([0-9a-f]+);?/gi, (_m, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);?/g, (_m, dec) => String.fromCodePoint(parseInt(dec, 10)))
+    .replace(/&colon;/gi, ':')
+    .replace(/&tab;/gi, '\t')
+    .replace(/&newline;/gi, '\n')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/[\x00-\x20]+/g, '')
+    .toLowerCase();
+}
+
+test('HTML-entity-obfuscated javascript:/vbscript: hrefs never decode to an executable scheme anywhere in the site', () => {
+  const violations = [];
+  for (const f of allFiles.filter(x => x.endsWith('.html'))) {
+    const html = read(siteDir, f);
+    for (const m of html.matchAll(/<a\s[^>]*href\s*=\s*"([^"]*)"/gi)) {
+      const decoded = decodeHtmlEntitiesForUrlCheck(m[1]);
+      if (/^(javascript|vbscript|data):/.test(decoded)) {
+        violations.push(`${f}: href="${m[1]}" decodes to "${decoded}"`);
+      }
+    }
+  }
+  assert.deepStrictEqual(violations, [],
+    `entity-obfuscated executable-scheme href(s) survived sanitization:\n  ${violations.join('\n  ')}`);
+});
+
+test('the entity-obfuscation payloads from the XSS probe doc are neutralized', () => {
+  const xss = read(siteDir, 'docs/bmad-output-implementation-artifacts-9-9-xss-probe.html');
+  // None of the hostile source strings may survive verbatim as a live href
+  // (whether raw or partially re-escaped) — the attribute must either be
+  // dropped entirely or its decoded form must not be a javascript: URI.
+  for (const m of xss.matchAll(/<a\s[^>]*href\s*=\s*"([^"]*)"/gi)) {
+    const decoded = decodeHtmlEntitiesForUrlCheck(m[1]);
+    assert.ok(!decoded.startsWith('javascript:') && !decoded.startsWith('vbscript:'),
+      `href="${m[1]}" must not decode to an executable scheme (decoded: "${decoded}")`);
+  }
+  // Sanity: prove the probe's raw hostile substrings are not merely
+  // re-encoded/relabeled elsewhere in the page as a live, clickable href.
+  assert.ok(!/href="jav&#x09;ascript:/i.test(xss), 'tab-entity payload must not survive as a raw href');
+  assert.ok(!/href="&#x6a;avascript:/i.test(xss), 'hex-entity payload must not survive as a raw href');
+  assert.ok(!/href="&#106;avascript:/i.test(xss), 'decimal-entity payload must not survive as a raw href');
 });
 
 // ─── AC 9: determinism ───────────────────────────────────────────────────────

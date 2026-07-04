@@ -21,6 +21,7 @@ import * as path from 'path';
 import { KnowledgeManifest, NodeKind, EdgeKind } from '../types.js';
 import { DESIGN_SYSTEM_CSS } from './design-system.js';
 import { FORCE_GRAPH_UMD } from './force-graph-umd.js';
+import { buildNavLinksHtml } from './layout.js';
 
 // ---------------------------------------------------------------------------
 // Node kind → visual style mapping
@@ -189,8 +190,11 @@ function buildLegendHtml(): string {
   for (const kind of ALL_NODE_KINDS) {
     const style = NODE_STYLES[kind];
     const label = NODE_KIND_LABELS[kind];
+    // FR222: --swatch-color feeds the shape-specific CSS above (e.g. the
+    // triangle shape can't use `background`, since its box is 0×0 — the
+    // color has to come from a border, via this custom property instead).
     lines.push(
-      `<li><span class="legend-swatch" style="background:${esc(style.color)}" ` +
+      `<li><span class="legend-swatch" style="background:${esc(style.color)};--swatch-color:${esc(style.color)}" ` +
       `aria-hidden="true" data-shape="${esc(style.shape)}"></span>${esc(label)}</li>`,
     );
   }
@@ -252,6 +256,7 @@ function buildFallbackHtml(manifest: KnowledgeManifest): string {
     '<div class="fallback-links">',
     '<a href="diagrams.html">Generated Diagrams</a>',
     '<a href="orphans.html">Orphan / Gap View</a>',
+    '<a href="search.html">Search</a>',
     '<a href="index.html">Knowledge Atlas Home</a>',
     '</div>',
     '</div>',
@@ -395,6 +400,33 @@ export function renderGraphPage(manifest: KnowledgeManifest, outDir: string): st
   flex-shrink: 0;
 }
 
+/* FR222: the legend swatch shape must match the canvas node shape for that
+   kind (data-shape is emitted per NODE_STYLES) — previously data-shape was
+   emitted but never styled, so every kind rendered as the same square. */
+.legend-swatch[data-shape="circle"] {
+  border-radius: 50%;
+}
+.legend-swatch[data-shape="square"] {
+  border-radius: 2px; /* same as the base rule — explicit for clarity/symmetry */
+}
+.legend-swatch[data-shape="diamond"] {
+  border-radius: 1px;
+  transform: rotate(45deg);
+}
+.legend-swatch[data-shape="triangle"] {
+  width: 0;
+  height: 0;
+  background: transparent !important;
+  border-radius: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 11px solid var(--swatch-color, currentColor);
+}
+.legend-swatch[data-shape="hexagon"] {
+  border-radius: 0;
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+}
+
 .legend-edge {
   display: inline-block;
   width: 20px;
@@ -470,10 +502,15 @@ export function renderGraphPage(manifest: KnowledgeManifest, outDir: string): st
     '<header>',
     `<h1>${title}</h1>`,
     '<p class="subtitle">Knowledge Graph — Interactive Navigation</p>',
+    // SHOULD-FIX #2: same shared Home/Graph/Diagrams/Orphans/Search set as
+    // every other page type (the old hand-rolled nav omitted Search, leaving
+    // no way back to search from the graph view). graph.ts/diagrams.ts/
+    // orphans.ts are always attempted together by generate.ts, so — matching
+    // this page's pre-existing assumption that its siblings exist — the other
+    // two 29.4 pages are always linked; only Graph itself is naturally
+    // omitted (this IS graph.html).
     '<nav aria-label="Site navigation">',
-    '<a href="index.html">Home</a>',
-    '<a href="diagrams.html">Diagrams</a>',
-    '<a href="orphans.html">Orphans &amp; Gaps</a>',
+    buildNavLinksHtml('', { hasGraphPage: false, hasDiagramsPage: true, hasOrphansPage: true }, 'graph'),
     '</nav>',
     '</header>',
     '<main>',
@@ -611,6 +648,56 @@ function buildAppScript(): string {
     return;
   }
 
+  // FR222: distinct shape per entity type (previously color+size only — the
+  // canvas never read NODE_STYLES' shape/data-shape, so every node was a
+  // circle regardless of kind). Traces the path for the node's shape
+  // (embedded per-node from NODE_STYLES server-side) into the 2D canvas
+  // context; shared by both the visible paint and the (invisible,
+  // color-keyed) hit-test paint so click/hover keep working with the new
+  // shapes.
+  function traceNodeShapePath(ctx, shape, x, y, size) {
+    ctx.beginPath();
+    switch (shape) {
+      case 'square': {
+        var s = size;
+        ctx.rect(x - s, y - s, s * 2, s * 2);
+        break;
+      }
+      case 'diamond': {
+        var d = size * 1.15;
+        ctx.moveTo(x, y - d);
+        ctx.lineTo(x + d, y);
+        ctx.lineTo(x, y + d);
+        ctx.lineTo(x - d, y);
+        ctx.closePath();
+        break;
+      }
+      case 'triangle': {
+        var t = size * 1.3;
+        ctx.moveTo(x, y - t);
+        ctx.lineTo(x + t * 0.87, y + t * 0.5);
+        ctx.lineTo(x - t * 0.87, y + t * 0.5);
+        ctx.closePath();
+        break;
+      }
+      case 'hexagon': {
+        var h = size * 1.05;
+        for (var i = 0; i < 6; i++) {
+          var angle = (Math.PI / 3) * i - Math.PI / 6;
+          var px = x + h * Math.cos(angle);
+          var py = y + h * Math.sin(angle);
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        break;
+      }
+      case 'circle':
+      default:
+        ctx.arc(x, y, size, 0, 2 * Math.PI);
+        break;
+    }
+  }
+
   function applyGraphData() {
     var filtered = getFilteredData();
     // Deep-copy to avoid force-graph mutating shared objects
@@ -623,6 +710,24 @@ function buildAppScript(): string {
       .nodeColor(function(n) { return n.color || '#888'; })
       .nodeRelSize(1)
       .nodeVal(function(n) { return (n.size || 6) * (n.size || 6); })
+      // FR222: paint the node as its per-kind shape (circle/square/diamond/
+      // triangle) instead of force-graph's default circle-only rendering.
+      .nodeCanvasObject(function(n, ctx) {
+        var size = n.size || 6;
+        ctx.fillStyle = n.color || '#888';
+        traceNodeShapePath(ctx, n.shape, n.x, n.y, size);
+        ctx.fill();
+      })
+      // Matching hit-test paint: without this, force-graph's click/hover
+      // detection falls back to a generic area that no longer matches the
+      // custom shape drawn above (non-circle nodes would get unreliable
+      // hover/click hit-boxes).
+      .nodePointerAreaPaint(function(n, color, ctx) {
+        var size = (n.size || 6) + 2; // slightly larger — easier to hit
+        ctx.fillStyle = color;
+        traceNodeShapePath(ctx, n.shape, n.x, n.y, size);
+        ctx.fill();
+      })
       .linkSource('source')
       .linkTarget('target')
       .linkColor(function(e) { return e.color || '#aaa'; })

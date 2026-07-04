@@ -26,6 +26,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { pageShell } from './layout.js';
+import type { NavFlags } from './layout.js';
 import { renderDocumentPage } from './document.js';
 import { renderSearchPageHtml } from './search.js';
 import { filePathToSlug, buildSlugMap } from './paths.js';
@@ -55,7 +56,7 @@ function writeHtml(filePath: string, content: string): void {
 // Home page renderer
 // ---------------------------------------------------------------------------
 
-function renderHomePage(manifest: KnowledgeManifest, hasGraphPage: boolean): string {
+function renderHomePage(manifest: KnowledgeManifest, navFlags: NavFlags): string {
   const { projectTitle, generatedAt, counts, nodes, edges } = manifest;
   const escapedTitle = esc(projectTitle);
 
@@ -193,10 +194,19 @@ function renderHomePage(manifest: KnowledgeManifest, hasGraphPage: boolean): str
     '</div>',
   ].join('\n');
 
-  // Graph link is included ONLY if 29.4 has written graph.html into outDir.
-  // (Detected by renderSite before this runs; passed as hasGraphPage.)
-  const graphNavItem = hasGraphPage
+  // Graph/Diagrams/Orphans entry points are included ONLY if 29.4 has written
+  // that page into outDir (detected by renderSite before this runs, passed as
+  // navFlags). Home must surface ALL entry points, not just the graph
+  // (SHOULD-FIX #2 — diagrams.html/orphans.html were previously unreachable
+  // from home).
+  const graphNavItem = navFlags.hasGraphPage
     ? '<li><a href="graph.html">Explore the knowledge graph</a></li>'
+    : '';
+  const diagramsNavItem = navFlags.hasDiagramsPage
+    ? '<li><a href="diagrams.html">View generated diagrams</a></li>'
+    : '';
+  const orphansNavItem = navFlags.hasOrphansPage
+    ? '<li><a href="orphans.html">View orphans &amp; gaps</a></li>'
     : '';
 
   const quickNavHtml = [
@@ -205,6 +215,8 @@ function renderHomePage(manifest: KnowledgeManifest, hasGraphPage: boolean): str
     '<ul>',
     '<li><a href="search.html">Search all documents and entities</a></li>',
     graphNavItem,
+    diagramsNavItem,
+    orphansNavItem,
     '</ul>',
     '</div>',
   ].filter(Boolean).join('\n');
@@ -226,6 +238,7 @@ function renderHomePage(manifest: KnowledgeManifest, hasGraphPage: boolean): str
     body,
     manifest,
     pageType: 'home',
+    navFlags,
     // scripts intentionally omitted → home page has zero JS
   });
 }
@@ -254,10 +267,21 @@ export function renderSite(manifest: KnowledgeManifest, outDir: string): string[
   const fileIds = manifest.files.map(f => f.path);
   const slugMap = buildSlugMap(fileIds);
 
+  // SHOULD-FIX #2: which 29.4 pages (graph/diagrams/orphans) exist, so every
+  // page type below can share ONE consistent nav (Home · Graph · Diagrams ·
+  // Orphans · Search) instead of the previous per-page-type divergent set.
+  // generate.ts always writes graph.html/diagrams.html/orphans.html BEFORE
+  // calling renderSite, so this check is reliable here.
+  const navFlags: NavFlags = {
+    hasGraphPage: fs.existsSync(path.join(outDir, 'graph.html')),
+    hasDiagramsPage: fs.existsSync(path.join(outDir, 'diagrams.html')),
+    hasOrphansPage: fs.existsSync(path.join(outDir, 'orphans.html')),
+  };
+
   // Step 1: Render document pages (reading views). Zero JS required.
   for (const file of manifest.files) {
     const slug = slugMap.get(file.path) ?? filePathToSlug(file.path);
-    const { html, articleText } = renderDocumentPage(file, manifest, manifest.projectRoot);
+    const { html, articleText } = renderDocumentPage(file, manifest, manifest.projectRoot, navFlags);
     const relPath = `docs/${slug}.html`;
     writeHtml(path.join(outDir, relPath), html);
     written.push(relPath);
@@ -268,14 +292,13 @@ export function renderSite(manifest: KnowledgeManifest, outDir: string): string[
   }
 
   // Step 2: Render search.html (offline lunr search; PE fallback).
-  const searchHtml = renderSearchPageHtml(manifest, docBodies);
+  const searchHtml = renderSearchPageHtml(manifest, docBodies, navFlags);
   writeHtml(path.join(outDir, 'search.html'), searchHtml);
   written.push('search.html');
 
-  // Step 3: Render index.html (home page — NO <script>/src=). Link to
-  // graph.html only if 29.4 has already written it into outDir (graceful).
-  const hasGraphPage = fs.existsSync(path.join(outDir, 'graph.html'));
-  const indexHtml = renderHomePage(manifest, hasGraphPage);
+  // Step 3: Render index.html (home page — NO <script>/src=). Surfaces
+  // Graph/Diagrams/Orphans/Search as entry points whenever those pages exist.
+  const indexHtml = renderHomePage(manifest, navFlags);
   writeHtml(path.join(outDir, 'index.html'), indexHtml);
   written.push('index.html');
 

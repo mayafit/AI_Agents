@@ -26,6 +26,8 @@
 
 import { DESIGN_SYSTEM_CSS } from './design-system.js';
 import { filePathToSlug, buildSlugMap } from './paths.js';
+import { buildNavLinksHtml } from './layout.js';
+import type { NavFlags } from './layout.js';
 import type { KnowledgeManifest } from '../types.js';
 
 // lunr is bundled by esbuild for build-time index construction.
@@ -153,11 +155,18 @@ export function buildSearchIndex(
 
   // NFR64 / XSS: the index + docs are inlined inside a <script> block, so any
   // content containing "</script>" could break out of the script and execute.
-  // Unicode-escape every "<" — this keeps the string valid JSON that
-  // JSON.parse decodes identically, but no "</script>" token survives in the
-  // HTML. Applied to BOTH docs and the lunr index (defensive).
+  // Unicode-escape "<" and ">" — this keeps the string valid JSON that
+  // JSON.parse decodes identically, but no "</script>"/"<!--" token survives
+  // in the HTML. U+2028/U+2029 (LINE/PARAGRAPH SEPARATOR) are valid inside a
+  // JSON string but are illegal, script-terminating raw characters in a JS
+  // string literal — escape those too. Matches graph.ts's embedded-JSON
+  // escaping (NICE-TO-HAVE #4); applied to BOTH docs and the lunr index.
   const safeJson = (value: unknown): string =>
-    JSON.stringify(value).replace(/</g, '\\u003c');
+    JSON.stringify(value)
+      .replace(/</g, '\\u003c')
+      .replace(/>/g, '\\u003e')
+      .replace(/\u2028/g, '\\u2028')
+      .replace(/\u2029/g, '\\u2029');
 
   const indexJson = safeJson(idx);
   const docsJson = safeJson(docs);
@@ -263,6 +272,7 @@ const SEARCH_UI_SCRIPT = [
 export function renderSearchPageHtml(
   manifest: KnowledgeManifest,
   docBodies: Map<string, string>,
+  navFlags?: NavFlags,
 ): string {
   const { projectTitle, generatedAt } = manifest;
   const escapedTitle = esc(projectTitle);
@@ -300,8 +310,7 @@ export function renderSearchPageHtml(
     '<div class="page-wrap">',
     '<nav class="site-nav" aria-label="Site navigation">',
     `<a href="index.html" class="nav-brand">${escapedTitle}</a>`,
-    '<a href="index.html">Home</a>',
-    '<a href="search.html" aria-current="page">Search</a>',
+    buildNavLinksHtml('', navFlags, 'search'),
     '</nav>',
     '<main id="main-content" tabindex="-1">',
     '<div class="content-wrap">',

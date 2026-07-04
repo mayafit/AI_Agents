@@ -108,6 +108,12 @@ export const DESIGN_SYSTEM_CSS: string = `\
   top: 0;
 }
 
+/* FR223 — smooth scrolling for in-page anchor jumps (TOC, backlinks, orphan
+   summary links). Guarded below by prefers-reduced-motion. */
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: var(--font);
   background: var(--paper);
@@ -606,6 +612,9 @@ footer {
 /* ── Reduced motion ─────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;

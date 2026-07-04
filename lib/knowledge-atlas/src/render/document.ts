@@ -34,6 +34,7 @@ import * as path from 'path';
 import MarkdownIt from 'markdown-it';
 import { headingToSlug } from '../extract/slug.js';
 import { pageShell } from './layout.js';
+import type { NavFlags } from './layout.js';
 import { gatherBacklinks, renderBacklinksHtml } from './backlinks.js';
 import { linkifyHtml, sanitizeHtml } from './linkify.js';
 import { resolveSlug } from './paths.js';
@@ -195,6 +196,8 @@ function getFileNodes(fileId: string, nodes: GraphNode[]): GraphNode[] {
  * @param fileRec      The file record from the manifest.
  * @param manifest     The full knowledge manifest.
  * @param projectRoot  Absolute path to the project root (to read markdown files).
+ * @param navFlags     Which 29.4 pages (graph/diagrams/orphans) exist in this
+ *                      build, so the shared nav can link to them (SHOULD-FIX #2).
  * @returns `{ html, articleText }` — the full page HTML plus the plain-text of
  *          JUST the rendered article body (no nav/footer/TOC/status chrome), so
  *          the search index reflects document content, not shell boilerplate.
@@ -210,6 +213,7 @@ export function renderDocumentPage(
   fileRec: FileRecord,
   manifest: KnowledgeManifest,
   projectRoot: string,
+  navFlags?: NavFlags,
 ): RenderedDocument {
   const absPath = path.join(projectRoot, fileRec.path);
   const title = fileTitle(fileRec.path);
@@ -314,6 +318,7 @@ export function renderDocumentPage(
     manifest,
     pageType: 'document',
     baseHref: '../',
+    navFlags,
   });
 
   // Article-only plain text for the search index (SF-1): strip tags from the

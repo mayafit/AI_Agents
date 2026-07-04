@@ -266,16 +266,75 @@ const CONTENT_REMOVAL_TAGS = new Set([
 ]);
 
 /**
+ * Decode HTML character references and strip URL-parser-ignored whitespace,
+ * mirroring what the BROWSER does when it HTML-decodes an attribute value
+ * before parsing it as a URL. Used ONLY to detect the true scheme for the
+ * allowlist test below — the original (still-encoded) attribute text is what
+ * gets emitted to output; we never rewrite the href itself here.
+ *
+ * MUST-FIX #1 (stored XSS): the previous `isSafeUrl` tested the RAW attribute
+ * text, but the browser HTML-decodes entities AFTER sanitization runs and
+ * before it navigates. Two independent bypasses existed:
+ *   1. `javascript&#58;alert(1)` has no literal ':' pre-decode, so the old
+ *      code's `colon === -1` branch treated it as a schemeless relative path.
+ *   2. `jav&#x09;ascript:alert(1)` contains a literal '#' inside the numeric
+ *      reference `&#x09;` itself — the old "':' precedes a '/','?','#' → it's
+ *      a path colon, not a scheme colon" heuristic saw that '#' and matched
+ *      the colon-is-in-a-path branch, waving through an actual scheme colon.
+ * Decoding entities (and stripping the tab/newline/control noise browsers
+ * also discard mid-URL) BEFORE running the heuristics closes both: the probe
+ * now sees exactly the string the browser will act on.
+ */
+function decodeForSchemeProbe(value: string): string {
+  return value
+    // Hex numeric refs: &#x6a; / &#X6A (trailing ';' optional per the HTML
+    // spec's legacy numeric-reference parsing).
+    .replace(/&#x([0-9a-f]+);?/gi, (_m, hex: string) => {
+      const code = parseInt(hex, 16);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : '';
+    })
+    // Decimal numeric refs: &#58; / &#58
+    .replace(/&#(\d+);?/g, (_m, dec: string) => {
+      const code = parseInt(dec, 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : '';
+    })
+    // The few NAMED character references that can reassemble a scheme-
+    // relevant character (colon, or whitespace the URL parser discards).
+    .replace(/&colon;/gi, ':')
+    .replace(/&tab;/gi, '\t')
+    .replace(/&newline;/gi, '\n')
+    // Any other named reference (&amp; &nbsp; etc.) is dropped — it cannot
+    // reconstruct a dangerous scheme, since the only characters a URL parser
+    // treats specially (colon, tab/CR/LF, C0 controls, space) are already
+    // decoded above or stripped below.
+    .replace(/&[a-z][a-z0-9]*;/gi, '')
+    // Browsers ignore ASCII tab/newline/CR anywhere in a URL and strip
+    // leading/trailing C0 controls + space before scheme detection. Removing
+    // all C0 controls/space/tab/newline everywhere is a superset of that and
+    // can only make the probe MORE conservative (never hides a real scheme).
+    .replace(/[\x00-\x20]+/g, '')
+    .toLowerCase();
+}
+
+/**
  * Allowlist test for href/src/action values. Returns true ONLY for URLs that
  * cannot execute script: relative paths (`./x`, `../x`, `x`, `/x`), in-page
  * anchors (`#x`), query-only (`?x`), and the mailto:/tel: schemes. Any value
  * whose first URL delimiter is a `:` (i.e. an explicit scheme other than the
  * two allowed) is rejected — this blocks javascript:, vbscript:, data:, file:,
  * and any future executable scheme without a denylist to maintain.
+ *
+ * The scheme test runs against the ENTITY-DECODED probe (see
+ * decodeForSchemeProbe above), not the raw attribute text, so an
+ * HTML-entity-obfuscated scheme cannot slip past the allowlist.
  */
 function isSafeUrl(value: string): boolean {
-  const v = value.trim();
-  if (v === '') return true; // empty href/src — harmless, keep as-is
+  const raw = value.trim();
+  if (raw === '') return true; // empty href/src — harmless, keep as-is
+
+  const v = decodeForSchemeProbe(raw);
+  if (v === '') return true;
+
   // Relative / anchor / query forms never carry a scheme.
   if (/^[.\/#?]/.test(v)) return true;
   // A scheme is text before the first ':' that precedes any '/', '?', or '#'.
@@ -283,7 +342,7 @@ function isSafeUrl(value: string): boolean {
   if (colon === -1) return true; // no scheme → relative path
   const slash = v.search(/[/?#]/);
   if (slash !== -1 && slash < colon) return true; // ':' is in a path segment, not a scheme
-  const scheme = v.slice(0, colon).toLowerCase();
+  const scheme = v.slice(0, colon);
   return scheme === 'mailto' || scheme === 'tel';
 }
 
@@ -298,8 +357,14 @@ function isSafeUrl(value: string): boolean {
 export function sanitizeHtml(html: string): string {
   if (!html) return html;
 
+  // Step 0: Strip HTML comments entirely, content included (NICE-TO-HAVE #5).
+  // Comments are a known mutation-XSS surface (parser disagreements on how a
+  // comment interacts with surrounding markup on re-parse/innerHTML), and
+  // authored/rendered doc content has no legitimate need for them to survive
+  // into the shipped page. Runs before all other steps.
+  let result = html.replace(/<!--[\s\S]*?-->/g, '');
+
   // Step 1: Remove content-removal tags and their inner content
-  let result = html;
   for (const tag of CONTENT_REMOVAL_TAGS) {
     // Remove both self-closing and paired tags with content
     // Use a non-greedy match to handle multiple occurrences
@@ -311,7 +376,10 @@ export function sanitizeHtml(html: string): string {
 
   // Step 2: Process remaining tags
   result = result.replace(/<(!?\/?[\w:-]+)([^>]*)>/g, (fullMatch, tagName: string, attrs: string) => {
-    // Comments — keep (they're harmless, <!--[if IE]> etc.)
+    // Real `<!-- ... -->` comments are already stripped in Step 0. Anything
+    // still matching `!...` here is a non-comment bang construct (e.g. a
+    // stray `<!DOCTYPE>` or an unterminated `<!--` with no closing `-->`) —
+    // pass it through unchanged; it carries no executable attribute surface.
     if (tagName.startsWith('!')) return fullMatch;
 
     const lcTag = tagName.toLowerCase().replace(/^\//, '');
