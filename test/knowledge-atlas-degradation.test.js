@@ -472,6 +472,47 @@ test('NFR64 consolidated: no XSS payload from DOC CONTENT survives in any render
     `NFR64 violations (doc-content XSS payload survived):\n  ${violations.join('\n  ')}`);
 });
 
+// MUST-FIX #1 (adversarial review, blocks release): the old isSafeUrl() tested
+// the RAW href/src attribute text, but browsers HTML-decode the attribute
+// AFTER our sanitizer runs and BEFORE navigating. HTML-entity-obfuscated
+// schemes (`javascript&#58;alert(1)`, `jav&#x09;ascript:alert(1)`,
+// `&#x6a;avascript:alert(1)`, `&#106;avascript:alert(1)` — all added to
+// xss-injection-story.md above) decode to a literal `javascript:` URI that
+// fires on click despite passing the old check. This test decodes entities
+// the same way a browser would BEFORE asserting, closing the blind spot the
+// plain-text "javascript:" substring checks above have.
+function decodeHtmlEntitiesForUrlCheck(v) {
+  return v
+    .replace(/&#x([0-9a-f]+);?/gi, (_m, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);?/g, (_m, dec) => String.fromCodePoint(parseInt(dec, 10)))
+    .replace(/&colon;/gi, ':')
+    .replace(/&tab;/gi, '\t')
+    .replace(/&newline;/gi, '\n')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/[\x00-\x20]+/g, '')
+    .toLowerCase();
+}
+
+test('MUST-FIX #1: HTML-entity-obfuscated javascript:/vbscript: hrefs never decode to an executable scheme in ANY rendered page', () => {
+  if (!siteDir) throw new Error('siteDir not available (prior test failed)');
+  const allHtmlFiles = collectFiles(siteDir).filter(f => f.endsWith('.html'));
+  const violations = [];
+  for (const f of allHtmlFiles) {
+    const html = fs.readFileSync(path.join(siteDir, f), 'utf-8');
+    for (const m of html.matchAll(/<a\s[^>]*href\s*=\s*"([^"]*)"/gi)) {
+      const decoded = decodeHtmlEntitiesForUrlCheck(m[1]);
+      if (/^(javascript|vbscript|data):/.test(decoded)) {
+        violations.push(`${f}: href="${m[1]}" decodes to "${decoded}"`);
+      }
+    }
+  }
+  assert.deepStrictEqual(violations, [],
+    `entity-obfuscated executable-scheme href(s) survived sanitization:\n  ${violations.join('\n  ')}`);
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Cleanup
 // ─────────────────────────────────────────────────────────────────────────────

@@ -21,6 +21,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { KnowledgeManifest, GraphNode, GraphEdge, NodeKind } from '../types.js';
 import { DESIGN_SYSTEM_CSS } from './design-system.js';
+import { buildNavLinksHtml } from './layout.js';
 
 // ---------------------------------------------------------------------------
 // HTML escape
@@ -687,10 +688,10 @@ export function renderDiagrams(manifest: KnowledgeManifest, outDir: string): str
     '<header>',
     `<h1>${title}</h1>`,
     '<p class="subtitle">Generated Diagrams</p>',
+    // SHOULD-FIX #2: shared Home/Graph/Diagrams/Orphans/Search nav set (the
+    // old hand-rolled nav omitted Search — a dead end back to search from here).
     '<nav aria-label="Site navigation">',
-    '<a href="index.html">Home</a>',
-    '<a href="graph.html">Interactive Graph</a>',
-    '<a href="orphans.html">Orphans &amp; Gaps</a>',
+    buildNavLinksHtml('', { hasGraphPage: true, hasDiagramsPage: false, hasOrphansPage: true }, 'diagrams'),
     '</nav>',
     '</header>',
     '<main>',

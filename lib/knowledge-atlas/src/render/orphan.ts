@@ -24,6 +24,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { KnowledgeManifest, GraphNode } from '../types.js';
 import { DESIGN_SYSTEM_CSS } from './design-system.js';
+import { buildNavLinksHtml } from './layout.js';
 
 // ---------------------------------------------------------------------------
 // HTML escape
@@ -507,10 +508,10 @@ export function renderOrphanPage(manifest: KnowledgeManifest, outDir: string): s
     '<header>',
     `<h1>${title}</h1>`,
     '<p class="subtitle">Orphans &amp; Gaps</p>',
+    // SHOULD-FIX #2: shared Home/Graph/Diagrams/Orphans/Search nav set (the
+    // old hand-rolled nav omitted Search — a dead end back to search from here).
     '<nav aria-label="Site navigation">',
-    '<a href="index.html">Home</a>',
-    '<a href="graph.html">Interactive Graph</a>',
-    '<a href="diagrams.html">Diagrams</a>',
+    buildNavLinksHtml('', { hasGraphPage: true, hasDiagramsPage: true, hasOrphansPage: false }, 'orphans'),
     '</nav>',
     '</header>',
     '<main>',

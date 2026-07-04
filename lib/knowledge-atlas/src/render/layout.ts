@@ -23,11 +23,61 @@ import type { KnowledgeManifest } from '../types.js';
 // Types
 // ---------------------------------------------------------------------------
 
+/**
+ * Which of the 29.4 pages (graph.html / diagrams.html / orphans.html) exist
+ * in this build, so the shared nav can link to them without producing a dead
+ * link. Search and Home always exist (renderSite always writes both), so they
+ * need no flag. Callers compute these via `fs.existsSync` against outDir —
+ * 29.4 pages are always written BEFORE the 29.3/site pages that consume this
+ * (see generate.ts), so the check is reliable by the time any of these pages
+ * render (SHOULD-FIX #2).
+ */
+export interface NavFlags {
+  hasGraphPage: boolean;
+  hasDiagramsPage: boolean;
+  hasOrphansPage: boolean;
+}
+
+const NO_NAV_FLAGS: NavFlags = { hasGraphPage: false, hasDiagramsPage: false, hasOrphansPage: false };
+
+/**
+ * Build the shared list of site nav `<a>` links: Home · Graph · Diagrams ·
+ * Orphans · Search — in that order, every page type includes the same set
+ * (SHOULD-FIX #2: previously the 29.4 pages hand-rolled a divergent nav that
+ * omitted Search, and document/home/search pages omitted Graph/Diagrams/
+ * Orphans entirely, leaving diagrams.html/orphans.html unreachable from home
+ * or any reading/search page). Graph/Diagrams/Orphans links are included only
+ * when that page actually exists in this build (see NavFlags above); Home and
+ * Search are unconditional.
+ *
+ * `current` marks the active page with aria-current="page" for a11y and is
+ * purely cosmetic — omit it for hand-rolled pages that don't track it.
+ */
+export function buildNavLinksHtml(
+  baseHref: string,
+  flags: NavFlags = NO_NAV_FLAGS,
+  current?: 'home' | 'graph' | 'diagrams' | 'orphans' | 'search' | 'document',
+): string {
+  const base = esc(baseHref);
+  const link = (href: string, label: string, key: NonNullable<typeof current>): string => {
+    const aria = current === key ? ' aria-current="page"' : '';
+    return `<a href="${base}${href}"${aria}>${label}</a>`;
+  };
+  const links: string[] = [link('index.html', 'Home', 'home')];
+  if (flags.hasGraphPage) links.push(link('graph.html', 'Graph', 'graph'));
+  if (flags.hasDiagramsPage) links.push(link('diagrams.html', 'Diagrams', 'diagrams'));
+  if (flags.hasOrphansPage) links.push(link('orphans.html', 'Orphans', 'orphans'));
+  links.push(link('search.html', 'Search', 'search'));
+  return links.join('\n');
+}
+
 export interface PageShellOpts {
   title: string;
   body: string;
-  /** Optional extra nav items HTML (appended after default nav links). */
+  /** Optional extra nav items HTML (appended after the shared nav links). */
   nav?: string;
+  /** Which 29.4 pages exist, so the shared nav can include Graph/Diagrams/Orphans. */
+  navFlags?: NavFlags;
   manifest: KnowledgeManifest;
   /** Affects body class for per-page styling. */
   pageType?: 'home' | 'document' | 'search';
@@ -78,7 +128,7 @@ export function renderSearchBoxHtml(baseHref = ''): string {
 // ---------------------------------------------------------------------------
 
 export function pageShell(opts: PageShellOpts): string {
-  const { title, body, manifest, pageType = 'home', scripts = [], nav, baseHref = '' } = opts;
+  const { title, body, manifest, pageType = 'home', scripts = [], nav, navFlags, baseHref = '' } = opts;
   const { projectTitle, generatedAt } = manifest;
 
   const escapedTitle = esc(title);
@@ -87,6 +137,8 @@ export function pageShell(opts: PageShellOpts): string {
   const escapedBase = esc(baseHref);
   const bodyClass = `page-type-${pageType}`;
 
+  const navCurrent = pageType === 'home' ? 'home' : pageType === 'search' ? 'search' : 'document';
+  const navLinksHtml = buildNavLinksHtml(baseHref, navFlags, navCurrent);
   const navExtras = nav ? `\n${nav}` : '';
   const scriptBlocks = scripts.length > 0 ? `\n${scripts.join('\n')}` : '';
 
@@ -108,8 +160,7 @@ export function pageShell(opts: PageShellOpts): string {
     '<div class="page-wrap">',
     '<nav class="site-nav" aria-label="Site navigation">',
     `<a href="${escapedBase}index.html" class="nav-brand">${escapedProjectTitle}</a>`,
-    `<a href="${escapedBase}index.html">Home</a>`,
-    `<a href="${escapedBase}search.html">Search</a>`,
+    navLinksHtml,
     navExtras,
     renderSearchBoxHtml(baseHref),
     '</nav>',

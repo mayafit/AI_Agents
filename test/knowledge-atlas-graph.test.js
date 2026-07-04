@@ -806,6 +806,54 @@ test('edge-kind filter restricts nodes to matching-edge endpoints (finding #5)',
   );
 });
 
+// ─── FR222: distinct shape per entity type ──────────────────────────────────
+console.log('\n--- FR222: node shape rendering ---');
+
+test('the force-graph canvas config paints a distinct shape per node (not color+size only)', () => {
+  if (!graphHtml) throw new Error('graphHtml not loaded');
+  // Before the fix, the canvas only called .nodeColor()/.nodeVal() — shape was
+  // never read from NODE_STYLES/window.__ATLAS_GRAPH__ node.shape at all.
+  assert.ok(graphHtml.includes('.nodeCanvasObject('),
+    'graph.html app script must register a nodeCanvasObject to draw per-kind shapes');
+  assert.ok(graphHtml.includes('.nodePointerAreaPaint('),
+    'graph.html app script must register a matching nodePointerAreaPaint (so click/hover ' +
+    'hit-testing still works for non-circle shapes)');
+  assert.ok(/traceNodeShapePath\([^)]*n\.shape/.test(graphHtml),
+    'the canvas draw path must be driven by the per-node `shape` field embedded in __ATLAS_GRAPH__');
+});
+
+test('the shape-tracing helper distinguishes circle/square/diamond/triangle', () => {
+  if (!graphHtml) throw new Error('graphHtml not loaded');
+  for (const shape of ['square', 'diamond', 'triangle']) {
+    assert.ok(graphHtml.includes(`case '${shape}':`),
+      `graph.html app script must have a distinct draw case for shape "${shape}"`);
+  }
+});
+
+test('legend swatches carry data-shape and CSS renders a distinct shape per data-shape value', () => {
+  if (!graphHtml) throw new Error('graphHtml not loaded');
+  // Every NODE_STYLES shape actually used must appear as a data-shape attribute...
+  for (const shape of ['circle', 'square', 'diamond', 'triangle']) {
+    assert.ok(new RegExp(`data-shape="${shape}"`).test(graphHtml),
+      `legend must tag a swatch with data-shape="${shape}"`);
+    // ...and the inline <style> block must style that data-shape selector (the
+    // pre-fix bug: data-shape was emitted but never matched by any CSS rule,
+    // so every swatch rendered identically regardless of the attribute).
+    assert.ok(new RegExp(`\\.legend-swatch\\[data-shape="${shape}"\\]`).test(graphHtml),
+      `graph.html <style> must have a rule for .legend-swatch[data-shape="${shape}"]`);
+  }
+});
+
+test('__ATLAS_GRAPH__ nodes retain a shape field the canvas can consume', () => {
+  if (!graphHtml) throw new Error('graphHtml not loaded');
+  const data = extractAtlasGraph(graphHtml);
+  assert.ok(data.nodes.length > 0, 'must have nodes to check');
+  for (const node of data.nodes) {
+    assert.ok(typeof node.shape === 'string' && node.shape.length > 0,
+      `node ${node.id} must carry a non-empty shape string for canvas rendering`);
+  }
+});
+
 // ─── Cleanup ─────────────────────────────────────────────────────────────────
 for (const d of tempDirs) {
   try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* swallow */ }

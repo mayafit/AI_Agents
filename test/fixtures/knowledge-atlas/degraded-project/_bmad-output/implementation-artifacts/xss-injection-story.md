@@ -36,6 +36,19 @@ This story contains injected attack payloads that must be neutralized by the san
 
 <object data="https://evil.example.com/malicious.swf"></object>
 
+## Entity-Obfuscated JavaScript URL Injection (MUST-FIX #1)
+
+These decode to `javascript:alert(1)` only AFTER the browser HTML-decodes the
+attribute — a raw-text scheme check misses them.
+
+[Markdown decimal-entity colon](javascript&#58;alert(1))
+
+<a href="jav&#x09;ascript:alert(1)">hex-entity tab obfuscation</a>
+
+<a href="&#x6a;avascript:alert(1)">hex-entity leading char</a>
+
+<a href="&#106;avascript:alert(1)">decimal-entity leading char</a>
+
 ## Normal Content
 
 This is normal text that should appear in the rendered page.
