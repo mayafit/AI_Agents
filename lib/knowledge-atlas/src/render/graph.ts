@@ -22,6 +22,7 @@ import { KnowledgeManifest, NodeKind, EdgeKind } from '../types.js';
 import { DESIGN_SYSTEM_CSS } from './design-system.js';
 import { FORCE_GRAPH_UMD } from './force-graph-umd.js';
 import { buildNavLinksHtml } from './layout.js';
+import { buildDocPageMap } from './paths.js';
 
 // ---------------------------------------------------------------------------
 // Node kind → visual style mapping
@@ -131,6 +132,16 @@ interface GraphNode {
   shape: string;
   size: number;
   status: string | undefined;
+  /**
+   * Server-resolved rendered doc-page path ("docs/<slug>.html"), via the
+   * shared 29.3 resolver (paths.ts::buildDocPageMap) — mirrors the `page`
+   * field search.ts already embeds per search entry. `undefined` when this
+   * node's fileId has no corresponding rendered page (e.g. a knowledge-graph-
+   * only node): the client MUST treat that as non-navigable rather than
+   * falling back to the raw fileId (which is a `.md` source path, not a site
+   * URL, and would 404).
+   */
+  page: string | undefined;
 }
 
 interface GraphEdge {
@@ -142,6 +153,14 @@ interface GraphEdge {
 }
 
 function buildGraphData(manifest: KnowledgeManifest): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  // fileId -> rendered doc-page path ("docs/<slug>.html"), via the shared
+  // 29.3 resolver (paths.ts). This is the ONLY thing the client should ever
+  // navigate to — the raw fileId is a `.md` source path that does not exist
+  // in the generated static site (Epic 29 bug fix). Resolved once here
+  // (rather than per-node via docPageRelPath) to avoid rebuilding the slug
+  // map for every node.
+  const docPages = buildDocPageMap(manifest.files.map(f => f.path));
+
   const nodes: GraphNode[] = manifest.nodes.map(n => {
     const style = NODE_STYLES[n.kind] ?? NODE_STYLES.story;
     return {
@@ -156,6 +175,9 @@ function buildGraphData(manifest: KnowledgeManifest): { nodes: GraphNode[]; edge
       shape: style.shape,
       size: style.size,
       status: n.status,
+      // undefined when this fileId has no rendered doc page (KG-only node) —
+      // the client's onNodeClick must no-op rather than navigate to a raw path.
+      page: docPages.get(n.fileId),
     };
   });
 
@@ -735,16 +757,26 @@ function buildAppScript(): string {
       .linkDirectionalArrowRelPos(1)
       .linkCurvature(0.1)
       .onNodeClick(function(n) {
-        // Navigate to the reading view: fileId#anchor.
-        // SECURITY (finding #2): reject any URI scheme (javascript:, data:, http:)
-        // and protocol-relative paths so a hostile fileId cannot execute or
-        // navigate off-origin. fileIds are relative document paths only.
-        var raw = n.fileId || '';
-        if (/^[a-zA-Z][a-zA-Z0-9+.\\-]*:/.test(raw) || /^\\/\\//.test(raw)) { return; }
-        var href = raw + (n.anchor ? '#' + n.anchor : '');
+        // Navigate to the reading view via the server-resolved doc page (the
+        // 'page' field, e.g. "docs/<slug>.html"), NOT the raw fileId — the
+        // raw fileId is a '.md' source path in the project and does not exist
+        // in the generated static site (Epic 29 bug fix). Nodes with no
+        // resolvable page (e.g. a knowledge-graph-only node with no rendered
+        // doc) must never navigate anywhere — no-op.
+        var page = n.page || '';
+        if (!page) { return; }
+        // SECURITY (finding #2, kept as defense-in-depth): reject any URI
+        // scheme (javascript:, data:, http:) and protocol-relative paths so a
+        // hostile/malformed page value cannot execute or navigate off-origin.
+        if (/^[a-zA-Z][a-zA-Z0-9+.\\-]*:/.test(page) || /^\\/\\//.test(page)) { return; }
+        var href = page + (n.anchor ? '#' + n.anchor : '');
         window.location.href = href;
       })
       .onNodeHover(function(n) {
+        // Distinct cursor hint: pointer only over nodes that actually
+        // navigate somewhere (have a resolved page); default cursor otherwise
+        // (secondary to correctness, but signals non-clickable nodes clearly).
+        if (container) container.style.cursor = (n && n.page) ? 'pointer' : 'default';
         if (!tooltip) return;
         if (!n) { tooltip.style.display = 'none'; lastHoverNode = null; return; }
         lastHoverNode = n;

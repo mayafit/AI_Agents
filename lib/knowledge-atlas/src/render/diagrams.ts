@@ -22,6 +22,7 @@ import * as path from 'path';
 import { KnowledgeManifest, GraphNode, GraphEdge, NodeKind } from '../types.js';
 import { DESIGN_SYSTEM_CSS } from './design-system.js';
 import { buildNavLinksHtml } from './layout.js';
+import { buildDocPageMap } from './paths.js';
 
 // ---------------------------------------------------------------------------
 // HTML escape
@@ -89,9 +90,36 @@ function statusBadge(status: string | undefined): string {
 // Node link helper
 // ---------------------------------------------------------------------------
 
-function nodeLink(node: GraphNode): string {
-  const base = safePath(node.fileId);
-  const href = base === '#invalid' ? base : base + (node.anchor ? '#' + node.anchor : '');
+/**
+ * Render a link to a node's rendered reading-view page (docs/<slug>.html),
+ * resolved via the shared 29.3 resolver (paths.ts::buildDocPageMap) — NOT the
+ * raw source fileId, which is a `.md` path in the project and does not exist
+ * in the generated static site.
+ *
+ * `docPages` maps fileId -> "docs/<slug>.html" for every fileId that has a
+ * rendered doc page. A node whose fileId is absent from that map (e.g. a
+ * knowledge-graph-only node with no corresponding scanned document) has no
+ * page to link to; it renders as non-clickable text instead of a live href
+ * that would 404 (mirrors backlinks.ts's dangling-backlink treatment).
+ */
+function nodeLink(node: GraphNode, docPages: Map<string, string>): string {
+  const page = docPages.get(node.fileId);
+  if (!page) {
+    return (
+      `<span class="node-link node-link-nodoc" aria-disabled="true" ` +
+      `aria-label="${esc(node.label)} (${esc(node.kind)}, no page)">${esc(node.label)}</span>`
+    );
+  }
+  const base = safePath(page);
+  if (base === '#invalid') {
+    // Defense-in-depth: page is server-resolved ("docs/<slug>.html") and can
+    // never actually trip safePath's scheme/protocol-relative checks.
+    return (
+      `<span class="node-link node-link-nodoc" aria-disabled="true" ` +
+      `aria-label="${esc(node.label)} (${esc(node.kind)}, no page)">${esc(node.label)}</span>`
+    );
+  }
+  const href = base + (node.anchor ? '#' + node.anchor : '');
   return `<a href="${esc(href)}" class="node-link" aria-label="${esc(node.label)} (${esc(node.kind)})">${esc(node.label)}</a>`;
 }
 
@@ -104,7 +132,7 @@ function nodeLink(node: GraphNode): string {
  * Shows the chain: Capability → Requirements/NFR → Epic → Story → Bug → Retrospective
  * as a swimlane table with connected rows.
  */
-function buildTraceabilitySpine(manifest: KnowledgeManifest): string {
+function buildTraceabilitySpine(manifest: KnowledgeManifest, docPages: Map<string, string>): string {
   const nodes = manifest.nodes;
   const edges = manifest.edges;
 
@@ -218,7 +246,7 @@ function buildTraceabilitySpine(manifest: KnowledgeManifest): string {
         }
         lines.push(
           `<td class="spine-cell" style="border-left:2px solid ${esc(nodeColor(node.kind))}">` +
-          `${nodeLink(node)}${badge}${connector}</td>`,
+          `${nodeLink(node, docPages)}${badge}${connector}</td>`,
         );
       }
     }
@@ -233,7 +261,7 @@ function buildTraceabilitySpine(manifest: KnowledgeManifest): string {
 // 2. Epic → Story trees
 // ---------------------------------------------------------------------------
 
-function buildEpicStoryTrees(manifest: KnowledgeManifest): string {
+function buildEpicStoryTrees(manifest: KnowledgeManifest, docPages: Map<string, string>): string {
   const nodes = manifest.nodes;
   const edges = manifest.edges;
 
@@ -290,7 +318,7 @@ function buildEpicStoryTrees(manifest: KnowledgeManifest): string {
       `<div class="epic-tree" aria-label="Epic: ${esc(epic.label)}">`,
       `<div class="epic-root" style="border-left:4px solid ${esc(color)}">`,
       `<span class="epic-icon" aria-hidden="true">&#9733;</span>`,
-      `${nodeLink(epic)}${statusBadge(epic.status)}`,
+      `${nodeLink(epic, docPages)}${statusBadge(epic.status)}`,
       '</div>',
     );
 
@@ -301,7 +329,7 @@ function buildEpicStoryTrees(manifest: KnowledgeManifest): string {
       for (const story of epicStoryList) {
         lines.push(
           `<li class="story-item" style="border-left:2px solid ${esc(nodeColor(story.kind))}">` +
-          `${nodeLink(story)}${statusBadge(story.status)}</li>`,
+          `${nodeLink(story, docPages)}${statusBadge(story.status)}</li>`,
         );
       }
       lines.push('</ul>');
@@ -331,7 +359,7 @@ const STATUS_LABELS: Record<LifecycleStatus, string> = {
   done:           'Done',
 };
 
-function buildStatusBoard(manifest: KnowledgeManifest): string {
+function buildStatusBoard(manifest: KnowledgeManifest, docPages: Map<string, string>): string {
   const nodes = manifest.nodes;
 
   // Collect story + bug nodes by status
@@ -387,7 +415,7 @@ function buildStatusBoard(manifest: KnowledgeManifest): string {
         lines.push(
           `<li class="status-card" aria-label="${esc(node.label)} (${esc(node.kind)})">`,
           `<span class="card-kind" style="color:${esc(nodeColor(node.kind))}" aria-hidden="true">${esc(node.kind)}</span>`,
-          nodeLink(node),
+          nodeLink(node, docPages),
           '</li>',
         );
       }
@@ -410,7 +438,7 @@ function buildStatusBoard(manifest: KnowledgeManifest): string {
       lines.push(
         `<li class="status-card" aria-label="${esc(node.label)} (${esc(node.kind)})">`,
         `<span class="card-kind" style="color:${esc(nodeColor(node.kind))}" aria-hidden="true">${esc(node.kind)}</span>`,
-        nodeLink(node),
+        nodeLink(node, docPages),
         '</li>',
       );
     }
@@ -667,9 +695,14 @@ const DIAGRAMS_CSS = `
 export function renderDiagrams(manifest: KnowledgeManifest, outDir: string): string[] {
   const title = esc(manifest.projectTitle);
 
-  const spineHtml = buildTraceabilitySpine(manifest);
-  const treesHtml = buildEpicStoryTrees(manifest);
-  const boardHtml = buildStatusBoard(manifest);
+  // fileId -> rendered doc-page path ("docs/<slug>.html"), via the shared
+  // 29.3 resolver (paths.ts). Every node link on this page must resolve
+  // against the RENDERED page, never the raw source fileId (Epic 29 bug fix).
+  const docPages = buildDocPageMap(manifest.files.map(f => f.path));
+
+  const spineHtml = buildTraceabilitySpine(manifest, docPages);
+  const treesHtml = buildEpicStoryTrees(manifest, docPages);
+  const boardHtml = buildStatusBoard(manifest, docPages);
 
   const html = [
     '<!DOCTYPE html>',

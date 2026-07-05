@@ -25,6 +25,7 @@ import * as path from 'path';
 import { KnowledgeManifest, GraphNode } from '../types.js';
 import { DESIGN_SYSTEM_CSS } from './design-system.js';
 import { buildNavLinksHtml } from './layout.js';
+import { buildDocPageMap } from './paths.js';
 
 // ---------------------------------------------------------------------------
 // HTML escape
@@ -55,22 +56,35 @@ function safePath(p: string): string {
 // Node link helper
 // ---------------------------------------------------------------------------
 
-// Set of rendered document paths (manifest.files[].path), populated by
-// renderOrphanPage before any nodeLink call. A node whose fileId is NOT a
-// rendered doc page — e.g. a KG-only node from knowledge-graph.json — must not
-// emit a live href, or the browser would 404 on click. Such nodes render as
-// non-clickable text instead (finding: KG-only orphan link → 404).
-let RENDERED_DOC_PATHS: Set<string> = new Set();
+// fileId -> rendered doc-page path ("docs/<slug>.html"), populated by
+// renderOrphanPage before any nodeLink call, via the shared 29.3 resolver
+// (paths.ts::buildDocPageMap). A node whose fileId has NO entry here — e.g. a
+// KG-only node from knowledge-graph.json — must not emit a live href, or the
+// browser would 404 on click. Such nodes render as non-clickable text instead
+// (finding: KG-only orphan link → 404; also fixes the original bug where even
+// nodes WITH a rendered page linked to the raw source fileId instead of the
+// generated docs/<slug>.html page).
+let DOC_PAGE_MAP: Map<string, string> = new Map();
 
 function nodeLink(node: GraphNode, extra?: string): string {
-  const base = safePath(node.fileId);
   const extraStr = extra ? ` ${esc(extra)}` : '';
   const meta = `<span class="node-meta">[${esc(node.kind)}${extraStr}]</span>`;
-  const hasDoc = RENDERED_DOC_PATHS.has(node.fileId);
-  if (base === '#invalid' || !hasDoc) {
-    // Unsafe or no rendered doc page (KG-only): non-clickable, never a dead link.
+  const page = DOC_PAGE_MAP.get(node.fileId);
+  if (!page) {
+    // No rendered doc page for this fileId (KG-only node): non-clickable,
+    // never a dead link.
     return (
-      `<span class="node-link node-link-nodoc" aria-label="${esc(node.label)} (${esc(node.kind)}, no page)">` +
+      `<span class="node-link node-link-nodoc" aria-disabled="true" aria-label="${esc(node.label)} (${esc(node.kind)}, no page)">` +
+      `${esc(node.label)}</span>${meta}`
+    );
+  }
+  const base = safePath(page);
+  if (base === '#invalid') {
+    // Defense-in-depth: page is server-resolved ("docs/<slug>.html") and can
+    // never actually trip safePath's scheme/protocol-relative checks, but keep
+    // the guard for consistency with diagrams.ts/graph.ts.
+    return (
+      `<span class="node-link node-link-nodoc" aria-disabled="true" aria-label="${esc(node.label)} (${esc(node.kind)}, no page)">` +
       `${esc(node.label)}</span>${meta}`
     );
   }
@@ -449,9 +463,10 @@ const ORPHAN_CSS = `
  * @returns Array of relative paths written (always ['orphans.html']).
  */
 export function renderOrphanPage(manifest: KnowledgeManifest, outDir: string): string[] {
-  // Populate the rendered-doc-path set so nodeLink can suppress dead links to
-  // KG-only nodes that have no generated reading-view page.
-  RENDERED_DOC_PATHS = new Set(manifest.files.map(f => f.path));
+  // Populate the fileId -> doc-page map (via the shared 29.3 resolver) so
+  // nodeLink links to the actual rendered reading-view page and suppresses
+  // dead links to KG-only nodes that have no generated page.
+  DOC_PAGE_MAP = buildDocPageMap(manifest.files.map(f => f.path));
   const report = computeOrphans(manifest);
   const title = esc(manifest.projectTitle);
 
