@@ -483,6 +483,14 @@ pre code {
   cursor: default;
 }
 
+/* Non-clickable node reference (no rendered doc page, e.g. a KG-only node):
+   muted, not a link. Used by diagrams.ts and orphan.ts spine/orphan cells. */
+.node-link-nodoc {
+  color: var(--ink-wash);
+  text-decoration: none;
+  cursor: default;
+}
+
 /* ── Table of contents ──────────────────────────────────────────────────── */
 
 .toc {

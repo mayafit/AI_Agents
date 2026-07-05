@@ -71,6 +71,30 @@ export function docPageRelPath(fileId: string, allFileIds?: string[]): string {
 }
 
 /**
+ * Build a fileId → site-root-relative doc-page path ("docs/<slug>.html") map
+ * for every fileId in `fileIds`, resolved once against the shared collision-
+ * free slug map.
+ *
+ * Callers that need to resolve MANY fileIds against the same manifest (e.g.
+ * the 29.4 spine/graph/orphan renderers, which iterate every node once per
+ * page render) should use this instead of calling `docPageRelPath` per fileId
+ * — that would rebuild the slug map from scratch on every call (O(n^2)).
+ *
+ * A node's fileId that is NOT present in `fileIds` (e.g. a knowledge-graph-only
+ * node with no corresponding scanned document) is simply absent from the
+ * returned map — callers must treat a missing entry as "no rendered page" and
+ * render that node/link as non-clickable rather than emitting a live href.
+ */
+export function buildDocPageMap(fileIds: string[]): Map<string, string> {
+  const slugMap = buildSlugMap(fileIds);
+  const map = new Map<string, string>();
+  for (const [fileId, slug] of slugMap) {
+    map.set(fileId, `docs/${slug}.html`);
+  }
+  return map;
+}
+
+/**
  * Build an href to a node (fileId#anchor) FROM a page located at `fromRel`
  * (a site-root-relative path such as "index.html" or "docs/x.html").
  *
