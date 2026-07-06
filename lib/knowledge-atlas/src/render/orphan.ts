@@ -159,10 +159,17 @@ function computeOrphans(manifest: KnowledgeManifest): OrphanReport {
   // An epic node has no 'validates' edge targeting it from a retrospective
   const epicNodes = nodes.filter(n => n.kind === 'epic');
   const validatedEpicIds = new Set(validatesEdges.map(e => e.to));
-  // Also check derives-from links from retrospectives
+  // Also check semantic links from retrospectives.
+  // Story 29.8: gap categories MUST stay keyed on SEMANTIC edges only. A
+  // retrospective's file node now also emits weak `references` edges to every
+  // entity it merely MENTIONS; counting those here would mark an epic that a
+  // retro only name-drops (never validates) as "has a retrospective" and hide a
+  // real gap. Exclude `references` so epic-retro coverage stays honest.
   const retroNodes = nodes.filter(n => n.kind === 'retrospective');
   const retroLinkedEpicIds = new Set(
-    edges.filter(e => retroNodes.some(r => r.id === e.from)).map(e => e.to),
+    edges
+      .filter(e => e.kind !== 'references' && retroNodes.some(r => r.id === e.from))
+      .map(e => e.to),
   );
 
   const epicsWithNoRetro = epicNodes
