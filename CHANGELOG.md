@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.15.0-beta.1] - 2026-07-07
+
+Knowledge Atlas beta.1 — fixes from real-project (Prophesee) testing of beta.0:
+
+- **Broken links fixed:** the traceability spine, interactive graph, and orphan/gap
+  view linked entities by their raw source path (`…/foo.md#anchor`) instead of the
+  rendered page, so every click opened an empty page. All three now resolve to the
+  real `docs/<slug>.html` page (link-integrity test guards it).
+- **Config-aware knowledge-source discovery (Story 29.7):** the engine now reads
+  `_bmad/bmm/config.yaml` and scans the project's configured knowledge folders
+  (`planning_artifacts` / `implementation_artifacts` / `knowledgebase_path`) in
+  addition to `_bmad-output` — resolving `{project-root}` and stripping wrapping
+  quotes. Projects with no such config are unchanged (byte-identical). `.git`,
+  `node_modules`, and hidden files/dirs are excluded; stale output is purged on
+  regen (guarded so it can never delete a configured source).
+- **Reference-edge extraction (Story 29.8):** planning-centric projects (dense PRD
+  with few/no story files) previously produced a disconnected graph with no
+  backlinks. The engine now derives `references` edges from the docs/sections that
+  mention an entity, so the graph connects and "Referenced by" populates
+  (Prophesee: 0 → 317 edges). Gap/orphan detection stays keyed on semantic edges,
+  so a merely-referenced requirement is still flagged as unimplemented.
+
+Beta.0 users should reinstall (the manifest version bumped, forcing a clean
+re-extraction). No breaking change to the public CLI.
+
 ## [3.15.0-beta.0] - 2026-07-03
 
 Knowledge Atlas — Epic 29 beta prerelease (FR215–234 / NFR60–69). Adds a
