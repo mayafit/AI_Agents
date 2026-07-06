@@ -250,8 +250,19 @@ function renderHomePage(manifest: KnowledgeManifest, navFlags: NavFlags): string
 /**
  * Write all pages and assets under outDir.
  * Returns a sorted list of relative paths written.
+ *
+ * @param resolveAbsPath  Story 29.7 — optional fileId → absolute-path resolver
+ *   forwarded to `renderDocumentPage()` for files scanned from a knowledge
+ *   source outside `projectRoot` (whose fileId is `<basename>/<relPath>`, not
+ *   joinable with projectRoot). generate.ts always supplies this, built from
+ *   the current scan; omitted callers keep the historical
+ *   `path.join(projectRoot, fileId)` behavior.
  */
-export function renderSite(manifest: KnowledgeManifest, outDir: string): string[] {
+export function renderSite(
+  manifest: KnowledgeManifest,
+  outDir: string,
+  resolveAbsPath?: (fileId: string) => string | undefined,
+): string[] {
   const written: string[] = [];
   const docBodies = new Map<string, string>();
 
@@ -281,7 +292,7 @@ export function renderSite(manifest: KnowledgeManifest, outDir: string): string[
   // Step 1: Render document pages (reading views). Zero JS required.
   for (const file of manifest.files) {
     const slug = slugMap.get(file.path) ?? filePathToSlug(file.path);
-    const { html, articleText } = renderDocumentPage(file, manifest, manifest.projectRoot, navFlags);
+    const { html, articleText } = renderDocumentPage(file, manifest, manifest.projectRoot, navFlags, resolveAbsPath);
     const relPath = `docs/${slug}.html`;
     writeHtml(path.join(outDir, relPath), html);
     written.push(relPath);

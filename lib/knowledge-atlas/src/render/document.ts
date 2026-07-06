@@ -198,6 +198,17 @@ function getFileNodes(fileId: string, nodes: GraphNode[]): GraphNode[] {
  * @param projectRoot  Absolute path to the project root (to read markdown files).
  * @param navFlags     Which 29.4 pages (graph/diagrams/orphans) exist in this
  *                      build, so the shared nav can link to them (SHOULD-FIX #2).
+ * @param resolveAbsPath  Story 29.7 — optional fileId → absolute-path resolver.
+ *                      A file scanned from a knowledge source OUTSIDE
+ *                      `projectRoot` has a fileId of the form
+ *                      `<source-basename>/<relPath>`, which is NOT joinable
+ *                      with `projectRoot` to recover its real location. When
+ *                      provided (generate.ts always provides it, built from
+ *                      the current scan), it is consulted first; falling back
+ *                      to `path.join(projectRoot, fileRec.path)` — the
+ *                      historical behavior — when it returns nothing, so
+ *                      callers that never pass it (e.g. direct unit use) are
+ *                      unaffected.
  * @returns `{ html, articleText }` — the full page HTML plus the plain-text of
  *          JUST the rendered article body (no nav/footer/TOC/status chrome), so
  *          the search index reflects document content, not shell boilerplate.
@@ -214,8 +225,9 @@ export function renderDocumentPage(
   manifest: KnowledgeManifest,
   projectRoot: string,
   navFlags?: NavFlags,
+  resolveAbsPath?: (fileId: string) => string | undefined,
 ): RenderedDocument {
-  const absPath = path.join(projectRoot, fileRec.path);
+  const absPath = resolveAbsPath?.(fileRec.path) ?? path.join(projectRoot, fileRec.path);
   const title = fileTitle(fileRec.path);
 
   // Read markdown content

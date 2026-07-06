@@ -270,4 +270,5 @@ development_status:
   29-4-graph-view-generated-diagrams-orphan-gap: done
   29-5-sealed-offline-packaging-knowledge-graph-reconciliation: done
   29-6-release-gate-determinism-degradation-smoke-semver: done
+  29-7-config-aware-knowledge-source-discovery: done
   epic-29-retrospective: optional

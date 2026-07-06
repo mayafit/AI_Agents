@@ -10,13 +10,23 @@ triggers:
 
 # Knowledge Atlas Skill
 
-Generate a self-contained, offline-ready Knowledge Atlas HTML site from the project's `_bmad-output` planning and implementation artifacts. No network access is required at generation or view time.
+Generate a self-contained, offline-ready Knowledge Atlas HTML site from the project's planning and implementation artifacts. No network access is required at generation or view time.
 
 ## Prerequisites
 
-- The project must have a `_bmad-output/` directory (created by BMAD install).
+- The project must have a `_bmad-output/` directory (created by BMAD install) and/or a `_bmad/bmm/config.yaml` pointing at where its knowledge actually lives.
 - `ma-agents` must be installed (globally via `npx ma-agents` or as a local dependency).
 - Node.js >= 18 must be available.
+
+## Source discovery (engine-side — nothing for this skill to configure)
+
+The engine itself resolves WHICH folders to scan — this skill just passes `projectRoot` (Step 1) and lets `atlas.cjs` do the rest:
+
+- It always scans `<projectRoot>/<output_folder>` (`output_folder` defaults to `_bmad-output`).
+- If the project has `_bmad/bmm/config.yaml`, it ALSO scans any configured `planning_artifacts`, `implementation_artifacts`, and `knowledgebase_path` folders that exist on disk — even when they live OUTSIDE `_bmad-output` (a common real-world setup: e.g. `planning_artifacts` pointing at a sibling knowledge folder). All of these are unioned and deduplicated automatically.
+- A project with no `_bmad/bmm/config.yaml` (or none of the above keys) behaves exactly as before: scan `_bmad-output` only.
+- The generated site is written to `<projectRoot>/<output_folder>/knowledge-site/` (so if `output_folder` is customized, the site follows it).
+- Before writing, the engine purges the DEFAULT `<output_folder>/knowledge-site/` dir so removed/renamed docs leave no orphaned pages. It never touches a configured knowledge source, and it skips the purge entirely if a source resolves at/under that output dir (a warning is printed). A caller-supplied `--out` override is intentionally NOT purged — the engine only ever clears the default site dir.
 
 ---
 
@@ -24,13 +34,14 @@ Generate a self-contained, offline-ready Knowledge Atlas HTML site from the proj
 
 ### Step 1 — Resolve the project root
 
-The project root is the directory containing `_bmad-output/`. Locate it by walking up from the current working directory until `_bmad-output/` is found, or use the directory the agent is operating in.
+The project root is the directory containing `_bmad-output/` (and/or `_bmad/bmm/config.yaml`). Locate it by walking up from the current working directory until either is found, or use the directory the agent is operating in.
 
 ```
-projectRoot = <directory containing _bmad-output/>
-bmadOutputDir = <projectRoot>/_bmad-output
-outputSite = <projectRoot>/_bmad-output/knowledge-site/index.html
+projectRoot = <directory containing _bmad-output/ and/or _bmad/bmm/config.yaml>
+outputSite  = <projectRoot>/<output_folder>/knowledge-site/index.html   (output_folder defaults to _bmad-output)
 ```
+
+This skill does NOT need to know which knowledge folders exist or where `output_folder` points — the engine reads `_bmad/bmm/config.yaml` itself and reports the real output path on stdout/stderr in Step 3.
 
 ### Step 2 — Locate the engine bundle
 
@@ -103,16 +114,18 @@ arg-array element to the platform opener:
 - **macOS:**   `execFile('open', [indexHtmlPath])`
 - **Linux:**   `execFile('xdg-open', [indexHtmlPath])`
 
-Report the output path to the user regardless of whether the browser opens:
+Report the output path to the user regardless of whether the browser opens
+(the ARGV output printed by the engine in Step 3 is the source of truth — it
+reflects the real `output_folder`, which may differ from `_bmad-output`):
 ```
-Knowledge Atlas generated: <projectRoot>/_bmad-output/knowledge-site/index.html
+Knowledge Atlas generated: <projectRoot>/<output_folder>/knowledge-site/index.html
 ```
 
 ---
 
 ## Gitignore policy
 
-The `_bmad-output/knowledge-site/` directory is automatically gitignored when BMAD installs into a project (via `ensureKnowledgeSiteIgnored`). If it is not already ignored, add the following line to `.gitignore`:
+The `<output_folder>/knowledge-site/` directory (default `_bmad-output/knowledge-site/`) is automatically gitignored when BMAD installs into a project (via `ensureKnowledgeSiteIgnored`). If it is not already ignored, add the following line to `.gitignore` (adjusted for a customized `output_folder`):
 
 ```
 _bmad-output/knowledge-site/
