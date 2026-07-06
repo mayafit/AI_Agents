@@ -3,9 +3,15 @@
  * ---------------------------------------------------------------------------
  * Story 29.1 — Core generate() function: discovery → manifest → render.
  * Story 29.2 — Extended buildManifest() with full scan→extract→graph→persist.
+ * Story 29.7 — Config-aware knowledge-source discovery: scans the union of
+ *   `<output_folder>` (default `_bmad-output`) and any configured
+ *   `planning_artifacts` / `implementation_artifacts` / `knowledgebase_path`
+ *   from `_bmad/bmm/config.yaml`, and purges stale generated output before
+ *   writing. A project with no such config scans/writes exactly as before
+ *   (AC3 backward-compat hard gate).
  *
  * Architecture invariants (Decision P5-7):
- *   - Write ONLY under `_bmad-output/knowledge-site/`. Never touch source.
+ *   - Write ONLY under `<output_folder>/knowledge-site/`. Never touch source.
  *   - No network access. Node built-ins + esbuild-inlined modules only.
  *   - LF output throughout (never emit CRLF into the HTML).
  *   - Deterministic: identical inputs + pinned SOURCE_DATE_EPOCH → byte-identical output.
@@ -20,7 +26,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { GenerateOptions, GenerateResult, KnowledgeManifest, FileRecord } from './types.js';
-import { scanFiles } from './scan/scanner.js';
+import { scanSources, ScannedFile } from './scan/scanner.js';
+import { resolveKnowledgeSources } from './scan/config.js';
 import { parseFrontmatter } from './extract/frontmatter.js';
 import { extractEntities } from './extract/entities.js';
 import { buildNodes, buildEdges, buildCounts } from './graph/build.js';
@@ -35,6 +42,25 @@ import { renderOrphanPage } from './render/orphan.js';
 
 /** Current manifest schema version. Increment on breaking changes. */
 const MANIFEST_VERSION = 1;
+
+/**
+ * Path helpers for the Story 29.7 purge safety gates (MUST-FIX #1).
+ * `path.resolve` normalizes separators and `.`/`..` segments; a trailing-sep
+ * strip keeps the prefix comparison in `isUnder` exact.
+ */
+function normPath(p: string): string {
+  return path.resolve(p).replace(/[\\/]+$/, '');
+}
+/** True if two paths refer to the same location. */
+function pathsEqual(a: string, b: string): boolean {
+  return normPath(a) === normPath(b);
+}
+/** True if `child` is strictly nested under `parent` (not equal). */
+function isUnder(parent: string, child: string): boolean {
+  const p = normPath(parent);
+  const c = normPath(child);
+  return c.startsWith(p + path.sep);
+}
 
 // ---------------------------------------------------------------------------
 // Timestamp resolution — NFR62 determinism contract
@@ -183,25 +209,32 @@ function extractFileRecord(absPath: string, fileId: string, docType: import('./t
 /**
  * Build the full KnowledgeManifest from a project.
  *
- * Orchestration: scan → incremental diff → extract changed files → build graph → reconcile → return manifest.
+ * Orchestration: incremental diff → extract changed files → build graph → reconcile → return manifest.
  * Does NOT write to disk (that's done in generate() after this returns).
  *
+ * @param scannedFiles   Story 29.7 — files already discovered by scanning every
+ *                       resolved knowledge source (see `resolveKnowledgeSources()` +
+ *                       `scanSources()` in generate()). Scanning is done by the
+ *                       caller (rather than here) so generate() can also build a
+ *                       fileId → absPath resolver for rendering (needed for
+ *                       sources outside projectRoot) from the SAME scan.
  * @param projectRoot    Absolute path to the project root.
- * @param bmadOutputDir  Absolute path to _bmad-output.
- * @param outDir         Absolute path to the knowledge-site output directory.
+ * @param bmadOutputDir  Absolute path to the resolved `<projectRoot>/<output_folder>`
+ *                       (used only to locate `knowledge-graph.json` for reconciliation).
+ * @param outDir         Absolute path to the knowledge-site output directory
+ *                       (used only to locate the PRIOR manifest.json for the
+ *                       incremental diff — read BEFORE generate() purges it).
  * @param generatedAt    ISO-8601 timestamp (already resolved).
  * @returns The full KnowledgeManifest.
  */
 function buildManifest(
+  scannedFiles: ScannedFile[],
   projectRoot: string,
   bmadOutputDir: string,
   outDir: string,
   generatedAt: string,
 ): KnowledgeManifest {
   const projectTitle = deriveProjectTitle(projectRoot);
-
-  // Step 1: Scan all BMAD files
-  const scannedFiles = scanFiles(projectRoot, bmadOutputDir, outDir);
 
   // Step 2: Load prior manifest for incremental rebuild (version-guarded:
   // a schema-mismatched or stub prior is ignored → full rebuild, item 19).
@@ -288,8 +321,15 @@ export function generate(opts: GenerateOptions): GenerateResult {
     throw new Error(`generate: projectRoot does not exist or is not a directory: ${projectRoot}`);
   }
 
-  const bmadOutputDir = path.join(projectRoot, '_bmad-output');
-  const outDir = outDirOverride ?? path.join(bmadOutputDir, 'knowledge-site');
+  // Story 29.7 — discover every knowledge source the project's own BMAD setup
+  // defines (`_bmad/bmm/config.yaml`: output_folder / planning_artifacts /
+  // implementation_artifacts / knowledgebase_path), unioned + deduped. A
+  // project with no config (or none of these keys) resolves to exactly the
+  // historical single source `<projectRoot>/_bmad-output` (AC3 backward-compat).
+  const { sources, outputFolder, outputOverlap } = resolveKnowledgeSources(projectRoot);
+  const bmadOutputDir = path.join(projectRoot, outputFolder);
+  const defaultOutDir = path.join(bmadOutputDir, 'knowledge-site');
+  const outDir = outDirOverride ?? defaultOutDir;
 
   // Safety (hunter #7): ALWAYS enforce that the resolved outDir stays under
   // projectRoot — including when the caller supplied `--out`/outDir. The CLI's
@@ -304,8 +344,43 @@ export function generate(opts: GenerateOptions): GenerateResult {
   // Resolve the timestamp (NFR62 determinism)
   const generatedAt = resolveTimestamp(opts.now);
 
-  // Discovery half: full scan→extract→graph→reconcile
-  const manifest = buildManifest(projectRoot, bmadOutputDir, outDir, generatedAt);
+  // Discovery half: scan every resolved source, then extract→graph→reconcile.
+  // Scanning happens HERE (not inside buildManifest) so the resulting
+  // ScannedFile[] — which carries the real absPath for every file, including
+  // ones from sources OUTSIDE projectRoot — can also back the fileId → absPath
+  // resolver handed to renderSite() below (needed because a file scanned from
+  // an external source has a fileId of the form `<basename>/<relPath>`, which
+  // is not joinable with projectRoot to recover its on-disk location).
+  const scannedFiles = scanSources(sources, outDir);
+  const manifest = buildManifest(scannedFiles, projectRoot, bmadOutputDir, outDir, generatedAt);
+  const absPathByFileId = new Map(scannedFiles.map(f => [f.fileId, f.absPath]));
+  const resolveAbsPath = (fileId: string): string | undefined => absPathByFileId.get(fileId);
+
+  // Story 29.7 (AC5) — purge stale generated output BEFORE writing, so a doc
+  // removed/renamed/moved-out-of-scope since the last run leaves no orphaned
+  // page behind. This runs AFTER buildManifest (which already read the PRIOR
+  // manifest.json for the incremental diff above) and BEFORE any write below.
+  //
+  // Safety gates (MUST-FIX #1 — never destroy a knowledge source):
+  //   (a) SHOULD-FIX #4: only the DEFAULT `<output_folder>/knowledge-site` is
+  //       purged. A caller-supplied `--out` override is intentionally NOT
+  //       purged (it may point anywhere the caller manages themselves).
+  //   (b) `outputOverlap` is set by resolveKnowledgeSources() when a CONFIGURED
+  //       source resolved to the output dir or a path nested under it — purging
+  //       would delete the user's data, so we skip it entirely (a warning was
+  //       already emitted during resolution).
+  //   (c) Defense-in-depth: refuse to purge if ANY resolved source equals the
+  //       output dir or lives underneath it. (After (b) this can't happen for a
+  //       configured source, but this also covers any future source origin.)
+  const isDefaultOut = pathsEqual(outDir, defaultOutDir);
+  const sourceAtOrUnderOut = sources.some((s) => pathsEqual(s.absPath, outDir) || isUnder(outDir, s.absPath));
+  if (isDefaultOut && !outputOverlap && !sourceAtOrUnderOut) {
+    fs.rmSync(outDir, { recursive: true, force: true });
+  } else if (isDefaultOut && (outputOverlap || sourceAtOrUnderOut)) {
+    process.stderr.write(
+      `[atlas] WARN: refusing to purge ${outDir} — a knowledge source resolves at or under it (data-loss guard)\n`,
+    );
+  }
 
   // Ensure output directory exists
   fs.mkdirSync(outDir, { recursive: true });
@@ -339,7 +414,7 @@ export function generate(opts: GenerateOptions): GenerateResult {
   // reading view per document, and search assets, returning the sorted list of
   // relative paths written. It detects the 29.4 pages written above and links
   // the interactive graph from the home/nav.
-  const written = renderSite(manifest, outDir);
+  const written = renderSite(manifest, outDir, resolveAbsPath);
 
   // Write manifest.json (Story 29.2)
   writeManifest(outDir, manifest);

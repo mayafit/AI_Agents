@@ -18,7 +18,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { DocType } from '../types.js';
+import { DocType, KnowledgeSource } from '../types.js';
 import { contentHash } from './hash.js';
 
 /** A single scanned file entry before extraction. */
@@ -144,8 +144,27 @@ export function classifyFile(fileId: string): DocType {
 }
 
 /**
+ * Directory names never descended into during a scan (Story 29.7 SHOULD-FIX #3).
+ *
+ * Now that knowledge sources are CONFIGURABLE (and can resolve broadly — even to
+ * a project root or a checkout that contains a VCS/tooling tree), the walker must
+ * not ingest VCS metadata, dependency trees, or IDE folders as "documents"
+ * (the real Prophesee bug: `prophesee-knowledge/.git/HEAD`, `.git/hooks/*.sample`
+ * were scanned as docs). We also never descend into a `knowledge-site` output dir.
+ *
+ * In addition to this explicit list, ANY dot-directory (name starting with `.`)
+ * is skipped. The existing fixtures contain none of these, so this is
+ * byte-neutral for the backward-compat (AC3) gate.
+ */
+const EXCLUDED_DIR_NAMES = new Set([
+  '.git', 'node_modules', '.hg', '.svn', '.idea', '.vscode', 'knowledge-site',
+]);
+
+/**
  * Recursively enumerate all files under `dir`, appending their absolute paths
- * to `results`. Excludes symlinks that resolve to directories (tolerated).
+ * to `results`. Excludes symlinks that resolve to directories (tolerated), and
+ * skips VCS/dependency/IDE/output directories (see EXCLUDED_DIR_NAMES) plus any
+ * dot-directory.
  */
 function walkDir(dir: string, results: string[]): void {
   let entries: fs.Dirent[];
@@ -158,6 +177,10 @@ function walkDir(dir: string, results: string[]): void {
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
+      // Skip VCS/dependency/IDE/output dirs and any dot-directory (SHOULD-FIX #3).
+      if (EXCLUDED_DIR_NAMES.has(entry.name) || entry.name.startsWith('.')) {
+        continue;
+      }
       walkDir(full, results);
     } else if (entry.isFile()) {
       results.push(full);
@@ -167,7 +190,110 @@ function walkDir(dir: string, results: string[]): void {
 }
 
 /**
- * Scan all BMAD documents under `bmadOutputDir`.
+ * Scan all BMAD documents across multiple knowledge sources (Story 29.7).
+ *
+ * Each source contributes files under its own `absPath`, with the resulting
+ * fileId built as `fileIdPrefix + '/' + relToSource` (or just `relToSource`
+ * when `fileIdPrefix` is empty). All other per-file logic — outDir exclusion,
+ * `knowledge-graph.html` exclusion, binary skip, CRLF/BOM-safe hashing,
+ * classification — is IDENTICAL to the original single-source `scanFiles()`.
+ *
+ * A source whose `absPath` does not exist is tolerated (contributes zero
+ * files), matching `scanFiles()`'s historical tolerance of a missing
+ * `_bmad-output`.
+ *
+ * Results are merged across all sources, sorted by fileId (POSIX), and
+ * deduplicated by fileId (first-encountered — i.e. earliest source in the
+ * input array, in on-disk walk order — wins; `Array.prototype.sort` is stable
+ * so ties from equal fileIds preserve that encounter order).
+ *
+ * @param sources  Knowledge sources to scan (see `resolveKnowledgeSources()`).
+ * @param outDir   Absolute path to the knowledge-site output directory (excluded from scan).
+ * @returns Sorted, deduplicated array of ScannedFile records (sorted by fileId, POSIX).
+ */
+export function scanSources(
+  sources: KnowledgeSource[],
+  outDir: string,
+): ScannedFile[] {
+  // Normalize outDir for exclusion comparison (POSIX, NO trailing slash) so the
+  // `+ '/'` below can never produce a `//` that defeats the exclusion (item 20).
+  const outDirPosix = outDir.split(path.sep).join('/').replace(/\/+$/, '');
+
+  const results: ScannedFile[] = [];
+
+  for (const source of sources) {
+    // Tolerate a source that doesn't exist yet (e.g. _bmad-output pre-first-run).
+    if (!fs.existsSync(source.absPath)) {
+      continue;
+    }
+
+    const absPaths: string[] = [];
+    walkDir(source.absPath, absPaths);
+
+    for (const absPath of absPaths) {
+      const absPosix = absPath.split(path.sep).join('/').replace(/\/+$/, '');
+
+      // Exclude files inside the output directory (knowledge-site/)
+      if (absPosix === outDirPosix || absPosix.startsWith(outDirPosix + '/')) {
+        continue;
+      }
+
+      // Exclude knowledge-graph.html (the legacy rendered artifact)
+      const basename = path.basename(absPath);
+      if (basename === 'knowledge-graph.html') {
+        continue;
+      }
+
+      // Skip binary / non-text files (item 15): a binary file utf-8-coerced and
+      // CRLF-normalized would yield a corrupt, non-deterministic-ish hash and no
+      // meaningful entities. Detect by extension OR a null byte in the head.
+      if (isBinaryFile(absPath)) {
+        continue;
+      }
+
+      // Compute POSIX-normalized file-id, prefixed per source (Task 2.1).
+      const relToSource = path.relative(source.absPath, absPath).split(path.sep).join('/');
+      const fileId = source.fileIdPrefix ? `${source.fileIdPrefix}/${relToSource}` : relToSource;
+
+      // Compute content hash (CRLF-safe, BOM-stripped)
+      let hash: string;
+      try {
+        hash = contentHash(absPath);
+      } catch {
+        // Tolerate unreadable files (skip)
+        continue;
+      }
+
+      const type = classifyFile(fileId);
+
+      results.push({ fileId, absPath, type, contentHash: hash });
+    }
+  }
+
+  // Deterministic: sort by fileId (POSIX). Stable sort preserves the
+  // source-array / on-disk-walk encounter order for equal fileIds.
+  results.sort((a, b) => a.fileId < b.fileId ? -1 : a.fileId > b.fileId ? 1 : 0);
+
+  // Dedup identical fileIds — first-encountered (post-stable-sort) wins.
+  const seen = new Set<string>();
+  const deduped: ScannedFile[] = [];
+  for (const r of results) {
+    if (seen.has(r.fileId)) continue;
+    seen.add(r.fileId);
+    deduped.push(r);
+  }
+
+  return deduped;
+}
+
+/**
+ * Scan all BMAD documents under `bmadOutputDir` (single-source form).
+ *
+ * Preserved for backward compatibility and as the no-config default path:
+ * this is exactly `scanSources()` called with a single source whose
+ * `fileIdPrefix` is the projectRoot-relative POSIX path of `bmadOutputDir`
+ * (e.g. `_bmad-output`) — the SAME identity scheme this function has always
+ * produced (AC3 backward-compat hard gate).
  *
  * @param projectRoot  Absolute path to the project root.
  * @param bmadOutputDir  Absolute path to _bmad-output.
@@ -179,61 +305,6 @@ export function scanFiles(
   bmadOutputDir: string,
   outDir: string,
 ): ScannedFile[] {
-  // Tolerate missing _bmad-output
-  if (!fs.existsSync(bmadOutputDir)) {
-    return [];
-  }
-
-  // Normalize outDir for exclusion comparison (POSIX, NO trailing slash) so the
-  // `+ '/'` below can never produce a `//` that defeats the exclusion (item 20).
-  const outDirPosix = outDir.split(path.sep).join('/').replace(/\/+$/, '');
-
-  const absPaths: string[] = [];
-  walkDir(bmadOutputDir, absPaths);
-
-  const results: ScannedFile[] = [];
-
-  for (const absPath of absPaths) {
-    const absPosix = absPath.split(path.sep).join('/').replace(/\/+$/, '');
-
-    // Exclude files inside the output directory (knowledge-site/)
-    if (absPosix === outDirPosix || absPosix.startsWith(outDirPosix + '/')) {
-      continue;
-    }
-
-    // Exclude knowledge-graph.html (the legacy rendered artifact)
-    const basename = path.basename(absPath);
-    if (basename === 'knowledge-graph.html') {
-      continue;
-    }
-
-    // Skip binary / non-text files (item 15): a binary file utf-8-coerced and
-    // CRLF-normalized would yield a corrupt, non-deterministic-ish hash and no
-    // meaningful entities. Detect by extension OR a null byte in the head.
-    if (isBinaryFile(absPath)) {
-      continue;
-    }
-
-    // Compute POSIX-normalized file-id (relative to projectRoot)
-    const rel = path.relative(projectRoot, absPath);
-    const fileId = rel.split(path.sep).join('/');
-
-    // Compute content hash (CRLF-safe, BOM-stripped)
-    let hash: string;
-    try {
-      hash = contentHash(absPath);
-    } catch {
-      // Tolerate unreadable files (skip)
-      continue;
-    }
-
-    const type = classifyFile(fileId);
-
-    results.push({ fileId, absPath, type, contentHash: hash });
-  }
-
-  // Deterministic: sort by fileId (POSIX)
-  results.sort((a, b) => a.fileId < b.fileId ? -1 : a.fileId > b.fileId ? 1 : 0);
-
-  return results;
+  const fileIdPrefix = path.relative(projectRoot, bmadOutputDir).split(path.sep).join('/');
+  return scanSources([{ absPath: bmadOutputDir, fileIdPrefix }], outDir);
 }

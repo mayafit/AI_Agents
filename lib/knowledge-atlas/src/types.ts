@@ -51,6 +51,31 @@ export interface GenerateResult {
 }
 
 // ---------------------------------------------------------------------------
+// Story 29.7 — Config-aware knowledge-source descriptor
+// ---------------------------------------------------------------------------
+
+/**
+ * A single knowledge-source root discovered by `resolveKnowledgeSources()`
+ * (src/scan/config.ts) and consumed by `scanSources()` (src/scan/scanner.ts).
+ *
+ * `fileIdPrefix` is prepended to every file found under `absPath` to build the
+ * manifest fileId: `fileIdPrefix ? fileIdPrefix + '/' + relToSource : relToSource`.
+ *   - Source UNDER projectRoot: fileIdPrefix = the projectRoot-relative POSIX
+ *     path of the source (e.g. `_bmad-output`) — IDENTICAL to today's scheme,
+ *     so a project with no `_bmad/bmm/config.yaml` produces byte-identical
+ *     fileIds (AC3, backward-compat hard gate).
+ *   - Source OUTSIDE projectRoot: fileIdPrefix = `path.basename(absPath)`
+ *     (e.g. `prophesee-knowledge`), with a deterministic `-2`/`-3` suffix on
+ *     basename collision — never an absolute path or `../` (AC4).
+ */
+export interface KnowledgeSource {
+  /** Absolute, OS-native path to the source root directory. */
+  absPath: string;
+  /** Prefix prepended to every fileId produced by scanning this source. */
+  fileIdPrefix: string;
+}
+
+// ---------------------------------------------------------------------------
 // Story 29.2 — Document type classification
 // ---------------------------------------------------------------------------
 
