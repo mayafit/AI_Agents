@@ -370,11 +370,110 @@ export function extractEntities(
     edges.push({ from: sourceId, to: `version:${version}`, kind: 'shipped-in' });
   }
 
+  // ── Story 29.8: `references` edges (weak/structural navigation links) ──
+  //
+  // These are ADDITIVE to the semantic edges above and never relabel them.
+  // Two shapes, both bounded to ONE edge per (source, referenced-entity) pair
+  // (no per-occurrence duplication, no entity×entity full mesh):
+  //
+  //   (a) doc → entity: the document's file node references each DISTINCT
+  //       entity token it mentions. `entitySet` is already the deduped set of
+  //       every entity in this file, so this is inherently ≤ |entities|.
+  //   (b) owner → entity: when a heading establishes a dominant owner entity
+  //       (e.g. `## Epic 2: …`, `## Story 29.8 …`, `## FR26 …`), each distinct
+  //       entity mentioned WITHIN that section is referenced by the owner
+  //       (e.g. Epic 2 → FR26). Scoping to the section — rather than pairing
+  //       every entity with every other — is what keeps this bounded.
+  //
+  // Token→node-id resolution, (from,to,kind) dedup, sorting, and dangling
+  // flagging all happen uniformly in graph/build.ts::buildEdges (the same seam
+  // the semantic edges use), so determinism is preserved for free.
+
+  // (a) doc → each distinct entity it mentions.
+  for (const token of entitySet) {
+    edges.push({ from: sourceId, to: token, kind: 'references' });
+  }
+
+  // (b) section-owner -> each distinct entity in its section.
+  // Walk the (code-stripped, CRLF-normalized) body tracking a heading stack;
+  // the nearest ancestor heading that names a single dominant entity token
+  // owns the current section until a heading of equal-or-higher rank closes it.
+  // Observations are keyed `owner + '|' + referencedToken`; '|' never occurs
+  // inside an entity token (which may contain spaces/dots, e.g. "Epic 2",
+  // "Story 29.8"), so splitting the pair back apart is unambiguous.
+  const refObservations = new Set<string>();
+  const lines = normalized.split('\n');
+  const stack: Array<{ level: number; owner: string }> = []; // owner '' = none
+  for (const line of lines) {
+    const hm = /^(#{1,6})[ \t]+(.+?)[ \t]*$/.exec(line);
+    if (hm) {
+      const level = hm[1]!.length;
+      const headingText = hm[2]!;
+      // Close sections at this rank or shallower before opening the new one.
+      while (stack.length > 0 && stack[stack.length - 1]!.level >= level) stack.pop();
+      const parentOwner = stack.length > 0 ? stack[stack.length - 1]!.owner : '';
+      const headingTokens = [...new Set(allEntityTokens(headingText))];
+      // A heading OWNS a section only when it names exactly ONE distinct entity
+      // (a "dominant" token); otherwise the section inherits its parent's owner.
+      const ownOwner = headingTokens.length === 1 ? headingTokens[0]! : '';
+      const owner = ownOwner || parentOwner;
+      stack.push({ level, owner });
+      // Extra tokens in the heading line are references within the section.
+      for (const t of headingTokens) {
+        if (owner && t !== owner) refObservations.add(owner + '|' + t);
+      }
+      continue;
+    }
+    const owner = stack.length > 0 ? stack[stack.length - 1]!.owner : '';
+    if (!owner) continue; // no owning entity -> doc->entity edges cover it
+    for (const t of new Set(allEntityTokens(line))) {
+      if (t !== owner) refObservations.add(owner + '|' + t);
+    }
+  }
+  for (const obs of refObservations) {
+    const bar = obs.indexOf('|');
+    const owner = obs.slice(0, bar);
+    const token = obs.slice(bar + 1);
+    if (owner && token && owner !== token) {
+      edges.push({ from: owner, to: token, kind: 'references' });
+    }
+  }
+
   return {
     entities: dedupSorted([...entitySet]),
     statuses: [...statusSet].sort(),
     edges,
   };
+}
+
+/**
+ * Story 29.8 — extract EVERY entity token from a slice of text (the full BMAD
+ * vocabulary: FR/NFR/F/Epic/Story N.M/story-key/bug/P#-#/retro), used for
+ * section-owner detection and per-section `references` observations. Distinct
+ * from `extractEntityRefs` (which is scoped to the relationship-prose kinds and
+ * must not change) — this one is the superset used only for reference edges.
+ */
+function allEntityTokens(text: string): string[] {
+  const refs: string[] = [];
+  RE_FR.lastIndex = 0;
+  for (const m of text.matchAll(RE_FR)) refs.push(normalizeFR(m[1]!));
+  RE_NFR.lastIndex = 0;
+  for (const m of text.matchAll(RE_NFR)) refs.push(normalizeNFR(m[1]!));
+  RE_F.lastIndex = 0;
+  for (const m of text.matchAll(RE_F)) refs.push(normalizeF(m[1]!));
+  RE_EPIC.lastIndex = 0;
+  for (const m of text.matchAll(RE_EPIC)) refs.push(normalizeEpic(m[1]!));
+  RE_STORY_NM.lastIndex = 0;
+  for (const m of text.matchAll(RE_STORY_NM)) refs.push(normalizeStoryNM(m[1]!, m[2]!));
+  RE_STORY_KEY.lastIndex = 0;
+  for (const m of text.matchAll(RE_STORY_KEY)) refs.push(normalizeStoryKey(m[1]!, m[2]!, m[3]!));
+  RE_BUG.lastIndex = 0;
+  for (const m of text.matchAll(RE_BUG)) refs.push(normalizeBug(m[1]!));
+  RE_ARCH.lastIndex = 0;
+  for (const m of text.matchAll(RE_ARCH)) refs.push(normalizeArch(m[1]!, m[2]!));
+  RE_RETRO.lastIndex = 0;
+  for (const m of text.matchAll(RE_RETRO)) refs.push(normalizeRetro(m[1]!));
+  return refs;
 }
 
 /**

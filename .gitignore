@@ -18,6 +18,12 @@ coverage/
 .claude/
 test-security-project/
 _bmad/
+# Story 29.8: the config-scan test fixtures ship a committed `_bmad/bmm/config.yaml`
+# (they exercise config-aware knowledge-source discovery). Re-include only those
+# fixture configs so a fresh checkout/CI has them — the global `_bmad/` ignore
+# above still covers every real install dir.
+!test/fixtures/**/_bmad/
+!test/fixtures/**/_bmad/**
 _bmad-custom-backup-temp/
 _bmad-output/methodology/
 .agent/

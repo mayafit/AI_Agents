@@ -65,12 +65,16 @@ interface KGJson {
   [key: string]: unknown;
 }
 
-// Valid node/edge kind sets for validation
+// Valid node/edge kind sets for validation.
+// Story 29.8: 'document' (file-level node for non-story/bug/retro docs) and
+// 'references' (weak/structural mention edge) are valid scan-derived kinds
+// too, so a KG-sourced node/edge of either kind is not silently coerced to a
+// misleading fallback ('story' / 'implements') during reconciliation.
 const VALID_NODE_KINDS = new Set<NodeKind>([
-  'capability', 'requirement', 'nfr', 'epic', 'story', 'bug', 'arch-decision', 'retrospective',
+  'capability', 'requirement', 'nfr', 'epic', 'story', 'bug', 'arch-decision', 'retrospective', 'document',
 ]);
 const VALID_EDGE_KINDS = new Set<EdgeKind>([
-  'implements', 'derives-from', 'refines', 'blocks', 'depends-on', 'validates', 'addressed-by', 'shipped-in',
+  'implements', 'derives-from', 'refines', 'blocks', 'depends-on', 'validates', 'addressed-by', 'shipped-in', 'references',
 ]);
 
 /**

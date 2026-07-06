@@ -114,7 +114,13 @@ export type NodeKind =
   | 'story'           // Story N.M / NN-M-slug
   | 'bug'             // bug-<slug>
   | 'arch-decision'   // P#-# architecture decision
-  | 'retrospective';  // epic-N-retrospective
+  | 'retrospective'   // epic-N-retrospective
+  // Story 29.8 — a whole-document file node for docs that are NOT
+  // story/bug/retrospective (prd/architecture/epics/brief/report/…). It lets
+  // any scanned document participate in the graph as a link source/target and
+  // back `references` edges, so planning-centric projects (dense PRD, no
+  // stories) produce a connected graph instead of a cloud of isolated dots.
+  | 'document';
 
 /**
  * Kind of directed edge in the knowledge graph.
@@ -128,7 +134,14 @@ export type EdgeKind =
   | 'depends-on'      // entity depends on another
   | 'validates'       // retro validates epic/story
   | 'addressed-by'    // issue addressed-by story/fix
-  | 'shipped-in';     // entity shipped-in version
+  | 'shipped-in'      // entity shipped-in version
+  // Story 29.8 — WEAK/structural relationship: "a document or section MENTIONS
+  // this entity". This is a NAVIGATION aid + backlink source ONLY. It is
+  // explicitly NOT a semantic claim like `implements`/`derives-from`: a doc
+  // that references FR26 does not thereby implement it. Gap/orphan detection
+  // must stay keyed on the semantic kinds above and ignore `references`, so a
+  // merely-referenced requirement is still reported as an unimplemented gap.
+  | 'references';
 
 /**
  * Provenance tag indicating where a node/edge originated.

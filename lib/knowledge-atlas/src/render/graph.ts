@@ -30,7 +30,9 @@ import { buildDocPageMap } from './paths.js';
 
 interface NodeStyle {
   color: string;
-  shape: 'circle' | 'square' | 'diamond' | 'triangle';
+  // 'hexagon' added in Story 29.8 for the 'document' NodeKind (the client
+  // canvas already implements a hexagon path in traceNodeShapePath()).
+  shape: 'circle' | 'square' | 'diamond' | 'triangle' | 'hexagon';
   size: number;
 }
 
@@ -43,6 +45,10 @@ const NODE_STYLES: Record<NodeKind, NodeStyle> = {
   bug:             { color: '#c62828', shape: 'triangle', size: 9 },
   'arch-decision': { color: '#4527a0', shape: 'diamond', size: 9  },
   retrospective:   { color: '#e65100', shape: 'square',  size: 8  },
+  // Story 29.8 — whole-document file node (prd/architecture/epics/report/…).
+  // Muted gray hexagon so it reads as "container/document", distinct from the
+  // brighter typed entity shapes above.
+  document:        { color: '#78909c', shape: 'hexagon', size: 9  },
 };
 
 // Edge kind → color mapping
@@ -55,6 +61,9 @@ const EDGE_COLORS: Record<EdgeKind, string> = {
   'validates':     '#00695c',
   'addressed-by':  '#ad1457',
   'shipped-in':    '#546e7a',
+  // Story 29.8 — weak/structural "mentions" edge. Light gray so it visually
+  // recedes behind the semantic (implements/derives-from/…) edges above.
+  'references':    '#b0bec5',
 };
 
 // Human-readable labels for legend
@@ -67,6 +76,7 @@ const NODE_KIND_LABELS: Record<NodeKind, string> = {
   bug:             'Bug',
   'arch-decision': 'Architecture Decision',
   retrospective:   'Retrospective',
+  document:        'Document',
 };
 
 const EDGE_KIND_LABELS: Record<EdgeKind, string> = {
@@ -78,16 +88,17 @@ const EDGE_KIND_LABELS: Record<EdgeKind, string> = {
   'validates':     'validates',
   'addressed-by':  'addressed-by',
   'shipped-in':    'shipped-in',
+  'references':    'references',
 };
 
 // All NodeKind values for iteration (sorted for determinism)
 const ALL_NODE_KINDS: NodeKind[] = [
-  'capability', 'requirement', 'nfr', 'epic', 'story', 'bug', 'arch-decision', 'retrospective',
+  'capability', 'requirement', 'nfr', 'epic', 'story', 'bug', 'arch-decision', 'retrospective', 'document',
 ];
 
 // All EdgeKind values for iteration
 const ALL_EDGE_KINDS: EdgeKind[] = [
-  'implements', 'derives-from', 'refines', 'blocks', 'depends-on', 'validates', 'addressed-by', 'shipped-in',
+  'implements', 'derives-from', 'refines', 'blocks', 'depends-on', 'validates', 'addressed-by', 'shipped-in', 'references',
 ];
 
 // ---------------------------------------------------------------------------
@@ -150,6 +161,8 @@ interface GraphEdge {
   kind: string;
   color: string;
   dangling: boolean;
+  /** Story 29.8 — render this edge dashed (used for weak `references` links). */
+  dashed: boolean;
 }
 
 function buildGraphData(manifest: KnowledgeManifest): { nodes: GraphNode[]; edges: GraphEdge[] } {
@@ -189,6 +202,10 @@ function buildGraphData(manifest: KnowledgeManifest): { nodes: GraphNode[]; edge
       kind: e.kind,
       color,
       dangling: e.dangling === true,
+      // Story 29.8 — `references` edges render DASHED (in addition to their
+      // lighter color) so a weak "mentions" link is unmistakably distinct from
+      // a strong semantic edge and never reads as a false `implements` claim.
+      dashed: e.kind === 'references',
     };
   });
 
@@ -753,6 +770,8 @@ function buildAppScript(): string {
       .linkSource('source')
       .linkTarget('target')
       .linkColor(function(e) { return e.color || '#aaa'; })
+      // Story 29.8 - dashed stroke for weak references edges; solid otherwise.
+      .linkLineDash(function(e) { return e.dashed ? [4, 3] : null; })
       .linkDirectionalArrowLength(4)
       .linkDirectionalArrowRelPos(1)
       .linkCurvature(0.1)

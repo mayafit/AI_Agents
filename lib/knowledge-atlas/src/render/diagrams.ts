@@ -147,29 +147,47 @@ function buildTraceabilitySpine(manifest: KnowledgeManifest, docPages: Map<strin
   const bugs = byKind('bug');
   const retros = byKind('retrospective');
 
-  // Build edge lookup (from → to[])
-  const edgeMap = new Map<string, string[]>();
-  for (const e of edges) {
-    if (!edgeMap.has(e.from)) edgeMap.set(e.from, []);
-    edgeMap.get(e.from)!.push(e.to);
+  // Story 29.8 — the spine must stay legible: PREFER semantic edges
+  // (implements/derives-from/refines/blocks/depends-on/validates/
+  // addressed-by/shipped-in) for the connector glyph/degree, and only FALL
+  // BACK to `references` edges for a node that has ZERO semantic edges in
+  // either direction. Otherwise a heavily-referenced entity (FR26 mentioned
+  // 47×) would flood every already-connected node's connector tooltip with
+  // weak "mentions" noise on top of its real semantic links.
+  const semanticEdges = edges.filter(e => e.kind !== 'references');
+  const referenceEdges = edges.filter(e => e.kind === 'references');
+
+  function buildDegreeMaps(edgeList: GraphEdge[]): { fwd: Map<string, string[]>; rev: Map<string, string[]> } {
+    const fwd = new Map<string, string[]>();
+    const rev = new Map<string, string[]>();
+    for (const e of edgeList) {
+      if (!fwd.has(e.from)) fwd.set(e.from, []);
+      fwd.get(e.from)!.push(e.to);
+      if (!rev.has(e.to)) rev.set(e.to, []);
+      rev.get(e.to)!.push(e.from);
+    }
+    return { fwd, rev };
   }
 
-  // Build reverse edge lookup (to → from[])
-  const revEdgeMap = new Map<string, string[]>();
-  for (const e of edges) {
-    if (!revEdgeMap.has(e.to)) revEdgeMap.set(e.to, []);
-    revEdgeMap.get(e.to)!.push(e.from);
-  }
+  const semanticMaps = buildDegreeMaps(semanticEdges);
+  const referenceMaps = buildDegreeMaps(referenceEdges);
 
   const nodeById = new Map(nodes.map(n => [n.id, n]));
 
+  /** True if `id` has at least one semantic edge (either direction). */
+  function hasSemanticLink(id: string): boolean {
+    return (semanticMaps.fwd.get(id)?.length ?? 0) > 0 || (semanticMaps.rev.get(id)?.length ?? 0) > 0;
+  }
+
   /** Count of forward (outgoing) edges from a node — drives the connector glyph. */
   function outDegree(id: string): number {
-    return edgeMap.get(id)?.length ?? 0;
+    if (hasSemanticLink(id)) return semanticMaps.fwd.get(id)?.length ?? 0;
+    return referenceMaps.fwd.get(id)?.length ?? 0;
   }
   /** Count of reverse (incoming) edges into a node. */
   function inDegree(id: string): number {
-    return revEdgeMap.get(id)?.length ?? 0;
+    if (hasSemanticLink(id)) return semanticMaps.rev.get(id)?.length ?? 0;
+    return referenceMaps.rev.get(id)?.length ?? 0;
   }
 
   const colDefs: { kind: string; label: string; nodes: GraphNode[] }[] = [
@@ -184,9 +202,12 @@ function buildTraceabilitySpine(manifest: KnowledgeManifest, docPages: Map<strin
 
   // Connector resolver (finding #7): for a node, list the labels of its
   // forward-linked targets that exist in the graph (so the spine shows real
-  // relationships, not just colored columns). Uses edgeMap + nodeById.
+  // relationships, not just colored columns). Mirrors outDegree/inDegree's
+  // semantic-preferred, references-as-fallback rule (Story 29.8) so the
+  // tooltip text always matches the connector count shown.
   function linkedTargetLabels(id: string): string[] {
-    const tos = edgeMap.get(id) ?? [];
+    const maps = hasSemanticLink(id) ? semanticMaps : referenceMaps;
+    const tos = maps.fwd.get(id) ?? [];
     const labels: string[] = [];
     for (const to of tos) {
       const target = nodeById.get(to);
@@ -291,7 +312,12 @@ function buildEpicStoryTrees(manifest: KnowledgeManifest, docPages: Map<string, 
     arr.push(story);
   }
 
+  // Story 29.8: membership must stay on SEMANTIC edges (derives-from/
+  // implements/…) — a `references` edge is just a prose mention, not epic
+  // membership, and would otherwise falsely list every story an epic's
+  // section happens to name.
   for (const edge of edges) {
+    if (edge.kind === 'references') continue;
     const a = nodeById.get(edge.from);
     const b = nodeById.get(edge.to);
     if (!a || !b) continue;

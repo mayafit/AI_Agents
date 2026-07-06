@@ -183,6 +183,15 @@ function walkDir(dir: string, results: string[]): void {
       }
       walkDir(full, results);
     } else if (entry.isFile()) {
+      // Story 29.8 — skip hidden FILES too (extends 29.7's hidden-DIR skip).
+      // A dotfile at a source root (`.gitignore`, `.gitattributes`, `.DS_Store`,
+      // any basename starting with `.`) is tooling metadata, not a BMAD
+      // document; without this it leaked in as an `unknown` doc (real Prophesee
+      // bug). The existing fixtures contain no such dotfiles, so this is
+      // byte-neutral for the backward-compat (AC3/AC6) gate.
+      if (entry.name.startsWith('.')) {
+        continue;
+      }
       results.push(full);
     }
     // Symlinks: skip (tolerate, not followed)

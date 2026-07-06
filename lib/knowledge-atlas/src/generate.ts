@@ -40,8 +40,19 @@ import { renderGraphPage } from './render/graph.js';
 import { renderDiagrams } from './render/diagrams.js';
 import { renderOrphanPage } from './render/orphan.js';
 
-/** Current manifest schema version. Increment on breaking changes. */
-const MANIFEST_VERSION = 1;
+/**
+ * Current manifest schema version. Increment on breaking changes OR when the
+ * extraction logic changes in a way that alters nodes/edges for UNCHANGED source
+ * files — the incremental diff reuses cached FileRecords keyed on contentHash,
+ * so without a version bump an engine upgrade would silently keep stale records.
+ *
+ * Story 29.8 bumps 1 → 2: the graph now includes `document` file nodes for every
+ * doc and `references` edges. A project with a v1 knowledge-site (built by the
+ * pre-29.8 engine) has NO such nodes/edges cached; a version bump forces the
+ * one-time full re-extraction that materializes them (verified on Prophesee:
+ * without this, an in-place re-run kept 0 edges).
+ */
+const MANIFEST_VERSION = 2;
 
 /**
  * Path helpers for the Story 29.7 purge safety gates (MUST-FIX #1).
