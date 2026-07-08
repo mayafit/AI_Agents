@@ -15,6 +15,6 @@
 code: ma-skills
 name: "MA-Agents Skills & Agents"
 description: "Enterprise methodology enforcement, specialized agents, and operational workflows"
-module_version: "3.6.2"
+module_version: "3.7.0"
 extends-module: bmm
 default_selected: false
