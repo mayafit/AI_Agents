@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.15.0-beta.2] - 2026-07-09
+
+Knowledge Atlas beta.2 — fixes authored inter-document links (found in real-project
+testing). Author-written markdown cross-links between source docs (e.g.
+`[roadmap](roadmap.md#…)`, `[domain model](domain-model.md)`) were emitted verbatim
+and, because reading views are written flat under `docs/<slug>.html`, resolved to a
+nonexistent `docs/roadmap.md` → broken links. The renderer now rewrites an authored
+relative doc-link (resolved against the source doc's directory) to the corresponding
+rendered page, preserving `#fragment` and handling spaced/`.MD` filenames and
+`../`/subdir traversal; non-scanned targets are left untouched. Verified on a real
+project: 18 → 0 broken links. No breaking change to the public CLI.
+
 ## [3.15.0-beta.1] - 2026-07-07
 
 Knowledge Atlas beta.1 — fixes from real-project (Prophesee) testing of beta.0:
