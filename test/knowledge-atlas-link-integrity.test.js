@@ -32,6 +32,7 @@ const { spawnSync } = require('child_process');
 // ─── Paths ───────────────────────────────────────────────────────────────────
 const ATLAS_CJS = path.join(__dirname, '..', 'lib', 'knowledge-atlas', 'dist', 'atlas.cjs');
 const RICH_FIXTURE = path.join(__dirname, 'fixtures', 'knowledge-atlas', 'rich-project');
+const AUTHORED_LINKS_FIXTURE = path.join(__dirname, 'fixtures', 'knowledge-atlas', 'authored-links-project');
 
 // Pin SOURCE_DATE_EPOCH for determinism (NFR62)
 const PINNED_EPOCH = '1700000000'; // 2023-11-14T22:13:20Z
@@ -418,6 +419,156 @@ test('search.html embeds resolved `page` fields matching docPageRelPath output',
   const searchHtml = readSiteFile(siteDir, 'search.html');
   const marker = 'window.__ATLAS_SEARCH__ = {';
   assert.ok(searchHtml.includes(marker), 'search.html must embed __ATLAS_SEARCH__');
+});
+
+// ─── Authored relative markdown cross-links (bug fix) ───────────────────────
+//
+// CONFIRMED BUG (real Prophesys project, 18 broken links): reading-view docs
+// contain AUTHORED markdown cross-links to sibling source docs, e.g. in
+// `prd.md`: `[roadmap](roadmap.md#7-development-timetable)`. markdown-it
+// renders these as a plain `<a href="roadmap.md#...">` and passes them
+// through verbatim — but every reading view is written FLAT at
+// `docs/<slug>.html`, so the raw relative href resolves against the WRONG
+// base directory (`docs/roadmap.md` instead of the real
+// `docs/<slug-of-roadmap>.html`). The fix (render/linkify.ts
+// `rewriteAuthoredLinks`, wired into render/document.ts) resolves the
+// authored href against the SOURCE document's directory and rewrites it to
+// the sibling docs/-relative page — only when it actually matches a scanned
+// document; a genuinely non-scanned target is left untouched.
+console.log('\n--- Authored relative markdown cross-links (bug fix) ---');
+
+/** Find the single href attribute value in `html` that contains `needle`. */
+function findHrefContaining(html, needle) {
+  const hrefs = extractHrefs(html);
+  const matches = hrefs.filter(h => h.includes(needle));
+  assert.strictEqual(matches.length, 1,
+    `expected exactly one href containing "${needle}", found ${matches.length}: ${JSON.stringify(matches)}`);
+  return matches[0];
+}
+
+let authoredSiteDir;
+let authoredManifest;
+let prdHtml;
+let glossaryHtml;
+
+test('authored-links-project fixture exists', () => {
+  assert.ok(fs.existsSync(AUTHORED_LINKS_FIXTURE), `fixture missing: ${AUTHORED_LINKS_FIXTURE}`);
+});
+
+test('generate authored-links-project (temp copy)', () => {
+  const tmpProject = makeTempDir('authored');
+  copyDirRecursive(AUTHORED_LINKS_FIXTURE, tmpProject);
+  authoredManifest = runAtlas(tmpProject);
+  authoredSiteDir = path.join(tmpProject, '_bmad-output', 'knowledge-site');
+  assert.ok(fs.existsSync(authoredSiteDir), 'knowledge-site output dir must exist');
+
+  const docsDir = path.join(authoredSiteDir, 'docs');
+  const prdFile = fs.readdirSync(docsDir).find(f => /prd\.html$/.test(f));
+  const glossaryFile = fs.readdirSync(docsDir).find(f => /glossary\.html$/.test(f));
+  assert.ok(prdFile, 'a docs/*prd.html page must be generated');
+  assert.ok(glossaryFile, 'a docs/*glossary.html page must be generated');
+  prdHtml = readSiteFile(authoredSiteDir, `docs/${prdFile}`);
+  glossaryHtml = readSiteFile(authoredSiteDir, `docs/${glossaryFile}`);
+});
+
+test('sibling link with #anchor rewrites to the rendered sibling page, anchor preserved', () => {
+  // Authored: [roadmap](roadmap.md#7-development-timetable)
+  const href = findHrefContaining(prdHtml, 'roadmap.html#7-development-timetable');
+  assert.ok(/^[^/]+\.html#7-development-timetable$/.test(href),
+    `expected a flat docs/-relative href with the anchor preserved, got "${href}"`);
+  const targetPath = path.join(authoredSiteDir, 'docs', href.split('#')[0]);
+  assert.ok(fs.existsSync(targetPath), `rewritten target must exist on disk: ${targetPath}`);
+  // The anchor must land on a real id in the target page (not just survive as text).
+  const targetHtml = fs.readFileSync(targetPath, 'utf-8');
+  assert.ok(targetHtml.includes('id="7-development-timetable"'),
+    'target page must have a heading anchor matching the preserved fragment');
+});
+
+test('sibling link with no anchor rewrites to the rendered sibling page', () => {
+  // Authored: [roadmap again](roadmap.md)
+  const hrefs = extractHrefs(prdHtml).filter(h => /roadmap/.test(h) && !h.includes('#'));
+  assert.strictEqual(hrefs.length, 1, `expected exactly one no-anchor roadmap href, found: ${JSON.stringify(hrefs)}`);
+  const targetPath = path.join(authoredSiteDir, 'docs', hrefs[0]);
+  assert.ok(fs.existsSync(targetPath), `rewritten target must exist on disk: ${targetPath}`);
+});
+
+test('subdirectory link (sub/domain-model.md) rewrites to the rendered flat docs page', () => {
+  // Authored: [domain model](sub/domain-model.md)
+  const href = findHrefContaining(prdHtml, 'domain-model.html');
+  assert.ok(!href.includes('/'), `docs pages are flat — rewritten href must have no subdirectory, got "${href}"`);
+  const targetPath = path.join(authoredSiteDir, 'docs', href);
+  assert.ok(fs.existsSync(targetPath), `rewritten target must exist on disk: ${targetPath}`);
+});
+
+test('parent-directory link (../glossary.md) rewrites to the rendered flat docs page', () => {
+  // Authored: [glossary](../glossary.md)
+  const href = findHrefContaining(prdHtml, 'glossary.html');
+  assert.ok(!href.includes('..'), `rewritten href must not retain "../" traversal, got "${href}"`);
+  const targetPath = path.join(authoredSiteDir, 'docs', href);
+  assert.ok(fs.existsSync(targetPath), `rewritten target must exist on disk: ${targetPath}`);
+});
+
+test('space + uppercase .MD extension link rewrites and resolves', () => {
+  // Authored: [system description](General%20System%20Description.MD)
+  const href = findHrefContaining(prdHtml, 'General-System-Description');
+  assert.ok(/^[^/#\s]+\.html$/.test(href), `expected a clean flat .html href, got "${href}"`);
+  const targetPath = path.join(authoredSiteDir, 'docs', href);
+  assert.ok(fs.existsSync(targetPath), `rewritten target must exist on disk: ${targetPath}`);
+});
+
+test('reverse direction: a root-level doc linking DOWN into a subdirectory also resolves', () => {
+  // glossary.md authors: [PRD](planning-artifacts/prd.md)
+  const href = findHrefContaining(glossaryHtml, 'prd.html');
+  const targetPath = path.join(authoredSiteDir, 'docs', href);
+  assert.ok(fs.existsSync(targetPath), `rewritten target must exist on disk: ${targetPath}`);
+});
+
+test('genuinely non-scanned target (missing-file.md) is left UNTOUCHED, not falsely rewritten', () => {
+  // Authored: [missing doc](missing-file.md) — no such file was ever scanned.
+  const hrefs = extractHrefs(prdHtml).filter(h => h.includes('missing-file'));
+  assert.strictEqual(hrefs.length, 1, `expected exactly one missing-file href, found: ${JSON.stringify(hrefs)}`);
+  assert.strictEqual(hrefs[0], 'missing-file.md',
+    'a non-scanned target must be left byte-for-byte unchanged (no invented docs/ page)');
+});
+
+test('no authored .md href in the generated site actually matches a scanned document (i.e. the fix did not miss one)', () => {
+  const fileIdsLower = new Set(authoredManifest.files.map(f => f.path.toLowerCase()));
+  const htmlFiles = collectHtmlFiles(authoredSiteDir).filter(f => f.startsWith('docs/'));
+  const straggler = /\.md(#.*)?$/i;
+  const unresolvedButShouldveMatched = [];
+  for (const relPath of htmlFiles) {
+    const html = readSiteFile(authoredSiteDir, relPath);
+    for (const href of extractHrefs(html)) {
+      if (!straggler.test(href)) continue;
+      // A surviving .md href is only correct behavior for a genuinely
+      // non-scanned target. If its resolved source path DOES match a scanned
+      // fileId, the rewrite pass has a bug (missed a real match).
+      if (fileIdsLower.has(href.split('#')[0].toLowerCase())) {
+        unresolvedButShouldveMatched.push(`${relPath} -> href="${href}"`);
+      }
+    }
+  }
+  assert.strictEqual(unresolvedButShouldveMatched.length, 0,
+    `Found authored .md href(s) that should have been rewritten but weren't:\n${unresolvedButShouldveMatched.join('\n')}`);
+});
+
+test('authored-links-project: every internal href resolves, EXCEPT the one intentionally non-scanned link', () => {
+  const htmlFiles = collectHtmlFiles(authoredSiteDir);
+  const failures = [];
+  for (const relPath of htmlFiles) {
+    const html = readSiteFile(authoredSiteDir, relPath);
+    const hrefs = extractHrefs(html).filter(h => !isNonInternalHref(h));
+    for (const href of hrefs) {
+      if (href === 'missing-file.md') continue; // expected, asserted separately above
+      const target = resolveHrefAgainstPage(relPath, href.split('#')[0]);
+      const targetPath = path.join(authoredSiteDir, target);
+      if (!fs.existsSync(targetPath)) {
+        failures.push(`${relPath} -> href="${href}" -> resolved "${target}" (missing)`);
+      }
+    }
+  }
+  assert.strictEqual(failures.length, 0,
+    `Found ${failures.length} broken internal link(s):\n${failures.join('\n')}`);
 });
 
 // ─── Cleanup ─────────────────────────────────────────────────────────────────

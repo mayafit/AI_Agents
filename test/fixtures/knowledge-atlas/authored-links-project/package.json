@@ -1,0 +1,5 @@
+{
+  "name": "authored-links-atlas-fixture",
+  "version": "0.1.0",
+  "description": "Fixture project exercising AUTHORED relative markdown cross-links (bug fix: broken authored .md links, confirmed on the Prophesys real project)"
+}
