@@ -8,6 +8,7 @@
  *   sanitizeHtml()  — strip dangerous HTML from rendered markdown output
  */
 
+import * as path from 'path';
 import type { KnowledgeManifest } from '../types.js';
 import { filePathToSlug, buildSlugMap } from './paths.js';
 
@@ -238,6 +239,173 @@ function linkifyText(
   // Append remaining text
   result += text.slice(last);
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// rewriteAuthoredLinks — bug fix: authored relative `.md` cross-links
+// ---------------------------------------------------------------------------
+//
+// CONFIRMED BUG (real Prophesys project, 18 broken links): reading-view docs
+// contain AUTHORED markdown cross-links to sibling source docs, e.g. in
+// `prd.md`: `[roadmap](roadmap.md#7-development-timetable)`. markdown-it
+// renders these as plain `<a href="roadmap.md#...">` and `linkifyHtml` above
+// only rewrites bare ENTITY TOKENS (FR26, Story 1.2, …) found in TEXT nodes —
+// it never touches an href that already lives inside an authored `<a>` tag.
+// Every reading view is written FLAT at `docs/<slug>.html` (render/paths.ts),
+// so from `docs/prd.html` a raw `href="roadmap.md"` resolves to the
+// non-existent `docs/roadmap.md` instead of the real `docs/roadmap.html`.
+//
+// This pass resolves the authored href against the SOURCE document's
+// directory (not the rendered docs/ directory), looks the resolved path up
+// in the SAME collision-free slug map every other renderer uses, and — only
+// when it matches an actual scanned document — rewrites it to the sibling
+// docs/-relative page. Anything that doesn't resolve to a scanned document
+// (external URL, mailto:, in-page anchor, or a genuinely non-scanned file) is
+// left byte-for-byte untouched: this pass never invents a target.
+
+/**
+ * Decode the HTML character references markdown-it's link renderer can
+ * introduce into an href attribute value (notably `&amp;` for a literal `&`
+ * in the authored URL). Narrow by design — just enough to recover the
+ * original authored URL text for filesystem-path resolution; the decoded
+ * scheme/path is never emitted as-is (only a freshly-built `<slug>.html`
+ * href is written back), so there is no injection surface here.
+ */
+function decodeHrefEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, '\'');
+}
+
+/** Re-escape `&` for safe embedding back into an HTML attribute value. */
+function encodeHrefForAttr(value: string): string {
+  return value.replace(/&/g, '&amp;');
+}
+
+/**
+ * Resolve a single authored href (already HTML-entity-decoded) against the
+ * SOURCE document's directory. Returns the rewritten docs/-relative href
+ * (`<slug>.html[#fragment]`, since every doc page lives flat under `docs/`)
+ * or `null` when the href should be left untouched:
+ *   - external / scheme'd links (`http:`, `mailto:`, `javascript:`, …),
+ *   - protocol-relative (`//host/...`) and in-page (`#frag`) links,
+ *   - site-root-absolute paths (`/x`) — not this bug's shape,
+ *   - anything that normalizes outside the scanned tree (`../../../etc`),
+ *   - anything that does not resolve (case-insensitively) to a fileId
+ *     actually present in the manifest — a genuinely non-scanned target;
+ *     never invent a link for it.
+ */
+function resolveAuthoredHref(
+  href: string,
+  currentFileId: string,
+  fileIdLookup: Map<string, string>,
+  slugMap: Map<string, string>,
+): string | null {
+  const trimmed = href.trim();
+  if (trimmed === '') return null;
+
+  // External schemes (http:, https:, mailto:, tel:, javascript:, vbscript:,
+  // data:, ...), in-page fragments, and protocol-relative URLs are never
+  // authored-doc cross-links — leave them exactly as authored/sanitized.
+  if (/^(?:[a-zA-Z][a-zA-Z0-9+.-]*:|#|\/\/)/.test(trimmed)) return null;
+  // Site-root-absolute path — not the relative-link shape this bug covers.
+  if (trimmed.startsWith('/')) return null;
+
+  const hashIdx = trimmed.indexOf('#');
+  const rawPath = hashIdx === -1 ? trimmed : trimmed.slice(0, hashIdx);
+  const fragment = hashIdx === -1 ? '' : trimmed.slice(hashIdx);
+  if (rawPath === '') return null; // defensive: pure-fragment already caught above
+
+  // URL-decode so `%20` (space), `%2E` etc. match the real on-disk filename.
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(rawPath);
+  } catch {
+    decodedPath = rawPath; // malformed percent-escape — fall back to raw text
+  }
+
+  // Resolve RELATIVE TO THE SOURCE DOC'S DIRECTORY (the authored-link base),
+  // never the rendered docs/ directory the page happens to live under.
+  const currentDir = path.posix.dirname(currentFileId);
+  const joined = currentDir === '.' ? decodedPath : `${currentDir}/${decodedPath}`;
+  const resolved = path.posix.normalize(joined).replace(/\/+$/, '');
+
+  // Escaped above the scanned root — cannot be a scanned fileId.
+  if (resolved === '..' || resolved.startsWith('../')) return null;
+
+  // Case-insensitive match (`.md` vs `.MD`, mixed-case filenames) against the
+  // ACTUAL scanned fileIds — the same identity space every other renderer
+  // (linkifyHtml, backlinks, search) resolves against.
+  const matchedFileId = fileIdLookup.get(resolved.toLowerCase());
+  if (!matchedFileId) return null; // not a scanned document — leave unchanged
+
+  const targetSlug = slugMap.get(matchedFileId);
+  if (!targetSlug) return null;
+
+  // Self-link (authored link back to its own file): collapse to an in-page
+  // anchor, mirroring resolveHref()'s same-page handling above, instead of a
+  // full-page href to the page it's already on.
+  if (matchedFileId === currentFileId) {
+    return fragment || '#';
+  }
+
+  return `${targetSlug}.html${fragment}`;
+}
+
+/**
+ * Rewrite AUTHORED relative markdown cross-links — `[x](roadmap.md)`,
+ * `[x](sub/y.md#anchor)`, `[x](../z.MD)`, spaces/`%20`, mixed-case
+ * `.md`/`.MD` — so they point at the RENDERED sibling doc page instead of
+ * the raw source-relative path markdown-it passed through verbatim.
+ *
+ * Only touches `href` attributes on `<a>` tags already present in `html`
+ * (i.e. AUTHORED links); it never invents new links from plain text — that
+ * remains `linkifyHtml`'s job. Must run BEFORE `sanitizeHtml` so the
+ * rewritten href is what the safe-URL allowlist evaluates (a relative
+ * `<slug>.html[#frag]` href always passes it, matching prior behavior for
+ * already-relative authored links — no new unsafe-URL surface is created).
+ * Order relative to `linkifyHtml` does not matter: that pass only touches
+ * bare text nodes, never existing `<a>` attributes.
+ */
+export function rewriteAuthoredLinks(
+  html: string,
+  manifest: KnowledgeManifest,
+  currentFileId: string,
+): string {
+  if (!html) return html;
+
+  const fileIds = manifest.files.map(f => f.path);
+  if (fileIds.length === 0) return html;
+
+  const slugMap = buildSlugMap(fileIds);
+
+  // Case-insensitive fileId lookup. First-encountered (sorted-order) wins on
+  // a case-fold collision — deterministic, matching the scanner's own
+  // first-wins dedup semantics.
+  const fileIdLookup = new Map<string, string>();
+  for (const id of fileIds) {
+    const key = id.toLowerCase();
+    if (!fileIdLookup.has(key)) fileIdLookup.set(key, id);
+  }
+
+  return html.replace(/<a\b[^>]*>/gi, (tag) => {
+    const hrefMatch = tag.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')/i);
+    if (!hrefMatch) return tag;
+
+    const usesDoubleQuote = hrefMatch[1] !== undefined;
+    const rawAttrValue = usesDoubleQuote ? hrefMatch[1]! : hrefMatch[2]!;
+    const decoded = decodeHrefEntities(rawAttrValue);
+
+    const rewritten = resolveAuthoredHref(decoded, currentFileId, fileIdLookup, slugMap);
+    if (rewritten === null) return tag;
+
+    const quote = usesDoubleQuote ? '"' : '\'';
+    const newAttr = `href=${quote}${encodeHrefForAttr(rewritten)}${quote}`;
+    return tag.slice(0, hrefMatch.index!) + newAttr + tag.slice(hrefMatch.index! + hrefMatch[0].length);
+  });
 }
 
 // ---------------------------------------------------------------------------

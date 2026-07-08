@@ -36,7 +36,7 @@ import { headingToSlug } from '../extract/slug.js';
 import { pageShell } from './layout.js';
 import type { NavFlags } from './layout.js';
 import { gatherBacklinks, renderBacklinksHtml } from './backlinks.js';
-import { linkifyHtml, sanitizeHtml } from './linkify.js';
+import { linkifyHtml, sanitizeHtml, rewriteAuthoredLinks } from './linkify.js';
 import { resolveSlug } from './paths.js';
 import type { FileRecord, KnowledgeManifest, GraphNode } from '../types.js';
 
@@ -261,6 +261,12 @@ export function renderDocumentPage(
   // Process mermaid fences (rendered as a self-contained plain-text figure)
   const { html: mermaidHtml } = processMermaidFences(renderedHtml);
   renderedHtml = mermaidHtml;
+
+  // Rewrite AUTHORED relative markdown cross-links (e.g. `[x](roadmap.md)`)
+  // to the RENDERED sibling doc page — bug fix (see render/linkify.ts for
+  // the full writeup). Must run before linkifyHtml/sanitizeHtml so the
+  // resolved href is what the safe-URL allowlist evaluates.
+  renderedHtml = rewriteAuthoredLinks(renderedHtml, manifest, fileRec.path);
 
   // Linkify entity tokens (now that HTML structure is stable)
   renderedHtml = linkifyHtml(renderedHtml, manifest, fileRec.path);
