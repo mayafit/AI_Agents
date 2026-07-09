@@ -210,11 +210,11 @@ const allExpectedSkills = [
   ...expectedSqaSkills,
 ];
 
-test('skills/ has exactly 62 subdirectories', () => {
+test('skills/ has exactly 63 subdirectories', () => {
   const entries = fs.readdirSync(skillsDir).filter(e =>
     fs.statSync(path.join(skillsDir, e)).isDirectory()
   );
-  assert.strictEqual(entries.length, 62, `Expected 62 skill dirs, found ${entries.length}`);
+  assert.strictEqual(entries.length, 63, `Expected 63 skill dirs, found ${entries.length}`);
 });
 
 test('all 5 agent skill directories exist', () => {
@@ -317,8 +317,8 @@ test('module-help.csv has correct header columns', () => {
   }
 });
 
-test('module-help.csv has 62 skill entries (excluding header)', () => {
-  assert.strictEqual(csvData.rows.length, 62, `Expected 62 rows, found ${csvData.rows.length}`);
+test('module-help.csv has 63 skill entries (excluding header)', () => {
+  assert.strictEqual(csvData.rows.length, 63, `Expected 63 rows, found ${csvData.rows.length}`);
 });
 
 test('all CSV entries use module code ma-skills', () => {
