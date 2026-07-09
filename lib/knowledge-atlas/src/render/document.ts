@@ -299,16 +299,36 @@ export function renderDocumentPage(
   // to a heading slug (`story-11-oauth2-integration`). We emit an invisible
   // anchor target for every file node whose anchor is not already a heading id,
   // so every cross-link `…#anchor` resolves to a real location on the page.
+  // Place each entity's anchor at the FIRST place that entity is mentioned in
+  // the body (its first linkified occurrence: an <a … href="…#anchor">), so a
+  // cross-link or graph-node click lands where the entity is actually discussed.
+  // Previously every anchor was emitted as one clump at the top of the article,
+  // so every #anchor (e.g. all 9 epics) resolved to the same spot. Anchors with
+  // no linked mention fall back to the top clump.
   const existingIds = new Set<string>();
   for (const m of renderedHtml.matchAll(/\sid="([^"]+)"/g)) existingIds.add(m[1]!);
-  const anchorTargets: string[] = [];
+  const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const inlinePlacements: { idx: number; anchor: string }[] = [];
+  const fallbackAnchors: string[] = [];
   for (const node of fileNodes) {
-    if (node.anchor && !existingIds.has(node.anchor)) {
-      anchorTargets.push(`<span class="entity-anchor" id="${esc(node.anchor)}"></span>`);
-      existingIds.add(node.anchor);
-    }
+    const a = node.anchor;
+    if (!a || existingIds.has(a)) continue;
+    existingIds.add(a);
+    // First <a> tag whose href ends with this exact anchor fragment.
+    const m = new RegExp('<a\\b[^>]*href="[^"]*#' + escRe(a) + '"', 'i').exec(renderedHtml);
+    if (m) inlinePlacements.push({ idx: m.index, anchor: a });
+    else fallbackAnchors.push(a);
   }
-  const anchorTargetsHtml = anchorTargets.join('\n');
+  // Insert the invisible anchor spans just before their target links. Apply from
+  // the last position to the first so earlier indices stay valid.
+  inlinePlacements.sort((x, y) => y.idx - x.idx);
+  for (const p of inlinePlacements) {
+    const span = `<span class="entity-anchor" id="${esc(p.anchor)}"></span>`;
+    renderedHtml = renderedHtml.slice(0, p.idx) + span + renderedHtml.slice(p.idx);
+  }
+  const anchorTargetsHtml = fallbackAnchors
+    .map(a => `<span class="entity-anchor" id="${esc(a)}"></span>`)
+    .join('\n');
 
   // Back link
   const backLinkHtml = '<a class="back-link" href="../index.html">&larr; Back to Home</a>';
