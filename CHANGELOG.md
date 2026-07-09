@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.15.5] - 2026-07-09
+
+Knowledge Atlas — FR clicks land on the definition, not the revision history.
+
+### Fixed
+- **Clicking an FR jumped to the revision-history/changelog table.** The entity
+  anchor was placed at the FR's first linkified mention, but a BMAD PRD lists FRs
+  in a changelog table near the top ("…update FR21, FR91… accordingly") — so that
+  became the anchor target. The anchor is now placed at the FR's **definition** —
+  the `**FRn:**` / `## FRn:` occurrence immediately followed by a colon — falling
+  back to first mention only when no such definition exists. Verified on Prophesys:
+  FR1/FR21/FR56/FR87 anchors now sit at their requirement text, not the changelog.
+  (Render-time change — takes effect on any regenerate, no manifest bump needed.)
+
 ## [3.15.4] - 2026-07-09
 
 Knowledge Atlas — make the 3.15.3 def-site fix actually apply on in-place upgrade.

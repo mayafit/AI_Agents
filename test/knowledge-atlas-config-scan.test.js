@@ -677,6 +677,48 @@ test('FR defined in prd.md anchors in the PRD, not in prd-validation-report.md',
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Regression (3.15.5): an entity anchor must land at the DEFINITION, not at an
+// earlier passing mention. A BMAD PRD lists FRs in a revision-history/changelog
+// table near the top ("…update FR1 accordingly"), which used to capture the
+// anchor — so clicking the FR jumped to the changelog instead of its definition.
+// ─────────────────────────────────────────────────────────────────────────────
+console.log('\n--- Regression: FR anchor lands at the definition, not the changelog ---');
+
+test('FR anchor is placed at "**FRn:**" definition, past an earlier changelog mention', () => {
+  const projectRoot = makeTempDir('anchor-def');
+  writeFileTree(projectRoot, {
+    '_bmad-output/planning-artifacts/planning/prd.md':
+      '# Product Requirements\n\n' +
+      '## Revision History\n\n| Date | Change |\n| --- | --- |\n' +
+      '| 2026-01-01 | Detection refactor; update FR1 accordingly |\n\n' +
+      '## Functional Requirements\n\n' +
+      '- **FR1:** Users can view a 2D map with base layers rendered via Cesium.\n' +
+      '- **FR2:** Users can pan and zoom the map.\n',
+  });
+  runAtlas(projectRoot);
+
+  const docsDir = path.join(projectRoot, '_bmad-output', 'knowledge-site', 'docs');
+  const prdFile = fs.readdirSync(docsDir).find(f => /prd\.html$/.test(f) && !/validation|report/.test(f));
+  assert.ok(prdFile, 'PRD doc page must exist');
+  const html = fs.readFileSync(path.join(docsDir, prdFile), 'utf-8');
+
+  const anchorIdx = html.indexOf('id="fr1"');
+  assert.ok(anchorIdx >= 0, 'fr1 anchor must exist');
+  // "update FR1 accordingly" gets linkified (FR1 → <a>), so match text that
+  // survives: the changelog cell's prose and the definition sentence.
+  const changelogIdx = html.indexOf('Detection refactor');
+  const defIdx = html.indexOf('Users can view a 2D map');
+  assert.ok(changelogIdx >= 0 && defIdx >= 0, 'both changelog mention and definition must render');
+  assert.ok(anchorIdx > changelogIdx,
+    'fr1 anchor must be placed AFTER the changelog mention, not at it');
+  // The anchor sits immediately before the definition link, so the definition
+  // text must follow closely after the anchor.
+  const tail = html.slice(anchorIdx, anchorIdx + 200).replace(/<[^>]+>/g, ' ');
+  assert.ok(/FR1\s*:?\s*Users can view a 2D map/.test(tail),
+    `fr1 anchor must sit at the definition; got: ${tail.replace(/\s+/g, ' ').trim().slice(0, 120)}`);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Cleanup
 // ─────────────────────────────────────────────────────────────────────────────
 for (const d of tempDirs) {
