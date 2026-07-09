@@ -151,12 +151,16 @@ function processMermaidFences(html: string): { html: string; hasMermaid: boolean
   const fenceRe = /<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/gi;
   const result = html.replace(fenceRe, (_match, codeContent: string) => {
     hasMermaid = true;
-    // codeContent is already HTML-entity-encoded by markdown-it; keep it encoded
-    // (safe) and present it verbatim inside a labelled figure.
+    // `<pre class="mermaid">` is mermaid's default render target: the vendored
+    // runtime (assets/mermaid.min.js, injected by the shell when hasMermaid) reads
+    // the element's textContent — the HTML entities markdown-it emitted decode
+    // back to the literal diagram source — and replaces it with rendered SVG.
+    // With no JS the source stays legible (the plain-text degradation fallback).
+    // linkify skips <pre>, and sanitize preserves `<pre class="…">`, so the
+    // diagram source reaches the browser uncorrupted (no injected <a> tags).
     return [
       '<figure class="mermaid-block" aria-label="Mermaid diagram">',
-      '<figcaption class="mermaid-note">Mermaid diagram (source)</figcaption>',
-      `<div class="mermaid"><pre class="mermaid-fallback">${codeContent.trim()}</pre></div>`,
+      `<pre class="mermaid">${codeContent.trim()}</pre>`,
       '</figure>',
     ].join('\n');
   });
@@ -218,6 +222,10 @@ export interface RenderedDocument {
   html: string;
   /** Plain-text of the rendered article body only (for the search index). */
   articleText: string;
+  /** True if this page contains a mermaid diagram (needs the vendored runtime). */
+  usedMermaid: boolean;
+  /** True if this page is a rendered .drawio diagram (needs the vendored viewer). */
+  usedDrawio: boolean;
 }
 
 export function renderDocumentPage(
@@ -229,6 +237,12 @@ export function renderDocumentPage(
 ): RenderedDocument {
   const absPath = resolveAbsPath?.(fileRec.path) ?? path.join(projectRoot, fileRec.path);
   const title = fileTitle(fileRec.path);
+
+  // draw.io files are mxGraph XML, not markdown — render them via the vendored
+  // GraphViewer instead of the markdown pipeline (which would strip the XML).
+  if (/\.drawio(\.xml)?$/i.test(fileRec.path)) {
+    return renderDrawioPage(fileRec, absPath, title, manifest, navFlags);
+  }
 
   // Read markdown content
   let rawContent = '';
@@ -258,8 +272,8 @@ export function renderDocumentPage(
   // Add heading anchors for in-page navigation
   renderedHtml = addHeadingAnchors(renderedHtml);
 
-  // Process mermaid fences (rendered as a self-contained plain-text figure)
-  const { html: mermaidHtml } = processMermaidFences(renderedHtml);
+  // Process mermaid fences → live `<pre class="mermaid">` render targets.
+  const { html: mermaidHtml, hasMermaid } = processMermaidFences(renderedHtml);
   renderedHtml = mermaidHtml;
 
   // Rewrite AUTHORED relative markdown cross-links (e.g. `[x](roadmap.md)`)
@@ -354,9 +368,19 @@ export function renderDocumentPage(
     '</div>',
   ].filter(Boolean).join('\n');
 
-  // Reading views require zero JS — mermaid is rendered as a plain-text figure
-  // and all links are static HTML (progressive-enhancement baseline, AC 7).
-  // Doc pages live under docs/, so nav/search links need a "../" baseHref.
+  // Reading content is legible with zero JS (progressive-enhancement baseline,
+  // AC 7): all links are static HTML and a mermaid figure degrades to its
+  // legible source. When the page HAS a mermaid diagram we additionally inject
+  // the vendored runtime so it renders to SVG — this is the only script on a
+  // doc page, and only on pages that need it. Doc pages live under docs/, so
+  // nav/search/asset links need a "../" baseHref.
+  const scripts: string[] = [];
+  if (hasMermaid) {
+    scripts.push('<script src="../assets/mermaid.min.js"></script>');
+    scripts.push(
+      '<script>try{mermaid.initialize({startOnLoad:true,securityLevel:"strict",theme:"neutral"});}catch(e){}</script>',
+    );
+  }
   const html = pageShell({
     title,
     body: pageBody,
@@ -364,6 +388,7 @@ export function renderDocumentPage(
     pageType: 'document',
     baseHref: '../',
     navFlags,
+    scripts,
   });
 
   // Article-only plain text for the search index (SF-1): strip tags from the
@@ -374,5 +399,70 @@ export function renderDocumentPage(
     .replace(/\s+/g, ' ')
     .trim();
 
-  return { html, articleText };
+  return { html, articleText, usedMermaid: hasMermaid, usedDrawio: false };
+}
+
+/**
+ * Render a draw.io (`.drawio`) file as a live diagram. draw.io files are
+ * mxGraph XML, not markdown — running them through the markdown/sanitize
+ * pipeline strips every mxGraph tag and yields a blank page. Instead we embed
+ * the raw XML in a draw.io GraphViewer element (`<div class="mxgraph">`) and
+ * load the vendored, URL-neutralized viewer, which renders it to SVG entirely
+ * offline. With no JS the page shows a short note + a link to the source file.
+ */
+function renderDrawioPage(
+  fileRec: FileRecord,
+  absPath: string,
+  title: string,
+  manifest: KnowledgeManifest,
+  navFlags?: NavFlags,
+): RenderedDocument {
+  let xml = '';
+  try {
+    xml = fs.readFileSync(absPath, 'utf-8').replace(/\r\n/g, '\n');
+  } catch {
+    xml = '';
+  }
+
+  // GraphViewer reads a JSON config from data-mxgraph; `xml` carries the source.
+  // esc() HTML-escapes the JSON so the attribute is well-formed; the viewer
+  // HTML-decodes then JSON-parses it back to the original XML.
+  const config = { highlight: '#3572b0', nav: true, resize: true, 'toolbar-nohide': true, toolbar: 'zoom layers', xml };
+  const dataAttr = esc(JSON.stringify(config));
+
+  const body = [
+    '<div class="content-wrap">',
+    '<a class="back-link" href="../index.html">&larr; Back to Home</a>',
+    '<article class="doc-body">',
+    `<h1>${esc(title)}</h1>`,
+    '<figure class="drawio-block" aria-label="draw.io diagram">',
+    xml
+      ? `<div class="mxgraph" style="max-width:100%;border:1px solid var(--border,#ddd);border-radius:6px" data-mxgraph="${dataAttr}"></div>`
+      : '<p><em>(draw.io file could not be read.)</em></p>',
+    '<noscript><p class="mermaid-note">This is a draw.io diagram; enable JavaScript to render it.</p></noscript>',
+    '</figure>',
+    '</article>',
+    '</div>',
+  ].filter(Boolean).join('\n');
+
+  // Predefine the viewer's config globals to inert local values so it never
+  // reaches for a network endpoint (the vendored file's diagrams.net/font/icon
+  // URLs are already neutralized; this belt-and-suspenders covers the `||`
+  // fallbacks, which need a TRUTHY value — "" would fall through to the URL).
+  const scripts = [
+    '<script>window.DRAWIO_BASE_URL=".";window.PROXY_URL=".";window.STYLE_PATH=".";window.RESOURCE_BASE=".";window.SHAPES_PATH=".";window.STENCIL_PATH=".";window.IMAGE_PATH=".";</script>',
+    '<script src="../assets/drawio-viewer.min.js"></script>',
+  ];
+
+  const html = pageShell({
+    title,
+    body,
+    manifest,
+    pageType: 'document',
+    baseHref: '../',
+    navFlags,
+    scripts,
+  });
+
+  return { html, articleText: title, usedMermaid: false, usedDrawio: true };
 }

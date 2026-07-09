@@ -28,6 +28,7 @@ import * as path from 'path';
 import { pageShell } from './layout.js';
 import type { NavFlags } from './layout.js';
 import { renderDocumentPage } from './document.js';
+import { writeVendorAsset } from './vendor.js';
 import { renderSearchPageHtml } from './search.js';
 import { filePathToSlug, buildSlugMap } from './paths.js';
 import type { KnowledgeManifest, FileRecord } from '../types.js';
@@ -289,17 +290,34 @@ export function renderSite(
     hasOrphansPage: fs.existsSync(path.join(outDir, 'orphans.html')),
   };
 
-  // Step 1: Render document pages (reading views). Zero JS required.
+  // Step 1: Render document pages (reading views). Legible with zero JS; pages
+  // that contain a mermaid diagram additionally load the vendored runtime.
+  let anyMermaid = false;
+  let anyDrawio = false;
   for (const file of manifest.files) {
     const slug = slugMap.get(file.path) ?? filePathToSlug(file.path);
-    const { html, articleText } = renderDocumentPage(file, manifest, manifest.projectRoot, navFlags, resolveAbsPath);
+    const { html, articleText, usedMermaid, usedDrawio } = renderDocumentPage(file, manifest, manifest.projectRoot, navFlags, resolveAbsPath);
     const relPath = `docs/${slug}.html`;
     writeHtml(path.join(outDir, relPath), html);
     written.push(relPath);
+    if (usedMermaid) anyMermaid = true;
+    if (usedDrawio) anyDrawio = true;
 
     // Index ONLY the article text (no nav/footer/TOC/status chrome), so search
     // hits reflect document content rather than shell boilerplate.
     docBodies.set(file.path, articleText);
+  }
+
+  // Step 1b: Copy the vendored browser runtimes into assets/ — but only the ones
+  // a page actually references (mermaid runtime / draw.io viewer), so a site with
+  // no such diagrams carries no extra weight.
+  if (anyMermaid) {
+    const rel = writeVendorAsset(outDir, 'mermaid.min.js');
+    if (rel) written.push(rel);
+  }
+  if (anyDrawio) {
+    const rel = writeVendorAsset(outDir, 'drawio-viewer.min.js');
+    if (rel) written.push(rel);
   }
 
   // Step 2: Render search.html (offline lunr search; PE fallback).
