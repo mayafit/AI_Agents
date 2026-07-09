@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.15.4] - 2026-07-09
+
+Knowledge Atlas — make the 3.15.3 def-site fix actually apply on in-place upgrade.
+
+### Fixed
+- **The 3.15.3 fix didn't take effect when regenerating over an existing site.**
+  The classified DocType is baked into each cached `FileRecord`, and the
+  incremental rebuild reuses unchanged records verbatim — so on an in-place
+  re-run, `prd-validation-report.md` kept its old `prd` type and kept winning the
+  def-site election. Bumped `MANIFEST_VERSION` 2 → 3 to force the one-time full
+  re-extraction on upgrade (same mechanism as the 29.8 1 → 2 bump). Verified on
+  Prophesys: a normal in-place regenerate now re-routes all FR links to the PRD.
+
 ## [3.15.3] - 2026-07-09
 
 Knowledge Atlas — FR/NFR links now resolve to the PRD, not a report about it.

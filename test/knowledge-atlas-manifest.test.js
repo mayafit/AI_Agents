@@ -941,10 +941,11 @@ test('incremental: schema-version mismatch forces a full rebuild (item 19)', () 
 
   // Rebuild: version mismatch → full rebuild → no stale hash survives.
   const manifest2 = runAtlas(tmpDir);
-  // Story 29.8: MANIFEST_VERSION bumped 1→2 so an engine upgrade forces a full
-  // re-extraction (new `document` nodes + `references` edges) rather than
-  // reusing stale contentHash-keyed FileRecords from a pre-29.8 knowledge-site.
-  assert.strictEqual(manifest2.version, 2, 'rebuilt manifest must use current version');
+  // MANIFEST_VERSION bumps force a full re-extraction on engine upgrade rather
+  // than reusing stale contentHash-keyed FileRecords: 29.8 (1→2) added `document`
+  // nodes + `references` edges; 3.15.3 (2→3) re-classifies prd-derivative reports
+  // so they stop winning the requirement def-site election.
+  assert.strictEqual(manifest2.version, 3, 'rebuilt manifest must use current version');
   assert.ok(!manifest2.files.find(f => f.contentHash === 'STALE_HASH_SHOULD_NOT_SURVIVE'),
     'stale-version prior records must NOT flow through the diff'
   );
