@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.15.3] - 2026-07-09
+
+Knowledge Atlas — FR/NFR links now resolve to the PRD, not a report about it.
+
+### Fixed
+- **Requirement links pointed at the validation report instead of the PRD.**
+  `classifyFile()` typed any filename containing `prd` as the canonical PRD — so
+  `prd-validation-report.md` became a rival definition-site. A requirement the PRD
+  actually defines (e.g. `- **FR1:** …`) could lose the def-site election to the
+  report, and every link to it (from the architecture doc, the graph, etc.)
+  resolved to `prd-validation-report.html#frN` rather than the PRD. Validation
+  reports, checklists, reviews, and cohesion/assessment reports now classify as
+  `report`, so the PRD proper always wins. Verified on Prophesys: all 35
+  mis-routed FR links now point at the PRD (0 to the report). Note: a requirement
+  that appears *only* in the architecture doc (not the PRD at all) still anchors
+  in the architecture doc — there is no PRD description to link to.
+
 ## [3.15.2] - 2026-07-09
 
 Knowledge Atlas — anchor precision + edge tracing, from continued real-project use.

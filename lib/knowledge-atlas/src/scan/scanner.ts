@@ -126,8 +126,20 @@ export function classifyFile(fileId: string): DocType {
   // e.g. briefs/epic-overview.md must be 'brief', not 'epics'.
   if (lowerFileId.includes('/briefs/')) return 'brief';
 
-  // PRD: filename contains 'prd' or matches product-requirements
-  if (/prd/.test(basename) || /product-requirements/.test(basename)) return 'prd';
+  // PRD: filename contains 'prd' or matches product-requirements — but NOT a
+  // derivative document *about* the PRD (validation report, checklist, review,
+  // cohesion/assessment report). Those score or critique the requirements; the
+  // requirements themselves live in the PRD proper. Classifying e.g.
+  // `prd-validation-report.md` as 'prd' made it a rival definition-site, so an
+  // FR the PRD actually defines could anchor in the report instead — the real
+  // Prophesee bug where FR1/FR3/FR21 links pointed at prd-validation-report.html
+  // rather than the PRD. Let those fall through to 'report'.
+  if (
+    (/prd/.test(basename) || /product-requirements/.test(basename)) &&
+    !/(validation|report|checklist|review|cohesion|assessment)/.test(basename)
+  ) {
+    return 'prd';
+  }
 
   // Architecture document
   if (/architecture/.test(basename)) return 'architecture';

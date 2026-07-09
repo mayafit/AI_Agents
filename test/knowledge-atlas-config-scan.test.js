@@ -635,6 +635,48 @@ test('config-project generates byte-identical manifests from two different absol
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Regression (3.15.3): a PRD validation report must NOT win the def-site
+// election for a requirement the PRD itself defines. `prd-validation-report.md`
+// used to classify as 'prd' (basename contains "prd") and could become the
+// canonical def-site, so an FR link in another doc pointed at the report instead
+// of the PRD (real Prophesee bug: FR1/FR3/FR21 → prd-validation-report.html).
+// ─────────────────────────────────────────────────────────────────────────────
+console.log('\n--- Regression: PRD wins def-site over prd-validation-report ---');
+
+test('FR defined in prd.md anchors in the PRD, not in prd-validation-report.md', () => {
+  const projectRoot = makeTempDir('prd-vs-report');
+  writeFileTree(projectRoot, {
+    '_bmad-output/planning-artifacts/planning/prd.md':
+      '# Product Requirements\n\n## Functional Requirements\n\n' +
+      '- **FR1:** Users can view a 2D map with base layers.\n' +
+      '- **FR2:** Users can pan and zoom the map.\n',
+    '_bmad-output/planning-artifacts/planning/prd-validation-report.md':
+      '# PRD Validation Report\n\n| Req | Area | Score |\n| --- | --- | --- |\n' +
+      '| FR1 | Map | 5 |\n| FR2 | Map | 4 |\n',
+    '_bmad-output/planning-artifacts/planning/architecture.md':
+      '# Architecture\n\nThe map component implements FR1 and FR2.\n',
+  });
+  runAtlas(projectRoot);
+
+  const docsDir = path.join(projectRoot, '_bmad-output', 'knowledge-site', 'docs');
+  const docFiles = fs.readdirSync(docsDir);
+  const prdFile = docFiles.find(f => /prd\.html$/.test(f) && !/validation|report/.test(f));
+  assert.ok(prdFile, `PRD doc page must exist; got: ${JSON.stringify(docFiles)}`);
+  const prdHtml = fs.readFileSync(path.join(docsDir, prdFile), 'utf-8');
+  assert.ok(prdHtml.includes('id="fr1"'), 'PRD page must carry the fr1 anchor (it defines FR1)');
+
+  const archFile = docFiles.find(f => /architecture\.html$/.test(f));
+  assert.ok(archFile, 'architecture doc page must exist');
+  const archHtml = fs.readFileSync(path.join(docsDir, archFile), 'utf-8');
+  const fr1Hrefs = extractHrefs(archHtml).filter(h => /#fr1"?$/.test(h) || /#fr1$/.test(h));
+  assert.ok(fr1Hrefs.length > 0, `architecture must link FR1; hrefs: ${JSON.stringify(extractHrefs(archHtml))}`);
+  assert.ok(fr1Hrefs.some(h => h.includes('prd.html#fr1')),
+    `FR1 link must target the PRD; got: ${JSON.stringify(fr1Hrefs)}`);
+  assert.ok(!fr1Hrefs.some(h => h.includes('validation-report')),
+    `FR1 link must NOT target the validation report; got: ${JSON.stringify(fr1Hrefs)}`);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Cleanup
 // ─────────────────────────────────────────────────────────────────────────────
 for (const d of tempDirs) {
