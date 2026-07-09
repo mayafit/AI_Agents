@@ -3,7 +3,7 @@
   "owner": {
     "name": "Alon Mayaffit"
   },
-  "description": "ma-agents BMAD extension — enterprise SDLC personas (Yael, Amit, Alex, Demerzel, Gad) plus MIL-STD-498, SRE, DevOps, Cyber, ML, and SQA workflow skills.",
+  "description": "ma-agents BMAD extension — enterprise SDLC personas (Yael, Amit, Alex, Demerzel, Gadi) plus MIL-STD-498, SRE, DevOps, Cyber, ML, and SQA workflow skills.",
   "license": "MIT",
   "homepage": "https://github.com/mayafit/AI_Agents",
   "repository": "https://github.com/mayafit/AI_Agents",
@@ -37,7 +37,7 @@
       "name": "ma-skills",
       "source": "./",
       "description": "ma-agents extension module providing enterprise SDLC personas and operational workflow skills.",
-      "version": "3.15.0-beta.2",
+      "version": "3.15.0",
       "author": {
         "name": "Alon Mayaffit"
       },
@@ -91,6 +91,7 @@
         "./skills/ml-techspec",
         "./skills/add-sprint",
         "./skills/add-to-sprint",
+        "./skills/bmad-dev-epic",
         "./skills/bmad-dev-story",
         "./skills/bmad-sprint-planning",
         "./skills/bmad-sprint-status",

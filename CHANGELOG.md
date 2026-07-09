@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.15.0] - 2026-07-09
+
+Knowledge Atlas — **stable release** (Epic 29, FR215–234 / NFR60–69), consolidating the
+beta.0–beta.2 prereleases. A pre-bundled, fully-offline static-site generator invoked by
+the `bmad-knowledge` skill: authoritative scan → typed manifest → per-document reading
+views + interactive typed graph + generated diagrams + orphan/gap view + offline search,
+all self-contained (no CDN/network, `file://`-safe) and deterministic. Includes
+config-aware knowledge-source discovery (scans the folders defined in `_bmad/bmm/config.yaml`),
+reference-edge extraction so planning-centric projects produce a connected graph with
+working backlinks, and resolution of authored inter-document markdown cross-links. Sealed
+air-gap packaging, sanitized output, cross-platform byte-identical builds. See the beta
+entries below for the detailed per-story changelog. No breaking change to the public CLI → MINOR.
+
 ## [3.15.0-beta.2] - 2026-07-09
 
 Knowledge Atlas beta.2 — fixes authored inter-document links (found in real-project
