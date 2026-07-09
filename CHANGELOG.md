@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.15.1] - 2026-07-09
+
+Knowledge Atlas — graph interaction + navigation fixes from real-project use.
+
+### Fixed
+- **Overlapping "blob" graph:** nodes were oversized and piled on top of each other.
+  Stronger charge repulsion + larger link distance now spread the graph out, and node
+  glyphs are drawn at half the previous size.
+- **Dragging a node sprang back:** the graph now pins a node where you drop it
+  (`onNodeDragEnd` sets `fx`/`fy`); its linked neighbours follow the drag and nodes
+  farther along the graph move progressively less, so you can pull a cluster apart to
+  read the connections. Right-click a node to release its pin back into the layout.
+- **Clicking a node "went to the start of the document":** a global `scroll-behavior:
+  smooth` made the browser's on-load `#anchor` jump unreliable on long reading views.
+  Switched to `auto` so entity/graph links land on the target reliably (in-page TOC and
+  backlink jumps still work, just without the animation).
+
+No breaking change to the public CLI → PATCH.
+
 ## [3.15.0] - 2026-07-09
 
 Knowledge Atlas — **stable release** (Epic 29, FR215–234 / NFR60–69), consolidating the

@@ -108,10 +108,14 @@ export const DESIGN_SYSTEM_CSS: string = `\
   top: 0;
 }
 
-/* FR223 — smooth scrolling for in-page anchor jumps (TOC, backlinks, orphan
-   summary links). Guarded below by prefers-reduced-motion. */
+/* Scroll behaviour: use auto (instant) so that landing on a page via a
+   #anchor — e.g. clicking a graph node or an entity link into a long reading
+   view — reliably jumps to the target. A global smooth scroll-behavior
+   made the browser's on-load hash navigation unreliable on long documents (it
+   could stay at the top — the "click goes to the start of the document" bug).
+   In-page TOC/backlink clicks still jump correctly, just without the animation. */
 html {
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
 }
 
 body {
