@@ -5,6 +5,8 @@ phase2CompletedAt: '2026-03-11'
 phase2cStepsCompleted: ['step-02-context', 'step-04-decisions', 'step-06-structure', 'step-07-validation', 'step-08-complete']
 phase2cCompletedAt: '2026-03-26'
 phase5EditHistory:
+  - date: '2026-07-09'
+    changes: 'Added P5-8: BMAD v6.10.0 Integration (FR235–FR247, NFR70–NFR75; Epic 29). Three threads. (1) Pin + offline-bundle filter: v6.10.0 introduces bmad-loop as a new type: bmad-org module with marketplace-plugin: true and marks bmad-automator deprecated: true. Live-registry check: bmad-modules.yaml PATH unchanged, SCHEMA additive-only (new optional fields marketplace-plugin/deprecated/deprecation-message/post-install-message/aliases) so the P5-5 reader/parser carry forward verbatim. Key contrast with P5-6 (v6.9.0 = reader-neutral): here build-bmad-cache.js normalizeModules() bundles EVERY type: bmad-org module and the NFR56 thin-cache guard only fails on a set SMALLER than {tea,bmb,cis,gds,wds}, so a bmad-loop ADDITION passes silently and would be force-bundled and installed by default. Fix (small): extend the filter predicate to also drop marketplace-plugin: true and deprecated: true, pinning the bundle to exactly {tea,bmb,cis,gds,wds}. bmad-loop is opt-in only (Python/tmux/hooks orchestrator needing bmad-loop-setup + vendor-API sessions, air-gap-hostile by default, overlapping ma-agents own bmad-dev-epic which stays the default epic orchestrator). Pin bump 6.9.0→6.10.0 supersedes P5-6/FR211; cache+plugin rebuild; Story 29.1 live-registry confirmation gate. Passthrough (bmad-investigate retired; bmad-dev-auto/bmad-loop-setup; party-mode/edge-case-hunter/elicitation/bmad-help) via the existing P5-3 Cline-wrapper reconciliation. Two v6.10.0 changes touch ma-agents own --custom-source staging (P4-1) and are regression-verified not re-implemented: the Windows-local-custom-path fix (#2511) and the hardened PluginResolver fail-loud-on-empty. (2) Custom marketplace source: install-time prompt + --bmad-custom-source <marketplace-url|path>; ma-agents reuses BMAD CustomModuleManager (resolveSource + discoverModules) to enumerate a marketplace repo declared extensions, presents them in ma-agents own wizard multiselect, installs the selected subset; single-wizard principle (FR126) preserved (BMAD runs --yes non-interactively); ambient git creds (SSH/helper), zero token handling; marketplace URL + selected codes persist in .ma-agents.json, re-enumerated on update; subset-passing under --yes is a Story-1 spike. Supersedes the GitLab-group/submodule expansion idea. (3) Demerzel deprecation: remove ma-agent-ml + 13 ml-* skills from lib/bmad-extension/skills + lib/bmad-extension-plugin/skills + module-help.csv for NEW installs; existing installs untouched (non-destructive, NFR49) with a one-time notice; no in-tool migration (replacement in the org local marketplace); supersedes FR193 (P4-1 deferred Memory-agent conversion cancelled; P4-1 project-tree and deferred-follow-up notes annotated in place, retained as history; Gadi remains the only conversion candidate); the P5-6/FR213/NFR59 ml-* uv-run-python exemption simplifies once ml-* is gone. Technology stack bumped from bmad-method v6.9.0 to v6.10.0. Evidence: gh release view v6.10.0 + live bmad-modules.yaml at v6.9.0/v6.10.0 + build-bmad-cache.js + BMAD custom-module-manager.js/ui.js source.'
   - date: '2026-06-30'
     changes: 'SQA persona renamed Gad → Gadi in Decision P3-2 (title + decision body + gap-remediation row), the module-folder structure diagram (ma-agent-sqa annotation), and the deferred Memory-agent follow-up references (P4 deferred-follow-up note + out-of-scope list). Display-name-only "how" change: agent host `bmm-qa`, skill folder/name `ma-agent-sqa`, report-naming conventions, and memory path `_bmad/memory/ma-agent-sqa/` are all unchanged. Mirrors the parallel PRD requirement rename; implemented via standalone story rename-sqa-persona-gad-to-gadi. Prior dated changelog entries (phase4 P4-1) left intact as history.'
   - date: '2026-06-28'
@@ -2012,7 +2014,7 @@ lib/bmad-extension-plugin/                        — BUILD OUTPUT (generated)
 │   │   └── resources/
 │   ├── ma-agent-devops/                          — Amit
 │   ├── ma-agent-sre/                             — Alex
-│   ├── ma-agent-ml/                              — Demerzel (stateless in v6.3; memory-agent in follow-up)
+│   ├── ma-agent-ml/                              — Demerzel [DEPRECATED v6.10 / P5-8 — removed from shipped bundle for new installs; memory-agent conversion cancelled]
 │   ├── ma-agent-sqa/                             — Gadi (stateless in v6.3; memory-agent in follow-up)
 │   └── ...workflow skills (mil498-*, sre-*, cyber-*, devops-*, ml-*)...
 ```
@@ -2039,7 +2041,7 @@ Net deletion: ~140 lines. Replacement: ~30 lines for stage-and-invoke.
 
 **Offline verification gate.** Add a CI job that runs `npm pack`, extracts the tarball into a clean container with egress blocked, and runs the installer end-to-end. Smoke-assert: plugin stages, bmad-method install completes, no outbound connections attempted. Gate every release candidate (NFR50).
 
-**Deferred follow-up (not in this epic).** Convert Demerzel and Gadi to Memory-agent format at `_bmad/memory/<agent>/` after 6.3.0 lands. Stateless format is valid for v6.3 — conversion is an authoring improvement, not a compat requirement.
+**Deferred follow-up (not in this epic).** Convert Demerzel and Gadi to Memory-agent format at `_bmad/memory/<agent>/` after 6.3.0 lands. Stateless format is valid for v6.3 — conversion is an authoring improvement, not a compat requirement. **[UPDATE — P5-8 (2026-07-09): the Demerzel half of this follow-up is CANCELLED. Demerzel is deprecated and removed from the shipped bundle for new installs; only Gadi remains a Memory-agent-conversion candidate.]**
 
 **Rationale.**
 - Deletes ~140 lines of fragile manifest-surgery code whose underlying mechanism no longer exists upstream
@@ -2062,7 +2064,7 @@ Net deletion: ~140 lines. Replacement: ~30 lines for stage-and-invoke.
 - CI workflow (new offline install job)
 
 **Out of scope (deferred):**
-- Memory-agent conversion for Demerzel and Gadi (FR193, FR194 — follow-up epic)
+- Memory-agent conversion for Demerzel and Gadi (FR193, FR194 — follow-up epic) — **Demerzel portion cancelled by P5-8 (deprecated, FR247); Gadi only**
 - Restructure of stateless agent SKILL.md bodies into BMAD Builder "Stateless Agent" conventions if it changes anything beyond frontmatter
 
 ---
@@ -2584,3 +2586,38 @@ The pipeline splits at the **manifest**, the load-bearing seam:
 **FR Coverage:** FR215–FR234, NFR60–NFR69. Extends P3-1 (Knowledge Graph); composes with Epic 19 `emitToGraph` (stories 19-1…19-4); re-asserts the air-gap guarantee of P2-6/NFR2/NFR50/NFR54/NFR57.
 
 **[ASSUMPTION]** Exact build order vs. Epic 19 stories 19-1…19-4 (Atlas-first with reconciliation fast-follow) to be ratified in epics/story planning.
+
+---
+
+### Decision P5-8: BMAD v6.10.0 Integration — Bundle-Filter Change + Custom Marketplace Source + Demerzel Deprecation (FR235–FR247, NFR70–NFR75) (2026-07-09)
+
+**Context.** The v6.9.0 bump (P5-6) was reader-neutral. v6.10.0 is not. It ships three things that reach ma-agents:
+
+1. **`bmad-loop`** — a new `type: bmad-org` module (the unattended-dev orchestrator succeeding the now-`deprecated` `bmad-automator`). It carries two registry traits ma-agents has never seen: `marketplace-plugin: true` (its skills resolve from `.claude-plugin/marketplace.json` via the plugin resolver, not from a single `module-definition` dir) and — on `bmad-automator` — `deprecated: true`.
+2. A cluster of upstream skill changes (`bmad-investigate` retired; `bmad-dev-auto`/`bmad-loop-setup`; party-mode; edge-case-hunter; elicitation; `bmad-help`).
+3. Two installer/resolver changes on the code path ma-agents' own extension staging uses.
+
+**Live-registry verification (the gate).** A read of `bmad-modules.yaml` at `v6.9.0` and `v6.10.0` confirms the registry **PATH is unchanged** (package root) and the **parse SCHEMA is additive-only** — the new keys (`marketplace-plugin`, `deprecated`, `deprecation-message`, `post-install-message`, `aliases`) are optional and the `modules:` map shape is intact. So the **P5-5 reader and `parseModulesYaml` are retained verbatim**; this is *not* a repeat of the 6.8.0 relocation.
+
+**The one real break — the bundle filter, not the reader.** `build-bmad-cache.js` `normalizeModules()` keeps **every** `type: bmad-org` entry, and the NFR56 thin-cache guard only fails when the resolved set is *smaller* than `KNOWN_BUNDLED_MODULES = {tea, bmb, cis, gds, wds}`. A new `bmad-org` module is therefore an **addition the guard does not catch** — a naive pin bump would clone `bmad-loop` into `lib/bmad-cache/` and, because ma-agents' default `--modules` is "every bundled cache module," would pass `--modules …,bmad-loop` and **install it by default**. `bmad-loop` is a Python/tmux/hooks orchestrator requiring a separate `bmad-loop-setup` step plus vendor-API sessions — air-gap-hostile as a default — and it functionally overlaps ma-agents' own `bmad-dev-epic`.
+
+**Decision.**
+- **Filter change (FR235):** extend `normalizeModules()` to also exclude `marketplace-plugin: true` and `deprecated: true`, on top of the existing `type: bmad-org` inclusion. The bundled set stays exactly `{tea, bmb, cis, gds, wds}`; `KNOWN_BUNDLED_MODULES` is unchanged; a regression test asserts a `marketplace-plugin`/`deprecated` entry is dropped (NFR73). `bmad-loop` is **opt-in only**, never force-bundled; `bmad-dev-epic` remains the default epic orchestrator.
+- **Pin + passthrough (FR236–FR238):** bump 6.9.0→6.10.0 (supersedes P5-6/FR211), rebuild cache + plugin, offline-install verify, Story-29.1 live-registry confirmation gate. Upstream skill changes inherited via the existing P5-3 Cline-wrapper reconciliation. Regression-verify (confirmed by a v6.9.0…v6.10.0 diff, not re-implemented) the two changes on ma-agents' `--custom-source` staging path (P4-1): (a) #2511's new `isLocalSourcePath()` in `custom-module-manager.js` (now recognizes Windows-absolute paths + `.\`/`..\`) — beneficial to Windows staging; (b) `official-modules.js` fails loud on an unresolved `marketplace-plugin` module, and the shared `_copyResolvedSkills()` (used by the custom-source `installFromResolution` path) now fails loud on empty-resolution or duplicate skill-leaf names — regression check that ma-agents' staged plugin resolves non-empty with unique leaf names. `uv-check.js` is a stdout-only reword; its `{ status }` return/exit contract is unchanged (re-confirms FR212/NFR74).
+
+**Custom marketplace source (FR239–FR243, NFR70–NFR72).** After module selection, the installer offers a single **marketplace repository** (local path or intra-perimeter Git URL such as on-prem GitLab — a repo with `.claude-plugin/marketplace.json`). ma-agents **reuses BMAD's own `CustomModuleManager`** (`resolveSource` → clone/local + `discoverModules`) to enumerate the declared extensions, presents them in **ma-agents' own wizard multiselect**, and installs the user-selected subset — the FR126 single-wizard principle is preserved (bmad-method runs `--yes`). Authentication is the host's **ambient git config** (SSH keys / credential helper) — ma-agents does zero token handling. The marketplace URL + selected codes persist in `.ma-agents.json` and re-enumerate on update. **Open spike (Story 29.x):** how a *subset* of a marketplace's plugins is passed to BMAD under `--yes` — BMAD's CLI path (`ui.js:_resolveCustomSourcesCli`) resolves *all* declared codes, so a subset likely also constrains `--modules`. On-prem posture: no public-internet egress required; intra-perimeter Git permitted; custom-source content is **pass-through and outside the sealed-bundle guarantee** (NFR71, one-line user warning). This supersedes the earlier GitLab-group-enumeration / submodule-expansion idea — a single curated `marketplace.json` is the org's entry point.
+
+**Demerzel deprecation (FR244–FR247, NFR75).** Remove the `ma-agent-ml` agent and the 13 `ml-*` skills from `lib/bmad-extension/skills/`, `lib/bmad-extension-plugin/skills/`, and the 14 `bmm-demerzel`-keyed rows in `module-help.csv` for **new installs**. **Existing installs are left untouched** (non-destructive, per NFR49) with a one-time deprecation notice; no auto-removal, no prompt. **No in-tool migration** — the replacement is published in the org's local marketplace, reachable via the custom marketplace source above. This **supersedes FR193** (the P4-1 deferred Demerzel → Memory-agent conversion is cancelled; the P4-1 project-tree entry and deferred-follow-up notes are annotated in place and retained as history — Gadi remains the only Memory-agent-conversion candidate). The P5-6/FR213/NFR59 `ml-*` `uv run python` exemption simplifies once the `ml-*` skills are gone (NFR74).
+
+**Affects:**
+- `package.json` (bmad-method 6.9.0 → 6.10.0)
+- `scripts/build-bmad-cache.js` (`normalizeModules` filter predicate; regression test for `marketplace-plugin`/`deprecated` exclusion)
+- `bin/cli.js` / `lib/bmad.js` (custom-marketplace prompt + `--bmad-custom-source`, `CustomModuleManager` enumeration, multiselect, subset install, `.ma-agents.json` persistence)
+- `lib/bmad-extension/skills/` + `lib/bmad-extension-plugin/skills/` (remove `ma-agent-ml` + `ml-*`), `module-help.csv` (remove 14 rows)
+- `MANIFEST.yaml` (drop `ma-agent-ml` + `ml-*`), Cline-wrapper reconciliation (retire `ml-*` + `bmad-investigate` wrappers)
+- `lib/bmad-cache/` (rebuilt against 6.10.0), `lib/bmad-extension-plugin/` (rebuilt)
+- Regression tests (bundle-filter exclusion, uv-missing success, custom-source isolation, non-destructive deprecation)
+
+**FR Coverage:** FR235–FR247, NFR70–NFR75. Supersedes P5-6/FR211 (pin) and FR193 (Demerzel conversion). Retains the P5-5 reader/parser and the NFR56 thin-cache guard; re-asserts the air-gap guarantee (NFR2/NFR54/NFR57).
+
+**[ASSUMPTION]** Epic/story split — whether custom-marketplace-source and Demerzel-deprecation ship as story clusters within Epic 29 or as adjacent epics — to be ratified in epics/story planning; the subset-passing spike (Story 29.x) gates the custom-source stories.
