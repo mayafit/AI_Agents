@@ -687,6 +687,20 @@ function buildAppScript(): string {
     return;
   }
 
+  // Layout forces (fixes the overlapping-blob): stronger charge repulsion + a
+  // larger link distance push nodes apart; a gentler velocity decay lets a
+  // dragged node's neighbourhood follow it and settle rather than everything
+  // snapping. The vendored force-graph exposes charge/link via d3Force but no
+  // collide, so spacing comes from charge+distance. All best-effort.
+  try {
+    var _charge = graph.d3Force && graph.d3Force('charge');
+    if (_charge && _charge.strength) _charge.strength(-160);
+    var _link = graph.d3Force && graph.d3Force('link');
+    if (_link && _link.distance) _link.distance(48);
+    if (graph.d3VelocityDecay) graph.d3VelocityDecay(0.3);
+    if (graph.warmupTicks) graph.warmupTicks(80); // pre-spread before first paint
+  } catch (_e) { /* forces best-effort; graph still renders without them */ }
+
   // FR222: distinct shape per entity type (previously color+size only — the
   // canvas never read NODE_STYLES' shape/data-shape, so every node was a
   // circle regardless of kind). Traces the path for the node's shape
@@ -752,7 +766,7 @@ function buildAppScript(): string {
       // FR222: paint the node as its per-kind shape (circle/square/diamond/
       // triangle) instead of force-graph's default circle-only rendering.
       .nodeCanvasObject(function(n, ctx) {
-        var size = n.size || 6;
+        var size = (n.size || 6) * 0.5; // smaller nodes (were visually oversized/overlapping)
         ctx.fillStyle = n.color || '#888';
         traceNodeShapePath(ctx, n.shape, n.x, n.y, size);
         ctx.fill();
@@ -762,7 +776,7 @@ function buildAppScript(): string {
       // custom shape drawn above (non-circle nodes would get unreliable
       // hover/click hit-boxes).
       .nodePointerAreaPaint(function(n, color, ctx) {
-        var size = (n.size || 6) + 2; // slightly larger — easier to hit
+        var size = (n.size || 6) * 0.5 + 2; // match the smaller draw size, +2 to stay easy to hit
         ctx.fillStyle = color;
         traceNodeShapePath(ctx, n.shape, n.x, n.y, size);
         ctx.fill();
@@ -790,6 +804,16 @@ function buildAppScript(): string {
         if (/^[a-zA-Z][a-zA-Z0-9+.\\-]*:/.test(page) || /^\\/\\//.test(page)) { return; }
         var href = page + (n.anchor ? '#' + n.anchor : '');
         window.location.href = href;
+      })
+      // Drag-to-pin (fixes the spring-back): keep the node exactly where it was
+      // dropped (fx/fy). Because the simulation stays warm, its linked neighbours
+      // follow the drag and nodes farther along the graph move progressively less.
+      // Right-click a node to release its pin back into the layout.
+      .onNodeDrag(function(n) { n.fx = n.x; n.fy = n.y; })
+      .onNodeDragEnd(function(n) { n.fx = n.x; n.fy = n.y; })
+      .onNodeRightClick(function(n) {
+        n.fx = undefined; n.fy = undefined;
+        if (graph.d3ReheatSimulation) graph.d3ReheatSimulation();
       })
       .onNodeHover(function(n) {
         // Distinct cursor hint: pointer only over nodes that actually
