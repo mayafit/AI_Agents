@@ -51,8 +51,16 @@ import { renderOrphanPage } from './render/orphan.js';
  * pre-29.8 engine) has NO such nodes/edges cached; a version bump forces the
  * one-time full re-extraction that materializes them (verified on Prophesee:
  * without this, an in-place re-run kept 0 edges).
+ *
+ * 3.15.3 bumps 2 → 3: `classifyFile()` no longer types `prd-validation-report.md`
+ * (and other prd-derivative reports) as 'prd'. The DocType is baked into each
+ * cached FileRecord, and the incremental diff reuses unchanged records verbatim —
+ * so on an in-place re-run those files kept their old 'prd' type and continued
+ * winning the requirement def-site election. Bumping the version forces the
+ * one-time full re-extraction that re-classifies them (verified on Prophesys:
+ * without this, FR links kept pointing at prd-validation-report.html).
  */
-const MANIFEST_VERSION = 2;
+const MANIFEST_VERSION = 3;
 
 /**
  * Path helpers for the Story 29.7 purge safety gates (MUST-FIX #1).
