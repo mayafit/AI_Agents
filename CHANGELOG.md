@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.16.0] - 2026-07-09
+
+Knowledge Atlas — mermaid and draw.io diagrams now render as real diagrams.
+
+### Added
+- **Live mermaid diagrams.** Authored ` ```mermaid ` fences were shown as source
+  text; they now render to SVG in the browser via a vendored, fully-offline
+  mermaid runtime (`assets/mermaid.min.js`, ~2.6MB, written only when a page uses
+  it). The diagram source is preserved uncorrupted (linkify/sanitize never inject
+  markup into it) and remains the legible fallback with no JS.
+- **Live draw.io diagrams.** `.drawio` files (mxGraph XML) rendered as a near-blank
+  page; they now render via the vendored draw.io GraphViewer
+  (`assets/drawio-viewer.min.js`, ~3.6MB). All diagrams.net / font / icon CDN
+  endpoints in the viewer are neutralized at vendor time, so rendering is fully
+  offline with no network calls.
+
+### Notes
+- Both runtimes are vendored (committed under `lib/knowledge-atlas/vendor/`) and
+  copied into a site's `assets/` only when a page needs them — diagram-free sites
+  carry no extra weight. Only diagram pages gain a local `<script>`; `index.html`
+  stays script-free and every reading view stays legible without JavaScript.
+- Render-time change — takes effect on any regenerate; no manifest bump needed.
+
 ## [3.15.5] - 2026-07-09
 
 Knowledge Atlas — FR clicks land on the definition, not the revision history.

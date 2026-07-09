@@ -113,6 +113,13 @@ function stripVendorBlock(content, filename) {
  * Collect all generated files under knowledge-site/ (excluding manifest.json).
  * Returns array of { filename, content, stripped } objects.
  */
+// Vendored browser runtimes copied verbatim into assets/. Like the inlined
+// force-graph block, they contain baked-in string literals (W3C namespace URIs,
+// license-comment links) that are NEVER fetched — mermaid/drawio render entirely
+// client-side from local data. They ARE the offline runtime, so they are exempt
+// from the external-URL scan (analogous to the manifest.json exemption).
+const VENDORED_RUNTIME_ASSETS = new Set(['mermaid.min.js', 'drawio-viewer.min.js']);
+
 function collectGeneratedFiles(siteDir) {
   const files = [];
   const walk = (dir) => {
@@ -124,6 +131,8 @@ function collectGeneratedFiles(siteDir) {
         const filename = entry.name;
         // Exempt manifest.json (contains absolute fs paths, not external URLs)
         if (filename === 'manifest.json') continue;
+        // Exempt vendored offline runtimes (see note above).
+        if (VENDORED_RUNTIME_ASSETS.has(filename)) continue;
         const content = fs.readFileSync(full, 'utf-8');
         const stripped = stripVendorBlock(content, filename);
         files.push({ filename, full, content, stripped });

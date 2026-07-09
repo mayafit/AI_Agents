@@ -222,6 +222,23 @@ test('entity tokens become links in reading views', () => {
     'FR101 must link to the PRD definition anchor');
 });
 
+test('mermaid fence renders as a live <pre class="mermaid"> with uncorrupted source + runtime', () => {
+  // The xss-probe doc (see setup) contains a ```mermaid graph TD; A-->B; fence.
+  const page = read(siteDir, 'docs/bmad-output-implementation-artifacts-9-9-xss-probe.html');
+  const m = page.match(/<pre class="mermaid">([\s\S]*?)<\/pre>/);
+  assert.ok(m, 'mermaid fence must become a <pre class="mermaid"> render target');
+  // Source must survive verbatim — linkify must NOT inject <a> tags into it,
+  // or mermaid would fail to parse the diagram.
+  assert.ok(/graph TD/.test(m[1]), 'diagram source must be present');
+  assert.ok(!/<a\b/.test(m[1]), 'no <a> may be injected into the mermaid source');
+  // The vendored runtime + init must be present on this page (local relative src).
+  assert.ok(/<script src="\.\.\/assets\/mermaid\.min\.js"><\/script>/.test(page),
+    'mermaid page must load the vendored runtime');
+  assert.ok(/mermaid\.initialize\(/.test(page), 'mermaid page must initialize the runtime');
+  // And the asset itself must be written.
+  assert.ok(allFiles.includes('assets/mermaid.min.js'), 'assets/mermaid.min.js must be written');
+});
+
 test('every entity-link href resolves to a real page (and anchor) in the site', () => {
   const docPages = allFiles.filter(f => f.startsWith('docs/') && f.endsWith('.html'));
   // Build a set of available page basenames + the set of ids per page.
@@ -588,9 +605,14 @@ test('no http(s):// URLs anywhere in the generated site', () => {
     const e = txt.indexOf('</script>', s);
     return (s >= 0 && e >= 0) ? txt.slice(0, s) + txt.slice(e) : txt;
   };
+  // Vendored offline runtimes (mermaid, drawio viewer) copied into assets/ bake
+  // W3C namespace URIs + license-comment links into their code — never fetched,
+  // exactly like the inlined force-graph block. Exempt them from the URL scan.
+  const vendoredAssets = new Set(['mermaid.min.js', 'drawio-viewer.min.js']);
   for (const f of allFiles) {
     if (!/\.(html|js|json)$/.test(f)) continue;
     if (f.endsWith('manifest.json')) continue; // manifest holds absolute fs paths, not URLs
+    if (vendoredAssets.has(f.split('/').pop())) continue; // vendored offline runtime
     const txt = stripVendor(read(siteDir, f), f);
     const m = txt.match(/https?:\/\//);
     assert.ok(!m, `${f} must not contain http(s):// (found: ${m && m[0]})`);
@@ -613,8 +635,18 @@ test('injected <script> from document content is neutralized', () => {
   // The doc body must NOT contain an executable inline script from content.
   assert.ok(!/window\.__pwned\s*=\s*1/.test(xss),
     'inline <script> payload from doc content must be stripped');
-  // No script tag should survive in the article region (doc pages emit no scripts).
-  assert.ok(!/<script/i.test(xss), 'no <script> may survive in a reading view');
+  assert.ok(!/window\.__searchpwned/.test(xss),
+    'heading </script> breakout payload from doc content must be stripped');
+  // No CONTENT-injected script may survive. This doc contains a ```mermaid fence,
+  // so the page legitimately carries the vendored mermaid runtime + its init —
+  // those are the ONLY scripts permitted; any other <script> means content leaked.
+  const scripts = [...xss.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/gi)].map(m => m[0]);
+  for (const s of scripts) {
+    assert.ok(
+      /assets\/mermaid\.min\.js/.test(s) || /mermaid\.initialize/.test(s),
+      `only the vendored mermaid runtime may appear as a script; got: ${s.slice(0, 90)}`,
+    );
+  }
 });
 
 test('injected event handlers and javascript: URLs are neutralized', () => {

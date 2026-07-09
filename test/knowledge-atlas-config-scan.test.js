@@ -719,6 +719,45 @@ test('FR anchor is placed at "**FRn:**" definition, past an earlier changelog me
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Diagrams: .drawio files render via the vendored offline GraphViewer.
+// ─────────────────────────────────────────────────────────────────────────────
+console.log('\n--- Diagrams: .drawio renders live (vendored, offline) ---');
+
+test('.drawio file renders as a GraphViewer embed with the mxfile XML + vendored viewer', () => {
+  const projectRoot = makeTempDir('drawio');
+  writeFileTree(projectRoot, {
+    '_bmad-output/planning-artifacts/planning/architecture.drawio':
+      '<mxfile host="test"><diagram name="Arch" id="d1"><mxGraphModel dx="800" dy="600">' +
+      '<root><mxCell id="0"/><mxCell id="1" parent="0"/>' +
+      '<mxCell id="2" value="Service A" style="rounded=1" vertex="1" parent="1">' +
+      '<mxGeometry x="40" y="40" width="120" height="40" as="geometry"/></mxCell>' +
+      '</root></mxGraphModel></diagram></mxfile>\n',
+    '_bmad-output/planning-artifacts/planning/prd.md':
+      '# PRD\n\n- **FR1:** The system renders diagrams.\n',
+  });
+  runAtlas(projectRoot);
+
+  const siteDir = path.join(projectRoot, '_bmad-output', 'knowledge-site');
+  const docsDir = path.join(siteDir, 'docs');
+  const drawioFile = fs.readdirSync(docsDir).find(f => /drawio\.html$/.test(f));
+  assert.ok(drawioFile, `a .drawio doc page must be generated; got: ${JSON.stringify(fs.readdirSync(docsDir))}`);
+  const html = fs.readFileSync(path.join(docsDir, drawioFile), 'utf-8');
+
+  assert.ok(/<div class="mxgraph"[^>]*data-mxgraph="/.test(html), 'must contain a .mxgraph GraphViewer embed');
+  // The mxfile XML must round-trip through the data-mxgraph JSON config.
+  const m = html.match(/data-mxgraph="([^"]*)"/);
+  const decoded = m[1].replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  const cfg = JSON.parse(decoded);
+  assert.ok(/mxGraphModel/.test(cfg.xml) && /Service A/.test(cfg.xml),
+    'data-mxgraph config must carry the original mxfile XML');
+  assert.ok(/<script src="\.\.\/assets\/drawio-viewer\.min\.js"><\/script>/.test(html),
+    'drawio page must load the vendored viewer');
+  assert.ok(fs.existsSync(path.join(siteDir, 'assets', 'drawio-viewer.min.js')),
+    'assets/drawio-viewer.min.js must be written');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Cleanup
 // ─────────────────────────────────────────────────────────────────────────────
 for (const d of tempDirs) {
