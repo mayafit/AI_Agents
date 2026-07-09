@@ -648,6 +648,7 @@ function buildAppScript(): string {
   // mouse (finding #8: tooltip was shown with display:block but no left/top,
   // so it rendered at the bottom of <main>).
   var lastHoverNode = null;
+  var selectedLink = null; // edge highlighted on click: drawn bold + its two endpoints ringed
 
   function getFilteredData() {
     var nodes = allNodes;
@@ -770,6 +771,18 @@ function buildAppScript(): string {
         ctx.fillStyle = n.color || '#888';
         traceNodeShapePath(ctx, n.shape, n.x, n.y, size);
         ctx.fill();
+        // Ring the two endpoints of the selected edge so both ends are easy to
+        // find, however far apart they sit in the layout.
+        if (selectedLink) {
+          var s = selectedLink.source, t = selectedLink.target;
+          if (n === s || n === t) {
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, size + 3.5, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#111827';
+            ctx.lineWidth = 1.8;
+            ctx.stroke();
+          }
+        }
       })
       // Matching hit-test paint: without this, force-graph's click/hover
       // detection falls back to a generic area that no longer matches the
@@ -783,12 +796,30 @@ function buildAppScript(): string {
       })
       .linkSource('source')
       .linkTarget('target')
-      .linkColor(function(e) { return e.color || '#aaa'; })
+      // Selected edge is drawn dark + thick so you can trace it end to end.
+      .linkColor(function(e) { return e === selectedLink ? '#111827' : (e.color || '#aaa'); })
+      .linkWidth(function(e) { return e === selectedLink ? 3.5 : (e.dashed ? 0.5 : 1); })
       // Story 29.8 - dashed stroke for weak references edges; solid otherwise.
       .linkLineDash(function(e) { return e.dashed ? [4, 3] : null; })
-      .linkDirectionalArrowLength(4)
+      .linkDirectionalArrowLength(function(e) { return e === selectedLink ? 7 : 4; })
       .linkDirectionalArrowRelPos(1)
       .linkCurvature(0.1)
+      // Click an edge to highlight it (bold + ringed endpoints); click it again
+      // or click empty space to clear. Re-applying the accessors forces an
+      // immediate repaint of the new selection state.
+      .onLinkClick(function(e) {
+        selectedLink = (selectedLink === e) ? null : e;
+        graph.linkWidth(graph.linkWidth()).linkColor(graph.linkColor());
+      })
+      .onLinkHover(function(e) {
+        if (container) container.style.cursor = e ? 'pointer' : 'default';
+        if (!tooltip) return;
+        if (!e) { tooltip.style.display = 'none'; return; }
+        var s = (e.source && e.source.label) || e.source;
+        var t = (e.target && e.target.label) || e.target;
+        tooltip.style.display = 'block';
+        tooltip.textContent = s + '  →  ' + t + (e.kind ? '  [' + e.kind + ']' : '');
+      })
       .onNodeClick(function(n) {
         // Navigate to the reading view via the server-resolved doc page (the
         // 'page' field, e.g. "docs/<slug>.html"), NOT the raw fileId — the
@@ -829,6 +860,10 @@ function buildAppScript(): string {
       .onBackgroundClick(function() {
         if (tooltip) tooltip.style.display = 'none';
         lastHoverNode = null;
+        if (selectedLink) {
+          selectedLink = null;
+          graph.linkWidth(graph.linkWidth()).linkColor(graph.linkColor());
+        }
       });
   }
 

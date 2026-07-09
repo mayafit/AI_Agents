@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.15.2] - 2026-07-09
+
+Knowledge Atlas — anchor precision + edge tracing, from continued real-project use.
+
+### Fixed
+- **Every entity link jumped to the same spot in a document:** all entity anchors
+  (e.g. all 9 epics on `architecture.html`) were emitted as one clump at the top of
+  the article, so `#epic-1` … `#epic-9` all resolved to ~6% into the page. Each
+  anchor is now placed at that entity's **first actual mention** in the body, so
+  clicking a different epic (or its graph node) lands where that epic is discussed.
+  Anchor precision is bounded by the source: entities first mentioned in the same
+  table/paragraph still land near each other, but at their own distinct positions.
+
+### Added
+- **Trace an edge in the graph:** click an edge to highlight it (drawn dark + thick,
+  with a larger arrowhead) and ring **both** of its endpoint nodes, so you can find
+  where a connection goes however far apart the ends sit. Click the edge again or
+  click empty space to clear. Hovering an edge shows a `source → target [kind]`
+  tooltip and a pointer cursor.
+
 ## [3.15.1] - 2026-07-09
 
 Knowledge Atlas — graph interaction + navigation fixes from real-project use.
