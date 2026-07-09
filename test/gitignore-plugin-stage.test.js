@@ -13,11 +13,12 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-const { ensurePluginStageIgnored, ensureBmadDirIgnored } = require('../lib/installer');
+const { ensurePluginStageIgnored, ensureBmadDirIgnored, ensureKnowledgeSiteIgnored } = require('../lib/installer');
 const { PLUGIN_STAGE_DIR_NAME, ensurePluginStageGitignoredForProject } = require('../lib/bmad');
 
 const CANONICAL_ENTRY = `${PLUGIN_STAGE_DIR_NAME}/`;
 const BMAD_CANONICAL_ENTRY = '_bmad/';
+const KNOWLEDGE_SITE_CANONICAL_ENTRY = '_bmad-output/knowledge-site/';
 
 function makeProject(gitignoreContent) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-22-8-'));
@@ -329,7 +330,16 @@ test('27.11 — wrapper ensurePluginStageGitignoredForProject adds both entries'
   const active = written.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   assert.ok(active.includes(CANONICAL_ENTRY), 'plugin-stage entry present');
   assert.ok(active.includes(BMAD_CANONICAL_ENTRY), '_bmad/ entry present');
-  assert.ok(!active.some(l => l.startsWith('_bmad-output')), '_bmad-output must remain tracked');
+  // Story 29.1 — the wrapper must also add the Knowledge Atlas site entry.
+  assert.ok(active.includes(KNOWLEDGE_SITE_CANONICAL_ENTRY), 'knowledge-site entry present');
+  // _bmad-output/ itself (tracked project knowledge) must never be ignored.
+  // Story 29.1: _bmad-output/knowledge-site/ is added as a specific subdir
+  // gitignore entry — that is intentional and does NOT gitignore _bmad-output/.
+  const BARE_BMAD_OUTPUT_PATTERNS = ['_bmad-output', '_bmad-output/', '/_bmad-output', '/_bmad-output/'];
+  assert.ok(
+    !active.some(l => BARE_BMAD_OUTPUT_PATTERNS.includes(l)),
+    '_bmad-output/ root must remain tracked (only specific subdirs like knowledge-site/ are ignored)'
+  );
 });
 
 test('27.11 — invalid projectRoot is a no-op', () => {
@@ -337,6 +347,65 @@ test('27.11 — invalid projectRoot is a no-op', () => {
     ensureBmadDirIgnored(undefined);
     ensureBmadDirIgnored(null);
     ensureBmadDirIgnored('');
+  });
+});
+
+// ─── Story 29.1 — ensureKnowledgeSiteIgnored() behaviour ─────────────────────
+test('29.1 — appends _bmad-output/knowledge-site/ when .gitignore exists without it', () => {
+  const dir = makeProject('node_modules/\ndist/\n');
+  ensureKnowledgeSiteIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  assert.ok(written.includes(KNOWLEDGE_SITE_CANONICAL_ENTRY), 'knowledge-site entry must be appended');
+  assert.ok(written.includes('node_modules/'), 'existing node_modules/ preserved');
+});
+
+test('29.1 — creates .gitignore with the knowledge-site entry when absent', () => {
+  const dir = makeProject(null); // no .gitignore
+  ensureKnowledgeSiteIgnored(dir);
+  const giPath = path.join(dir, '.gitignore');
+  assert.ok(fs.existsSync(giPath), '.gitignore must be created');
+  const written = fs.readFileSync(giPath, 'utf-8');
+  assert.ok(written.includes(KNOWLEDGE_SITE_CANONICAL_ENTRY), 'knowledge-site entry must be present');
+});
+
+test('29.1 — idempotent: re-run does not duplicate the knowledge-site entry', () => {
+  const dir = makeProject('node_modules/\n');
+  ensureKnowledgeSiteIgnored(dir);
+  ensureKnowledgeSiteIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const count = written.split(/\r?\n/).map(l => l.trim()).filter(l => l === KNOWLEDGE_SITE_CANONICAL_ENTRY).length;
+  assert.strictEqual(count, 1, 'knowledge-site entry must appear exactly once after two runs');
+});
+
+test('29.1 — broader _bmad-output/ entry already present → no redundant append', () => {
+  // If the project already gitignores the whole _bmad-output tree, knowledge-site
+  // is implicitly covered; we must NOT append a redundant nested entry.
+  const dir = makeProject('node_modules/\n_bmad-output/\n');
+  ensureKnowledgeSiteIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const active = written.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  assert.ok(
+    !active.includes(KNOWLEDGE_SITE_CANONICAL_ENTRY),
+    'must not append knowledge-site/ when the parent _bmad-output/ is already ignored'
+  );
+});
+
+test('29.1 — unrelated _bmad-output-archive entry does NOT block the append (no false parent match)', () => {
+  const dir = makeProject('node_modules/\n_bmad-output-archive/\n');
+  ensureKnowledgeSiteIgnored(dir);
+  const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+  const active = written.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  assert.ok(
+    active.includes(KNOWLEDGE_SITE_CANONICAL_ENTRY),
+    'an unrelated _bmad-output-archive entry must not be mistaken for the _bmad-output parent'
+  );
+});
+
+test('29.1 — invalid projectRoot is a no-op (does not throw)', () => {
+  assert.doesNotThrow(() => {
+    ensureKnowledgeSiteIgnored(undefined);
+    ensureKnowledgeSiteIgnored(null);
+    ensureKnowledgeSiteIgnored('');
   });
 });
 

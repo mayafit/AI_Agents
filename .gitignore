@@ -6,6 +6,11 @@ Thumbs.db
 .env
 .env.*
 dist/
+# Story 29.1 — the Knowledge Atlas engine bundle is a COMMITTED build artifact
+# (sealed-packaging invariant: consuming projects never build it). The bare
+# `dist/` rule above would ignore it, so un-ignore the atlas dist explicitly.
+!lib/knowledge-atlas/dist/
+!lib/knowledge-atlas/dist/atlas.cjs
 coverage/
 .vscode/
 .idea/
@@ -13,6 +18,12 @@ coverage/
 .claude/
 test-security-project/
 _bmad/
+# Story 29.8: the config-scan test fixtures ship a committed `_bmad/bmm/config.yaml`
+# (they exercise config-aware knowledge-source discovery). Re-include only those
+# fixture configs so a fresh checkout/CI has them — the global `_bmad/` ignore
+# above still covers every real install dir.
+!test/fixtures/**/_bmad/
+!test/fixtures/**/_bmad/**
 _bmad-custom-backup-temp/
 _bmad-output/methodology/
 .agent/
@@ -40,6 +51,11 @@ opencode.json
 # Story 22.8 — transient plugin stage produced by lib/bmad.js#stagePlugin during
 # dev-local test installs. Never commit.
 .ma-agents-plugin-stage/
+
+# Story 29.1 — Knowledge Atlas site output (transient, regenerated on each skill run).
+# _bmad-output/ itself remains tracked (project knowledge artifacts); only the nested
+# knowledge-site/ is ignored.
+_bmad-output/knowledge-site/
 
 # Root-level files that should not be committed (VS Code workspace, scratch output)
 agents.code-workspace

@@ -1,0 +1,7 @@
+{
+  "name": "bmad-knowledge",
+  "version": "1.0.0",
+  "description": "Generate a self-contained Knowledge Atlas HTML site from project planning and implementation artifacts. No per-project install required — the engine is pre-bundled in ma-agents.",
+  "category": "workflow",
+  "tags": ["knowledge-atlas", "documentation", "site-generator", "offline"]
+}

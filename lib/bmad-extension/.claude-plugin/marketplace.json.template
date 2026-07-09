@@ -111,7 +111,8 @@
         "./skills/prioritize-backlog",
         "./skills/project-context-expansion",
         "./skills/remove-from-sprint",
-        "./skills/sprint-status-view"
+        "./skills/sprint-status-view",
+        "./skills/bmad-knowledge"
       ]
     }
   ]

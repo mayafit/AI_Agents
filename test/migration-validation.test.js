@@ -354,11 +354,11 @@ test('5.2: skills/module.yaml has extends-module: bmm', () => {
   assert.ok(content.includes('extends-module: bmm'), 'skills/module.yaml must declare extends-module: bmm');
 });
 
-test('5.3: skills/ contains exactly 61 skill folders', () => {
+test('5.3: skills/ contains exactly 62 skill folders', () => {
   const folders = fs.readdirSync(SKILLS_DIR).filter(f =>
     fs.statSync(path.join(SKILLS_DIR, f)).isDirectory());
-  assert.strictEqual(folders.length, 61,
-    `Expected 61 skill folders, found ${folders.length}: ${folders.join(', ')}`);
+  assert.strictEqual(folders.length, 62,
+    `Expected 62 skill folders, found ${folders.length}: ${folders.join(', ')}`);
 });
 
 test('5.4: every skill folder has SKILL.md', () => {
@@ -379,12 +379,12 @@ test('5.5: every skill folder has bmad-skill-manifest.yaml', () => {
   }
 });
 
-test('5.6: skills/module-help.csv exists and lists all 61 skills', () => {
+test('5.6: skills/module-help.csv exists and lists all 62 skills', () => {
   const csv = fs.readFileSync(path.join(SKILLS_DIR, 'module-help.csv'), 'utf-8');
   const lines = csv.split('\n').filter(l => l.trim() && !l.startsWith('module,'));
-  // Should have a line for each of the 61 skills (header excluded)
-  assert.strictEqual(lines.length, 61,
-    `Expected 61 data rows in module-help.csv, found ${lines.length}`);
+  // Should have a line for each of the 62 skills (header excluded)
+  assert.strictEqual(lines.length, 62,
+    `Expected 62 data rows in module-help.csv, found ${lines.length}`);
 });
 
 test('5.7: skills/module-help.csv references module code ma-skills', () => {
@@ -417,7 +417,7 @@ test('5.8: skill folder breakdown: 5 agents + 8 mil498 + 7 sre + 5 devops + 7 cy
   assert.strictEqual(devops.length, 5, `Expected 5 devops folders, found ${devops.length}`);
   assert.strictEqual(cyber.length, 7, `Expected 7 cyber folders, found ${cyber.length}`);
   assert.strictEqual(ml.length, 12, `Expected 12 ml folders, found ${ml.length}`);
-  assert.strictEqual(ext.length, 17, `Expected 17 extension folders, found ${ext.length}`);
+  assert.strictEqual(ext.length, 18, `Expected 18 extension folders, found ${ext.length}`);
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

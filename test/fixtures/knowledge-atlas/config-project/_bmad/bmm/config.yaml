@@ -1,0 +1,11 @@
+# Story 29.7 config-scan fixture — a project whose BMAD config points its
+# planning knowledge at an EXTERNAL sibling folder (config-project-knowledge),
+# exercising: quote-stripping, {project-root} substitution, union with the
+# default _bmad-output source, and dedup of a nested implementation_artifacts
+# path plus a knowledgebase_path that duplicates planning_artifacts.
+#
+# Paths are {project-root}-relative (never hardcoded absolute) so the fixture is
+# portable across machines/CI. The sibling folder resolves via "../".
+planning_artifacts: "\"{project-root}/../config-project-knowledge\""
+knowledgebase_path: "\"{project-root}/../config-project-knowledge\""
+implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"

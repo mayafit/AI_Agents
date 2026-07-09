@@ -1,0 +1,5 @@
+{
+  "name": "degraded-atlas-fixture",
+  "version": "0.1.0",
+  "description": "Fixture with malformed/bad docs for degradation + safety tests (Story 29.6)"
+}

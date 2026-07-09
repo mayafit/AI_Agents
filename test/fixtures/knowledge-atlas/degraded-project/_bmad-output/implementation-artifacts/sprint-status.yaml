@@ -1,0 +1,12 @@
+metadata:
+  last_updated: "2026-01-01T00:00:00Z"
+  tracking_system: file-system
+
+sprints:
+  sprint-1:
+    status: active
+    items:
+      - id: "1-1-valid-story"
+        type: story
+        title: "The one valid story in this fixture"
+        status: in-progress

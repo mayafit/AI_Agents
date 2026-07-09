@@ -5,6 +5,114 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.15.0-beta.2] - 2026-07-09
+
+Knowledge Atlas beta.2 — fixes authored inter-document links (found in real-project
+testing). Author-written markdown cross-links between source docs (e.g.
+`[roadmap](roadmap.md#…)`, `[domain model](domain-model.md)`) were emitted verbatim
+and, because reading views are written flat under `docs/<slug>.html`, resolved to a
+nonexistent `docs/roadmap.md` → broken links. The renderer now rewrites an authored
+relative doc-link (resolved against the source doc's directory) to the corresponding
+rendered page, preserving `#fragment` and handling spaced/`.MD` filenames and
+`../`/subdir traversal; non-scanned targets are left untouched. Verified on a real
+project: 18 → 0 broken links. No breaking change to the public CLI.
+
+## [3.15.0-beta.1] - 2026-07-07
+
+Knowledge Atlas beta.1 — fixes from real-project (Prophesee) testing of beta.0:
+
+- **Broken links fixed:** the traceability spine, interactive graph, and orphan/gap
+  view linked entities by their raw source path (`…/foo.md#anchor`) instead of the
+  rendered page, so every click opened an empty page. All three now resolve to the
+  real `docs/<slug>.html` page (link-integrity test guards it).
+- **Config-aware knowledge-source discovery (Story 29.7):** the engine now reads
+  `_bmad/bmm/config.yaml` and scans the project's configured knowledge folders
+  (`planning_artifacts` / `implementation_artifacts` / `knowledgebase_path`) in
+  addition to `_bmad-output` — resolving `{project-root}` and stripping wrapping
+  quotes. Projects with no such config are unchanged (byte-identical). `.git`,
+  `node_modules`, and hidden files/dirs are excluded; stale output is purged on
+  regen (guarded so it can never delete a configured source).
+- **Reference-edge extraction (Story 29.8):** planning-centric projects (dense PRD
+  with few/no story files) previously produced a disconnected graph with no
+  backlinks. The engine now derives `references` edges from the docs/sections that
+  mention an entity, so the graph connects and "Referenced by" populates
+  (Prophesee: 0 → 317 edges). Gap/orphan detection stays keyed on semantic edges,
+  so a merely-referenced requirement is still flagged as unimplemented.
+
+Beta.0 users should reinstall (the manifest version bumped, forcing a clean
+re-extraction). No breaking change to the public CLI.
+
+## [3.15.0-beta.0] - 2026-07-03
+
+Knowledge Atlas — Epic 29 beta prerelease (FR215–234 / NFR60–69). Adds a
+pre-bundled, offline-first static-site generator (`bmad-knowledge` skill) that
+scans a project's `_bmad-output` and produces a fully self-contained knowledge
+site with zero runtime dependencies. No breaking change to the public CLI
+surface → MINOR; beta prerelease pending cross-platform CI sign-off.
+
+### Added
+
+- **Knowledge Atlas engine** (`lib/knowledge-atlas/dist/atlas.cjs`, ~737 KB committed
+  bundle, FR215/FR230): scan → manifest → reading views → interactive graph → orphan/gap
+  report, all in a single sealed CJS artifact. The bundle is vendored into the
+  ma-agents distribution so consuming projects never run `npm install` for the Atlas.
+
+- **`bmad-knowledge` skill** (FR215/FR230): registered in `skills/bmad-knowledge/`,
+  `lib/bmad-extension/skills/bmad-knowledge/`, `module-help.csv`, and
+  `marketplace.json.template`/built plugin bundle (skill count 62). Invokes the
+  committed `atlas.cjs` against the project's `_bmad-output` to generate or refresh
+  the knowledge site.
+
+- **Six-page site output** (FR216–222): `index.html` (home + health snapshot),
+  `search.html` (offline lunr full-text search), `graph.html` (interactive
+  force-graph visualization), `diagrams.html` (Mermaid diagram viewer),
+  `orphans.html` (orphaned/gap entities), and per-document reading views under
+  `docs/`. All pages are fully self-contained (no CDN, no network fetch,
+  `file://`-safe).
+
+- **Manifest system** (FR223–226): incremental `manifest.json` with stable key
+  ordering, schema-version guard, POSIX-relative paths (no machine-specific
+  absolute paths), and LF normalization. Cross-platform byte-identical across
+  Linux and Windows.
+
+- **Offline packaging + air-gap seal** (NFR60/NFR61/NFR67): lunr browser runtime
+  vendored at build time; `offline-install-verify.sh` generates and verifies an
+  Atlas under `--network none`; `offline-install.yml` CI gate.
+
+- **Determinism** (NFR62): pinned `SOURCE_DATE_EPOCH`, sorted entities, LF output,
+  relativized manifest paths, CRLF-tolerant scanner — same `_bmad-output` produces
+  byte-identical output on Linux and Windows from any absolute project path.
+
+- **Graceful degradation** (NFR63/FR234): per-renderer try/catch in `generate.ts`
+  (one failing page never aborts the run), tolerant scanner (binary/zero-byte/unknown
+  docs skipped), bad-YAML frontmatter tolerated. Disabled-JS baseline: every page
+  is legible and navigable without executing any script.
+
+- **Output sanitization** (NFR64): `sanitizeHtml()` in `linkify.ts` — allowlist-based
+  tag/attribute filter strips `<script>`, `<iframe>`, `onerror=`, `javascript:`/
+  `vbscript:`/`data:` schemes from all document-rendered HTML.
+
+- **Graph reconciliation** (NFR65): `reconcileWithKgJson()` merges the auto-extracted
+  graph with hand-curated `knowledge-graph.json` if present.
+
+- **Test suites** (Story 29.1–29.6, 315+ assertions):
+  `knowledge-atlas-{smoke,manifest,render,graph,packaging,offline-safety,reconcile,
+  determinism,degradation,realproject}.test.js`
+
+- **Release gate** (Story 29.6): bundle-drift check (build-to-temp, never mutates
+  committed `dist/atlas.cjs`), cross-platform determinism gate (two-path byte-identity
+  + CRLF≡LF), graceful-degradation gate (malformed docs + disabled-JS baseline),
+  NFR64 consolidated safety assertion, and real-project smoke against the ma-agents
+  repo's own `_bmad-output`.
+
+### Fixed
+
+- **Bundle-drift test flaw** (Story 29.6 AC 8): the prior drift check rebuilt
+  `atlas.cjs` in place and restored committed bytes in a `finally` — this mutated
+  the working tree during the test run and allowed a stale committed bundle to pass.
+  Rewritten to build to a temp path and byte-compare against the committed file,
+  never writing to `dist/atlas.cjs`.
+
 ## [3.14.1] - 2026-06-30
 
 Cosmetic patch: rename the SQA & Standards Expert persona **Gad → Gadi**. Display-name
