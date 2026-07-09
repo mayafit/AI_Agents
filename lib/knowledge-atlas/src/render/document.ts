@@ -314,8 +314,15 @@ export function renderDocumentPage(
     const a = node.anchor;
     if (!a || existingIds.has(a)) continue;
     existingIds.add(a);
-    // First <a> tag whose href ends with this exact anchor fragment.
-    const m = new RegExp('<a\\b[^>]*href="[^"]*#' + escRe(a) + '"', 'i').exec(renderedHtml);
+    const ra = escRe(a);
+    // Prefer the DEFINITION occurrence — a linkified mention immediately followed
+    // by a colon (the BMAD "**FRn:** description" / "## FRn: …" pattern) — over an
+    // earlier passing mention. Without this, an FR that a revision-history /
+    // changelog row lists near the top of the PRD ("…update FR21, FR91…") anchored
+    // there, so clicking the FR jumped to the changelog instead of its definition.
+    let m = new RegExp('<a\\b[^>]*href="[^"]*#' + ra + '"[^>]*>[^<]*</a>\\s*:', 'i').exec(renderedHtml);
+    // Otherwise fall back to the first linkified mention anywhere on the page.
+    if (!m) m = new RegExp('<a\\b[^>]*href="[^"]*#' + ra + '"', 'i').exec(renderedHtml);
     if (m) inlinePlacements.push({ idx: m.index, anchor: a });
     else fallbackAnchors.push(a);
   }
