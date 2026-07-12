@@ -48,8 +48,11 @@ err() { printf 'ERROR: %s\n' "$*" >&2; }
 # Canonical ma-agents persona skill IDs. Single source of truth used by both
 # the MANIFEST grep (Invariant C) and the persona filesystem check
 # (Invariant D). When adding/removing a persona, update ONLY this list.
+# Story 30.4 removed ma-agent-ml (Demerzel deprecated for new installs,
+# FR244-FR247) — kept in lockstep with test/routing-parity.test.js's
+# PERSONA_SKILL_IDS.
 # ---------------------------------------------------------------------------
-PERSONAS="ma-agent-cyber ma-agent-devops ma-agent-sre ma-agent-sqa ma-agent-ml"
+PERSONAS="ma-agent-cyber ma-agent-devops ma-agent-sre ma-agent-sqa"
 
 # Always-on skills shipped from ma-agents/skills/ that land in every tool's
 # skills dir even when the plugin-routed personas do not. Used by

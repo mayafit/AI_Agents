@@ -233,18 +233,19 @@ test('skills/module-help.csv exists alongside module.yaml (PluginResolver Strate
 // ─── AC 5-6 precursor / AC 7: skills list hygiene + version-bump convention
 console.log('\n--- AC 5/6/7: Skills list hygiene ---');
 
-test('template lists the five renamed ma-agent-* skills (Story 22.2 contract)', () => {
+test('template lists the four renamed ma-agent-* skills (Story 22.2 contract; ma-agent-ml removed by Story 30.4)', () => {
   const required = [
     './skills/ma-agent-cyber',
     './skills/ma-agent-devops',
     './skills/ma-agent-sre',
-    './skills/ma-agent-ml',
     './skills/ma-agent-sqa',
   ];
   for (const p of required) {
     assert.ok(plugin.skills.includes(p),
       `template.plugins[0].skills missing Story 22.2 entry: ${p}`);
   }
+  assert.ok(!plugin.skills.includes('./skills/ma-agent-ml'),
+    'template.plugins[0].skills must NOT list ma-agent-ml (Story 30.4 — Demerzel deprecated for new installs)');
 });
 
 test('every skill path declared in the template resolves to an on-disk directory', () => {
