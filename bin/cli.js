@@ -1125,6 +1125,13 @@ async function reconcileCustomMarketplaceOnUpdate({ projectRoot }) {
   });
 
   console.log(chalk.cyan(`\n  Custom marketplace source "${persisted.source}" re-enumerated:`));
+  if (persisted.sha) {
+    // The persisted SHA is the last-installed commit, INFORMATIONAL only.
+    // Updates deliberately float to remote HEAD (FR242/NFR72) to surface
+    // newly-published extensions — we report the last-installed SHA rather
+    // than pin to it, so the float-to-HEAD behavior is explicit, not silent.
+    console.log(chalk.gray(`    (last installed at ${persisted.sha.slice(0, 12)}; update re-enumerates at the source's current HEAD, not this pin)`));
+  }
   if (added.length > 0) {
     console.log(chalk.gray(`    + newly available (not auto-installed; re-run the custom-source flow to add): ${added.join(', ')}`));
   }
