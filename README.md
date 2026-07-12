@@ -2,6 +2,23 @@
 
 A universal NPX tool to install AI coding agent skills. Write skills once, install them across Claude Code, Gemini, Copilot, Cline, Cursor, Kilocode, and Roo Code.
 
+## What's New in v3.17.0
+
+- **BMAD-METHOD v6.10.0** — bundled bmad-method updated to v6.10.0. The
+  offline bundle stays exactly `{tea, bmb, cis, gds, wds}`; the new upstream
+  `bmad-loop` module is deliberately excluded (never bundled, never installed
+  by default) by a closed-allowlist filter with a two-sided fail-loud guard.
+- **Custom marketplace source (opt-in)** — `--bmad-custom-source
+  <path|url>` (or the install-time Y/N prompt) lets you enumerate and install
+  a hand-picked subset of extensions from your own BMAD marketplace repo —
+  the sanctioned way to add `bmad-loop` or any other excluded module. The
+  source and your selection persist in `.ma-agents.json` and re-enumerate on
+  every `update`. See "Custom Marketplace Source" below.
+- **Demerzel (ML Scientist) deprecated** — `ma-agent-ml` and its 12 `ml-*`
+  skills are no longer installed by default for new projects. Existing
+  installs are completely untouched (non-destructive); a one-time notice
+  explains how to opt back in via a custom marketplace source.
+
 ## What's New in v3.12.0
 
 - **Cline `.clinerules` directory fix** — `.clinerules` is now correctly created as a directory (matching Cline's native structure), not as a file. This prevents ENOTDIR errors during workflow generation and ensures `.clinerules/workflows/` is always generated correctly. Legacy installs that had `.clinerules` as a file are automatically migrated on the next install or update.
@@ -316,7 +333,7 @@ Running `ma-agents` on a project where skills are already installed triggers the
    - **Cleans up stale tool directories** — if a tool's skill path changed between releases (e.g., Copilot migrated from `.github/copilot/skills/` to `.github/skills/`), the old directory is automatically removed when the new one has content.
 
 ### BMAD-METHOD Integration
-`ma-agents` bundles [BMAD-METHOD](https://docs.bmad-method.org/) **v6.5.0** to provide advanced orchestration and specialized personas.
+`ma-agents` bundles [BMAD-METHOD](https://docs.bmad-method.org/) **v6.10.0** to provide advanced orchestration and specialized personas.
 
 #### Core Features
 - **Auto-Detection**: Recognizes existing BMAD installations and prompts for silent updates.
@@ -330,15 +347,69 @@ Running `ma-agents` on a project where skills are already installed triggers the
 `ma-agents` ships with everything needed to install BMAD without any network access at install time:
 
 - **`bmad-method` is a direct npm dependency** — no runtime `npx bmad-method` fetch required. The correct version is pinned and bundled inside `node_modules/` when you `npm install ma-agents`.
-- **External modules pre-bundled** — `lib/bmad-cache/` ships the 4 optional BMAD modules (`bmb`, `cis`, `gds`, `tea`) inside the package itself. They are pre-populated to `~/.bmad/cache/external-modules/` before any install runs, so BMAD never needs to clone them from GitHub.
+- **External modules pre-bundled** — `lib/bmad-cache/` ships exactly 5 optional BMAD modules (`bmb`, `cis`, `gds`, `tea`, `wds`) inside the package itself. They are pre-populated to `~/.bmad/cache/external-modules/` before any install runs, so BMAD never needs to clone them from GitHub. The bundled set is a **closed allowlist** — a build-time guard fails loud if the resolved set is ever smaller (a thin cache) *or* larger (a silent upstream addition) than these five, so a new upstream module can never be force-bundled or installed by default. `bmad-loop` (BMAD's own unattended-dev orchestrator, added upstream at v6.10.0) is deliberately **excluded** from this bundle — see "BMAD-loop and other opt-in modules" below.
 - **Plugin bundle pre-built** — `lib/bmad-extension-plugin/` ships as a deterministic, byte-stable bundle (built from `lib/bmad-extension/` via `scripts/build-plugin.js`). At install time it is staged into `<project>/.ma-agents-plugin-stage/` and consumed by `bmad-method install --custom-source`, so the install never touches the network for plugin assembly.
 - **Deterministic installs** — same `ma-agents` version always produces the same `_bmad/` output, regardless of network conditions (NFR21). Bundle reproducibility is gated by a CI drift check.
 - **Air-gapped friendly** — install from a tarball (`npm install ./ma-agents-x.y.z.tgz`) and run `npx ma-agents install` completely offline. Every PR runs an offline-install gate (`--network none` Docker) to enforce this guarantee (NFR54).
 
 ```
-npm install ma-agents          # bundles bmad-method + 4 external modules
+npm install ma-agents          # bundles bmad-method + 5 external modules
 npx ma-agents install --yes    # fully offline BMAD install — no network needed
 ```
+
+#### Custom Marketplace Source (opt-in)
+
+After module selection, the installer offers to pull in extensions from **one**
+additional BMAD marketplace repository — a local path or an intra-perimeter
+Git URL (e.g. on-prem GitLab) pointing at a repo with a
+`.claude-plugin/marketplace.json`. This is how a team plugs in extensions
+ma-agents deliberately does not ship by default — including **`bmad-loop`**
+(see below) or an internally-published replacement for a deprecated agent.
+
+- **Interactive flow**: `Install additional BMAD extensions from a custom
+  source? (y/N)` → if yes, enter the source → ma-agents **enumerates** the
+  extensions the source declares (reusing bmad-method's own module
+  discovery) → presents them in **ma-agents' own multiselect** (the
+  single-wizard principle is preserved; `bmad-method` itself still runs
+  non-interactively) → installs only the codes you picked.
+- **Non-interactive equivalent**: `--bmad-custom-source <local-path-or-url>`.
+  Under `--yes`, every declared extension is selected automatically (matching
+  how `--bmad-modules`/skill selection behave under `--yes`).
+- **Persistence + reconcile on update**: the marketplace source and your
+  selected extension codes are saved in `.ma-agents.json`. On the next
+  `update`, ma-agents automatically re-resolves the source and re-enumerates
+  it, reporting anything newly published (not auto-installed — re-run the
+  custom-source flow to add it) or no longer available (dropped from the
+  installed selection) — it never silently changes what you already have.
+- **Authentication**: ambient git only — your existing SSH keys or credential
+  helper. ma-agents performs zero token handling and never stores or logs a
+  credential.
+- **On-prem posture**: no public-internet egress is required (an on-prem
+  GitLab over SSH works with no extra configuration), but custom-source
+  content is explicitly **outside** the sealed offline-bundle guarantee above
+  — you are responsible for that source's own offline self-containment. The
+  installer prints a one-line warning before you can select anything from it.
+
+```bash
+npx ma-agents install --yes --bmad-custom-source ./org-marketplace
+npx ma-agents install --bmad-custom-source git@git.intra.example:team/bmad-marketplace.git
+```
+
+#### `bmad-loop` and other opt-in modules
+
+BMAD-METHOD v6.10.0 added `bmad-loop`, an unattended Python/tmux/hooks
+development-orchestrator module that requires a separate `bmad-loop-setup`
+step and vendor-API sessions. It is **air-gap-hostile as a default** and
+functionally overlaps ma-agents' own `bmad-dev-epic` orchestrator, so
+`bmad-loop` is **never bundled and never installed by default** — it is
+excluded by the same closed-allowlist guard described above. `bmad-dev-epic`
+remains ma-agents' default air-gapped epic orchestrator.
+
+`bmad-loop` (or any other module ma-agents excludes) can still be installed
+as a deliberate, explicit opt-in through a **custom marketplace source** (see
+above) — for example a locally-published copy of `bmad-loop` in your org's
+marketplace repo. This is the sanctioned path for teams that want it; nothing
+in the default install pulls it in silently.
 
 #### Specialized BMAD Agents
 1. **SRE Agent (Alex)**:
@@ -353,10 +424,20 @@ npx ma-agents install --yes    # fully offline BMAD install — no network neede
    - **Focus**: Cyber immunity, security auditing, and vulnerability management.
    - **Capabilities**: Immunity estimation (scoring), Vault secret management, and PKI automation.
    - **Integration**: Orchestrates ma-agents security skills for deep scans.
-4. **Demerzel (ML Scientist)**:
+4. **Demerzel (ML Scientist)** — **DEPRECATED, no longer installed by default (v3.17.0+)**:
    - **Focus**: Hypothesis-driven machine learning lifecycle with scientific rigor.
    - **Capabilities**: EDA, architecture design, locked TechSpec contracts, experiment execution, failure-cost analysis.
    - **Workflows**: 12-stage ML lifecycle from ideation through retrospective, with mandatory review gates.
+   - **Status**: `ma-agent-ml` and its 12 `ml-*` workflow skills are no longer
+     part of the default bundle for **new** installs. This is **non-destructive**
+     for everyone else — an **existing** install's `ma-agent-ml`/`ml-*` content
+     (and anything you produced with it) is left completely untouched on update;
+     there is no auto-removal and no prompt. You'll see a one-time notice the
+     first time you install or update after upgrading ma-agents, and that's it.
+     There is no in-tool migration path — if your team still needs ML
+     workflows, install a replacement from your organization's own BMAD
+     marketplace via the **custom marketplace source** described above
+     (`--bmad-custom-source`).
 5. **Gadi (SQA & Standards Expert)**:
    - **Focus**: Software quality assurance and defense documentation standards — a unified persona covering SQA auditing and MIL-STD-498 document generation.
    - **SQA Capabilities**: Multi-dimensional project quality audits, IEEE/ISO/IEC 12207:2017 compliance assessments (23 process areas, 4 groups), requirements evaluation against 14 established quality criteria (scope-selectable: PRD FRs, NFRs, epics, stories).
