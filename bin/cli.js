@@ -949,6 +949,29 @@ async function selectBmadModules({ bmadModulesFlag, bmadModulesPrompt, projectRo
 // --- Custom marketplace source (Story 30.6a) ---
 
 /**
+ * Story 30.6b AC 6 — single source of truth for whether the base BMAD
+ * install/update step (Step 3.5) left a usable installation for the
+ * custom-marketplace subset install (Step 3.5b) to layer `--custom-source`
+ * onto. Pure function, exported for direct unit testing (no need to drive
+ * the full wizard to exercise this policy):
+ *
+ *   - not attempted (user declined, or --yes short-circuited before any
+ *     call): usable only if BMAD was ALREADY installed from a prior run —
+ *     there is no `_bmad/` tree to layer onto for a declined FRESH install.
+ *   - attempted: usable iff the install/update call itself reported success.
+ *
+ * @param {Object} ctx
+ * @param {boolean} ctx.bmadInstalled - Was BMAD already installed before this step?
+ * @param {boolean} ctx.attempted - Was `installBmad`/`updateBmad` actually invoked?
+ * @param {boolean} [ctx.success] - That call's return value (ignored if `attempted` is false).
+ * @returns {boolean}
+ */
+function resolveBaseBmadOk({ bmadInstalled, attempted, success }) {
+  if (!attempted) return Boolean(bmadInstalled);
+  return Boolean(success);
+}
+
+/**
  * FR239-FR241 — after BMAD module selection, offer to enumerate ONE custom
  * marketplace source and let the user pick which of its declared extensions
  * to install. This function does the Y/N prompt (or its `--bmad-custom-source`
@@ -956,16 +979,19 @@ async function selectBmadModules({ bmadModulesFlag, bmadModulesPrompt, projectRo
  * ma-agents' OWN multiselect (FR240) — and stops there.
  *
  * Scope boundary (Story 30.6a vs 30.6b): this returns the user's selection —
- * `{ source, mode, selectedCodes, plugins }` — for Story 30.6b to consume. NO
- * pruning, staging, or `bmad-method` invocation happens here or anywhere in
- * this module. Returns `null` when the feature is not engaged (no flag, and
+ * `{ source, mode, selectedCodes, plugins, rootDir, sourceUrl }` (the last two
+ * added by 30.6b — additive, existing 30.6a consumers only read the first
+ * four fields) — for Story 30.6b to consume for prune-and-stage. NO pruning,
+ * staging, or `bmad-method` invocation happens here or anywhere in this
+ * function. Returns `null` when the feature is not engaged (no flag, and
  * either --yes with no flag, or the user answered "N") — this is the
  * byte-identical-to-baseline "off" path required by NFR70.
  *
  * @param {Object} ctx
  * @param {string} [ctx.bmadCustomSourceFlag] - `--bmad-custom-source <ref>` value
  * @param {boolean} [ctx.yesFlag] - non-interactive run
- * @returns {Promise<null|{ source: string, mode: 'discovery'|'direct', selectedCodes: string[], plugins: Array<Object> }>}
+ * @returns {Promise<null|{ source: string, mode: 'discovery'|'direct', selectedCodes: string[],
+ *   plugins: Array<Object>, rootDir: string, sourceUrl: string|null }>}
  */
 async function promptCustomMarketplace({ bmadCustomSourceFlag = '', yesFlag = false } = {}) {
   let source = bmadCustomSourceFlag;
@@ -1012,10 +1038,10 @@ async function promptCustomMarketplace({ bmadCustomSourceFlag = '', yesFlag = fa
     return null;
   }
 
-  const { plugins, mode } = enumerated;
+  const { plugins, mode, rootDir, sourceUrl } = enumerated;
   if (!plugins || plugins.length === 0) {
     console.log(chalk.yellow(`  Custom marketplace source "${source}" declared no plugins — nothing to select.`));
-    return { source, mode, selectedCodes: [], plugins: [] };
+    return { source, mode, selectedCodes: [], plugins: [], rootDir, sourceUrl };
   }
 
   // NFR71 — shown before the user can select/install anything from the source.
@@ -1027,7 +1053,7 @@ async function promptCustomMarketplace({ bmadCustomSourceFlag = '', yesFlag = fa
     // skills). The user asked for this source explicitly via the flag.
     const selectedCodes = plugins.map((p) => p.code);
     console.log(chalk.cyan(`  Custom marketplace: selected all ${selectedCodes.length} extension(s) from "${source}".`));
-    return { source, mode, selectedCodes, plugins };
+    return { source, mode, selectedCodes, plugins, rootDir, sourceUrl };
   }
 
   const { chosenCodes } = await prompts({
@@ -1047,7 +1073,7 @@ async function promptCustomMarketplace({ bmadCustomSourceFlag = '', yesFlag = fa
     return null;
   }
 
-  return { source, mode, selectedCodes: chosenCodes, plugins };
+  return { source, mode, selectedCodes: chosenCodes, plugins, rootDir, sourceUrl };
 }
 
 // --- Install wizard ---
@@ -1341,10 +1367,16 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
         projectRoot: process.cwd(),
       });
 
+      // Story 30.6b AC 6 — tracks whether the base BMAD install/update step
+      // left a usable installation for the custom-marketplace subset install
+      // (Step 3.5b) to layer onto. See resolveBaseBmadOk() for the policy.
+      let baseBmadOk = resolveBaseBmadOk({ bmadInstalled, attempted: false });
+
       if (!bmadInstalled) {
         if (yesFlag) {
           console.log(chalk.cyan(`\n Installing BMAD-METHOD (modules: ${bmadModules.join(', ')})...`));
           const success = await bmad.installBmad(bmadModules, bmadTools);
+          baseBmadOk = resolveBaseBmadOk({ bmadInstalled, attempted: true, success });
           if (success) {
             console.log(chalk.green(' BMAD-METHOD installed successfully!'));
           }
@@ -1359,15 +1391,19 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
           if (installBmad) {
             console.log(chalk.cyan(`\n Installing BMAD-METHOD (modules: ${bmadModules.join(', ')})...`));
             const success = await bmad.installBmad(bmadModules, bmadTools);
+            baseBmadOk = resolveBaseBmadOk({ bmadInstalled, attempted: true, success });
             if (success) {
               console.log(chalk.green(' BMAD-METHOD installed successfully!'));
             }
+          } else {
+            baseBmadOk = resolveBaseBmadOk({ bmadInstalled, attempted: false });
           }
         }
       } else {
         if (yesFlag) {
           console.log(chalk.cyan(`\n Updating BMAD-METHOD (modules: ${bmadModules.join(', ')})...`));
           const success = await bmad.updateBmad(bmadModules, bmadTools);
+          baseBmadOk = resolveBaseBmadOk({ bmadInstalled, attempted: true, success });
           if (success) {
             console.log(chalk.green(' BMAD-METHOD updated successfully!'));
           }
@@ -1382,17 +1418,19 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
           if (updateBmad) {
             console.log(chalk.cyan(`\n Updating BMAD-METHOD (modules: ${bmadModules.join(', ')})...`));
             const success = await bmad.updateBmad(bmadModules, bmadTools);
+            baseBmadOk = resolveBaseBmadOk({ bmadInstalled, attempted: true, success });
             if (success) {
               console.log(chalk.green(' BMAD-METHOD updated successfully!'));
             }
           }
+          // else: update declined, but BMAD was already installed from a
+          // prior run — resolveBaseBmadOk({attempted:false}) is `bmadInstalled`,
+          // i.e. still true (there IS a usable base).
         }
       }
 
-      // Step 3.5b: Custom marketplace source (Story 30.6a, FR239-FR241).
-      // Enumerate + ma-agents' own multiselect ONLY — no staging/install here.
-      // The selection is handed off for Story 30.6b to consume; until 30.6b
-      // lands, nothing is actually installed from a custom source.
+      // Step 3.5b: Custom marketplace source (Story 30.6a enumerate + wizard;
+      // Story 30.6b prune + stage + install-the-subset, FR240/FR242).
       let customMarketplaceSelection = null;
       try {
         customMarketplaceSelection = await promptCustomMarketplace({ bmadCustomSourceFlag, yesFlag });
@@ -1400,13 +1438,31 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
         console.log(chalk.yellow(`\n  Custom marketplace source skipped: ${err.message}`));
       }
       if (customMarketplaceSelection && customMarketplaceSelection.selectedCodes.length > 0) {
-        console.log(
-          chalk.cyan(
-            `\n  Custom marketplace: captured ${customMarketplaceSelection.selectedCodes.length} ` +
-            `extension(s) (${customMarketplaceSelection.selectedCodes.join(', ')}) from ` +
-            `"${customMarketplaceSelection.source}". Staging + installing this selection lands in Story 30.6b.`
-          )
-        );
+        if (!baseBmadOk) {
+          // AC 6 (30.6b) — never layer --custom-source onto a project with no
+          // (or a broken) base BMAD install. The rest of the install is
+          // otherwise unaffected.
+          console.log(
+            chalk.yellow(
+              '\n  Skipping custom marketplace install — the base BMAD install/update did not ' +
+              'complete successfully, so there is no BMAD installation to add it to.'
+            )
+          );
+        } else {
+          try {
+            const success = await bmad.installCustomMarketplaceSubset({
+              projectRoot: process.cwd(),
+              modules: bmadModules,
+              tools: bmadTools,
+              selection: customMarketplaceSelection,
+            });
+            if (success) {
+              console.log(chalk.green('  Custom marketplace subset installed successfully!'));
+            }
+          } catch (err) {
+            console.log(chalk.red(`\n  Custom marketplace install failed: ${err.message}`));
+          }
+        }
       }
     }
   }
@@ -1940,4 +1996,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue };
+module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, resolveBaseBmadOk, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue };
