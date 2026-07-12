@@ -51,6 +51,22 @@ marketplace source, and a non-destructive Demerzel deprecation (Epic 30 / F25).
   sanctioned path for installing a module ma-agents deliberately excludes
   from its own default bundle (e.g. a locally-published `bmad-loop`, or an
   organization's own replacement for a deprecated agent).
+- **Custom source now supports both marketplace formats.** In addition to a
+  `.claude-plugin/marketplace.json` bundle repo ("discovery" mode) and a
+  single-module repo ("direct" mode), the custom source now understands the
+  **BMAD registry-index format** used by the official
+  `bmad-code-org/bmad-plugins-marketplace` — `registry/official.yaml` +
+  `registry/community-index.yaml` (each a `modules:` list of `repository` +
+  `module_definition` pointers). Registry entries are enumerated with their
+  trust tier (bmad-certified vs. unverified/community) and installed
+  two-level: ma-agents clones each selected entry's pointed-to repository
+  (community entries pinned to their published `approved_tag`; the
+  `approved_sha` is recorded for the persisted selection), resolves the module
+  at `module_definition`, and stages it under a per-entry namespace with the
+  same FR238 non-empty/unique-skill-leaf guard. Detection precedence is
+  discovery → registry → direct; a registry source that resolves to zero
+  installable modules fails clean before staging. Registry sources require
+  network access and are unavailable to a fully offline install.
 
 ### Deprecated
 - **Demerzel (ML Scientist) agent.** `ma-agent-ml` and its 12 `ml-*`

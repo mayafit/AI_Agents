@@ -292,6 +292,45 @@ function makeModuleRepoClone(name, moduleDir) {
     }
   });
 
+  await test('a Git-URL entry pins the clone via the @<tag> SOURCE SUFFIX (bmad-method has no pinOverride option)', async () => {
+    // Regression guard: bmad-method's resolveSource() takes the ref ONLY as an
+    // `@<tag>` suffix on the input string — it ignores any pinOverride option.
+    // Passing the tag as an option (the original bug) silently floats the clone
+    // to HEAD. Assert the ref actually rides on the source string.
+    freshWorkRoot();
+    try {
+      const projectRoot = path.join(WORK_ROOT, 'project');
+      fs.mkdirSync(projectRoot, { recursive: true });
+
+      const captured = [];
+      const plugins = [
+        { code: 'tagged', name: 'tagged', description: '', repository: 'https://github.com/someone/tagged-ext', moduleDefinition: null, approvedSha: 'deadbeef', approvedTag: 'v2.1.0' },
+        { code: 'untagged', name: 'untagged', description: '', repository: 'https://github.com/someone/untagged-ext', moduleDefinition: null, approvedSha: null, approvedTag: null },
+      ];
+
+      for (const p of plugins) {
+        await assert.rejects(
+          () => stageRegistrySubset({
+            source: 'test-registry',
+            plugins: [p],
+            selectedCodes: [p.code],
+            projectRoot,
+            deps: {
+              // Capture the exact input string, then stop — we only assert the ref threading.
+              resolveSource: async (input) => { captured.push(input); throw new Error('stop-after-capture'); },
+            },
+          }),
+          (err) => err instanceof CustomMarketplaceError
+        );
+      }
+
+      assert.strictEqual(captured[0], 'https://github.com/someone/tagged-ext@v2.1.0', 'approved_tag must be threaded as an @<tag> suffix on the source string');
+      assert.strictEqual(captured[1], 'https://github.com/someone/untagged-ext', 'no approved_tag => clone the default branch, no @suffix');
+    } finally {
+      fs.rmSync(WORK_ROOT, { recursive: true, force: true });
+    }
+  });
+
   console.log('\nFail-clean — malformed index / unreachable repo / zero modules');
 
   await test('malformed index YAML throws a clean CustomMarketplaceError', async () => {
