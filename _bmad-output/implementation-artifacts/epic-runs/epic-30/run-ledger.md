@@ -31,8 +31,8 @@ Wave 5:  30.8 (release gate)                  [needs 30.3 + 30.4 + 30.7]
 | 30.9  | merged | 0 | Cline registry refactor — installer.js cline literals → injectionStrategy fields; #3.3 now green, no Cline regression. fa41b5c |
 | 30.3  | merged | 1 | bump→6.10.0; cache/plugin/manifest rebuilt (exactly 5); TWO offline proofs bmad-loop absent at real 6.10.0; staging regression (isLocalSourcePath+fail-loud). Reconciled bmad-investigate retirement + bmad-auto-setup→bmad-loop-setup rename. 8ff82c4 |
 | 30.6b | merged | 0 | prune+stage+install subset (reuses resolvePlugin/buildBmadArgs/deployClineWorkflows); FR238 fail-loud pre-flight tested at 6.9.0 AND 6.10.0; Cline reconcile (FR242); base-install short-circuit. a17b817 |
-| 30.7  | running | - | persist marketplace URL + selected codes + SHA pin; re-enumerate/reconcile |
-| 30.8  | pending | - | release gate: docs + offline E2E + semver cut |
+| 30.7  | merged | 1 | persist selection (customMarketplace key) + reconcile; self-review caught real gate bug (isUpdate→bmadInstalled). 1efa976 |
+| 30.8  | merged | 0 | docs (README) + traceability + offline-E2E runbook + CHANGELOG [UNRELEASED]; semver rec MINOR 3.16.0→3.17.0; corrected 2 stale README facts. a35b6ab |
 
 ## Integration & gate log
 - Wave 1 merged (98bcda4/33d1bf3/377f998); gate PASS (build ✓, only pre-existing cline failure — now fixed by 30.9).
@@ -48,4 +48,7 @@ Wave 5:  30.8 (release gate)                  [needs 30.3 + 30.4 + 30.7]
 ## Log
 - 2026-07-12 — Wave 1 gate-first: 30.1 PASS, 30.4/30.5 done, integrated. User approved Waves 2-5 (gated at publish/PR), 30.6→6a/6b split, 30.9 folded in.
 - 2026-07-12 — Wave 2 complete + integrated (30.2/30.6a/30.9). 30.6a recovered from a network-clone stall (→local bare-repo fixture).
-- 2026-07-12 — Wave 3 complete + integrated (30.3 bump→6.10.0, 30.6b subset-install). Both recovered from full-suite/real-install stalls (commit intended diff only, discard .agents churn). Epic worktree upgraded to 6.10.0; spine re-verified green at real 6.10.0. Wave 4 spawned (30.7).
+- 2026-07-12 — Wave 3 complete + integrated (30.3 bump→6.10.0, 30.6b subset-install). Both recovered from full-suite/real-install stalls (commit intended diff only, discard .agents churn). Epic worktree upgraded to 6.10.0; spine re-verified green at real 6.10.0.
+- 2026-07-12 — Wave 4 (30.7) + Wave 5 (30.8) complete + integrated. All 8 stories + 30.9 merged (30 commits; 177 files; +6503/-9372).
+- 2026-07-12 — STEP 05 package-integrity gate: build ✓, bundle-drift ✓ clean, 23 epic-touched test files green, ZERO new failures (only known-baseline wds-retired remains). Epic-level Opus adversarial review running.
+- Traceability gaps flagged by 30.8 (architecturally satisfied, dedicated tests recommended as fast-follow): FR243 (custom source CAN install excluded module), NFR75 (existing-install ml-* survival diff test).
