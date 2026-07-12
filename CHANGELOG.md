@@ -5,6 +5,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [UNRELEASED]
+
+BMAD v6.10.0 integration — closed-allowlist bundle safety, an opt-in custom
+marketplace source, and a non-destructive Demerzel deprecation (Epic 30 / F25).
+
+### Changed
+- **Bundled bmad-method updated to v6.10.0.** Upstream v6.10.0 introduces a
+  new `bmad-loop` module (`type: bmad-org`, `marketplace-plugin: true`) and
+  marks `bmad-automator` `deprecated: true`. The offline module-cache filter
+  (`scripts/build-bmad-cache.js`) is now a **closed-by-default allowlist**
+  (`{tea, bmb, cis, gds, wds}`) instead of "every `type: bmad-org` module" —
+  a naive pin bump on the old open-by-default filter would have silently
+  force-bundled and installed `bmad-loop` (a Python/tmux/hooks orchestrator,
+  air-gap-hostile by default and overlapping ma-agents' own `bmad-dev-epic`)
+  by default. A new **two-sided set-equality guard** fails the build loud on
+  a resolved set that is either smaller (thin cache) or larger (a silent
+  upstream addition) than the allowlist — not just the smaller-only check the
+  guard previously had. `bmad-loop` stays available only as an explicit
+  opt-in through a custom marketplace source (below); `bmad-dev-epic` remains
+  the default air-gapped orchestrator. Two upstream installer/resolver
+  changes on ma-agents' own `--custom-source` staging path (`#2511`'s
+  Windows-aware local-path detection; a new fail-loud guard on empty/
+  duplicate plugin-skill resolution) were regression-verified, not
+  re-implemented — both are neutral-to-beneficial for ma-agents' existing
+  staging.
+
+### Added
+- **Custom marketplace source (opt-in).** After module selection, the
+  installer offers `Install additional BMAD extensions from a custom
+  source? (y/N)` (or its non-interactive `--bmad-custom-source
+  <path|url>` equivalent) to pull extensions from **one** additional BMAD
+  marketplace repository (local path or an intra-perimeter Git URL, e.g.
+  on-prem GitLab). ma-agents reuses bmad-method's own module discovery to
+  enumerate the source's declared extensions, presents them in ma-agents'
+  own wizard multiselect (the single-wizard principle is preserved —
+  `bmad-method` itself runs non-interactively), and installs only the
+  selected subset. Authentication relies entirely on ambient git
+  credentials (SSH keys / credential helper) — zero token handling. The
+  source and selected extension codes persist in `.ma-agents.json` and
+  automatically re-enumerate/reconcile on every `update`, reporting
+  newly-published or no-longer-available extensions without silently
+  changing what is already installed. A no-source install remains
+  byte-identical to a v6.10.0 install without the feature. This is the
+  sanctioned path for installing a module ma-agents deliberately excludes
+  from its own default bundle (e.g. a locally-published `bmad-loop`, or an
+  organization's own replacement for a deprecated agent).
+
+### Deprecated
+- **Demerzel (ML Scientist) agent.** `ma-agent-ml` and its 12 `ml-*`
+  workflow skills are no longer part of the default bundle for **new**
+  installs. This is **non-destructive**: an existing install's
+  `ma-agent-ml`/`ml-*` content (and any artifacts produced with it) is left
+  completely untouched on update — no auto-removal, no prompt. A one-time
+  notice informs users of the deprecation the first time they install or
+  update. There is no in-tool migration; teams that still need ML workflows
+  can install a replacement from their own organization's BMAD marketplace
+  via the custom marketplace source above. This supersedes the previously
+  deferred Demerzel-to-Memory-agent conversion (FR193), which is cancelled.
+
+### Fixed
+- **`lib/installer.js` no longer special-cases Cline by name.** The two
+  remaining `agent.id === 'cline'` literal checks (dual-`.clinerules`-file
+  drift guard, framework-template selection) now drive off the agent
+  registry's `injectionStrategy` field instead, closing the last
+  agent-name-specific conditional the installer carried and fixing the
+  pre-existing (baseline, reproduces on `main`) test failure it caused.
+
 ## [3.16.0] - 2026-07-09
 
 Knowledge Atlas — mermaid and draw.io diagrams now render as real diagrams.
