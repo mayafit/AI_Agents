@@ -33,10 +33,16 @@
  *   bmb content already uses `uv run resolve_customization.py`; that is BMAD's
  *   call, not ours). ma-agents control-plane Python stays on `python`/`python3`
  *   so the air-gapped install surface (NFR58) never gains a `uv` runtime
- *   dependency. The ONLY ma-agents-owned `uv run` usage is the `ml-experiment` /
- *   `ml-infra` / `ml-eda` skills, which run the USER's ML-project scripts in the
- *   user's own `uv` env — a deliberate exception, not control-plane tooling.
- *   See Architecture Decision P5-6(c) / FR213.
+ *   dependency.
+ *
+ *   Story 30.4 / FR247 — the former `uv run` exception scoped to the
+ *   `ml-experiment` / `ml-infra` / `ml-eda` skills (which ran the USER's
+ *   ML-project scripts in the user's own `uv` env) is REMOVED along with those
+ *   skills: Demerzel (`ma-agent-ml` + the 12 `ml-*` skills) is deprecated and
+ *   no longer ships for new installs, so there is no remaining ma-agents-owned
+ *   skill with a legitimate `uv run` use. The guard below now asserts NO
+ *   ma-agents-owned skill uses `uv run`, full stop. See Architecture Decision
+ *   P5-6(c) / FR213 for the (now-historical) exception this simplifies.
  */
 'use strict';
 
@@ -183,11 +189,7 @@ test('no ma-agents lib JS source greps installer stdout for the probe/uv banner 
 // ───────────────────────────────────────────────────────────────────────────
 // AC3 / NFR59c — control-plane Python stays on python/python3, never `uv run`
 // ───────────────────────────────────────────────────────────────────────────
-console.log('\nAC3/NFR59c: control-plane Python stays on python/python3 (ml-* skills exempted)');
-
-// The deliberate, documented exception: these ma-agents-owned skills run the
-// USER's ML-project scripts via `uv run python` in the user's own uv env.
-const ML_UV_EXCEPTION = new Set(['ml-experiment', 'ml-infra', 'ml-eda']);
+console.log('\nAC3/NFR59c: control-plane Python stays on python/python3 (ml-* exemption dropped, FR247)');
 
 test('ma-agents control-plane code (lib JS, scripts/, bin/) contains no `uv run`', () => {
   const skip = new Set(['bmad-cache', 'bmad-extension-plugin', 'node_modules']);
@@ -203,22 +205,20 @@ test('ma-agents control-plane code (lib JS, scripts/, bin/) contains no `uv run`
     `control-plane code must invoke python/python3 directly, never \`uv run\`. Offenders: ${offenders.join(', ')}`);
 });
 
-test('the only ma-agents-owned skills using `uv run` are the documented ml-* exception', () => {
+test('no ma-agents-owned skill uses `uv run` (FR247 — the ml-* exception is gone along with ml-*)', () => {
   // Scan ma-agents-owned skill source (lib/bmad-extension/skills) — NOT vendored
-  // bmad-cache. Any `uv run` must belong to ml-experiment/ml-infra/ml-eda.
+  // bmad-cache. The ml-experiment/ml-infra/ml-eda skills that formerly carried
+  // the sole `uv run` exception were removed in Story 30.4 (Demerzel
+  // deprecation), so no remaining skill may use it.
   const skillsRoot = path.join(projectRoot, 'lib', 'bmad-extension', 'skills');
   const mdFiles = walk(skillsRoot, (n) => n.endsWith('.md'));
   const offenders = [];
   for (const f of mdFiles) {
     if (!fs.readFileSync(f, 'utf8').includes('uv run')) continue;
-    const rel = path.relative(skillsRoot, f);
-    const skillDir = rel.split(path.sep)[0];
-    if (!ML_UV_EXCEPTION.has(skillDir)) {
-      offenders.push(rel);
-    }
+    offenders.push(path.relative(skillsRoot, f));
   }
   assert.deepStrictEqual(offenders, [],
-    `only the ml-* exception skills may use \`uv run\`; unexpected control-plane uv usage in: ${offenders.join(', ')}`);
+    `no ma-agents-owned skill may use \`uv run\` post-Story-30.4; unexpected usage in: ${offenders.join(', ')}`);
 });
 
 test('vendored passthrough (lib/bmad-cache) is explicitly OUT of scope for the python/uv guard', () => {

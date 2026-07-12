@@ -34,7 +34,7 @@ const path = require('path');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
 const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout, migrateRetiredSkills, reconcileAgentsSharedSkills } = require('../lib/installer');
-const { getProfile, setProfile, resolveProfile, getBmadModules, setBmadModules } = require('../lib/profile');
+const { getProfile, setProfile, resolveProfile, getBmadModules, setBmadModules, showDemerzelDeprecationNoticeOnce } = require('../lib/profile');
 const { reconfigure: runReconfigure, ReconfigureYesRejectedError, ManifestNotFoundError, RoomodesSlugDivergenceError } = require('../lib/reconfigure');
 const { uninstallProfileArtifacts } = require('../lib/uninstall');
 const bmad = require('../lib/bmad');
@@ -1341,6 +1341,14 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     console.log(chalk.yellow(`\n Retired-skill migration skipped: ${err.message}`));
   }
 
+  // Story 30.4 (FR245/FR246) — idempotent one-time Demerzel deprecation
+  // notice. No-op after the first time it has ever printed for this project.
+  try {
+    showDemerzelDeprecationNoticeOnce(process.cwd());
+  } catch (err) {
+    console.log(chalk.yellow(`\n Deprecation notice skipped: ${err.message}`));
+  }
+
   // Install requested skills
   const batchState = {};
   if (yesFlag) {
@@ -1504,6 +1512,14 @@ async function handleInstall(args) {
     await migrateRetiredSkills({ scope, customPath: customPath || '' });
   } catch (err) {
     console.log(chalk.yellow(`\n Retired-skill migration skipped: ${err.message}`));
+  }
+
+  // Story 30.4 (FR245/FR246) — idempotent one-time Demerzel deprecation
+  // notice. No-op after the first time it has ever printed for this project.
+  try {
+    showDemerzelDeprecationNoticeOnce(process.cwd());
+  } catch (err) {
+    console.log(chalk.yellow(`\n Deprecation notice skipped: ${err.message}`));
   }
 
   try {

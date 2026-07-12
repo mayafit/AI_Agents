@@ -54,15 +54,17 @@ const EXTENSION_SKILLS_DIR = path.join(
   'skills'
 );
 
-// Single source of truth for the five ma-agents persona skill directories.
+// Single source of truth for the four ma-agents persona skill directories.
 // MUST stay in sync with `.github/scripts/multi-tool-smoke-verify.sh`'s
 // `PERSONAS` array and `lib/bmad.js`'s on-prem prefix mapping.
+// Story 30.4 removed `ma-agent-ml` (Demerzel deprecated for new installs,
+// FR244-FR247) — the persona no longer ships, so it is no longer a routing
+// target either.
 const PERSONA_SKILL_IDS = Object.freeze([
   'ma-agent-cyber',
   'ma-agent-devops',
   'ma-agent-sre',
   'ma-agent-sqa',
-  'ma-agent-ml',
 ]);
 
 // Flagship tools — the matrix that the multi-tool-smoke workflow runs.
