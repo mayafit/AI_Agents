@@ -140,6 +140,8 @@ test('core entry points are exported as functions', () => {
     // Epic 22 replacement for applyCustomizations:
     'stagePlugin',
     'cleanupStage',
+    // Story 30.6b — custom-marketplace subset install
+    'installCustomMarketplaceSubset',
   ];
   for (const name of expectedFns) {
     assert.strictEqual(
