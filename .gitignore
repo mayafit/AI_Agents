@@ -52,6 +52,10 @@ opencode.json
 # dev-local test installs. Never commit.
 .ma-agents-plugin-stage/
 
+# Story 30.6b — transient custom-marketplace subset stage produced by
+# lib/custom-marketplace.js#stageCustomMarketplaceSubset. Never commit.
+.ma-agents-custom-marketplace-stage/
+
 # Story 29.1 — Knowledge Atlas site output (transient, regenerated on each skill run).
 # _bmad-output/ itself remains tracked (project knowledge artifacts); only the nested
 # knowledge-site/ is ignored.
