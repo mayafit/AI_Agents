@@ -39,7 +39,7 @@ const { reconfigure: runReconfigure, ReconfigureYesRejectedError, ManifestNotFou
 const { uninstallProfileArtifacts } = require('../lib/uninstall');
 const bmad = require('../lib/bmad');
 const { getBmadPlatformCode } = require('../lib/agents');
-const { enumerateCustomSource, NFR71_WARNING, CustomMarketplaceError, reconcileCustomMarketplaceSelection } = require('../lib/custom-marketplace');
+const { enumerateCustomSource, NFR71_WARNING, CustomMarketplaceError, reconcileCustomMarketplaceSelection, registryTrustLabel } = require('../lib/custom-marketplace');
 const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
 
 const PKG = require('../package.json');
@@ -990,7 +990,7 @@ function resolveBaseBmadOk({ bmadInstalled, attempted, success }) {
  * @param {Object} ctx
  * @param {string} [ctx.bmadCustomSourceFlag] - `--bmad-custom-source <ref>` value
  * @param {boolean} [ctx.yesFlag] - non-interactive run
- * @returns {Promise<null|{ source: string, mode: 'discovery'|'direct', selectedCodes: string[],
+ * @returns {Promise<null|{ source: string, mode: 'discovery'|'direct'|'registry', selectedCodes: string[],
  *   plugins: Array<Object>, rootDir: string, sourceUrl: string|null }>}
  */
 async function promptCustomMarketplace({ bmadCustomSourceFlag = '', yesFlag = false } = {}) {
@@ -1056,15 +1056,31 @@ async function promptCustomMarketplace({ bmadCustomSourceFlag = '', yesFlag = fa
     return { source, mode, selectedCodes, plugins, rootDir, sourceUrl };
   }
 
+  // Registry mode (this story): show display_name + trust tier + category and
+  // make the community/unverified trust tier explicit PER ENTRY (AC2, NFR71).
+  // Registry entries are opt-in — nothing is pre-selected (AC1/AC2). Discovery/
+  // direct keep their existing "all pre-selected" behavior unchanged (AC6).
+  const isRegistry = mode === 'registry';
   const { chosenCodes } = await prompts({
     type: 'multiselect',
     name: 'chosenCodes',
     message: `Select extensions to install from "${source}":`,
-    choices: plugins.map((p) => ({
-      title: chalk.white(p.code) + chalk.gray(p.description ? ` — ${p.description}` : ''),
-      value: p.code,
-      selected: true,
-    })),
+    choices: plugins.map((p) => {
+      if (isRegistry) {
+        const label = registryTrustLabel(p);
+        const certified = p.trustTier === 'bmad-certified';
+        const head = chalk.white(p.displayName || p.name || p.code);
+        const tier = (certified ? chalk.green : chalk.yellow)(`[${label}]`);
+        const cat = p.category ? chalk.gray(` {${p.category}${p.subcategory ? `/${p.subcategory}` : ''}}`) : '';
+        const desc = p.description ? chalk.gray(` — ${p.description}`) : '';
+        return { title: `${head} ${tier}${cat}${desc}`, value: p.code, selected: false };
+      }
+      return {
+        title: chalk.white(p.code) + chalk.gray(p.description ? ` — ${p.description}` : ''),
+        value: p.code,
+        selected: true,
+      };
+    }),
     instructions: chalk.gray('  Use space to toggle, enter to confirm.'),
   });
 
@@ -1093,7 +1109,7 @@ async function promptCustomMarketplace({ bmadCustomSourceFlag = '', yesFlag = fa
  *
  * @param {Object} ctx
  * @param {string} ctx.projectRoot
- * @returns {Promise<undefined|null|{ source: string, mode: 'discovery'|'direct',
+ * @returns {Promise<undefined|null|{ source: string, mode: 'discovery'|'direct'|'registry',
  *   selectedCodes: string[], plugins: Array<Object>, rootDir: string, sourceUrl: string|null }>}
  *   `undefined` — nothing persisted; caller should fall back to `promptCustomMarketplace()`.
  *   `null` — persisted source exists but could not be re-enumerated (fail-loud; skip this run).
