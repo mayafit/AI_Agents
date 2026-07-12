@@ -3,11 +3,25 @@
  * Story 27.6 — Verify PluginResolver / module-schema compatibility +
  * per-tool skill-enumeration passthrough on bmad-method v6.8.0 (FR210).
  *
+ * Story 30.3 update: re-verified against bmad-method@6.10.0. The registry/
+ * plugin-resolver contract this suite pins is unchanged, but upstream's own
+ * `removals.txt` retires `bmad-investigate` ("plain investigation reaches the
+ * same conclusions at lower cost") somewhere after its v6.8.0 introduction —
+ * confirmed absent under `bmad-method/src` at 6.10.0 (searched recursively;
+ * the src tree itself was also reorganized into phase-numbered
+ * `bmm-skills/<phase>/` + `core-skills/` folders, which `findDirByName()`
+ * already tolerates since it never hardcoded the old flat layout). It moved
+ * from NEW_UPSTREAM to RETIRED_UPSTREAM below; no ma-agents code change is
+ * required — `deployClineWorkflows()`'s reconciliation is fully dynamic (diffs
+ * live `.cline/skills/` against existing wrappers), so it prunes any retired
+ * skill's stale wrapper regardless of when/why upstream retired it.
+ *
  * This is a VERIFICATION story: ma-agents owns none of the renamed/retired
  * upstream skill bodies (bmad-create-ux-design→bmad-ux, bmad-distillator→
- * bmad-spec, new bmad-prd/bmad-investigate). They reach users via passthrough
- * (extends-module: bmm). The only ma-agents-side propagation is to generated
- * artifacts and ma-agents-OWNED enumerations. These tests pin:
+ * bmad-spec, new bmad-prd; bmad-investigate was new at v6.8.0, retired by
+ * v6.10.0). They reach users via passthrough (extends-module: bmm). The only
+ * ma-agents-side propagation is to generated artifacts and ma-agents-OWNED
+ * enumerations. These tests pin:
  *
  *   AC1  The committed plugin bundle still resolves cleanly under v6.8.0's
  *        real PluginResolver — Strategy 1 (root module files), no schema break
@@ -50,10 +64,13 @@ const BMAD_SRC = path.join(PROJECT_ROOT, 'node_modules', 'bmad-method', 'src');
 // Retired/renamed-away upstream skills that must NOT appear as orphans in any
 // ma-agents-owned enumeration. (They legitimately appear in planning docs,
 // story files, and the GDS sync-plan as descriptions of the upstream change —
-// those are NOT enumerations and are out of scope here.)
-const RETIRED_UPSTREAM = ['bmad-create-ux-design', 'bmad-distillator'];
-// Renamed/new upstream skills that v6.8.0 ships and that passthrough delivers.
-const NEW_UPSTREAM = ['bmad-ux', 'bmad-spec', 'bmad-prd', 'bmad-investigate'];
+// those are NOT enumerations and are out of scope here.) `bmad-investigate`
+// was NEW at v6.8.0 and is RETIRED by v6.10.0 (Story 30.3 finding, confirmed
+// via bmad-method's own `removals.txt` and absence under `src/`).
+const RETIRED_UPSTREAM = ['bmad-create-ux-design', 'bmad-distillator', 'bmad-investigate'];
+// Renamed/new upstream skills that are current at the pinned bmad-method
+// version and that passthrough delivers.
+const NEW_UPSTREAM = ['bmad-ux', 'bmad-spec', 'bmad-prd'];
 
 const bmad = require('../lib/bmad');
 const { deployClineWorkflows, stagePlugin } = bmad;
@@ -128,13 +145,13 @@ async function runAll() {
   // ─── AC1: PluginResolver / module-schema smoke ──────────────────────────
   console.log('--- AC1: PluginResolver / module-schema smoke (multi-tool, offline) ---');
 
-  await test('AC1-1 bmad-method is pinned to 6.9.0 (the version under verification)', () => {
+  await test('AC1-1 bmad-method is pinned to 6.10.0 (the version under verification)', () => {
     // Introduced at v6.8.0 (Story 27.6); re-verified at v6.9.0 (Story 28.1 bump /
-    // Story 28.3 passthrough). The PluginResolver layout + enumeration-passthrough
-    // contract this suite checks is unchanged at v6.9.0 (Decision P5-6).
+    // Story 28.3 passthrough) and v6.10.0 (Story 30.3 bump). The PluginResolver
+    // layout + enumeration-passthrough contract this suite checks is unchanged.
     const ver = require('bmad-method/package.json').version;
-    assert.strictEqual(ver, '6.9.0',
-      `expected bmad-method@6.9.0, found ${ver} — this suite verifies passthrough against the current pin`);
+    assert.strictEqual(ver, '6.10.0',
+      `expected bmad-method@6.10.0, found ${ver} — this suite verifies passthrough against the current pin`);
   });
 
   await test('AC1-2 committed bundle resolves via Strategy 1 under v6.8.0 PluginResolver', async () => {
@@ -239,7 +256,7 @@ async function runAll() {
     }
   });
 
-  await test('AC2-4 new upstream skills are present at the passthrough SOURCE (bmad-method@6.8.0)', () => {
+  await test('AC2-4 new upstream skills are present at the passthrough SOURCE (bmad-method@6.10.0)', () => {
     // Confirm passthrough actually delivers the new set: each new skill must
     // exist somewhere under bmad-method/src so an install pulls it in via bmm.
     for (const sk of NEW_UPSTREAM) {
@@ -264,15 +281,18 @@ async function runAll() {
   await test('AC3-1 renamed/new skills get wrappers; retired ones do NOT (end-to-end)', async () => {
     const dir = mktemp();
     try {
-      // v6.8.0-shaped live skill set: the renamed + new upstream skills are
-      // deployed under .cline/skills/. bmad-prd is workflow-backed.
+      // Current live skill set: the renamed + new upstream skills are deployed
+      // under .cline/skills/. bmad-prd is workflow-backed. bmad-investigate is
+      // NOT seeded live — it is retired at 6.10.0, so only its STALE wrapper
+      // (from a pre-6.10.0 install) should exist, and reconciliation must
+      // remove it exactly like the other two retired skills.
       seedSkill(dir, 'bmad-ux');
       seedSkill(dir, 'bmad-spec');
       seedSkill(dir, 'bmad-prd', { withWorkflow: true });
-      seedSkill(dir, 'bmad-investigate');
-      // Stale wrappers for the now-retired skills linger from a pre-6.8.0 install.
+      // Stale wrappers for the now-retired skills linger from a prior install.
       seedStaleWrapper(dir, 'bmad-create-ux-design');
       seedStaleWrapper(dir, 'bmad-distillator');
+      seedStaleWrapper(dir, 'bmad-investigate');
 
       await deployClineWorkflows(dir, ['cline']);
 

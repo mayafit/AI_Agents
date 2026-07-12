@@ -1,36 +1,51 @@
 #!/usr/bin/env node
 /**
- * Tests for Story 28.1: Bump bmad-method to 6.9.0 + Rebuild Cache and Plugin (Gate)
+ * Tests for Story 30.3: Bump bmad-method to 6.10.0 + Rebuild Cache and Plugin
  *
- * Task 1: Verify package.json dependency + live install pinned at 6.9.0
+ * Task 1: Verify package.json dependency + live install pinned at 6.10.0
  * Task 2: Verify build:bmad-cache reads the package-root registry contract
  * Task 3: Verify bmad.js CLI compatibility with bmad-cli.js entry point
  * Task 4: Verify prePopulateBmadCache compatibility
  *
  * Lineage: originally Story 15.1 (6.2.2); rewritten for Story 22.1 (6.3.0);
  * updated for Story 24.1 (6.6.0); Story 27.3/27.5 moved the pin to 6.8.0 and
- * reworked the registry contract; Story 28.1 bumps the pin to 6.9.0. The
- * installer layout is unchanged since 6.3.0 (tools/installer/bmad-cli.js,
- * tools/installer/commands/install.js). fs-extra removed in 6.4.0 → replaced
- * with native node:fs in bmad-method internals; ma-agents keeps its own fs-extra.
+ * reworked the registry contract; Story 28.1 bumped the pin to 6.9.0; Story
+ * 30.2 closed the bundle filter to an ALLOWLIST + two-sided set-EQUALITY guard
+ * (still at 6.9.0, to unblock this bump safely); Story 30.3 bumps the pin to
+ * 6.10.0. The installer layout is unchanged since 6.3.0
+ * (tools/installer/bmad-cli.js, tools/installer/commands/install.js).
+ * fs-extra removed in 6.4.0 -> replaced with native node:fs in bmad-method
+ * internals; ma-agents keeps its own fs-extra.
  *
  * The module source lives in a package-root `bmad-modules.yaml` (relocated at
- * v6.8.0, Decision P5-5; UNCHANGED at v6.9.0, Decision P5-6) and the bundle
- * decision is a `type` field (`type: bmad-org` cloned; `type: experimental`
- * excluded). The reader (scripts/build-bmad-cache.js) tags that schema
- * `package-root-v68` and fails loud (NFR56) if it ever resolves fewer than the
- * known bundled set.
+ * v6.8.0, Decision P5-5; schema UNCHANGED at v6.9.0/v6.10.0, Decisions P5-6/
+ * P5-8) and the bundle decision used to be a bare `type: bmad-org` filter. At
+ * v6.10.0 the registry gained a NEW `bmad-loop` module (`type: bmad-org`,
+ * `marketplace-plugin: true`, air-gap-hostile) and flagged `bmad-automator`
+ * `deprecated: true` — so `scripts/build-bmad-cache.js`'s reader (Story 30.2)
+ * now filters on a CLOSED ALLOWLIST (`KNOWN_BUNDLED_MODULES`) rather than the
+ * raw `type` field, and a two-sided `diffBundleSet()` guard fails the build on
+ * either a MISSING or an EXTRA module versus that allowlist. The reader tags
+ * the schema `package-root-v68` and this file's AC3 gate re-confirms, against
+ * the LIVE-installed bmad-method@6.10.0, that this posture holds end-to-end —
+ * not just against the 30.2 hand-written fixtures.
  *
- * v6.9.0 GATE NOTE (Story 28.1 / P5-6): unlike the 27.x cycle — when this repo
- * still pinned an older bmad-method so the registry contract could only be
- * exercised against in-repo FIXTURES — the tree now genuinely installs 6.9.0.
- * The reader-contract assertions below remain fixture-driven (they test the pure
- * reader in isolation, offline), and a dedicated LIVE-INSTALL assertion now
- * re-confirms, against the npm-installed bmad-method@6.9.0 on disk, that the
- * package-root `bmad-modules.yaml` path AND schema are unchanged versus v6.8.0
- * — the hard verification gate that the "registry unchanged ⇒ no reader change"
- * claim (verified out-of-tree via tag clone + `gh` compare) actually holds for
- * the shipped package. No network or live clone is performed (air-gapped CI gate).
+ * v6.10.0 GATE NOTE (Story 30.3 / P5-8): the 30.1 gate confirmed live against
+ * `bmad-method@6.10.0` that the registry PATH and SCHEMA are unchanged (additive
+ * new fields only: `marketplace-plugin`, `deprecated`, `deprecation-message`,
+ * `post-install-message`, `aliases`), so `build-bmad-cache.js`'s reader
+ * (`parseModulesYaml`/`normalizeModules`) needed NO change beyond the 30.2
+ * allowlist/guard rework that already landed at 6.9.0. The AC3 assertion below
+ * re-confirms this against the npm-INSTALLED bmad-method@6.10.0 on disk: it
+ * resolves the package root via require.resolve and asserts the shipped
+ * `bmad-modules.yaml` exists there (path unchanged) with a `modules:` map whose
+ * entries carry code/url/name/type (schema unchanged); that `bmad-loop` is
+ * present as `type: bmad-org` + `marketplace-plugin: true` and `bmad-automator`
+ * is `deprecated: true`; and that running the REAL closed-allowlist reader
+ * against the live YAML resolves EXACTLY {tea, bmb, cis, gds, wds} with
+ * `bmad-loop` excluded. Fully offline (reads the installed file; no network, no
+ * clone). If the path or schema ever drifts, THIS is the gate that fails — not
+ * a silently thin (or silently over-broad) cache.
  */
 'use strict';
 
@@ -41,9 +56,10 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 // The pure reader functions (parseModulesYaml / normalizeModules / locateRegistry
-// + exported constants). Requiring the script exports them instead of running
-// the build (it guards on require.main === module), so the 6.8.0 contract can be
-// exercised against fixtures without cloning anything.
+// + exported constants, including the 30.2 closed allowlist + diffBundleSet
+// guard). Requiring the script exports them instead of running the build (it
+// guards on require.main === module), so the contract can be exercised against
+// fixtures and the live install without cloning anything.
 const reader = require('../scripts/build-bmad-cache.js');
 
 // A faithful slice of the relocated v6.8.0 package-root bmad-modules.yaml: a
@@ -52,7 +68,10 @@ const reader = require('../scripts/build-bmad-cache.js');
 // bmb/cis/gds/wds are `type: bmad-org` (bundled); automator is `experimental`
 // (excluded); bmm/core are built into the npm package and absent from the
 // registry entirely. There is NO `branch` field (defaults to main) and NO
-// `built_in` flag (superseded by `type`).
+// `built_in` flag (superseded by `type`). This fixture predates 6.10.0's
+// `bmad-loop`/`deprecated` additions on purpose — it exercises the reader
+// against the schema shape unchanged since 6.8.0; the 30.2 fixtures already
+// cover `bmad-loop` and `deprecated` exhaustively (test/bundle-filter-set-equality.test.js).
 const FIXTURE_V68 = `# Official module registry (relocated to package root at v6.8.0)
 modules:
   bmad-method-test-architecture-enterprise:
@@ -103,10 +122,10 @@ const errors = [];
 function test(name, fn) {
   try {
     fn();
-    console.log(`  \u2713 ${name}`);
+    console.log(`  ✓ ${name}`);
     passed++;
   } catch (err) {
-    console.error(`  \u2717 ${name}: ${err.message}`);
+    console.error(`  ✗ ${name}: ${err.message}`);
     failed++;
     errors.push({ name, err });
   }
@@ -199,60 +218,85 @@ function runScript(scriptPath, env) {
   }
 }
 
-console.log('\nStory 28.1: Bump bmad-method to 6.9.0 + Rebuild Cache and Plugin\n');
+console.log('\nStory 30.3: Bump bmad-method to 6.10.0 + Rebuild Cache and Plugin\n');
 
 // ---- Task 1: package.json dependency ----
 
 console.log('Task 1: package.json dependency');
 
-test('package.json pins bmad-method at 6.9.0 (exact, no caret/tilde)', () => {
+test('package.json pins bmad-method at 6.10.0 (exact, no caret/tilde)', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
-  assert.strictEqual(pkg.dependencies['bmad-method'], '6.9.0');
+  assert.strictEqual(pkg.dependencies['bmad-method'], '6.10.0');
 });
 
-test('installed bmad-method is version 6.9.0', () => {
+test('installed bmad-method is version 6.10.0', () => {
   const bmadPkg = JSON.parse(
     fs.readFileSync(path.join(projectRoot, 'node_modules', 'bmad-method', 'package.json'), 'utf8')
   );
-  assert.strictEqual(bmadPkg.version, '6.9.0');
+  assert.strictEqual(bmadPkg.version, '6.10.0');
 });
 
-// ---- Story 28.1 AC3 (P5-6 hard verification gate): LIVE-INSTALL registry check ----
+// ---- Story 30.3 AC (P5-8 hard verification gate): LIVE-INSTALL registry check ----
 //
-// The "registry unchanged at v6.9.0 ⇒ no build-bmad-cache.js reader change" claim
-// was verified OUT-OF-TREE (shallow tag clone + `gh` tag-to-tag compare). This
-// assertion re-confirms it against the npm-INSTALLED bmad-method@6.9.0 on disk:
-// it resolves the package root via require.resolve and asserts the shipped
-// `bmad-modules.yaml` exists there (path unchanged) with a `modules:` map whose
-// entries carry code/url/name/type (schema unchanged), and that the bundled
-// `type: bmad-org` set is exactly tea/bmb/cis/gds/wds with automator excluded.
-// Fully offline (reads the installed file; no network, no clone). If the path or
-// schema ever drifts, THIS is the gate that fails — not a silently thin cache.
-test('AC3 (P5-6 gate): live-installed bmad-modules.yaml is at the package root, schema unchanged vs v6.8.0', () => {
+// The "registry path/schema unchanged at v6.10.0, but a NEW bmad-loop module +
+// deprecated automator appeared" claim was verified live by the 30.1 gate
+// (out-of-tree scratch install). This assertion re-confirms it against the
+// npm-INSTALLED bmad-method@6.10.0 on disk: it resolves the package root via
+// require.resolve and asserts the shipped `bmad-modules.yaml` exists there
+// (path unchanged) with a `modules:` map whose entries carry
+// code/url/name/type (schema unchanged); that `bmad-loop` now exists as
+// `type: bmad-org` + `marketplace-plugin: true`; that `bmad-automator` carries
+// `deprecated: true`; and — the actual safety property Story 30.2/30.3 exist to
+// guarantee — that running the REAL closed-allowlist reader
+// (`normalizeModules`) against this live YAML resolves EXACTLY
+// {tea, bmb, cis, gds, wds}, with `bmad-loop` excluded despite being
+// `type: bmad-org`. Fully offline (reads the installed file; no network, no
+// clone). If the path, schema, or bundled-set ever drifts, THIS is the gate
+// that fails — not a silently thin or silently over-broad cache.
+test('AC (P5-8 gate): live-installed bmad-modules.yaml is at the package root, schema unchanged, bmad-loop present-but-excluded', () => {
   const bmadRoot = path.dirname(require.resolve('bmad-method/package.json'));
   const registryPath = path.join(bmadRoot, 'bmad-modules.yaml');
   assert.ok(
     fs.existsSync(registryPath),
-    `HALT (P5-6 drift): bmad-modules.yaml not at the package root (${registryPath}). The registry may have relocated at v6.9.0 — build-bmad-cache.js's reader would need rework; do not paper over.`
+    `HALT (P5-8 drift): bmad-modules.yaml not at the package root (${registryPath}). The registry may have relocated at v6.10.0 — build-bmad-cache.js's reader would need rework; do not paper over.`
   );
+  const rawText = fs.readFileSync(registryPath, 'utf8');
   const yaml = require('js-yaml');
-  const doc = yaml.load(fs.readFileSync(registryPath, 'utf8'));
+  const doc = yaml.load(rawText);
   assert.ok(doc && doc.modules && typeof doc.modules === 'object',
-    'live registry must expose a `modules:` map (the v6.8.0 schema shape)');
+    'live registry must expose a `modules:` map (the v6.8.0 schema shape, unchanged at 6.10.0)');
   const entries = Object.values(doc.modules);
   for (const e of entries) {
     assert.ok(e.code && e.url && e.name && e.type,
       `every live registry entry must carry code/url/name/type (got ${JSON.stringify(e)})`);
   }
-  const bundled = entries.filter(e => e.type === 'bmad-org').map(e => e.code).sort();
-  assert.deepStrictEqual(bundled, ['bmb', 'cis', 'gds', 'tea', 'wds'],
-    `live bundled type: bmad-org set must be tea/bmb/cis/gds/wds; got ${bundled.join(', ')}`);
-  const experimental = entries.filter(e => e.type === 'experimental').map(e => e.code);
-  assert.ok(experimental.includes('automator'),
-    'automator must remain type: experimental (excluded from the bundle) at v6.9.0');
+
+  // bmad-loop: NEW at 6.10.0 — bmad-org + marketplace-plugin (air-gap-hostile).
+  const bmadLoop = entries.find(e => e.code === 'bmad-loop');
+  assert.ok(bmadLoop, 'bmad-loop must be present in the live 6.10.0 registry (30.1 gate finding)');
+  assert.strictEqual(bmadLoop.type, 'bmad-org', 'bmad-loop must carry type: bmad-org at 6.10.0');
+  assert.ok(reader.isFlagTrue(bmadLoop['marketplace-plugin']),
+    'bmad-loop must carry marketplace-plugin: true at 6.10.0');
+
+  // bmad-automator: now explicitly deprecated (was already type: experimental).
+  const automator = entries.find(e => e.code === 'automator');
+  assert.ok(automator, 'automator must remain present (type: experimental) at 6.10.0');
+  assert.strictEqual(automator.type, 'experimental');
+  assert.ok(reader.isFlagTrue(automator.deprecated),
+    'bmad-automator must carry deprecated: true at 6.10.0');
+
+  // The actual safety property: the REAL closed-allowlist reader run against
+  // this live YAML resolves exactly the five — bmad-loop excluded even though
+  // it is type: bmad-org, because the filter is a closed allowlist (Story 30.2),
+  // not an open "keep every bmad-org" predicate.
+  const resolved = reader.normalizeModules(reader.parseModulesYaml(rawText)).map(m => m.code).sort();
+  assert.deepStrictEqual(resolved, ['bmb', 'cis', 'gds', 'tea', 'wds'],
+    `live closed-allowlist resolution must be exactly tea/bmb/cis/gds/wds with bmad-loop excluded; got ${resolved.join(', ')}`);
+  assert.ok(!resolved.includes('bmad-loop'),
+    'bmad-loop must NEVER be force-bundled — this is the concrete bug Story 30.2 closes and 30.3 proves end-to-end at 6.10.0');
 });
 
-test('require.resolve finds bmad-cli.js (6.9.0 entry point)', () => {
+test('require.resolve finds bmad-cli.js (6.10.0 entry point)', () => {
   const resolved = require.resolve('bmad-method/tools/installer/bmad-cli.js');
   assert.ok(resolved.includes('bmad-cli.js'), `Unexpected path: ${resolved}`);
   assert.ok(fs.existsSync(resolved), `File does not exist: ${resolved}`);
@@ -263,11 +307,14 @@ test('require.resolve finds bmad-cli.js (6.9.0 entry point)', () => {
 // Story 27.3 (AC1, AC2): these assertions used to pin the v6.6.0 reality — the
 // `registry-fallback.yaml` path, the `built_in`-flag filter, and wds-as-retired.
 // They now pin the relocated package-root YAML source tag (`package-root-v68`),
-// the `type`-based filter (bmad-org in / experimental out), and wds-as-active.
-// These reader-contract assertions stay driven by FIXTURE_V68 + the exported
-// reader (see header) so the pure reader logic is exercised in isolation, offline
-// — no network or clone. The LIVE-installed registry (now bmad-method@6.9.0) is
-// re-confirmed separately by the Task 1 "AC3 (P5-6 gate)" assertion above.
+// the CLOSED-ALLOWLIST filter (Story 30.2 — bmad-org in AND on the allowlist;
+// experimental out; a shape-flip on a bundled module halts the build), and
+// wds-as-active. These reader-contract assertions stay driven by FIXTURE_V68 +
+// the exported reader (see header) so the pure reader logic is exercised in
+// isolation, offline — no network or clone. The LIVE-installed registry (now
+// bmad-method@6.10.0) is re-confirmed separately by the Task 1 "AC (P5-8 gate)"
+// assertion above; the exhaustive allowlist/shape-flip/set-equality fixture
+// matrix lives in test/bundle-filter-set-equality.test.js (Story 30.2).
 
 console.log('\nTask 2: relocated v6.8.0 registry contract (fixture-driven)');
 
@@ -297,21 +344,23 @@ test('AC1: the relocated package-root path is the FIRST registry candidate, tagg
   assert.strictEqual(first.schema, 'package-root-v68');
 });
 
-test('AC1: type-based filter keeps type: bmad-org and excludes type: experimental', () => {
-  // Replaces the old `built_in`-flag filter. Drive the real normalizeModules over
-  // the 6.8.0-shaped fixture: the five bmad-org codes survive, experimental
-  // (automator) is dropped.
+test('AC1: closed-allowlist filter keeps the five bundled codes and excludes type: experimental', () => {
+  // Story 30.2 replaced the old `type: bmad-org` include predicate with a
+  // closed allowlist (KNOWN_BUNDLED_MODULES). Drive the real normalizeModules
+  // over the 6.8.0-shaped fixture: the five allowlisted codes survive,
+  // experimental (automator) is dropped (it was never on the allowlist).
   const codes = reader.normalizeModules(reader.parseModulesYaml(FIXTURE_V68)).map(m => m.code).sort();
   assert.deepStrictEqual(codes, ['bmb', 'cis', 'gds', 'tea', 'wds'],
-    `expected the five bmad-org modules; automator (experimental) must be excluded. Got: ${codes.join(', ')}`);
+    `expected the five allowlisted modules; automator (experimental) must be excluded. Got: ${codes.join(', ')}`);
 });
 
-test('AC1: bmm/core exclusion invariant retained (now via absence of a bmad-org type)', () => {
+test('AC1: bmm/core exclusion invariant retained (closed allowlist excludes anything not explicitly bundled)', () => {
   // bmm/core are first-party modules built into the npm package and are absent
-  // from the 6.8.0 registry. The exclusion invariant now holds structurally: any
-  // entry lacking `type: bmad-org` is dropped, so even a future registry that
-  // erroneously listed bmm/core (untyped or with a non-bundled type) would not
-  // pull them into the external clone set.
+  // from the 6.8.0/6.10.0 registry. The exclusion invariant now holds
+  // structurally twice over: an entry must both carry a bundled `type` shape
+  // AND be on the closed allowlist — so even a future registry that
+  // erroneously listed bmm/core (under any type) would not pull them into the
+  // external clone set.
   const raw = [
     { key: 'bmad-method', code: 'bmm', url: 'https://example.com/bmm' },            // untyped built-in
     { key: 'bmad-core', code: 'core', url: 'https://example.com/core', type: 'core' }, // non-bundled type
@@ -349,7 +398,7 @@ test('AC2/AC4: wds is bundled — a normal bmad-org clone, not a retained relic'
 
 test('AC4: bundled set is exactly tea/bmb/cis/gds/wds; automator/bmm/core absent', () => {
   // The full bundled-set assertion for the externally-cloned modules: the five
-  // bmad-org codes present, experimental automator absent, and the built-in
+  // allowlisted codes present, experimental automator absent, and the built-in
   // bmm/core absent (never in the registry). Also pin KNOWN_BUNDLED_MODULES so a
   // future edit to the bundled set is caught here too.
   const codes = reader.normalizeModules(reader.parseModulesYaml(FIXTURE_V68)).map(m => m.code).sort();
@@ -410,15 +459,15 @@ test('AC3/AC5/NFR56: a missing relocated YAML (registry moved again) exits non-z
   }
 });
 
-test('cache-manifest.json exists and records bmadMethodVersion 6.9.0', () => {
+test('cache-manifest.json exists and records bmadMethodVersion 6.10.0', () => {
   const manifestPath = path.join(projectRoot, 'lib', 'bmad-cache', 'cache-manifest.json');
   assert.ok(fs.existsSync(manifestPath), `Manifest not found at ${manifestPath}`);
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  assert.strictEqual(manifest.bmadMethodVersion, '6.9.0');
+  assert.strictEqual(manifest.bmadMethodVersion, '6.10.0');
 });
 
-test('cache-manifest.json registrySchema is unchanged (package-root-v68) at v6.9.0', () => {
-  // P5-6: the registry path/schema did not move at v6.9.0, so the schema tag the
+test('cache-manifest.json registrySchema is unchanged (package-root-v68) at v6.10.0', () => {
+  // P5-8: the registry path/schema did not move at v6.10.0, so the schema tag the
   // reader stamps is carried forward verbatim — a drift here would signal the
   // reader resolved a different (relocated) source.
   const manifestPath = path.join(projectRoot, 'lib', 'bmad-cache', 'cache-manifest.json');
@@ -426,13 +475,17 @@ test('cache-manifest.json registrySchema is unchanged (package-root-v68) at v6.9
   assert.strictEqual(manifest.registrySchema, 'package-root-v68');
 });
 
-test('cache-manifest.json contains at least the v6.6.0 official modules (bmb, cis, gds, tea)', () => {
+test('cache-manifest.json contains EXACTLY the five allowlisted modules — bmad-loop absent', () => {
+  // The concrete end-to-end proof for this story: at v6.10.0 the manifest built
+  // from the LIVE registry must resolve to exactly the closed allowlist, with
+  // the new bmad-loop module excluded (never force-bundled/installed-by-default
+  // on an air-gapped machine).
   const manifestPath = path.join(projectRoot, 'lib', 'bmad-cache', 'cache-manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  const codes = Object.keys(manifest.modules);
-  for (const required of ['bmb', 'cis', 'gds', 'tea']) {
-    assert.ok(codes.includes(required), `Manifest missing required module ${required}. Got: ${codes.join(', ')}`);
-  }
+  const codes = Object.keys(manifest.modules).filter(c => !manifest.modules[c].retiredUpstream).sort();
+  assert.deepStrictEqual(codes, ['bmb', 'cis', 'gds', 'tea', 'wds'],
+    `expected exactly the five allowlisted modules (bmad-loop must be absent); got: ${codes.join(', ')}`);
+  assert.ok(!('bmad-loop' in manifest.modules), 'bmad-loop must never appear in cache-manifest.json');
 });
 
 test('each cached module has a commit SHA in manifest', () => {
@@ -468,9 +521,8 @@ test('all non-retired cached modules have _git_preserved directory', () => {
 // clone, not a retained relic, so that assertion is inverted by the
 // fixture-driven 'AC2/AC4: wds is bundled — a normal bmad-org clone, not a
 // retained relic' test in the Task 2 section above. Keeping the old test would
-// directly contradict the inverted one (it still reads the live 6.6.0 manifest,
-// which the 27.5 bump will reshape), so it is retired together with the reality
-// it described.
+// directly contradict the inverted one, so it is retired together with the
+// reality it described.
 
 // ---- Task 3: bmad.js CLI compatibility ----
 
@@ -478,7 +530,13 @@ console.log('\nTask 3: bmad.js CLI compatibility');
 
 const bmad = require('../lib/bmad');
 
-test('getBmadCommand resolves bmad-cli.js from 6.9.0', () => {
+test('BMAD_TARGET_VERSION lockstep with the pinned dependency (6.10.0)', () => {
+  const bmadSource = fs.readFileSync(path.join(projectRoot, 'lib', 'bmad.js'), 'utf8');
+  assert.ok(/BMAD_TARGET_VERSION\s*=\s*'6\.10\.0'/.test(bmadSource),
+    'BMAD_TARGET_VERSION in lib/bmad.js must read 6.10.0 in lockstep with the package.json pin');
+});
+
+test('getBmadCommand resolves bmad-cli.js from 6.10.0', () => {
   const result = bmad.buildBmadArgs({
     projectRoot: '/test',
     modules: ['bmm'],
@@ -516,79 +574,80 @@ function readInstallCommand() {
   throw new Error(`install.js not found in any known location: ${candidates.join(', ')}`);
 }
 
-test('6.9.0 CLI accepts --directory flag', () => {
+test('6.10.0 CLI accepts --directory flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--directory'), '6.9.0 install.js missing --directory flag');
+  assert.ok(content.includes('--directory'), '6.10.0 install.js missing --directory flag');
 });
 
-test('6.9.0 CLI accepts --modules flag', () => {
+test('6.10.0 CLI accepts --modules flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--modules'), '6.9.0 install.js missing --modules flag');
+  assert.ok(content.includes('--modules'), '6.10.0 install.js missing --modules flag');
 });
 
-test('6.9.0 CLI accepts --tools flag', () => {
+test('6.10.0 CLI accepts --tools flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--tools'), '6.9.0 install.js missing --tools flag');
+  assert.ok(content.includes('--tools'), '6.10.0 install.js missing --tools flag');
 });
 
-test('6.9.0 CLI accepts the current custom-module flag', () => {
+test('6.10.0 CLI accepts the current custom-module flag', () => {
   // bmad-method 6.3.0 renamed --custom-content to --custom-source.
   // Accept either so the test survives both versions during bisects and
   // documents the rename.
   const { content } = readInstallCommand();
   const hasFlag = content.includes('--custom-source') || content.includes('--custom-content');
-  assert.ok(hasFlag, '6.9.0 install.js missing both --custom-source and --custom-content flags');
+  assert.ok(hasFlag, '6.10.0 install.js missing both --custom-source and --custom-content flags');
 });
 
-test('buildBmadArgs uses --custom-source on v6.9.0 (was --custom-content on v6.2.x)', () => {
+test('buildBmadArgs uses --custom-source on v6.10.0 (was --custom-content on v6.2.x)', () => {
   // Verify the dynamic flag resolver picks the right name for the installed
-  // bmad-method. On v6.9.0 it must be --custom-source; on v6.2.x it stays
-  // --custom-content. This is what makes AC #6 (scratch install) work.
+  // bmad-method. On v6.10.0 it must be --custom-source; on v6.2.x it stays
+  // --custom-content. This is what makes ma-agents' staged plugin install work.
   const flag = bmad.resolveCustomContentFlag();
   assert.ok(['--custom-source', '--custom-content'].includes(flag),
     `Unexpected flag returned: ${flag}`);
-  // Since we pin 6.9.0 in this repo, assert the specific value:
+  // Since we pin 6.10.0 in this repo, assert the specific value:
   assert.strictEqual(flag, '--custom-source',
-    `Expected --custom-source for bmad-method 6.9.0, got ${flag}`);
+    `Expected --custom-source for bmad-method 6.10.0, got ${flag}`);
 });
 
-test('6.9.0 CLI accepts --action flag', () => {
+test('6.10.0 CLI accepts --action flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--action'), '6.9.0 install.js missing --action flag');
+  assert.ok(content.includes('--action'), '6.10.0 install.js missing --action flag');
 });
 
-test('6.9.0 CLI accepts --yes flag', () => {
+test('6.10.0 CLI accepts --yes flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--yes'), '6.9.0 install.js missing --yes flag');
+  assert.ok(content.includes('--yes'), '6.10.0 install.js missing --yes flag');
 });
 
-test('6.9.0 CLI accepts --user-name flag', () => {
+test('6.10.0 CLI accepts --user-name flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--user-name'), '6.9.0 install.js missing --user-name flag');
+  assert.ok(content.includes('--user-name'), '6.10.0 install.js missing --user-name flag');
 });
 
-test('6.9.0 CLI accepts --communication-language flag', () => {
+test('6.10.0 CLI accepts --communication-language flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--communication-language'), '6.9.0 install.js missing --communication-language flag');
+  assert.ok(content.includes('--communication-language'), '6.10.0 install.js missing --communication-language flag');
 });
 
-test('6.9.0 CLI accepts --document-output-language flag', () => {
+test('6.10.0 CLI accepts --document-output-language flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--document-output-language'), '6.9.0 install.js missing --document-output-language flag');
+  assert.ok(content.includes('--document-output-language'), '6.10.0 install.js missing --document-output-language flag');
 });
 
-test('6.9.0 CLI accepts --output-folder flag', () => {
+test('6.10.0 CLI accepts --output-folder flag', () => {
   const { content } = readInstallCommand();
-  assert.ok(content.includes('--output-folder'), '6.9.0 install.js missing --output-folder flag');
+  assert.ok(content.includes('--output-folder'), '6.10.0 install.js missing --output-folder flag');
 });
 
-test('module.yaml custom-content format is still referenced by 6.9.0 installer', () => {
+test('module.yaml custom-content format is still referenced by 6.10.0 installer', () => {
   // 6.3.0 consolidated the custom-module flow into
   // tools/installer/modules/custom-module-manager.js (the legacy
   // tools/cli/installers/lib/custom/handler.js was removed). This structure
-  // is unchanged in 6.6.0. Verify the entry point still references module.yaml
-  // so the extension ma-agents ships (lib/bmad-extension/skills/module.yaml)
-  // is still a valid custom module payload.
+  // is unchanged through 6.10.0. Verify the entry point still references
+  // module.yaml so the extension ma-agents ships
+  // (lib/bmad-extension/skills/module.yaml) is still a valid custom module
+  // payload.
   const bmadDir = path.dirname(require.resolve('bmad-method/package.json'));
   const candidates = [
     path.join(bmadDir, 'tools', 'installer', 'modules', 'custom-module-manager.js'),
@@ -618,8 +677,9 @@ test('prePopulateBmadCache is exported', () => {
 
 test('prePopulateBmadCache source handles all cache modules dynamically', () => {
   // The function iterates fs.readdir(cacheSource) and handles any number of
-  // modules, so it automatically absorbs v6.6.0 changes (fewer or renamed
-  // modules) without code changes.
+  // modules, so it automatically absorbs registry changes (fewer, renamed, or
+  // added modules like bmad-loop) without code changes — the allowlist in
+  // build-bmad-cache.js is what decides what ends up in the cache dir at all.
   const bmadSource = fs.readFileSync(path.join(projectRoot, 'lib', 'bmad.js'), 'utf8');
   assert.ok(bmadSource.includes('fs.readdir(cacheSource)'), 'prePopulateBmadCache should iterate cache directory');
   assert.ok(!bmadSource.includes("['bmb',"), 'prePopulateBmadCache should not hardcode module list');
