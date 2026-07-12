@@ -57,6 +57,10 @@ opencode.json
 # knowledge-site/ is ignored.
 _bmad-output/knowledge-site/
 
+# Story 30.6a — transient scratch dirs created (and torn down in `finally`) by the
+# custom-marketplace tests. Guarded here in case a crash skips the teardown.
+.tmp-custom-marketplace-*/
+
 # Root-level files that should not be committed (VS Code workspace, scratch output)
 agents.code-workspace
 out.txt

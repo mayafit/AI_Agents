@@ -9,7 +9,8 @@
  *     `require.main === module`, so requiring the module does NOT execute the
  *     CLI. We assert against the REAL returned shape:
  *       { globalFlag, forceFlag, yesFlag, agentFlag, customPath,
- *         bmadModulesFlag, bmadModulesPrompt, scope, positional }
+ *         bmadModulesFlag, bmadModulesPrompt, bmadCustomSourceFlag,
+ *         scope, positional }
  *
  *   Subprocess (command routing):
  *     execFileSync(process.execPath, ['bin/cli.js', ...]) for NON-mutating,
@@ -133,7 +134,7 @@ async function runAll() {
     const r = parseFlags([]);
     assert.deepStrictEqual(
       Object.keys(r).sort(),
-      ['agentFlag', 'bmadModulesFlag', 'bmadModulesPrompt', 'customPath',
+      ['agentFlag', 'bmadCustomSourceFlag', 'bmadModulesFlag', 'bmadModulesPrompt', 'customPath',
        'forceFlag', 'globalFlag', 'positional', 'scope', 'yesFlag'].sort()
     );
   });
