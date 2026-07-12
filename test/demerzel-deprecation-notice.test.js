@@ -163,6 +163,33 @@ test('setting the profile AFTER the notice has fired does not reset the shown fl
   }
 });
 
+test('a foreign notices:[] (array) shape does not defeat the show-once guarantee', () => {
+  // Edge-case: `typeof [] === 'object'`, so a naive guard would keep the array
+  // and a named property set on it is dropped by JSON.stringify — the notice
+  // would then re-print forever. markNoticeShown must replace the array with a
+  // plain object so the flag actually persists.
+  const root = mkScratchRoot();
+  try {
+    fs.writeFileSync(path.join(root, '.ma-agents.json'),
+      JSON.stringify({ manifestVersion: '1.2.0', scope: 'project-root', notices: [] }, null, 2), 'utf-8');
+    const r1 = captureConsoleLog(() => {
+      const printed = showDemerzelDeprecationNoticeOnce(root);
+      assert.strictEqual(printed, true, 'first call must still print');
+    });
+    assert.ok(/Demerzel/.test(r1));
+    // Persisted as an object with the flag true — and a SECOND call is a no-op.
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, '.ma-agents.json'), 'utf-8'));
+    assert.ok(!Array.isArray(manifest.notices), 'notices must be normalized to a plain object');
+    assert.strictEqual(manifest.notices['demerzel-deprecation'], true);
+    const out2 = captureConsoleLog(() => {
+      assert.strictEqual(showDemerzelDeprecationNoticeOnce(root), false, 'second call must be a no-op');
+    });
+    assert.strictEqual(out2, '', 'second call must print nothing after array normalization');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('a malformed .ma-agents.json does not throw and is treated as not-yet-shown', () => {
   const root = mkScratchRoot();
   try {

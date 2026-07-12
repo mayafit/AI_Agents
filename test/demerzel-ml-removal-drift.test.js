@@ -150,6 +150,78 @@ test('rendered marketplace.json (generated) lists no ma-agent-ml / ml-* skill pa
     `rendered marketplace.json still lists removed Demerzel/ML skill path(s): ${survivors.join(', ')}`);
 });
 
+// ─── bmad-method@6.10.0 fail-loud staging guards (Story 30.1 gate constraint) ───
+// v6.10.0 added TWO fail-loud guards to official-modules.js `_copyResolvedSkills`,
+// on the SAME custom-source staging path ma-agents' own plugin traverses:
+//   (a) an empty/unresolved marketplace-plugin resolution THROWS (was silent);
+//   (b) duplicate skill-LEAF names (basename collisions) THROW.
+// Removing the ma-agent-ml + 12 ml-* entries from the template must NOT trip
+// either: the staged skill set must stay non-empty and every leaf unique, or a
+// formerly-silent partial install becomes a HARD failure at 6.10.0.
+
+function templateSkills() {
+  const tmplPath = path.join(PROJECT_ROOT, 'lib', 'bmad-extension', '.claude-plugin', 'marketplace.json.template');
+  const template = JSON.parse(fs.readFileSync(tmplPath, 'utf8'));
+  return (template.plugins && template.plugins[0] && template.plugins[0].skills) || [];
+}
+
+test('post-removal template resolves NON-EMPTY (6.10.0 _copyResolvedSkills guard a)', () => {
+  const skills = templateSkills();
+  assert.ok(Array.isArray(skills) && skills.length > 0,
+    'template.plugins[0].skills must be a non-empty array — an empty marketplace-plugin ' +
+    'resolution HARD-fails under bmad-method@6.10.0 _copyResolvedSkills');
+});
+
+test('post-removal template skill LEAF names are UNIQUE (6.10.0 _copyResolvedSkills guard b)', () => {
+  const skills = templateSkills();
+  const seen = new Set();
+  const dupLeaves = [];
+  for (const p of skills) {
+    const leaf = path.basename(p);
+    if (seen.has(leaf)) dupLeaves.push(leaf);
+    seen.add(leaf);
+  }
+  assert.deepStrictEqual(dupLeaves, [],
+    `duplicate skill-leaf name(s) in template: ${dupLeaves.join(', ')} — ` +
+    'bmad-method@6.10.0 _copyResolvedSkills HARD-fails on duplicate skill leaves');
+});
+
+test('every rendered-bundle skill leaf is unique AND non-empty (6.10.0 staging, rendered mirror)', () => {
+  const renderedPath = path.join(PROJECT_ROOT, 'lib', 'bmad-extension-plugin', '.claude-plugin', 'marketplace.json');
+  if (!fs.existsSync(renderedPath)) {
+    console.log('    (rendered marketplace.json absent — run `npm run build:plugin` first; skipping)');
+    return;
+  }
+  const rendered = JSON.parse(fs.readFileSync(renderedPath, 'utf8'));
+  const skills = (rendered.plugins && rendered.plugins[0] && rendered.plugins[0].skills) || [];
+  assert.ok(skills.length > 0, 'rendered bundle skills[] must be non-empty (6.10.0 guard a)');
+  const seen = new Set();
+  const dupLeaves = [];
+  for (const p of skills) {
+    const leaf = path.basename(p);
+    if (seen.has(leaf)) dupLeaves.push(leaf);
+    seen.add(leaf);
+  }
+  assert.deepStrictEqual(dupLeaves, [],
+    `duplicate skill-leaf name(s) in rendered bundle: ${dupLeaves.join(', ')} (6.10.0 guard b)`);
+});
+
+test('every template skill leaf corresponds to a real on-disk skill dir (non-empty resolution)', () => {
+  // Guard (a) is really about RESOLUTION being non-empty, not just the array
+  // being non-empty — a listed path that resolves to nothing would stage empty.
+  const skills = templateSkills();
+  const unresolved = [];
+  for (const rel of skills) {
+    const abs = path.join(PROJECT_ROOT, 'lib', 'bmad-extension', rel.replace(/^\.\//, ''));
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) {
+      unresolved.push(rel);
+    }
+  }
+  assert.deepStrictEqual(unresolved, [],
+    `template lists skill path(s) that do not resolve to an on-disk dir: ${unresolved.join(', ')} — ` +
+    'these would stage an empty/partial resolution and HARD-fail under 6.10.0');
+});
+
 test('lib/agents.js carries no bmm-demerzel agent registration', () => {
   const agentsPath = path.join(PROJECT_ROOT, 'lib', 'agents.js');
   const content = fs.readFileSync(agentsPath, 'utf8');
