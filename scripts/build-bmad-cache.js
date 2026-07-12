@@ -47,17 +47,43 @@ const REGISTRY_CANDIDATES = [
   { parts: ['tools', 'cli', 'external-official-modules.yaml'], schema: 'legacy' },
 ];
 
-// The set of modules ma-agents bundles for offline installs. At v6.8.0 these
-// are exactly the `type: bmad-org` registry entries. The fail-loud guard
-// (NFR56) treats a resolved set SMALLER than this as a thin-cache failure —
-// the registry path has moved twice, so silent degradation is a recurring
-// risk that must abort the build rather than ship an incomplete cache.
+// The set of modules ma-agents bundles for offline installs — the CLOSED
+// ALLOWLIST. `normalizeModules()` includes ONLY these codes; every other
+// registry entry is dropped, regardless of its `type`. This is the load-bearing
+// safety posture (P5-8 / FR235): at v6.10.0 the registry gained `bmad-loop`
+// (`type: bmad-org`, `marketplace-plugin: true`, air-gap-hostile) and marked
+// `bmad-automator` `deprecated: true`. An open-by-default "keep every
+// `type: bmad-org`" filter would silently force-bundle `bmad-loop` (and any
+// FUTURE plain `bmad-org` module) onto air-gapped machines. Closing to this
+// allowlist means new/renamed/re-flagged upstream modules FAIL CLOSED (excluded)
+// rather than fail open.
 const KNOWN_BUNDLED_MODULES = ['tea', 'bmb', 'cis', 'gds', 'wds'];
 
-// Registry `type` values that mark a module for bundling. `bmad-org` modules
-// are first-party expansions ma-agents clones; `experimental` (e.g. automator)
-// is deliberately excluded from the offline bundle.
+// The registry `type` first-party expansions carry. Retained for diagnostics
+// and for the shape-flip assertion below (an allowlisted module is expected to
+// stay a plain `bmad-org` module). It is NO LONGER the include criterion — the
+// allowlist above is. `experimental` (automator) and `marketplace-plugin`
+// modules (bmad-loop) are excluded simply by not being on the allowlist.
 const BUNDLED_MODULE_TYPE = 'bmad-org';
+
+// Registry traits that DISQUALIFY a module from the offline bundle. If a module
+// that IS on the allowlist ever starts carrying one of these (an upstream
+// shape/status flip on a module we bundle), the build HALTS rather than silently
+// shipping it — see the assertion in normalizeModules(). `bmad-loop` carries
+// `marketplace-plugin: true`; deprecated modules carry `deprecated: true`.
+const DISQUALIFYING_FLAGS = ['marketplace-plugin', 'deprecated'];
+
+/**
+ * True when a parsed registry flag reads as boolean-true. The line parser
+ * stores YAML scalars as strings (`'true'`), but unit callers may pass a real
+ * boolean, so accept both. Anything else (absent, `'false'`, other) is false.
+ *
+ * @param {*} value Raw flag value off a parsed module entry.
+ * @returns {boolean}
+ */
+function isFlagTrue(value) {
+  return value === true || String(value).trim().toLowerCase() === 'true';
+}
 
 /**
  * Locate the bmad-method package on disk. Abort cleanly if missing so the
@@ -179,20 +205,29 @@ function parseModulesYaml(content) {
  * Normalize parsed module entries into a uniform cache-ready shape:
  *   { code, url, name, branch }
  *
+ * CLOSED-BY-DEFAULT (FR235). The filter is an ALLOWLIST: an entry survives ONLY
+ * if its `code` is in KNOWN_BUNDLED_MODULES (tea, bmb, cis, gds, wds). Every
+ * other registry entry is dropped no matter its `type` — so a NEW upstream
+ * module (even a plain `type: bmad-org` one carrying neither disqualifying
+ * flag), `bmad-loop` (`marketplace-plugin: true`), the deprecated
+ * `bmad-automator`, `experimental` modules, and the built-in `bmm`/`core` are
+ * ALL excluded by default. This replaces the prior open-by-default posture
+ * ("keep every `type: bmad-org`, subtract known-bad"), which would silently
+ * bundle any future first-party module the moment it appeared upstream.
+ *
+ * SHAPE-FLIP HALT. For each entry that IS on the allowlist, assert it carries
+ * NONE of DISQUALIFYING_FLAGS (`marketplace-plugin: true` / `deprecated: true`).
+ * If a bundled module ever flips shape/status upstream, THROW — a bundled
+ * module turning into a marketplace-plugin or getting deprecated must be
+ * re-reviewed by a maintainer, never shipped silently.
+ *
  * - Requires both `code` and `url`.
- * - Keeps ONLY `type: bmad-org` modules (tea, bmb, cis, gds, wds) and drops
- *   everything else. This replaces the pre-6.8.0 `built_in` exclusion: the
- *   relocated registry no longer carries a `built_in` flag and instead tags
- *   each module with a `type`. `type: experimental` (e.g. `automator`) is
- *   excluded from the offline bundle; `bmm`/`core` are first-party modules
- *   that ship inside the npm package and are absent from the registry, so they
- *   are dropped here too (no `bmad-org` type → filtered out). There is NO
- *   `wds`-retired/skip path — `wds` is an active `bmad-org` clone at 6.8.0.
- * - Defaults `branch` to `main` when absent (the 6.8.0 schema omits it).
+ * - Defaults `branch` to `main` when absent (the 6.8.0+ schema omits it).
  * - Passes the URL through verbatim (git accepts both `repo` and `repo.git`).
  *
  * @param {Array<Object>} raw Entries from parseModulesYaml().
  * @returns {Array<{code: string, url: string, name: string, branch: string}>}
+ * @throws {Error} if an allowlisted entry carries a disqualifying flag.
  */
 // Module `code` values are used as directory names under lib/bmad-cache.
 // Reject anything that could escape the cache dir or inject shell characters;
@@ -200,25 +235,65 @@ function parseModulesYaml(content) {
 const MODULE_CODE_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 function normalizeModules(raw) {
+  const allowlist = new Set(KNOWN_BUNDLED_MODULES);
   return raw
     .filter(m => m.code && m.url)
-    .filter(m => {
-      // Bundle only `type: bmad-org`. Compare case-insensitively and trim so
-      // minor upstream whitespace/casing drift cannot silently drop a module.
-      const type = String(m.type || '').trim().toLowerCase();
-      return type === BUNDLED_MODULE_TYPE;
-    })
+    // CLOSED allowlist: include ONLY the known bundled codes. Anything not on
+    // the allowlist fails closed (excluded) — the safety-critical inversion.
+    .filter(m => allowlist.has(m.code))
     .filter(m => {
       if (MODULE_CODE_PATTERN.test(m.code)) return true;
       console.warn(`  ⚠  Skipping module with invalid code "${m.code}" (must match [a-zA-Z0-9_-]+)`);
       return false;
     })
-    .map(m => ({
-      code: m.code,
-      url: m.url,
-      name: m.name || m.key,
-      branch: m.branch || 'main',
-    }));
+    .map(m => {
+      // Shape-flip halt: a module we DO bundle must not have turned into a
+      // marketplace-plugin or been deprecated upstream. Fail loud, don't ship.
+      const tripped = DISQUALIFYING_FLAGS.filter(flag => isFlagTrue(m[flag]));
+      if (tripped.length > 0) {
+        throw new Error(
+          `Allowlisted bundled module "${m.code}" now carries disqualifying flag(s): ` +
+          `${tripped.map(f => `${f}: true`).join(', ')}. A bundled module changing shape/status ` +
+          `upstream must be re-reviewed before shipping (FR235) — refusing to build. ` +
+          `Remove it from KNOWN_BUNDLED_MODULES in scripts/build-bmad-cache.js, or coordinate ` +
+          `the upstream change, then rebuild.`
+        );
+      }
+      return {
+        code: m.code,
+        url: m.url,
+        name: m.name || m.key,
+        branch: m.branch || 'main',
+      };
+    });
+}
+
+/**
+ * Compare a RESOLVED bundle set (the codes normalizeModules() kept) against the
+ * closed allowlist and report both directions of drift (NFR73 two-sided
+ * set-EQUALITY). The resolved set must EQUAL the allowlist exactly.
+ *
+ * - `missing`: allowlisted codes the registry did NOT resolve — the thin-cache
+ *   case (a bundled module vanished / the registry relocated / a downgrade).
+ * - `extra`: resolved codes NOT on the allowlist — a silent upstream addition
+ *   (e.g. `bmad-loop`) that must never be force-bundled. Under the closed
+ *   allowlist filter this is normally empty; the check is defense-in-depth so a
+ *   future loosening of the filter can never ship an over-broad cache silently.
+ *
+ * Computed on the resolved/filtered set — NOT the final manifest keys, which
+ * the incremental-retention path deliberately augments with retired-upstream
+ * modules that are not on the allowlist (see AC #7 retention in main()).
+ *
+ * @param {Iterable<string>|Set<string>} resolvedCodes Codes kept by normalize.
+ * @param {Array<string>} [allowlist=KNOWN_BUNDLED_MODULES]
+ * @returns {{ missing: string[], extra: string[] }} Sorted; both empty = equal.
+ */
+function diffBundleSet(resolvedCodes, allowlist = KNOWN_BUNDLED_MODULES) {
+  const allow = new Set(allowlist);
+  const resolved = resolvedCodes instanceof Set ? resolvedCodes : new Set(resolvedCodes);
+  const missing = [...allow].filter(code => !resolved.has(code)).sort();
+  const extra = [...resolved].filter(code => !allow.has(code)).sort();
+  return { missing, extra };
 }
 
 function loadModuleDefinitions() {
@@ -371,12 +446,15 @@ function main() {
 
   const { modules, schema } = loadModuleDefinitions();
 
-  // Thin-cache fail-loud guard (NFR56). The registry path has moved twice;
-  // the real risk is no longer "zero modules" but the path moving again and
-  // the reader silently resolving FEWER than the known bundled set. Treat a
-  // deficient set as a hard error and abort BEFORE writing any manifest — a
-  // partial/empty cache-manifest.json would otherwise ship a broken offline
-  // bundle that "looks" successful.
+  // Two-sided set-EQUALITY fail-loud guard (NFR73, strengthening NFR56). The
+  // resolved bundle set must EQUAL the known allowlist — abort on a set that is
+  // either SMALLER (thin cache: a bundled module vanished / the registry moved /
+  // a downgrade below 6.8.0) OR LARGER (a silent upstream addition such as
+  // bmad-loop that must never be force-bundled). Abort BEFORE writing any
+  // manifest — a partial or over-broad cache-manifest.json would otherwise ship
+  // a broken/air-gap-hostile offline bundle that "looks" successful. Computed on
+  // the RESOLVED set (not the final manifest keys — the retention path below
+  // augments the manifest with non-allowlist retired modules by design).
   const resolvedCodes = new Set(modules.map(m => m.code));
 
   // Duplicate-code guard. Two registry entries sharing a `code` would clone
@@ -395,15 +473,18 @@ function main() {
     process.exit(1);
   }
 
-  const missing = KNOWN_BUNDLED_MODULES.filter(code => !resolvedCodes.has(code));
-  if (missing.length > 0) {
-    console.error('Error: registry resolved a thin module set — refusing to build a partial cache.');
-    console.error(`  Expected at least: ${KNOWN_BUNDLED_MODULES.join(', ')}`);
-    console.error(`  Resolved (type: ${BUNDLED_MODULE_TYPE}): ${[...resolvedCodes].join(', ') || '(none)'}`);
-    console.error(`  Missing: ${missing.join(', ')}`);
+  const { missing, extra } = diffBundleSet(resolvedCodes);
+  if (missing.length > 0 || extra.length > 0) {
+    console.error('Error: resolved bundle set does not EQUAL the known allowlist — refusing to build a');
+    console.error('  partial or over-broad cache (thin module set / silent upstream addition).');
+    console.error(`  Allowlist (KNOWN_BUNDLED_MODULES): ${KNOWN_BUNDLED_MODULES.join(', ')}`);
+    console.error(`  Resolved: ${[...resolvedCodes].sort().join(', ') || '(none)'}`);
+    console.error(`  Missing: ${missing.join(', ') || '(none)'}   (thin cache — a bundled module vanished/relocated)`);
+    console.error(`  Extra:   ${extra.join(', ') || '(none)'}   (silent upstream addition — must not be force-bundled)`);
     console.error('  Likely cause: bmad-method was downgraded below 6.8.0, the registry layout moved');
-    console.error('  again, or a bundled module was renamed/retired upstream. Update REGISTRY_CANDIDATES,');
-    console.error('  the type filter, or KNOWN_BUNDLED_MODULES in scripts/build-bmad-cache.js to match.');
+    console.error('  again, or a bundled module was added/renamed/retired upstream. Update');
+    console.error('  REGISTRY_CANDIDATES or KNOWN_BUNDLED_MODULES in scripts/build-bmad-cache.js to match —');
+    console.error('  and, for an EXTRA module, confirm it is safe to bundle offline before allowlisting it.');
     process.exit(1);
   }
   console.log(`Found ${modules.length} modules: ${modules.map(m => m.code).join(', ')}`);
@@ -587,9 +668,12 @@ if (require.main === module) {
   module.exports = {
     parseModulesYaml,
     normalizeModules,
+    diffBundleSet,
+    isFlagTrue,
     locateRegistry,
     KNOWN_BUNDLED_MODULES,
     BUNDLED_MODULE_TYPE,
+    DISQUALIFYING_FLAGS,
     REGISTRY_CANDIDATES,
   };
 }
