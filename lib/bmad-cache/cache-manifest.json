@@ -1,6 +1,6 @@
 {
-  "generated": "2026-06-27T14:28:18.113Z",
-  "bmadMethodVersion": "6.9.0",
+  "generated": "2026-07-12T07:02:48.848Z",
+  "bmadMethodVersion": "6.10.0",
   "registrySchema": "package-root-v68",
   "modules": {
     "tea": {
