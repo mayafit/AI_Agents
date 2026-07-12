@@ -34,12 +34,12 @@ const path = require('path');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
 const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout, migrateRetiredSkills, reconcileAgentsSharedSkills } = require('../lib/installer');
-const { getProfile, setProfile, resolveProfile, getBmadModules, setBmadModules, showDemerzelDeprecationNoticeOnce } = require('../lib/profile');
+const { getProfile, setProfile, resolveProfile, getBmadModules, setBmadModules, showDemerzelDeprecationNoticeOnce, getCustomMarketplaceSelection } = require('../lib/profile');
 const { reconfigure: runReconfigure, ReconfigureYesRejectedError, ManifestNotFoundError, RoomodesSlugDivergenceError } = require('../lib/reconfigure');
 const { uninstallProfileArtifacts } = require('../lib/uninstall');
 const bmad = require('../lib/bmad');
 const { getBmadPlatformCode } = require('../lib/agents');
-const { enumerateCustomSource, NFR71_WARNING, CustomMarketplaceError } = require('../lib/custom-marketplace');
+const { enumerateCustomSource, NFR71_WARNING, CustomMarketplaceError, reconcileCustomMarketplaceSelection } = require('../lib/custom-marketplace');
 const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
 
 const PKG = require('../package.json');
@@ -1076,6 +1076,72 @@ async function promptCustomMarketplace({ bmadCustomSourceFlag = '', yesFlag = fa
   return { source, mode, selectedCodes: chosenCodes, plugins, rootDir, sourceUrl };
 }
 
+/**
+ * Story 30.7 (FR242) — on `update`, re-enumerate a PERSISTED custom
+ * marketplace source instead of asking the plain Y/N prompt again, and
+ * reconcile the fresh plugin list against the persisted `selectedCodes`.
+ * Newly-appeared plugins are reported ONLY — never added to the returned
+ * selection. A code that is no longer declared is dropped and reported.
+ *
+ * Fail-loud contract: if the persisted source cannot be re-enumerated
+ * (unreachable, removed, drifted adapter surface), this prints a clear,
+ * visible error and returns `null` WITHOUT writing anything to
+ * `.ma-agents.json` — the persisted selection is left exactly as it was so a
+ * later successful `update` picks up where the user left off. This function
+ * never calls `setCustomMarketplaceSelection` itself; persistence only ever
+ * happens after a REAL install, in `lib/bmad.js#installCustomMarketplaceSubset`.
+ *
+ * @param {Object} ctx
+ * @param {string} ctx.projectRoot
+ * @returns {Promise<undefined|null|{ source: string, mode: 'discovery'|'direct',
+ *   selectedCodes: string[], plugins: Array<Object>, rootDir: string, sourceUrl: string|null }>}
+ *   `undefined` — nothing persisted; caller should fall back to `promptCustomMarketplace()`.
+ *   `null` — persisted source exists but could not be re-enumerated (fail-loud; skip this run).
+ *   selection object — reconciled; `selectedCodes` is the persisted set minus any `removed`.
+ */
+async function reconcileCustomMarketplaceOnUpdate({ projectRoot }) {
+  const persisted = getCustomMarketplaceSelection(projectRoot);
+  if (!persisted) return undefined;
+
+  let enumerated;
+  try {
+    enumerated = await enumerateCustomSource(persisted.source);
+  } catch (err) {
+    const message = err instanceof CustomMarketplaceError ? err.message : `Custom marketplace source error: ${err.message}`;
+    console.log(chalk.red(`\n  Custom marketplace update FAILED: ${message}`));
+    console.log(
+      chalk.red(
+        `  The persisted selection (${persisted.selectedCodes.join(', ') || '(none)'}) from ` +
+        `"${persisted.source}" is UNCHANGED — it will be retried on the next update.`
+      )
+    );
+    return null;
+  }
+
+  const { plugins, mode, rootDir, sourceUrl } = enumerated;
+  const { added, removed, stillPresent } = reconcileCustomMarketplaceSelection({
+    persistedSelectedCodes: persisted.selectedCodes,
+    enumeratedPlugins: plugins,
+  });
+
+  console.log(chalk.cyan(`\n  Custom marketplace source "${persisted.source}" re-enumerated:`));
+  if (added.length > 0) {
+    console.log(chalk.gray(`    + newly available (not auto-installed; re-run the custom-source flow to add): ${added.join(', ')}`));
+  }
+  if (removed.length > 0) {
+    console.log(chalk.yellow(`    - no longer available (dropped from the installed selection): ${removed.join(', ')}`));
+  }
+  if (added.length === 0 && removed.length === 0) {
+    console.log(chalk.gray('    No changes vs. the persisted selection.'));
+  }
+
+  if (stillPresent.length === 0) {
+    console.log(chalk.yellow('  None of the previously-selected extensions are declared by this source anymore — nothing to reinstall from it.'));
+  }
+
+  return { source: persisted.source, mode, selectedCodes: stillPresent, plugins, rootDir, sourceUrl };
+}
+
 // --- Install wizard ---
 
 async function installWizard(preselectedSkill, preselectedAgents, customPath, forceFlag, yesFlag = false, cliScope, bmadModulesFlag = '', bmadModulesPrompt = false, bmadCustomSourceFlag = '') {
@@ -1430,12 +1496,32 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
       }
 
       // Step 3.5b: Custom marketplace source (Story 30.6a enumerate + wizard;
-      // Story 30.6b prune + stage + install-the-subset, FR240/FR242).
+      // Story 30.6b prune + stage + install-the-subset; Story 30.7 persist +
+      // re-enumerate/reconcile on update, FR240/FR242).
       let customMarketplaceSelection = null;
-      try {
-        customMarketplaceSelection = await promptCustomMarketplace({ bmadCustomSourceFlag, yesFlag });
-      } catch (err) {
-        console.log(chalk.yellow(`\n  Custom marketplace source skipped: ${err.message}`));
+      // Story 30.7 — on a BMAD-METHOD *update* (i.e. `bmadInstalled` was
+      // already true before this run, so bmad.updateBmad() ran above — this
+      // is the FR242 "on update" case, and is DELIBERATELY independent of
+      // `isUpdate`, which only tracks ma-agents' own "Update (add/remove
+      // skills)" wizard choice and stays false under `--yes` reruns) with NO
+      // explicit `--bmad-custom-source` override, prefer re-enumerating a
+      // PERSISTED source over asking the plain Y/N prompt again. An explicit
+      // flag always wins (fresh engagement via the normal prompt path below).
+      // `undefined` means nothing was persisted — fall through unchanged.
+      let usedPersistedReconcile = false;
+      if (bmadInstalled && !bmadCustomSourceFlag) {
+        const reconciled = await reconcileCustomMarketplaceOnUpdate({ projectRoot: process.cwd() });
+        if (reconciled !== undefined) {
+          usedPersistedReconcile = true;
+          customMarketplaceSelection = reconciled; // null (fail-loud skip) or a reconciled selection
+        }
+      }
+      if (!usedPersistedReconcile) {
+        try {
+          customMarketplaceSelection = await promptCustomMarketplace({ bmadCustomSourceFlag, yesFlag });
+        } catch (err) {
+          console.log(chalk.yellow(`\n  Custom marketplace source skipped: ${err.message}`));
+        }
       }
       if (customMarketplaceSelection && customMarketplaceSelection.selectedCodes.length > 0) {
         if (!baseBmadOk) {
@@ -1996,4 +2082,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, resolveBaseBmadOk, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue };
+module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, reconcileCustomMarketplaceOnUpdate, resolveBaseBmadOk, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue };
