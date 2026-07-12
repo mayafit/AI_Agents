@@ -77,13 +77,18 @@ test('includes bmm (the BMad core)', () => {
   assert.ok(ids.includes('bmm'), `bmm must be present, got: ${ids.join(', ')}`);
 });
 
-test('flags wds as retired (per cache-manifest.json)', () => {
+test('wds surfaces as an ACTIVE (non-retired) bundled module', () => {
+  // wds is one of the five KNOWN_BUNDLED_MODULES (tea/bmb/cis/gds/wds) and has
+  // been ACTIVE since Epic 27 — it is NOT retiredUpstream. The cache-manifest
+  // wds entry carries no retiredUpstream marker, so when wds is present it must
+  // report non-retired. (Corrected from a stale assertion that wrongly expected
+  // wds.retired === true; the old assertion failed identically on main.)
   const result = bmad.getInstallableBmadModules();
   const wds = result.find(m => m.id === 'wds');
   // wds may or may not be in cache depending on manifest state — only assert
   // when present.
   if (wds) {
-    assert.strictEqual(wds.retired, true, 'wds is marked retiredUpstream in cache-manifest.json');
+    assert.notStrictEqual(wds.retired, true, 'wds is an active bundled module, not retiredUpstream');
   }
 });
 
