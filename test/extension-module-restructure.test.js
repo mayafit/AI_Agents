@@ -150,10 +150,10 @@ const expectedAgentSkills = [
   'ma-agent-sre',
   'ma-agent-devops',
   'ma-agent-cyber',
-  'ma-agent-ml',
   'ma-agent-sqa',
   // Note: ma-agent-mil498 retired in Epic 16 — MIL-STD-498 workflows absorbed into Gadi (ma-agent-sqa)
   // Story 22.2 renamed the bmad-ma-agent-* namespace to ma-agent-* to vacate the upstream-reserved bmad-* prefix.
+  // Story 30.4 removed ma-agent-ml (Demerzel deprecated for new installs, FR244-FR247).
 ];
 
 const expectedSqaSkills = [
@@ -193,11 +193,9 @@ const expectedExtensionSkills = [
   'bmad-knowledge',
 ];
 
-const expectedMlSkills = [
-  'ml-ideation', 'ml-eda', 'ml-architecture', 'ml-detailed-design',
-  'ml-techspec', 'ml-infra', 'ml-experiment', 'ml-analysis',
-  'ml-hparam', 'ml-revision', 'ml-advise', 'ml-retrospective',
-];
+// Story 30.4: the 12 ml-* skills were removed along with ma-agent-ml
+// (Demerzel deprecation, FR244-FR247). No expectedMlSkills list remains —
+// see test/demerzel-ml-removal-drift.test.js for the removal guard.
 
 const allExpectedSkills = [
   ...expectedAgentSkills,
@@ -206,18 +204,17 @@ const allExpectedSkills = [
   ...expectedDevopsSkills,
   ...expectedCyberSkills,
   ...expectedExtensionSkills,
-  ...expectedMlSkills,
   ...expectedSqaSkills,
 ];
 
-test('skills/ has exactly 63 subdirectories', () => {
+test('skills/ has exactly 50 subdirectories', () => {
   const entries = fs.readdirSync(skillsDir).filter(e =>
     fs.statSync(path.join(skillsDir, e)).isDirectory()
   );
-  assert.strictEqual(entries.length, 63, `Expected 63 skill dirs, found ${entries.length}`);
+  assert.strictEqual(entries.length, 50, `Expected 50 skill dirs, found ${entries.length}`);
 });
 
-test('all 5 agent skill directories exist', () => {
+test('all 4 agent skill directories exist', () => {
   for (const skill of expectedAgentSkills) {
     const p = path.join(skillsDir, skill);
     assert.ok(fs.existsSync(p), `Missing agent skill dir: ${skill}`);
@@ -249,13 +246,6 @@ test('all 7 Cyber skill directories exist', () => {
   for (const skill of expectedCyberSkills) {
     const p = path.join(skillsDir, skill);
     assert.ok(fs.existsSync(p), `Missing Cyber skill dir: ${skill}`);
-  }
-});
-
-test('all 12 ML skill directories exist', () => {
-  for (const skill of expectedMlSkills) {
-    const p = path.join(skillsDir, skill);
-    assert.ok(fs.existsSync(p), `Missing ML skill dir: ${skill}`);
   }
 });
 
@@ -317,8 +307,8 @@ test('module-help.csv has correct header columns', () => {
   }
 });
 
-test('module-help.csv has 63 skill entries (excluding header)', () => {
-  assert.strictEqual(csvData.rows.length, 63, `Expected 63 rows, found ${csvData.rows.length}`);
+test('module-help.csv has 50 skill entries (excluding header)', () => {
+  assert.strictEqual(csvData.rows.length, 50, `Expected 50 rows, found ${csvData.rows.length}`);
 });
 
 test('all CSV entries use module code ma-skills', () => {
@@ -328,7 +318,7 @@ test('all CSV entries use module code ma-skills', () => {
   }
 });
 
-test('CSV has entries for all 6 agent skills', () => {
+test('CSV has entries for all 4 agent skills', () => {
   const codeIdx = csvData.headers.indexOf('code');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedAgentSkills) {
@@ -381,14 +371,6 @@ test('CSV has entries for all 15 extension workflow skills', () => {
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedExtensionSkills) {
     assert.ok(codes.includes(skill), `Missing CSV entry for extension skill: ${skill}`);
-  }
-});
-
-test('CSV has entries for all 12 ML skills', () => {
-  const codeIdx = csvData.headers.indexOf('code');
-  const codes = csvData.rows.map(r => r[codeIdx]);
-  for (const skill of expectedMlSkills) {
-    assert.ok(codes.includes(skill), `Missing CSV entry for ML skill: ${skill}`);
   }
 });
 

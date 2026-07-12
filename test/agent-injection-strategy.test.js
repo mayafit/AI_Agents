@@ -66,15 +66,17 @@ test('3.3: installer.js contains NO agent-name-specific logic', () => {
 console.log('\nTask 4 — Registry completeness');
 
 const EXPECTED_IDE = ['claude-code', 'gemini', 'copilot', 'kilocode', 'cline', 'cursor', 'antigravity', 'opencode'];
-const EXPECTED_BMAD = ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-qa', 'bmm-demerzel'];
+// Story 30.4 removed 'bmm-demerzel' — Demerzel is deprecated for new installs
+// (FR244-FR247); its agent registration no longer ships.
+const EXPECTED_BMAD = ['bmm-sre', 'bmm-devops', 'bmm-cyber', 'bmm-qa'];
 const EXPECTED_ALL = [...EXPECTED_IDE, ...EXPECTED_BMAD];
 
-test('4.1: registry has at least 13 agents (8+ IDE + 5 BMAD)', () => {
-  assert.ok(allAgents.length >= 13, `Expected at least 13 agents, got ${allAgents.length}`);
+test('4.1: registry has at least 12 agents (8+ IDE + 4 BMAD)', () => {
+  assert.ok(allAgents.length >= 12, `Expected at least 12 agents, got ${allAgents.length}`);
   const ideCount = allAgents.filter(a => a.category === 'ide').length;
   const bmadCount = allAgents.filter(a => a.category === 'bmad').length;
   assert.ok(ideCount >= 8, `Expected at least 8 IDE agents, got ${ideCount}`);
-  assert.strictEqual(bmadCount, 5, `Expected 5 BMAD agents, got ${bmadCount}`);
+  assert.strictEqual(bmadCount, 4, `Expected 4 BMAD agents, got ${bmadCount}`);
 });
 
 test('4.2: every agent has well-shaped injectionStrategy property', () => {

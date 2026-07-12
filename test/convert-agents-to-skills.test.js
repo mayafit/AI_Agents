@@ -76,17 +76,12 @@ const AGENTS = [
     oldPaths: ['bmm/workflows/sqa/', '_bmad/bmm/workflows/sqa/'],
     chatTopic: 'quality assurance',
     menuItemCount: 14 // MH, CH, AU, IC, RQ, GS, GD, GP, GO, SS, GT, SD, MR, DA
-  },
-  {
-    folder: 'ma-agent-ml',
-    name: 'ma-agent-ml',
-    displayName: 'Demerzel',
-    title: 'ML Scientist',
-    skillNames: ['ml-ideation', 'ml-eda', 'ml-architecture', 'ml-detailed-design', 'ml-techspec', 'ml-infra', 'ml-experiment', 'ml-analysis', 'ml-hparam', 'ml-revision', 'ml-advise', 'ml-retrospective'],
-    oldPaths: ['bmm/workflows/ml/', '_bmad/bmm/workflows/ml/'],
-    chatTopic: 'Machine Learning',
-    menuItemCount: 15 // MH, CH, MLI, MLE, MLA, MLD, MLS, MLNF, MLX, MLAN, MLH, MLR, MLAD, MLRT, DA
   }
+  // Story 30.4 removed ma-agent-ml (Demerzel) — deprecated for new installs,
+  // FR244-FR247. The ml-* skills it referenced (ml-ideation, ml-eda,
+  // ml-architecture, ml-detailed-design, ml-techspec, ml-infra, ml-experiment,
+  // ml-analysis, ml-hparam, ml-revision, ml-advise, ml-retrospective) were
+  // removed along with it.
 ];
 
 const REQUIRED_MANIFEST_FIELDS = [
