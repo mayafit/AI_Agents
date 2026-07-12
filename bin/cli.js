@@ -39,6 +39,7 @@ const { reconfigure: runReconfigure, ReconfigureYesRejectedError, ManifestNotFou
 const { uninstallProfileArtifacts } = require('../lib/uninstall');
 const bmad = require('../lib/bmad');
 const { getBmadPlatformCode } = require('../lib/agents');
+const { enumerateCustomSource, NFR71_WARNING, CustomMarketplaceError } = require('../lib/custom-marketplace');
 const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
 
 const PKG = require('../package.json');
@@ -119,6 +120,13 @@ ${chalk.bold('Install options:')}
                        With CSV: install exactly those (e.g. tea,bmb)
                        Omitted: install every non-retired module (default)
                        'bmm' is always force-included.
+  ${chalk.cyan('--bmad-custom-source <ref>')} Enumerate extensions from ONE custom
+                       marketplace repo (local path or Git URL containing
+                       .claude-plugin/marketplace.json) and offer them in
+                       ma-agents' own multiselect. Non-interactive equivalent
+                       of the "Install additional BMAD extensions from a
+                       custom source?" prompt. Ambient git credentials only —
+                       no token handling.
   ${chalk.cyan('--log')}              Log all console output to install_<datetime>.log
 
 ${chalk.bold('Reconfigure options:')}
@@ -142,6 +150,8 @@ ${chalk.bold('Examples:')}
   npx ${NAME} install --yes --global
   npx ${NAME} install --yes --bmad-modules bmm,tea,bmb
   npx ${NAME} install --bmad-modules                    # prompt for modules
+  npx ${NAME} install --yes --bmad-custom-source ./org-marketplace
+  npx ${NAME} install --bmad-custom-source git@git.intra.example:team/bmad-marketplace.git
   npx ${NAME} uninstall code-review claude-code
   npx ${NAME} status
   npx ${NAME} status --global
@@ -270,6 +280,23 @@ function parseFlags(args) {
     }
   }
 
+  // --bmad-custom-source <ref> — Story 30.6a. Requires an explicit value (a
+  // path or Git URL); unlike --bmad-modules there is no "bare = prompt" form
+  // because the underlying Y/N wizard prompt already exists for interactive
+  // runs. A missing value is an error, not a silent no-op, to avoid a typo'd
+  // invocation silently skipping the intended custom source.
+  let bmadCustomSourceFlag = '';
+  const bmadCustomSourceIdx = positional.indexOf('--bmad-custom-source');
+  if (bmadCustomSourceIdx !== -1) {
+    const value = positional[bmadCustomSourceIdx + 1];
+    if (!value || value.startsWith('--')) {
+      console.error(chalk.red('Error: --bmad-custom-source requires a path or Git URL'));
+      process.exit(1);
+    }
+    bmadCustomSourceFlag = value;
+    positional.splice(bmadCustomSourceIdx, 2);
+  }
+
   return {
     globalFlag,
     forceFlag,
@@ -278,6 +305,7 @@ function parseFlags(args) {
     customPath,
     bmadModulesFlag,
     bmadModulesPrompt,
+    bmadCustomSourceFlag,
     scope: globalFlag ? 'global' : 'project',
     positional
   };
@@ -918,9 +946,113 @@ async function selectBmadModules({ bmadModulesFlag, bmadModulesPrompt, projectRo
   return persist(installable.map(m => m.id));
 }
 
+// --- Custom marketplace source (Story 30.6a) ---
+
+/**
+ * FR239-FR241 — after BMAD module selection, offer to enumerate ONE custom
+ * marketplace source and let the user pick which of its declared extensions
+ * to install. This function does the Y/N prompt (or its `--bmad-custom-source`
+ * non-interactive equivalent), the enumerate call, the NFR71 warning, and
+ * ma-agents' OWN multiselect (FR240) — and stops there.
+ *
+ * Scope boundary (Story 30.6a vs 30.6b): this returns the user's selection —
+ * `{ source, mode, selectedCodes, plugins }` — for Story 30.6b to consume. NO
+ * pruning, staging, or `bmad-method` invocation happens here or anywhere in
+ * this module. Returns `null` when the feature is not engaged (no flag, and
+ * either --yes with no flag, or the user answered "N") — this is the
+ * byte-identical-to-baseline "off" path required by NFR70.
+ *
+ * @param {Object} ctx
+ * @param {string} [ctx.bmadCustomSourceFlag] - `--bmad-custom-source <ref>` value
+ * @param {boolean} [ctx.yesFlag] - non-interactive run
+ * @returns {Promise<null|{ source: string, mode: 'discovery'|'direct', selectedCodes: string[], plugins: Array<Object> }>}
+ */
+async function promptCustomMarketplace({ bmadCustomSourceFlag = '', yesFlag = false } = {}) {
+  let source = bmadCustomSourceFlag;
+
+  if (!source) {
+    if (yesFlag) {
+      // Non-interactive run with no flag — feature stays off (NFR70: a
+      // no-source install is byte-identical to baseline). There is no
+      // "bare = prompt" fallback for --yes, matching how other install-time
+      // Y/N prompts behave under --yes.
+      return null;
+    }
+    const { wantsCustomSource } = await prompts({
+      type: 'confirm',
+      name: 'wantsCustomSource',
+      message: 'Install additional BMAD extensions from a custom source? (y/N)',
+      initial: false,
+    });
+    if (!wantsCustomSource) return null;
+
+    const { sourceInput } = await prompts({
+      type: 'text',
+      name: 'sourceInput',
+      message: 'Custom marketplace source (local path or Git URL):',
+    });
+    if (!sourceInput || !sourceInput.trim()) {
+      console.log(chalk.yellow('  No source entered — skipping custom marketplace source.'));
+      return null;
+    }
+    source = sourceInput.trim();
+  }
+
+  let enumerated;
+  try {
+    enumerated = await enumerateCustomSource(source);
+  } catch (err) {
+    // Fail clean (spike §3 contract) — a short, human-readable message only.
+    // Never print err.stack here: an unreachable/unauthorized custom source
+    // must not dump a raw upstream stack, and must never touch the base
+    // install (the rest of installWizard proceeds unaffected).
+    const message = err instanceof CustomMarketplaceError ? err.message : `Custom marketplace source error: ${err.message}`;
+    console.log(chalk.red(`\n  ${message}`));
+    console.log(chalk.gray('  Skipping custom marketplace source; the rest of the install is unaffected.'));
+    return null;
+  }
+
+  const { plugins, mode } = enumerated;
+  if (!plugins || plugins.length === 0) {
+    console.log(chalk.yellow(`  Custom marketplace source "${source}" declared no plugins — nothing to select.`));
+    return { source, mode, selectedCodes: [], plugins: [] };
+  }
+
+  // NFR71 — shown before the user can select/install anything from the source.
+  console.log(chalk.yellow(`\n  Warning: ${NFR71_WARNING}`));
+
+  if (yesFlag) {
+    // --yes + --bmad-custom-source: select every declared plugin, matching
+    // the "select all" default used elsewhere in --yes mode (bmad modules,
+    // skills). The user asked for this source explicitly via the flag.
+    const selectedCodes = plugins.map((p) => p.code);
+    console.log(chalk.cyan(`  Custom marketplace: selected all ${selectedCodes.length} extension(s) from "${source}".`));
+    return { source, mode, selectedCodes, plugins };
+  }
+
+  const { chosenCodes } = await prompts({
+    type: 'multiselect',
+    name: 'chosenCodes',
+    message: `Select extensions to install from "${source}":`,
+    choices: plugins.map((p) => ({
+      title: chalk.white(p.code) + chalk.gray(p.description ? ` — ${p.description}` : ''),
+      value: p.code,
+      selected: true,
+    })),
+    instructions: chalk.gray('  Use space to toggle, enter to confirm.'),
+  });
+
+  if (chosenCodes === undefined) {
+    console.log(chalk.gray('  Custom marketplace selection cancelled.'));
+    return null;
+  }
+
+  return { source, mode, selectedCodes: chosenCodes, plugins };
+}
+
 // --- Install wizard ---
 
-async function installWizard(preselectedSkill, preselectedAgents, customPath, forceFlag, yesFlag = false, cliScope, bmadModulesFlag = '', bmadModulesPrompt = false) {
+async function installWizard(preselectedSkill, preselectedAgents, customPath, forceFlag, yesFlag = false, cliScope, bmadModulesFlag = '', bmadModulesPrompt = false, bmadCustomSourceFlag = '') {
   const skills = listSkills();
   const agents = listAgents();
 
@@ -1256,6 +1388,26 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
           }
         }
       }
+
+      // Step 3.5b: Custom marketplace source (Story 30.6a, FR239-FR241).
+      // Enumerate + ma-agents' own multiselect ONLY — no staging/install here.
+      // The selection is handed off for Story 30.6b to consume; until 30.6b
+      // lands, nothing is actually installed from a custom source.
+      let customMarketplaceSelection = null;
+      try {
+        customMarketplaceSelection = await promptCustomMarketplace({ bmadCustomSourceFlag, yesFlag });
+      } catch (err) {
+        console.log(chalk.yellow(`\n  Custom marketplace source skipped: ${err.message}`));
+      }
+      if (customMarketplaceSelection && customMarketplaceSelection.selectedCodes.length > 0) {
+        console.log(
+          chalk.cyan(
+            `\n  Custom marketplace: captured ${customMarketplaceSelection.selectedCodes.length} ` +
+            `extension(s) (${customMarketplaceSelection.selectedCodes.join(', ')}) from ` +
+            `"${customMarketplaceSelection.source}". Staging + installing this selection lands in Story 30.6b.`
+          )
+        );
+      }
     }
   }
 
@@ -1432,7 +1584,7 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 // --- Command handlers ---
 
 async function handleInstall(args) {
-  const { globalFlag, forceFlag, yesFlag, agentFlag, customPath, bmadModulesFlag, bmadModulesPrompt, scope, positional } = parseFlags(args);
+  const { globalFlag, forceFlag, yesFlag, agentFlag, customPath, bmadModulesFlag, bmadModulesPrompt, bmadCustomSourceFlag, scope, positional } = parseFlags(args);
 
   // Task 3.2: Validate agentFlag against known agents
   if (agentFlag) {
@@ -1451,13 +1603,13 @@ async function handleInstall(args) {
 
   // No skill → launch wizard (Task 3.3, 3.4)
   if (!skillId) {
-    await installWizard(null, preselectedAgents, customPath, forceFlag, yesFlag, scope, bmadModulesFlag, bmadModulesPrompt);
+    await installWizard(null, preselectedAgents, customPath, forceFlag, yesFlag, scope, bmadModulesFlag, bmadModulesPrompt, bmadCustomSourceFlag);
     return;
   }
 
   // Skill but no agents (and no agentFlag) → wizard with skill preselected
   if (!agentFlag && agentIds.length === 0) {
-    await installWizard(skillId, null, customPath, forceFlag, yesFlag, scope, bmadModulesFlag, bmadModulesPrompt);
+    await installWizard(skillId, null, customPath, forceFlag, yesFlag, scope, bmadModulesFlag, bmadModulesPrompt, bmadCustomSourceFlag);
     return;
   }
 
@@ -1788,4 +1940,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseFlags, selectBmadModules, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue };
+module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue };
