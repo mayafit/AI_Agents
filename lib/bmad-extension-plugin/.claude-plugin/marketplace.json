@@ -37,7 +37,7 @@
       "name": "ma-skills",
       "source": "./",
       "description": "ma-agents extension module providing enterprise SDLC personas and operational workflow skills.",
-      "version": "3.17.0-beta.3",
+      "version": "3.17.0-beta.4",
       "author": {
         "name": "Alon Mayaffit"
       },
