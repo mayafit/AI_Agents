@@ -56,6 +56,8 @@ const {
   stageRegistrySubset,
   registryTrustLabel,
   CUSTOM_MARKETPLACE_STAGE_DIR_NAME,
+  findSkillDirsRecursive,
+  resolveRegistrySkillsRoot,
 } = require('../lib/custom-marketplace');
 const bmad = require('../lib/bmad');
 const { getCustomMarketplaceSelection, setCustomMarketplaceSelection } = require('../lib/profile');
@@ -326,6 +328,95 @@ function makeModuleRepoClone(name, moduleDir) {
 
       assert.strictEqual(captured[0], 'https://github.com/someone/tagged-ext@v2.1.0', 'approved_tag must be threaded as an @<tag> suffix on the source string');
       assert.strictEqual(captured[1], 'https://github.com/someone/untagged-ext', 'no approved_tag => clone the default branch, no @suffix');
+    } finally {
+      fs.rmSync(WORK_ROOT, { recursive: true, force: true });
+    }
+  });
+
+  console.log('\nSkill resolution — skills are NOT always beside module.yaml');
+
+  await test('resolveRegistrySkillsRoot: module.yaml at skills parent → that dir; nested/setup layouts handled', async () => {
+    freshWorkRoot();
+    try {
+      // Normal layout: module.yaml at the skills' parent.
+      assert.strictEqual(await resolveRegistrySkillsRoot('/x', 'skills/module.yaml'), 'skills');
+      assert.strictEqual(await resolveRegistrySkillsRoot('/x', 'src/module.yaml'), 'src');
+      assert.strictEqual(await resolveRegistrySkillsRoot('/x', 'module.yaml'), '.');
+      assert.strictEqual(await resolveRegistrySkillsRoot('/x', null), '.');
+
+      // Setup-skill layout: `<name>-setup/assets/module.yaml` where the -setup
+      // dir is a real skill → skills root is the setup skill's PARENT.
+      const repo = path.join(WORK_ROOT, 'repo');
+      writeSkill(path.join(repo, 'src', 'skills', 'thing-setup'), 'thing-setup', 'setup');
+      fs.mkdirSync(path.join(repo, 'src', 'skills', 'thing-setup', 'assets'), { recursive: true });
+      fs.writeFileSync(path.join(repo, 'src', 'skills', 'thing-setup', 'assets', 'module.yaml'), 'code: thing\n');
+      assert.strictEqual(
+        await resolveRegistrySkillsRoot(repo, 'src/skills/thing-setup/assets/module.yaml'),
+        'src/skills',
+        'setup-skill layout: skills root is the setup skill’s parent'
+      );
+
+      // assets/ but the parent is NOT a skill → fall back to module.yaml’s dir.
+      const repo2 = path.join(WORK_ROOT, 'repo2');
+      fs.mkdirSync(path.join(repo2, 'foo', 'assets'), { recursive: true });
+      fs.writeFileSync(path.join(repo2, 'foo', 'assets', 'module.yaml'), 'code: foo\n');
+      assert.strictEqual(await resolveRegistrySkillsRoot(repo2, 'foo/assets/module.yaml'), 'foo/assets');
+    } finally {
+      fs.rmSync(WORK_ROOT, { recursive: true, force: true });
+    }
+  });
+
+  await test('findSkillDirsRecursive: finds NESTED skills, skips node_modules/.git, does not descend into a skill', async () => {
+    freshWorkRoot();
+    try {
+      const repo = path.join(WORK_ROOT, 'repo');
+      writeSkill(path.join(repo, 'agents', 'a1'), 'a1', 'x');
+      writeSkill(path.join(repo, 'workflows', 'phase1', 'w1'), 'w1', 'x');
+      writeSkill(path.join(repo, 'workflows', 'phase1', 'research', 'w2'), 'w2', 'x');
+      // a skill with a subdir (assets) that must NOT be reported separately
+      fs.mkdirSync(path.join(repo, 'agents', 'a1', 'assets'), { recursive: true });
+      fs.writeFileSync(path.join(repo, 'agents', 'a1', 'assets', 'file.txt'), 'x');
+      // noise that must be skipped
+      writeSkill(path.join(repo, 'node_modules', 'pkg', 'skilly'), 'n', 'x');
+      fs.mkdirSync(path.join(repo, '.git', 'objects'), { recursive: true });
+
+      const skills = await findSkillDirsRecursive(repo, repo);
+      assert.deepStrictEqual(
+        skills,
+        ['agents/a1', 'workflows/phase1/research/w2', 'workflows/phase1/w1'],
+        'nested skills found; node_modules/.git skipped; no descent into a skill dir'
+      );
+    } finally {
+      fs.rmSync(WORK_ROOT, { recursive: true, force: true });
+    }
+  });
+
+  console.log('\nLoud per-entry guard — a selected entry that resolves to nothing must NOT be silently dropped');
+
+  await test('one selected entry resolving to zero modules aborts loudly (names it), no silent partial install', async () => {
+    freshWorkRoot();
+    try {
+      const projectRoot = path.join(WORK_ROOT, 'project');
+      fs.mkdirSync(projectRoot, { recursive: true });
+      const plugins = [
+        { code: 'good', name: 'good', description: '', repository: 'https://github.com/x/good', moduleDefinition: null, approvedTag: null, approvedSha: null },
+        { code: 'empty', name: 'empty', description: '', repository: 'https://github.com/x/empty', moduleDefinition: null, approvedTag: null, approvedSha: null },
+      ];
+      await assert.rejects(
+        () => stageRegistrySubset({
+          source: 'reg', plugins, selectedCodes: ['good', 'empty'], projectRoot,
+          deps: {
+            // both "clone" to a throwaway dir; resolvePlugin returns a module for
+            // good, [] for empty — the exact silent-drop scenario from the field.
+            resolveSource: async () => ({ rootDir: WORK_ROOT, sourceUrl: 'https://github.com/x/x' }),
+            resolvePlugin: async (repoPath, raw) =>
+              raw.name === 'good'
+                ? [{ code: 'good', pluginName: 'good', strategy: 1, skillPaths: [path.join(WORK_ROOT, 's1')], moduleYamlPath: path.join(WORK_ROOT, 'module.yaml') }]
+                : [],
+          },
+        }),
+        (err) => err instanceof CustomMarketplaceError && /\bempty\b/.test(err.message) && /zero installable modules/.test(err.message)
+      );
     } finally {
       fs.rmSync(WORK_ROOT, { recursive: true, force: true });
     }
