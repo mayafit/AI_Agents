@@ -40,6 +40,7 @@ const { uninstallProfileArtifacts } = require('../lib/uninstall');
 const bmad = require('../lib/bmad');
 const { getBmadPlatformCode } = require('../lib/agents');
 const { enumerateCustomSource, NFR71_WARNING, CustomMarketplaceError, reconcileCustomMarketplaceSelection, registryTrustLabel } = require('../lib/custom-marketplace');
+const { setLogSink, diag, diagError } = require('../lib/diag');
 const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
 
 const PKG = require('../package.json');
@@ -55,8 +56,20 @@ const VERSION = PKG.version;
  */
 function setupLogging(logFilePath) {
   const logFd = fs.openSync(logFilePath, 'w');
-  const header = `[${new Date().toISOString()}] ${NAME} v${VERSION} — log started\n`;
+  // Rich header — the environment facts needed to make sense of a report later:
+  // exact version, how it was invoked, runtime, platform, and where it ran.
+  const header =
+    `[${new Date().toISOString()}] ${NAME} v${VERSION} — log started\n` +
+    `  argv:     ${process.argv.slice(1).join(' ')}\n` +
+    `  node:     ${process.version}\n` +
+    `  platform: ${process.platform} ${process.arch}\n` +
+    `  cwd:      ${process.cwd()}\n`;
   fs.writeSync(logFd, header);
+
+  // Route log-file-only diagnostics (lib/diag.js) to this fd. These breadcrumbs
+  // (custom-marketplace phases, swallowed error causes, etc.) land ONLY in the
+  // log, never on the user's console.
+  setLogSink((s) => { try { fs.writeSync(logFd, s); } catch { /* ignore */ } });
 
   const origStdoutWrite = process.stdout.write.bind(process.stdout);
   const origStderrWrite = process.stderr.write.bind(process.stderr);
@@ -81,6 +94,7 @@ function setupLogging(logFilePath) {
     process.stderr.write = origStderrWrite;
     const footer = `\n[${new Date().toISOString()}] log ended\n`;
     try { fs.writeSync(logFd, footer); } catch { /* ignore */ }
+    setLogSink(null);
     try { fs.closeSync(logFd); } catch { /* ignore */ }
     delete process.env.MA_AGENTS_LOG_ACTIVE;
   };
@@ -1025,13 +1039,16 @@ async function promptCustomMarketplace({ bmadCustomSourceFlag = '', yesFlag = fa
   }
 
   let enumerated;
+  diag('custom-source: enumerate begin', { source });
   try {
     enumerated = await enumerateCustomSource(source);
   } catch (err) {
     // Fail clean (spike §3 contract) — a short, human-readable message only.
     // Never print err.stack here: an unreachable/unauthorized custom source
     // must not dump a raw upstream stack, and must never touch the base
-    // install (the rest of installWizard proceeds unaffected).
+    // install (the rest of installWizard proceeds unaffected). The full cause
+    // (and stack) goes to the LOG FILE only, for diagnosis.
+    diagError('custom-source: enumerate failed', err);
     const message = err instanceof CustomMarketplaceError ? err.message : `Custom marketplace source error: ${err.message}`;
     console.log(chalk.red(`\n  ${message}`));
     console.log(chalk.gray('  Skipping custom marketplace source; the rest of the install is unaffected.'));
@@ -1039,6 +1056,11 @@ async function promptCustomMarketplace({ bmadCustomSourceFlag = '', yesFlag = fa
   }
 
   const { plugins, mode, rootDir, sourceUrl } = enumerated;
+  diag('custom-source: enumerated', {
+    source, mode, rootDir, sourceUrl,
+    pluginCount: (plugins || []).length,
+    codes: (plugins || []).map((p) => p.code),
+  });
   if (!plugins || plugins.length === 0) {
     console.log(chalk.yellow(`  Custom marketplace source "${source}" declared no plugins — nothing to select.`));
     return { source, mode, selectedCodes: [], plugins: [], rootDir, sourceUrl };
@@ -1117,12 +1139,16 @@ async function promptCustomMarketplace({ bmadCustomSourceFlag = '', yesFlag = fa
  */
 async function reconcileCustomMarketplaceOnUpdate({ projectRoot }) {
   const persisted = getCustomMarketplaceSelection(projectRoot);
+  diag('custom-source: reconcile on update', persisted
+    ? { source: persisted.source, mode: persisted.mode, selectedCodes: persisted.selectedCodes }
+    : { persisted: false });
   if (!persisted) return undefined;
 
   let enumerated;
   try {
     enumerated = await enumerateCustomSource(persisted.source);
   } catch (err) {
+    diagError('custom-source: reconcile re-enumerate failed', err);
     const message = err instanceof CustomMarketplaceError ? err.message : `Custom marketplace source error: ${err.message}`;
     console.log(chalk.red(`\n  Custom marketplace update FAILED: ${message}`));
     console.log(
@@ -1547,6 +1573,12 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
         }
       }
       if (customMarketplaceSelection && customMarketplaceSelection.selectedCodes.length > 0) {
+        diag('custom-source: install begin', {
+          mode: customMarketplaceSelection.mode,
+          source: customMarketplaceSelection.source,
+          selectedCodes: customMarketplaceSelection.selectedCodes,
+          baseBmadOk,
+        });
         if (!baseBmadOk) {
           // AC 6 (30.6b) — never layer --custom-source onto a project with no
           // (or a broken) base BMAD install. The rest of the install is
@@ -1565,10 +1597,14 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
               tools: bmadTools,
               selection: customMarketplaceSelection,
             });
+            diag('custom-source: install result', { success: !!success });
             if (success) {
               console.log(chalk.green('  Custom marketplace subset installed successfully!'));
             }
           } catch (err) {
+            // User sees the one-liner; the full cause/stack (which entry, the
+            // git/resolve error, the FR238 zero-module detail) goes to the log.
+            diagError('custom-source: install failed', err);
             console.log(chalk.red(`\n  Custom marketplace install failed: ${err.message}`));
           }
         }
