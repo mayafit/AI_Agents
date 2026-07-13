@@ -5,10 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [UNRELEASED]
+## [3.17.0] - 2026-07-13
 
 BMAD v6.10.0 integration — closed-allowlist bundle safety, an opt-in custom
 marketplace source, and a non-destructive Demerzel deprecation (Epic 30 / F25).
+
+Post-Epic-30 follow-ups folded into this release: the custom marketplace source
+now also understands the **BMAD registry-index format** (`registry/official.yaml`
++ `community-index.yaml` of `repository`/`module_definition` pointers) in addition
+to `.claude-plugin/marketplace.json` and single-module repos; registry entries are
+installed two-level (clone the pointed repo at its `approved_tag`, resolve the
+module) with skills discovered from each module's real skills root; the multi-select
+is **best-effort** (a stale/broken registry entry — e.g. a nonexistent `approved_tag`
+— is skipped loudly with its reason and only the resolvable subset installs, rather
+than aborting everything); and `--log` now captures full install diagnostics
+(per-phase breadcrumbs + otherwise-swallowed root causes) to the log file only.
 
 ### Changed
 - **Bundled bmad-method updated to v6.10.0.** Upstream v6.10.0 introduces a
