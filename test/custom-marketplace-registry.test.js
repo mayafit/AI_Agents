@@ -391,31 +391,45 @@ function makeModuleRepoClone(name, moduleDir) {
     }
   });
 
-  console.log('\nLoud per-entry guard — a selected entry that resolves to nothing must NOT be silently dropped');
+  console.log('\nBest-effort per-entry — a broken/stale entry is skipped LOUDLY, not fatal to the rest');
 
-  await test('one selected entry resolving to zero modules aborts loudly (names it), no silent partial install', async () => {
+  await test('one broken entry (unreachable repo) is skipped; the good entry still installs; return names the skip', async () => {
+    freshWorkRoot();
+    try {
+      const { cloneDir } = makeModuleRepoClone('good', 'modules/good');
+      const projectRoot = path.join(WORK_ROOT, 'project');
+      fs.mkdirSync(projectRoot, { recursive: true });
+      const plugins = [
+        { code: 'good', name: 'good', description: '', repository: cloneDir, moduleDefinition: 'modules/good/module.yaml', approvedTag: null, approvedSha: null },
+        // Points at a nonexistent local path → the real resolveSource clone fails
+        // → this entry is skipped (the exact wds@v0.1.0 stale-tag field scenario).
+        { code: 'broken', name: 'broken', description: '', repository: path.join(WORK_ROOT, 'no-such-repo'), moduleDefinition: null, approvedTag: null, approvedSha: null },
+      ];
+      const result = await stageRegistrySubset({ source: 'reg', plugins, selectedCodes: ['good', 'broken'], projectRoot });
+      assert.deepStrictEqual(result.installedCodes, ['good'], 'only the resolvable entry is installed');
+      assert.strictEqual(result.skipped.length, 1, 'the broken entry is recorded as skipped');
+      assert.strictEqual(result.skipped[0].code, 'broken');
+      assert.ok(result.skipped[0].reason && result.skipped[0].reason.length > 0, 'skip carries a human reason');
+      // the good module actually staged
+      const staged = JSON.parse(fs.readFileSync(path.join(result.stagePath, '.claude-plugin', 'marketplace.json'), 'utf8'));
+      assert.deepStrictEqual(staged.plugins.map((p) => p.name), ['good']);
+    } finally {
+      fs.rmSync(WORK_ROOT, { recursive: true, force: true });
+    }
+  });
+
+  await test('ALL selected entries broken → hard-fail (nothing staged), naming them', async () => {
     freshWorkRoot();
     try {
       const projectRoot = path.join(WORK_ROOT, 'project');
       fs.mkdirSync(projectRoot, { recursive: true });
       const plugins = [
-        { code: 'good', name: 'good', description: '', repository: 'https://github.com/x/good', moduleDefinition: null, approvedTag: null, approvedSha: null },
-        { code: 'empty', name: 'empty', description: '', repository: 'https://github.com/x/empty', moduleDefinition: null, approvedTag: null, approvedSha: null },
+        { code: 'b1', name: 'b1', description: '', repository: path.join(WORK_ROOT, 'nope1'), moduleDefinition: null, approvedTag: null, approvedSha: null },
+        { code: 'b2', name: 'b2', description: '', repository: path.join(WORK_ROOT, 'nope2'), moduleDefinition: null, approvedTag: null, approvedSha: null },
       ];
       await assert.rejects(
-        () => stageRegistrySubset({
-          source: 'reg', plugins, selectedCodes: ['good', 'empty'], projectRoot,
-          deps: {
-            // both "clone" to a throwaway dir; resolvePlugin returns a module for
-            // good, [] for empty — the exact silent-drop scenario from the field.
-            resolveSource: async () => ({ rootDir: WORK_ROOT, sourceUrl: 'https://github.com/x/x' }),
-            resolvePlugin: async (repoPath, raw) =>
-              raw.name === 'good'
-                ? [{ code: 'good', pluginName: 'good', strategy: 1, skillPaths: [path.join(WORK_ROOT, 's1')], moduleYamlPath: path.join(WORK_ROOT, 'module.yaml') }]
-                : [],
-          },
-        }),
-        (err) => err instanceof CustomMarketplaceError && /\bempty\b/.test(err.message) && /zero installable modules/.test(err.message)
+        () => stageRegistrySubset({ source: 'reg', plugins, selectedCodes: ['b1', 'b2'], projectRoot }),
+        (err) => err instanceof CustomMarketplaceError && /None of the 2 selected/.test(err.message) && /b1/.test(err.message) && /b2/.test(err.message)
       );
     } finally {
       fs.rmSync(WORK_ROOT, { recursive: true, force: true });
@@ -566,6 +580,8 @@ function makeModuleRepoClone(name, moduleDir) {
               stagePath: path.join(projectRoot, CUSTOM_MARKETPLACE_STAGE_DIR_NAME),
               customSourceArg: `./${CUSTOM_MARKETPLACE_STAGE_DIR_NAME}`,
               resolvedModules: [{ code: 'cool-ext', cloneSha: null }],
+              installedCodes: ['cool-ext'],
+              skipped: [],
             };
           },
           runCommand: () => {},
