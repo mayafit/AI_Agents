@@ -56,6 +56,8 @@ const {
   stageRegistrySubset,
   registryTrustLabel,
   CUSTOM_MARKETPLACE_STAGE_DIR_NAME,
+  findSkillDirsRecursive,
+  resolveRegistrySkillsRoot,
 } = require('../lib/custom-marketplace');
 const bmad = require('../lib/bmad');
 const { getCustomMarketplaceSelection, setCustomMarketplaceSelection } = require('../lib/profile');
@@ -331,6 +333,109 @@ function makeModuleRepoClone(name, moduleDir) {
     }
   });
 
+  console.log('\nSkill resolution — skills are NOT always beside module.yaml');
+
+  await test('resolveRegistrySkillsRoot: module.yaml at skills parent → that dir; nested/setup layouts handled', async () => {
+    freshWorkRoot();
+    try {
+      // Normal layout: module.yaml at the skills' parent.
+      assert.strictEqual(await resolveRegistrySkillsRoot('/x', 'skills/module.yaml'), 'skills');
+      assert.strictEqual(await resolveRegistrySkillsRoot('/x', 'src/module.yaml'), 'src');
+      assert.strictEqual(await resolveRegistrySkillsRoot('/x', 'module.yaml'), '.');
+      assert.strictEqual(await resolveRegistrySkillsRoot('/x', null), '.');
+
+      // Setup-skill layout: `<name>-setup/assets/module.yaml` where the -setup
+      // dir is a real skill → skills root is the setup skill's PARENT.
+      const repo = path.join(WORK_ROOT, 'repo');
+      writeSkill(path.join(repo, 'src', 'skills', 'thing-setup'), 'thing-setup', 'setup');
+      fs.mkdirSync(path.join(repo, 'src', 'skills', 'thing-setup', 'assets'), { recursive: true });
+      fs.writeFileSync(path.join(repo, 'src', 'skills', 'thing-setup', 'assets', 'module.yaml'), 'code: thing\n');
+      assert.strictEqual(
+        await resolveRegistrySkillsRoot(repo, 'src/skills/thing-setup/assets/module.yaml'),
+        'src/skills',
+        'setup-skill layout: skills root is the setup skill’s parent'
+      );
+
+      // assets/ but the parent is NOT a skill → fall back to module.yaml’s dir.
+      const repo2 = path.join(WORK_ROOT, 'repo2');
+      fs.mkdirSync(path.join(repo2, 'foo', 'assets'), { recursive: true });
+      fs.writeFileSync(path.join(repo2, 'foo', 'assets', 'module.yaml'), 'code: foo\n');
+      assert.strictEqual(await resolveRegistrySkillsRoot(repo2, 'foo/assets/module.yaml'), 'foo/assets');
+    } finally {
+      fs.rmSync(WORK_ROOT, { recursive: true, force: true });
+    }
+  });
+
+  await test('findSkillDirsRecursive: finds NESTED skills, skips node_modules/.git, does not descend into a skill', async () => {
+    freshWorkRoot();
+    try {
+      const repo = path.join(WORK_ROOT, 'repo');
+      writeSkill(path.join(repo, 'agents', 'a1'), 'a1', 'x');
+      writeSkill(path.join(repo, 'workflows', 'phase1', 'w1'), 'w1', 'x');
+      writeSkill(path.join(repo, 'workflows', 'phase1', 'research', 'w2'), 'w2', 'x');
+      // a skill with a subdir (assets) that must NOT be reported separately
+      fs.mkdirSync(path.join(repo, 'agents', 'a1', 'assets'), { recursive: true });
+      fs.writeFileSync(path.join(repo, 'agents', 'a1', 'assets', 'file.txt'), 'x');
+      // noise that must be skipped
+      writeSkill(path.join(repo, 'node_modules', 'pkg', 'skilly'), 'n', 'x');
+      fs.mkdirSync(path.join(repo, '.git', 'objects'), { recursive: true });
+
+      const skills = await findSkillDirsRecursive(repo, repo);
+      assert.deepStrictEqual(
+        skills,
+        ['agents/a1', 'workflows/phase1/research/w2', 'workflows/phase1/w1'],
+        'nested skills found; node_modules/.git skipped; no descent into a skill dir'
+      );
+    } finally {
+      fs.rmSync(WORK_ROOT, { recursive: true, force: true });
+    }
+  });
+
+  console.log('\nBest-effort per-entry — a broken/stale entry is skipped LOUDLY, not fatal to the rest');
+
+  await test('one broken entry (unreachable repo) is skipped; the good entry still installs; return names the skip', async () => {
+    freshWorkRoot();
+    try {
+      const { cloneDir } = makeModuleRepoClone('good', 'modules/good');
+      const projectRoot = path.join(WORK_ROOT, 'project');
+      fs.mkdirSync(projectRoot, { recursive: true });
+      const plugins = [
+        { code: 'good', name: 'good', description: '', repository: cloneDir, moduleDefinition: 'modules/good/module.yaml', approvedTag: null, approvedSha: null },
+        // Points at a nonexistent local path → the real resolveSource clone fails
+        // → this entry is skipped (the exact wds@v0.1.0 stale-tag field scenario).
+        { code: 'broken', name: 'broken', description: '', repository: path.join(WORK_ROOT, 'no-such-repo'), moduleDefinition: null, approvedTag: null, approvedSha: null },
+      ];
+      const result = await stageRegistrySubset({ source: 'reg', plugins, selectedCodes: ['good', 'broken'], projectRoot });
+      assert.deepStrictEqual(result.installedCodes, ['good'], 'only the resolvable entry is installed');
+      assert.strictEqual(result.skipped.length, 1, 'the broken entry is recorded as skipped');
+      assert.strictEqual(result.skipped[0].code, 'broken');
+      assert.ok(result.skipped[0].reason && result.skipped[0].reason.length > 0, 'skip carries a human reason');
+      // the good module actually staged
+      const staged = JSON.parse(fs.readFileSync(path.join(result.stagePath, '.claude-plugin', 'marketplace.json'), 'utf8'));
+      assert.deepStrictEqual(staged.plugins.map((p) => p.name), ['good']);
+    } finally {
+      fs.rmSync(WORK_ROOT, { recursive: true, force: true });
+    }
+  });
+
+  await test('ALL selected entries broken → hard-fail (nothing staged), naming them', async () => {
+    freshWorkRoot();
+    try {
+      const projectRoot = path.join(WORK_ROOT, 'project');
+      fs.mkdirSync(projectRoot, { recursive: true });
+      const plugins = [
+        { code: 'b1', name: 'b1', description: '', repository: path.join(WORK_ROOT, 'nope1'), moduleDefinition: null, approvedTag: null, approvedSha: null },
+        { code: 'b2', name: 'b2', description: '', repository: path.join(WORK_ROOT, 'nope2'), moduleDefinition: null, approvedTag: null, approvedSha: null },
+      ];
+      await assert.rejects(
+        () => stageRegistrySubset({ source: 'reg', plugins, selectedCodes: ['b1', 'b2'], projectRoot }),
+        (err) => err instanceof CustomMarketplaceError && /None of the 2 selected/.test(err.message) && /b1/.test(err.message) && /b2/.test(err.message)
+      );
+    } finally {
+      fs.rmSync(WORK_ROOT, { recursive: true, force: true });
+    }
+  });
+
   console.log('\nFail-clean — malformed index / unreachable repo / zero modules');
 
   await test('malformed index YAML throws a clean CustomMarketplaceError', async () => {
@@ -475,6 +580,8 @@ function makeModuleRepoClone(name, moduleDir) {
               stagePath: path.join(projectRoot, CUSTOM_MARKETPLACE_STAGE_DIR_NAME),
               customSourceArg: `./${CUSTOM_MARKETPLACE_STAGE_DIR_NAME}`,
               resolvedModules: [{ code: 'cool-ext', cloneSha: null }],
+              installedCodes: ['cool-ext'],
+              skipped: [],
             };
           },
           runCommand: () => {},
