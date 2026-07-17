@@ -2,6 +2,15 @@
 
 A universal NPX tool to install AI coding agent skills. Write skills once, install them across Claude Code, Gemini, Copilot, Cline, Cursor, Kilocode, and Roo Code.
 
+## What's New in v3.17.1
+
+- **ma-agents now show up in the Copilot agent picker** — the DevOps (Amit),
+  Cyber (Yael), SQA (Gadi), and SRE (Alex) personas now appear in the GitHub
+  Copilot agent-picker dropdown in VS Code alongside the core BMAD agents.
+  They installed correctly before but were missing the `customize.toml`
+  `[agent]` marker the installer uses to register a persona in the picker;
+  each now ships one.
+
 ## What's New in v3.17.0
 
 - **BMAD-METHOD v6.10.0** — bundled bmad-method updated to v6.10.0. The

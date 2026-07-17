@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.1] - 2026-07-16
+
+### Fixed
+- **ma-agent personas now appear in the IDE agent picker.** The DevOps
+  (Amit), Cyber (Yael), SQA (Gadi), and SRE (Alex) personas installed as
+  skills but never surfaced in the GitHub Copilot agent-picker dropdown in
+  VS Code, while the core BMAD personas (Mary, John, Winston, Amelia, …) did.
+  BMAD's installer emits agent-picker entries (`.github/agents/<id>.agent.md`)
+  only for skills its `agents-only` filter classifies as personas, and that
+  filter keys **solely** off the presence of an `[agent]` section in the
+  skill's `customize.toml` — it does not read the `type: agent` field in
+  `bmad-skill-manifest.yaml`. The four ma-agent skills shipped no
+  `customize.toml`, so the filter skipped them and no picker entry was ever
+  written. Each persona now ships a `customize.toml` with an `[agent]` section
+  (name, title, icon, and persona metadata mirrored from its manifest), and a
+  regression test (`test/ma-agent-persona-picker.test.js`) pins the contract
+  in both the source and generated plugin trees so it cannot silently regress.
+
 ## [3.17.0] - 2026-07-13
 
 BMAD v6.10.0 integration — closed-allowlist bundle safety, an opt-in custom
