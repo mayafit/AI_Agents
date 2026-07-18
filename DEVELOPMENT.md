@@ -15,16 +15,34 @@ node bin/cli.js help
 
 ```
 ma-agents/
-├── bin/cli.js              CLI entry point (wizard, commands, flag parsing)
+├── bin/cli.js                  CLI entry point (wizard, commands, flag parsing)
 ├── lib/
-│   ├── agents.js           Agent configurations (paths, versions, resource maps)
-│   └── installer.js        Core logic (install, uninstall, manifest, status)
-├── skills/                 Bundled skills (one directory per skill)
-├── index.js                Programmatic API exports
-├── SKILLS_STRUCTURE.md     Skill authoring reference
-├── DEVELOPMENT.md          This file
+│   ├── agents.js               Agent configurations (paths, versions, resource maps, injection strategies)
+│   ├── installer.js            Core logic (install, uninstall, manifest, status, instruction-block stamping)
+│   ├── bmad.js                 BMAD-METHOD integration, recompile, persona phase prefix
+│   ├── profile.js              Profile persistence (standard / on-prem)
+│   ├── reconfigure.js          `ma-agents reconfigure` — re-stamp profile-dependent artifacts
+│   ├── uninstall.js            `ma-agents uninstall --profile-artifacts`
+│   ├── merge/                  YAML/JSON mergers (.roomodes slug collision, opencode.json)
+│   ├── templates/              Instruction-block, roomodes, AGENTS.md, clinerules, project-context templates
+│   ├── bmad-cache/             Pre-bundled BMAD external modules — closed allowlist {bmb, cis, gds, tea, wds}
+│   ├── bmad-extension/         Extension source (sprint mgmt, bug tracking, agent skills)
+│   ├── bmad-extension-plugin/  Generated plugin bundle (built from bmad-extension/)
+│   ├── knowledge-atlas/        Knowledge Atlas engine (TS source + committed dist/atlas.cjs)
+│   └── mil498-templates/       MIL-STD-498 DID library
+├── scripts/
+│   ├── build-bmad-cache.js     Rebuilds lib/bmad-cache/ from upstream repos
+│   ├── build-plugin.js         Rebuilds lib/bmad-extension-plugin/
+│   └── build-atlas.js          Rebuilds lib/knowledge-atlas/dist/atlas.cjs
+├── skills/                     Bundled skills (one directory per skill)
+├── test/                       ~100 test files (run via `npm test`)
+├── index.js                    Programmatic API exports
+├── SKILLS_STRUCTURE.md         Skill authoring reference
+├── DEVELOPMENT.md              This file
 └── package.json
 ```
+
+> **Build outputs are committed.** `lib/bmad-extension-plugin/` and `lib/knowledge-atlas/dist/atlas.cjs` are generated but checked in. Rebuild and commit them after changing their sources — the `prepare` and `version` npm hooks regenerate both, and CI enforces bundle freshness with a drift check.
 
 ## Versioning (Semver)
 
@@ -103,9 +121,9 @@ The installer writes `.ma-agents.json` into each agent's install directory to tr
   "skills": {
     "code-review": {
       "version": "1.0.0",
-      "installedAt": "2026-02-17T12:34:56Z",
-      "updatedAt": "2026-02-17T12:34:56Z",
-      "installerVersion": "1.4.0",
+      "installedAt": "2026-07-16T12:34:56Z",
+      "updatedAt": "2026-07-16T12:34:56Z",
+      "installerVersion": "3.17.1",
       "agentVersion": "1.0.0"
     }
   }
@@ -119,8 +137,12 @@ Do not edit manifests manually. Use `npx ma-agents status` to view and `npx ma-a
 Before running `npm publish`:
 
 - [ ] Package version bumped in `package.json`
+- [ ] `CHANGELOG.md` and the README "What's New" section updated for the new version
 - [ ] Skill versions bumped for any changed skills
 - [ ] Agent versions bumped for any changed agent configs
+- [ ] `npm test` — full suite passes (~100 test files)
+- [ ] `npm run build:plugin` — plugin bundle regenerated and committed if `lib/bmad-extension/` changed
+- [ ] `npm run build:atlas` — atlas bundle regenerated and committed if `lib/knowledge-atlas/src/` changed
 - [ ] `node bin/cli.js list` — all skills appear
 - [ ] `node bin/cli.js agents` — all agents appear
 - [ ] Test fresh install: `node bin/cli.js install code-review claude-code --force`
@@ -134,15 +156,19 @@ Before running `npm publish`:
 
 Use [Conventional Commits](https://www.conventionalcommits.org/):
 
+Allowed prefixes: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`.
+
 ```
 feat: add new skill for API testing
 fix: correct Cline resource mapping for docs/
 chore: bump code-review skill to v1.0.1
 docs: update SKILLS_STRUCTURE.md with hooks directory
 refactor: extract manifest logic into separate module
+test: add coverage for --agent scoping
+ci: add offline-install gate
 ```
 
-**Scopes** (optional): `cli`, `installer`, `agents`, `skills`, `docs`
+**Scopes** (optional): `cli`, `installer`, `agents`, `skills`, `docs`, `bmad`, `copilot`
 
 ```
 feat(cli): add status command
@@ -153,6 +179,9 @@ feat(skills): add vercel-react-best-practices skill
 ## Testing Locally
 
 ```bash
+# Run the full automated test suite (~100 files) — always run before publishing
+npm test
+
 # Run CLI directly
 node bin/cli.js
 

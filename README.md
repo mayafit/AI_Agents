@@ -1,6 +1,6 @@
 # ma-agents
 
-A universal NPX tool to install AI coding agent skills. Write skills once, install them across Claude Code, Gemini, Copilot, Cline, Cursor, Kilocode, and Roo Code.
+A universal NPX tool to install AI coding agent skills. Write skills once, install them across Claude Code, Gemini, Copilot, Cline, Cursor, Kilocode, Roo Code, Antigravity, and OpenCode.
 
 ## What's New in v3.17.1
 
@@ -176,7 +176,7 @@ To remove all on-prem profile artifacts: `npx ma-agents uninstall --profile-arti
 | `AGENTS.md` | Same block for OpenCode |
 | `opencode.json` | Additive entry in `instructions[]` array |
 | `.roomodes` | 4 BMAD planning modes with `fileRegex` phase enforcement |
-| Deployed `bmad-agent-*/SKILL.md` (across `.claude/skills/`, `.cline/skills/`, `.github/skills/`, `.roo/skills/`, `.kilocode/skills/`) | Per-persona phase prefix injected via marker block: planning personas get `/no_think`; dev personas get careful-coding prefix |
+| Deployed `bmad-agent-*/SKILL.md` (across `.claude/skills/`, `.cline/skills/`, and the unified `.agents/skills/` tree used by Copilot, Kilocode, and Roo Code) | Per-persona phase prefix injected via marker block: planning personas get `/no_think`; dev personas get careful-coding prefix |
 
 The standard profile stamps the universal block only (no `/no_think`, no `str_replace_editor` prohibition, no home-dir restriction).
 
@@ -194,11 +194,13 @@ Skills can be installed into any of these AI coding agents:
 | Google Gemini | `.gemini/skills/` | `generic` | `.gemini/gemini.md` |
 | GitHub Copilot | `.agents/skills/` | `generic` | `.github/copilot-instructions.md` |
 | Cursor | `.cursor/skills/` | `generic` | `.cursor/cursor.md` |
-| Kilocode | `.kilocode/skills/` | `generic` | `.kilocode/kilocode.md` |
+| Kilocode | `.agents/skills/` | `generic` | `.kilocode/kilocode.md` |
 | Cline | `.cline/skills/` | `cline` | `.cline/clinerules.md` |
-| Roo Code | `.roo/skills/` | `generic` | `.roo/rules/00-ma-agents.md` |
-| Antigravity | `_bmad/skills/` | `generic` | `_bmad/bmm/agents/antigravity.md` |
+| Roo Code | `.agents/skills/` | `generic` | `.roo/rules/00-ma-agents.md` |
+| Antigravity | `.antigravity/skills/` | `generic` | `.antigravity/antigravity.md` |
 | OpenCode | `.opencode/skills/` | `generic` | `opencode.json` |
+
+> **Copilot, Kilocode, and Roo Code share the unified `.agents/skills/` tree** — `bmad-method 6.5.0` moved these three platforms out of their old tool-specific directories. Each still keeps its own instruction file.
 
 ## Specialized BMAD Agents
 
@@ -226,10 +228,17 @@ These skills are installed into your coding tool of choice and provide reusable 
 | `test-generator` | Testing | Generates comprehensive unit and integration tests |
 | `test-accompanied-development` | Quality | Enforces "test-alongside" policy for every public method |
 | `code-documentation` | Quality | Enforces PEP 257, Doxygen, JSDoc, and XML standards |
+| `auto-bug-detection` | Quality | Identifies and reports defects in already-delivered code |
 | `skill-creator` | Meta | Guide for creating new skills to extend agent capabilities |
 | `document-revision-history` | Documentation | Manages revision history tables at the beginning of generated documents |
 | `ai-audit-trail` | Audit | Tracks AI agent session activity, time spent, and token usage |
+| `story-status-lookup` | Methodology | Classifies code as delivered or WIP by looking up story status in `sprint-status.yaml` |
+| `bmad-knowledge` | Documentation | Generates a self-contained Knowledge Atlas HTML site from planning and implementation artifacts |
 | `open-presentation` | Methodology | Opens the BMAD-METHOD AI Development Training presentation (`/open-presentation`) |
+| **Language Best Practices** | | |
+| `cpp-best-practices` | C++ | Naming, modern C++17/20/23 idioms, error handling, and build guidance |
+| `csharp-best-practices` | C# | Modern C# (10–12): async/await, LINQ, DI, nullable reference types, testing |
+| `python-best-practices` | Python | PEP 8, type hints (3.10+), modern patterns, async, and packaging |
 | **Security** | | |
 | `python-security-skill` | Python | OWASP Top 10 2025 aligned guardrails for Python |
 | `js-ts-security-skill` | JS/TS | Security verification for JS/TS codebases (OWASP aligned) |
@@ -260,7 +269,7 @@ These workflows are installed as part of the BMAD agent system and are invoked t
 
 | Workflow | Agent | Description |
 | :--- | :--- | :--- |
-| **Machine Learning (Demerzel)** | | |
+| **Machine Learning (Demerzel) — DEPRECATED, not installed by default (v3.17.0+)** | | |
 | `ml-ideation` | ML Scientist | Frame ML research problem, produce Research Thesis and PRD |
 | `ml-eda` | ML Scientist | Exploratory Data Analysis, establish baselines, produce EDA report |
 | `ml-architecture` | ML Scientist | Model architecture, stack, and experiment tracking strategy |
@@ -339,7 +348,7 @@ Running `ma-agents` on a project where skills are already installed triggers the
    - Re-injects the latest instructions into `CLAUDE.md`, `.clinerules`, etc.
    - Regenerates the `MANIFEST.yaml` to reflect the current skill set.
    - Updates BMAD-METHOD personas and workflows to the latest versions if detected.
-   - **Cleans up stale tool directories** — if a tool's skill path changed between releases (e.g., Copilot migrated from `.github/copilot/skills/` to `.github/skills/`), the old directory is automatically removed when the new one has content.
+   - **Cleans up stale tool directories** — if a tool's skill path changed between releases (e.g., Copilot migrated from `.github/copilot/skills/` to the unified `.agents/skills/`), the old directory is automatically removed when the new one has content.
 
 ### BMAD-METHOD Integration
 `ma-agents` bundles [BMAD-METHOD](https://docs.bmad-method.org/) **v6.10.0** to provide advanced orchestration and specialized personas.
@@ -563,6 +572,7 @@ npx ma-agents install code-review claude-code --force
 | `--force` | Skip upgrade prompts, always overwrite existing installations. |
 | `--global` | Install to global/user-level paths instead of project-level. |
 | `--path <dir>` | Custom installation directory. |
+| `--bmad-custom-source <path\|url>` | Pull additional BMAD extensions from one custom marketplace source (local path or intra-perimeter Git URL). Under `--yes`, every declared extension is selected. See [Custom Marketplace Source](#custom-marketplace-source-opt-in). |
 | `--log` | Log all console output to `install_<datetime>.log` in the current directory. |
 
 ## Requirements
@@ -739,17 +749,19 @@ ma-agents/
 │   │   ├── clinerules.template.md                    # .clinerules expansion for Cline
 │   │   └── project-context.template.md               # project-context.md generation template
 │   ├── bmad-customize/         # Source-of-truth: per-persona phase / on_prem_phase_prefix YAML (consumed by the post-install marker-block injector)
-│   ├── bmad-cache/             # Pre-bundled BMAD external modules (bmb, cis, gds, tea)
+│   ├── bmad-cache/             # Pre-bundled BMAD external modules — closed allowlist {bmb, cis, gds, tea, wds}
 │   ├── bmad-customizations/    # BMAD persona templates (.md) and YAML configs
 │   ├── bmad-extension/         # Extension source: sprint management, bug tracking, agent skills (hand-edited)
 │   ├── bmad-extension-plugin/  # Generated plugin bundle (deterministic; built from bmad-extension/ via scripts/build-plugin.js)
 │   ├── bmad-workflows/         # Specialized BMAD playbooks (SRE, Cyber, etc.)
+│   ├── knowledge-atlas/        # Knowledge Atlas engine (TS source + committed esbuild bundle dist/atlas.cjs)
 │   └── mil498-templates/       # MIL-STD-498 DID library (SRS, SSS, SSDD, etc.)
 ├── scripts/
 │   ├── build-bmad-cache.js     # Rebuilds lib/bmad-cache/ from upstream repos
-│   └── build-plugin.js         # Rebuilds lib/bmad-extension-plugin/ from lib/bmad-extension/ (run on `npm run build:plugin` and via the prepare hook)
-├── skills/
-│   ├── code-review/            # 27 bundled skills across 5 domains
+│   ├── build-plugin.js         # Rebuilds lib/bmad-extension-plugin/ from lib/bmad-extension/ (run on `npm run build:plugin` and via the prepare hook)
+│   └── build-atlas.js          # Rebuilds lib/knowledge-atlas/dist/atlas.cjs (run on `npm run build:atlas` and via the prepare hook)
+├── skills/                     # 45 bundled skills (34 general-purpose + 11 sprint-management workflows)
+│   ├── code-review/
 │   ├── commit-message/
 │   ├── create-hardened-docker-skill/
 │   ├── git-workflow-skill/
@@ -758,7 +770,7 @@ ma-agents/
 │   ├── test-generator/
 │   ├── vercel-react-best-practices/
 │   └── verify-hardened-docker-skill/
-├── test/
+├── test/                       # ~100 test files (run via `npm test`); one shown
 │   └── yes-flag.test.js        # Tests for --yes / --agent flag behavior
 ├── docs/
 │   └── validation/             # Manual validation reports (e.g., bundled install)

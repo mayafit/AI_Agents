@@ -178,10 +178,10 @@ Gemini CLI follows the same SKILL.md specification as Claude Code. Skills are pl
 
 ### GitHub Copilot
 
-**Install path:** `.github/copilot/skills/<skill-name>/`
+**Install path:** `.agents/skills/<skill-name>/`
 
 ```
-.github/copilot/skills/
+.agents/skills/
 └── my-skill/
     ├── SKILL.md              ← Instructions with injected frontmatter
     ├── scripts/              ← Executable scripts (if exists)
@@ -189,7 +189,7 @@ Gemini CLI follows the same SKILL.md specification as Claude Code. Skills are pl
     └── examples/             ← Sample outputs (if exists)
 ```
 
-Copilot uses the same SKILL.md specification (YAML frontmatter + Markdown). Copilot also supports path-scoped instructions via `.github/instructions/*.instructions.md` files with `applyTo` glob patterns.
+Copilot uses the same SKILL.md specification (YAML frontmatter + Markdown). Since `bmad-method 6.5.0`, Copilot, Kilocode, and Roo Code all write to the shared `.agents/skills/` tree (the old `.github/copilot/skills/` path is migrated away automatically). Copilot's skill-bootstrap instructions live in `.github/copilot-instructions.md` — the only repository custom-instructions file it reads. Copilot also supports path-scoped instructions via `.github/instructions/*.instructions.md` files with `applyTo` glob patterns.
 
 ### Cursor
 
@@ -234,17 +234,59 @@ Cline loads skills from `.cline/skills/` using a progressive three-level system:
 
 ### Kilocode
 
-**Install path:** `.kilocode/skills/<skill-name>/`
+**Install path:** `.agents/skills/<skill-name>/`
 
 ```
-.kilocode/skills/
+.agents/skills/
 └── my-skill/
     ├── SKILL.md              ← Instructions with injected frontmatter
     ├── scripts/              ← Executable scripts (if exists)
     └── references/           ← Static documentation (if exists)
 ```
 
-Kilocode natively uses `.kilocode/rules/` for generic rules and `.kilocode/rules-<mode>/` for mode-specific rules. The installer places skills in `.kilocode/skills/` using the standard folder structure. Kilocode also reads `.clinerules` as a fallback.
+Kilocode natively uses `.kilocode/rules/` for generic rules and `.kilocode/rules-<mode>/` for mode-specific rules. Since `bmad-method 6.5.0`, the installer places Kilocode skills in the shared `.agents/skills/` tree (alongside Copilot and Roo Code); its instruction file remains `.kilocode/kilocode.md`. Kilocode also reads `.clinerules` as a fallback.
+
+### Roo Code
+
+**Install path:** `.agents/skills/<skill-name>/`
+
+```
+.agents/skills/
+└── my-skill/
+    ├── SKILL.md              ← Instructions with injected frontmatter
+    ├── scripts/              ← Executable scripts (if exists)
+    └── references/           ← Static documentation (if exists)
+```
+
+Roo Code (an enhanced Cline fork) uses the shared `.agents/skills/` tree since `bmad-method 6.5.0`. Its instruction file is `.roo/rules/00-ma-agents.md`, and the installer additionally stamps a `.roomodes` file at the project root with 4 BMAD planning modes whose `fileRegex` restrictions gate planning-phase edits at the IDE layer.
+
+### Antigravity
+
+**Install path:** `.antigravity/skills/<skill-name>/`
+
+```
+.antigravity/skills/
+└── my-skill/
+    ├── SKILL.md              ← Instructions with injected frontmatter
+    ├── scripts/              ← Executable scripts (if exists)
+    └── references/           ← Static documentation (if exists)
+```
+
+Antigravity (Google DeepMind) uses the standard folder structure under `.antigravity/skills/`; its instruction file is `.antigravity/antigravity.md`.
+
+### OpenCode
+
+**Install path:** `.opencode/skills/<skill-name>/`
+
+```
+.opencode/skills/
+└── my-skill/
+    ├── SKILL.md              ← Instructions with injected frontmatter
+    ├── scripts/              ← Executable scripts (if exists)
+    └── references/           ← Static documentation (if exists)
+```
+
+OpenCode uses the standard folder structure under `.opencode/skills/`. Instead of a single Markdown instruction file, OpenCode reads an `AGENTS.md` at the project root (stamped between markers) that is registered via an additive entry in the `instructions[]` array of `opencode.json`.
 
 ---
 
@@ -357,6 +399,9 @@ Each agent has a `template` ID that determines which instruction file the instal
 | Cursor         | `generic`      | `generic.md` → `SKILL.md`                     |
 | Cline          | `cline`        | `cline.md` → `generic.md` → `SKILL.md`        |
 | Kilocode       | `generic`      | `generic.md` → `SKILL.md`                     |
+| Roo Code       | `generic`      | `generic.md` → `SKILL.md`                     |
+| Antigravity    | `generic`      | `generic.md` → `SKILL.md`                     |
+| OpenCode       | `generic`      | `generic.md` → `SKILL.md`                     |
 
 ---
 
@@ -368,10 +413,15 @@ Default installation is **project-level** (relative to where `npx ma-agents` is 
 |----------------|---------------------------------------|----------------------------------------------------------|
 | Claude Code    | `.claude/skills/`                     | `~/AppData/Roaming/Claude/skills/` (Win)                 |
 | Google Gemini  | `.gemini/skills/`                     | `~/AppData/Roaming/Gemini/skills/` (Win)                 |
-| GitHub Copilot | `.github/copilot/skills/`            | `~/AppData/Roaming/GitHub Copilot/skills/` (Win)         |
+| GitHub Copilot | `.agents/skills/`                     | `~/AppData/Roaming/GitHub Copilot/skills/` (Win)         |
 | Cursor         | `.cursor/skills/`                     | `~/AppData/Roaming/Cursor/User/skills/` (Win)            |
 | Cline          | `.cline/skills/`                      | `~/AppData/.../saoudrizwan.claude-dev/skills/` (Win)     |
-| Kilocode       | `.kilocode/skills/`                   | `~/AppData/Roaming/Kilocode/skills/` (Win)               |
+| Kilocode       | `.agents/skills/`                     | `~/AppData/Roaming/Kilocode/skills/` (Win)               |
+| Roo Code       | `.agents/skills/`                     | `~/AppData/.../rooveterinaryinc.roo-cline/skills/` (Win) |
+| Antigravity    | `.antigravity/skills/`                | `~/AppData/Roaming/Antigravity/skills/` (Win)            |
+| OpenCode       | `.opencode/skills/`                   | `~/AppData/Roaming/opencode/skills/` (Win)               |
+
+> Copilot, Kilocode, and Roo Code share the unified `.agents/skills/` project tree (since `bmad-method 6.5.0`).
 
 Use `--global` flag to install to user-level paths instead:
 ```bash

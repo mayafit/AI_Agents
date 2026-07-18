@@ -31,6 +31,9 @@ npx ma-agents
    - Kilocode
    - Cline
    - Cursor
+   - Roo Code
+   - Antigravity
+   - OpenCode
 
 5. **Choose installation path:**
    - Press Enter for default path
@@ -73,7 +76,7 @@ After installation, use the skills in your AI agent:
 
 **Claude Code:**
 ```bash
-claude-code
+claude
 > /code-review
 ```
 
@@ -124,8 +127,9 @@ Want to add your own skills or agents?
      id: 'my-agent',
      name: 'My Agent',
      description: 'My AI Agent',
-     getSkillsPath: () => {
-       // Return path based on OS
+     getProjectPath: () => path.join(process.cwd(), '.my-agent', 'skills'),
+     getGlobalPath: () => {
+       // Return global path based on OS (win32 / darwin / linux)
      },
      fileExtension: '.md',
      template: 'generic'
