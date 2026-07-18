@@ -33,7 +33,12 @@ function test(name, fn) {
   }
 }
 
-const { normalizeModuleOutputFolders, correctArtifactPath } = require('../lib/bmad');
+const {
+  normalizeModuleOutputFolders,
+  correctArtifactPath,
+  pruneOrphanedArtifactDirs,
+  dirIsFileless,
+} = require('../lib/bmad');
 
 function mktemp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-27-14-'));
@@ -202,6 +207,92 @@ test('no-op when config.toml absent', () => {
 test('invalid projectRoot is a no-op', () => {
   assert.strictEqual(normalizeModuleOutputFolders(undefined), 0);
   assert.strictEqual(normalizeModuleOutputFolders(''), 0);
+});
+
+// ── orphaned-directory cleanup (the missing half of the 27.14 work-around) ────
+
+// Reproduces the physical residue upstream leaves behind: it creates the
+// contaminated directories BEFORE ma-agents rewrites the config, so empty
+// `skills/planning-artifacts` + `skills/implementation-artifacts` dirs remain.
+function createContaminatedDirs(dir) {
+  fs.mkdirSync(path.join(dir, 'skills', 'planning-artifacts'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'skills', 'implementation-artifacts'), { recursive: true });
+}
+
+test('dirIsFileless: true for an empty tree, false once a file appears', () => {
+  const dir = mktemp();
+  try {
+    const empty = path.join(dir, 'a', 'b');
+    fs.mkdirSync(empty, { recursive: true });
+    assert.strictEqual(dirIsFileless(path.join(dir, 'a')), true);
+    fs.writeFileSync(path.join(empty, 'note.md'), 'x', 'utf-8');
+    assert.strictEqual(dirIsFileless(path.join(dir, 'a')), false);
+    assert.strictEqual(dirIsFileless(path.join(dir, 'missing')), false);
+  } finally { cleanup(dir); }
+});
+
+test('normalization prunes the orphaned skills/ artifact dirs', () => {
+  const dir = mktemp();
+  try {
+    writeContaminatedProject(dir, '_bmad-output');
+    createContaminatedDirs(dir);
+    normalizeModuleOutputFolders(dir);
+    assert.ok(!fs.existsSync(path.join(dir, 'skills', 'planning-artifacts')),
+      'orphaned skills/planning-artifacts must be removed');
+    assert.ok(!fs.existsSync(path.join(dir, 'skills', 'implementation-artifacts')),
+      'orphaned skills/implementation-artifacts must be removed');
+    assert.ok(!fs.existsSync(path.join(dir, 'skills')),
+      'now-empty skills/ container must be pruned too');
+  } finally { cleanup(dir); }
+});
+
+test('cleanup NEVER deletes a directory that holds real content', () => {
+  const dir = mktemp();
+  try {
+    writeContaminatedProject(dir, '_bmad-output');
+    createContaminatedDirs(dir);
+    // bmb legitimately owns skills/ — simulate a real artifact already written.
+    fs.mkdirSync(path.join(dir, 'skills', 'reports'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'skills', 'reports', 'r.md'), 'keep me', 'utf-8');
+    normalizeModuleOutputFolders(dir);
+    assert.ok(fs.existsSync(path.join(dir, 'skills', 'reports', 'r.md')),
+      'real content under skills/ must survive');
+    assert.ok(fs.existsSync(path.join(dir, 'skills')),
+      'skills/ must remain because it still holds content');
+    // The empty orphans are still pruned even though skills/ survives.
+    assert.ok(!fs.existsSync(path.join(dir, 'skills', 'planning-artifacts')),
+      'empty orphan still removed alongside surviving content');
+  } finally { cleanup(dir); }
+});
+
+test('cleanup never touches the canonical output folder', () => {
+  const dir = mktemp();
+  try {
+    // Orphan list references the canonical folder — must be ignored outright.
+    fs.mkdirSync(path.join(dir, '_bmad-output', 'planning-artifacts'), { recursive: true });
+    const removed = pruneOrphanedArtifactDirs(dir, '_bmad-output', new Set(['_bmad-output/planning-artifacts']));
+    assert.strictEqual(removed, 0, 'canonical output folder must never be pruned');
+    assert.ok(fs.existsSync(path.join(dir, '_bmad-output', 'planning-artifacts')));
+  } finally { cleanup(dir); }
+});
+
+test('cleanup stays inside the project root (no traversal)', () => {
+  const dir = mktemp();
+  try {
+    const removed = pruneOrphanedArtifactDirs(dir, '_bmad-output', new Set(['../escape', '/abs/escape']));
+    assert.strictEqual(removed, 0, 'paths escaping the project root must be ignored');
+  } finally { cleanup(dir); }
+});
+
+test('idempotent: a second full pass prunes nothing (dirs already gone)', () => {
+  const dir = mktemp();
+  try {
+    writeContaminatedProject(dir, '_bmad-output');
+    createContaminatedDirs(dir);
+    normalizeModuleOutputFolders(dir);
+    // Second pass must be a clean no-op and must not throw.
+    assert.strictEqual(normalizeModuleOutputFolders(dir), 0);
+  } finally { cleanup(dir); }
 });
 
 console.log(`\n  ${passed} passed, ${failed} failed\n`);
