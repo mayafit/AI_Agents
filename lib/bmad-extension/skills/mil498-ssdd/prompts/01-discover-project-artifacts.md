@@ -4,8 +4,8 @@ Search the project for the following artifacts. Communicate in {communication_la
 
 | Priority | Artifact | Search Pattern |
 |----------|----------|----------------|
-| Required | PRD | `**/prd.md`, `**/prd-*.md` |
-| Required | Architecture | `**/architecture.md`, `**/architecture-*.md` |
+| Required | PRD | `**/prd.md`, `**/prd-*.md`, `**/prd/**/*.md` |
+| Required | Architecture | `**/architecture.md`, `**/architecture-*.md`, `**/architecture/**/*.md` |
 | Recommended | Product Brief | `**/product-brief*.md` |
 | Recommended | SSS | `**/SSS.md` |
 | Optional | UX Designs | `**/ux-design*.md`, `**/ux-*.md` |
