@@ -43,8 +43,8 @@ Load the following artifacts. Note their presence or absence — missing artifac
 
 | Artifact | Standard Relevance | Path |
 |----------|-------------------|------|
-| PRD / stakeholder needs | Requirements Definition (6.4.2) | `{output_folder}/planning-artifacts/prd.md` |
-| Architecture document | Architecture Definition (6.4.4) | `{output_folder}/planning-artifacts/architecture.md` |
+| PRD / stakeholder needs | Requirements Definition (6.4.2) | `{output_folder}/planning-artifacts/prd.md` (+ `prd/**/*.md` if sharded) |
+| Architecture document | Architecture Definition (6.4.4) | `{output_folder}/planning-artifacts/architecture.md` (+ `architecture/**/*.md` if sharded) |
 | Epics & stories | Requirements traceability (6.4.2, 6.4.3) | `{output_folder}/planning-artifacts/epics.md` |
 | Sprint status | Project Planning (6.3.1), Implementation (6.4.7) | `{output_folder}/implementation-artifacts/sprint-status.yaml` |
 | Test artifacts | Verification (6.4.9), Validation (6.4.10) | Any `*.test.*`, `tests/`, `spec/` files |

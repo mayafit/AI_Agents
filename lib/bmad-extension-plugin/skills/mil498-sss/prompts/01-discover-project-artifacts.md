@@ -5,8 +5,8 @@ Search the project for the following artifacts. Communicate in {communication_la
 | Priority | Artifact | Search Pattern |
 |----------|----------|----------------|
 | Required | Product Brief | `**/product-brief*.md` |
-| Required | PRD | `**/prd.md`, `**/prd-*.md` |
-| Recommended | Architecture | `**/architecture.md`, `**/architecture-*.md` |
+| Required | PRD | `**/prd.md`, `**/prd-*.md`, `**/prd/**/*.md` |
+| Recommended | Architecture | `**/architecture.md`, `**/architecture-*.md`, `**/architecture/**/*.md` |
 | Optional | OCD | `**/OCD.md` |
 | Optional | UX Designs | `**/ux-design*.md` |
 
