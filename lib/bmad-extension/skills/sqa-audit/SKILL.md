@@ -40,8 +40,12 @@ Before running any audit dimension, collect the following project artifacts:
 
 ### Required reads
 - `{project-root}/_bmad/bmm/config.yaml` — resolve {output_folder}
-- `{output_folder}/planning-artifacts/prd.md` — product requirements (if exists)
-- `{output_folder}/planning-artifacts/architecture.md` — architecture doc (if exists)
+- `{output_folder}/planning-artifacts/prd.md` — product requirements (if exists).
+  If this file is an INDEX for a sharded PRD, also read `{output_folder}/planning-artifacts/prd/**/*.md`
+  (capability shards) — the index alone carries no requirement text.
+- `{output_folder}/planning-artifacts/architecture.md` — architecture doc (if exists).
+  If this file is an INDEX for a sharded architecture, also read
+  `{output_folder}/planning-artifacts/architecture/**/*.md`.
 - `{output_folder}/planning-artifacts/epics.md` — epics (if exists)
 - `{output_folder}/implementation-artifacts/sprint-status.yaml` — sprint and backlog state
 

@@ -62,7 +62,7 @@ Load the selected documents. Note presence or absence — missing documents resu
 
 | Source | Path |
 |--------|------|
-| PRD | `{output_folder}/planning-artifacts/prd.md` |
+| PRD | `{output_folder}/planning-artifacts/prd.md` — plus `{output_folder}/planning-artifacts/prd/**/*.md` when that file is a shard index |
 | Epics & Stories | `{output_folder}/planning-artifacts/epics.md` |
 
 Inform the user which documents were found and which were missing before proceeding.

@@ -5,9 +5,9 @@ Search the project for the following artifacts. Communicate in {communication_la
 | Priority | Artifact | Search Pattern |
 |----------|----------|----------------|
 | Required | Epics & Stories | `**/epics*.md`, `**/epic-*.md`, `**/stories/*.md` |
-| Required | Architecture | `**/architecture.md`, `**/architecture-*.md` |
+| Required | Architecture | `**/architecture.md`, `**/architecture-*.md`, `**/architecture/**/*.md` |
 | Recommended | SRS | `**/SRS.md` |
-| Recommended | PRD | `**/prd.md`, `**/prd-*.md` |
+| Recommended | PRD | `**/prd.md`, `**/prd-*.md`, `**/prd/**/*.md` |
 | Optional | Existing test files | `**/test/**`, `**/tests/**`, `**/__tests__/**`, `**/*.test.*`, `**/*.spec.*` |
 
 If **required** artifacts are missing, warn the user and ask whether to proceed with available data or stop.
