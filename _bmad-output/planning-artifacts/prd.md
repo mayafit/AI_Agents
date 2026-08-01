@@ -35,7 +35,7 @@ classification:
 > `prd/capabilities/X.md` and `architecture/decisions/X.md` — same filename, both sides of the
 > contract.
 
-**Totals:** 264 FR definitions covering **263 distinct IDs** (high-water mark FR265; FR35 is
+**Totals:** 265 FR definitions covering **264 distinct IDs** (high-water mark FR266; FR35 is
 defined twice — Known Issues #1) · 83 NFRs, all distinct (high-water mark NFR83) · 11
 capability domains covering the PRD's 26 declared capability areas. Every ID except FR35
 appears in exactly one file.
@@ -45,9 +45,70 @@ spans two capability files: the install-scope thread lives in
 [bmad-integration-and-bundling](prd/capabilities/bmad-integration-and-bundling.md)
 (FR248–FR253, NFR76–NFR78) and the knowledge-store / Confluence thread in
 [project-knowledge-and-repository-layout](prd/capabilities/project-knowledge-and-repository-layout.md)
-(FR254–FR265, NFR79–NFR83). It supersedes FR111 and FR117.
+(FR254–FR266, NFR79–NFR83). It supersedes FR111 and FR117.
 
 ---
+
+## F26 — thesis, glossary and open items
+
+F26 spans two capability files, so its scope story lives here.
+
+**Thesis.** *Where a project's knowledge lives is a property of the project, not of the machine
+it was installed on and not of the install scope.* Every F26 requirement follows from that: the
+bindings become committed rather than per-machine (FR263), the per-machine config becomes a
+generated artifact (FR264), a globally installed skill resolves knowledge from the project root
+alone (NFR83), and install scope stops dictating knowledge location (FR251, FR252).
+
+**Glossary.** F26 introduces five terms; *store* and *backend* are overloaded words elsewhere in
+software, so they are pinned here.
+
+| Term | Definition |
+|---|---|
+| **store** | A named, independently located collection of planning artifacts. F26 defines exactly two: system requirements and software requirements. A store is not a repository and not a directory — it is a binding of a set of artifacts to a location and a backend |
+| **system requirements store** | The store holding what the system must do independently of how it is built: product brief and PRD (FR255) |
+| **software requirements store** | The store holding how the system is built: architecture, UX designs, epics (FR256) |
+| **backend** | The mechanism through which a store's artifacts are read and written — `file-system` or `confluence` (FR257). Each store chooses its own |
+| **binding** | The recorded association of one store to its backend and location, persisted in `_bmad-output/project-layout.yaml` (FR263) |
+| **project-bind step** | The per-project operation that collects project-scoped answers and writes the bindings, for use when ma-agents was installed globally (FR252) |
+
+**Assumptions.** Inferred during the update, not directly confirmed:
+
+- `[ASSUMPTION]` The sprint-management question (FR112) stays a **third, separate** question and
+  is not folded into either store. F26 was described as splitting *knowledge*; sprint state is
+  tracked separately today and is left that way.
+- `[ASSUMPTION]` `implementation_artifacts` (story files) is **not** a third store — see Open
+  Items #1, which is unresolved and blocks epic creation.
+- `[ASSUMPTION]` One Confluence space per store is sufficient; a store does not need to span
+  spaces.
+- `[ASSUMPTION]` The two stores are the right cut. If a project wants brief and PRD in different
+  places, F26 does not support that.
+
+**Non-goals for F26.** Excluded deliberately, so downstream work does not assume them:
+
+- `[NON-GOAL]` Bidirectional Confluence sync with conflict resolution. FR266 establishes a local
+  mirror and requires divergence to be *reported*; reconciliation is out of scope
+- `[NON-GOAL]` Per-artifact Confluence page templates or enforced page hierarchy beyond the root
+  page of FR260
+- `[NON-GOAL]` Migrating existing projects automatically. FR265 offers migration; it never
+  performs it unprompted
+- `[NON-GOAL]` A store spanning multiple Confluence spaces, or more than two stores
+- `[NON-GOAL]` Any backend other than `file-system` and `confluence` (no SharePoint, Notion, Git
+  wiki)
+
+**Open items.** Four, ordered by how much they block:
+
+1. **`[NOTE FOR PM]` Where do `implementation_artifacts` (story files) live?** The split names
+   brief+PRD and architecture+UX+epics. Stories are neither, and
+   `implementation_artifacts` is a distinct config field today, separate from
+   `sprint_management_path`. Unresolved this becomes a blocking question during epic creation —
+   **needs an answer before `bmad-create-epics-and-stories`**
+2. **`[NOTE FOR PM]` FR250 spike outcome** gates how much of the global-install thread is
+   deliverable. If bmad-method v6.10.0 cannot install user-level, FR249 shrinks to its
+   degradation path
+3. **`[NOTE FOR PM]` Mirror synchronisation semantics** (FR266) — direction, trigger, conflict
+   handling. Deliberately deferred to Architecture Decision P5-9
+4. **`[NOTE FOR PM]` Confluence page structure** — which artifact becomes which child page under
+   the root page. Deferred to P5-9
 
 ## Capability register
 
@@ -59,7 +120,7 @@ spans two capability files: the install-scope thread lives in
 | [agent-personas-and-ide-targets.md](prd/capabilities/agent-personas-and-ide-targets.md) | F6 Specialized Agent Personas · F14 OpenCode Support · F22 Cline Workflow Generation | 9 | — | [agent-personas-and-ide-targets.md](architecture/decisions/agent-personas-and-ide-targets.md) |
 | [methodology-and-sdlc-workflows.md](prd/capabilities/methodology-and-sdlc-workflows.md) | F7 MIL-STD-498 · F8 SDLC Workflows · F9 Bug Management · F16 Methodology Onboarding | 27 | — | — |
 | [sprint-and-backlog-management.md](prd/capabilities/sprint-and-backlog-management.md) | F10 Sprint & Backlog Management | 20 | **none** | [sprint-and-backlog-management.md](architecture/decisions/sprint-and-backlog-management.md) |
-| [project-knowledge-and-repository-layout.md](prd/capabilities/project-knowledge-and-repository-layout.md) | F11 Project Knowledge & Context · F12 Multi-Repository Layout · **F26** (knowledge stores, Confluence) | 34 | NFR22–25, 34–37, 79–83 | [project-knowledge-and-repository-layout.md](architecture/decisions/project-knowledge-and-repository-layout.md) |
+| [project-knowledge-and-repository-layout.md](prd/capabilities/project-knowledge-and-repository-layout.md) | F11 Project Knowledge & Context · F12 Multi-Repository Layout · **F26** (knowledge stores, Confluence) | 35 | NFR22–25, 34–37, 79–83 | [project-knowledge-and-repository-layout.md](architecture/decisions/project-knowledge-and-repository-layout.md) |
 | [agent-activity-dashboard.md](prd/capabilities/agent-activity-dashboard.md) | F13 Agent Activity Dashboard | 7 | NFR26–28 | — |
 | [knowledge-graph-and-atlas.md](prd/capabilities/knowledge-graph-and-atlas.md) | F17 Knowledge Graph + Knowledge Atlas | 37 | NFR38–41, 60–69 | [knowledge-graph-and-atlas.md](architecture/decisions/knowledge-graph-and-atlas.md) |
 | [quality-assurance.md](prd/capabilities/quality-assurance.md) | F18 Software Quality Assurance (SQA) | 14 | NFR42–43 | [quality-assurance.md](architecture/decisions/quality-assurance.md) |
@@ -95,7 +156,7 @@ exact and machine-derived from the shard contents (no approximation, no "partial
 | FR13–FR33, FR60–FR64, FR72 | [methodology-and-sdlc-workflows](prd/capabilities/methodology-and-sdlc-workflows.md) | 27 |
 | FR35, FR42, FR56–FR57, FR199–FR203 | [agent-personas-and-ide-targets](prd/capabilities/agent-personas-and-ide-targets.md) | 9 |
 | FR65–FR71, FR128–FR140 | [sprint-and-backlog-management](prd/capabilities/sprint-and-backlog-management.md) | 20 |
-| FR58–FR59, FR79–FR86, FR111–FR122, FR254–FR265 | [project-knowledge-and-repository-layout](prd/capabilities/project-knowledge-and-repository-layout.md) | 34 |
+| FR58–FR59, FR79–FR86, FR111–FR122, FR254–FR266 | [project-knowledge-and-repository-layout](prd/capabilities/project-knowledge-and-repository-layout.md) | 35 |
 | FR87–FR93 | [agent-activity-dashboard](prd/capabilities/agent-activity-dashboard.md) | 7 |
 | FR141–FR157, FR215–FR234 | [knowledge-graph-and-atlas](prd/capabilities/knowledge-graph-and-atlas.md) | 37 |
 | FR158–FR171 | [quality-assurance](prd/capabilities/quality-assurance.md) | 14 |
