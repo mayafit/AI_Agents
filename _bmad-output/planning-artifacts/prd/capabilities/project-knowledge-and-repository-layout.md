@@ -7,7 +7,7 @@
 > Project Layout) — where planning knowledge lives and how agents find it.
 > Architecture: P2-7, P2-10.
 >
-> Also carries the **federated knowledge store** thread of F26 — FR254–FR266,
+> Also carries the **federated knowledge store** thread of F26 — FR254–FR267,
 > NFR79–NFR83. Architecture: P5-9 (proposed). F26 supersedes FR111 (single
 > knowledgebase question) and FR117 (bindings in the per-machine `config.yaml`);
 > both are retained below as history and marked accordingly.
@@ -59,6 +59,8 @@
 - FR263: `_bmad-output/project-layout.yaml` becomes the **authoritative, always-written** record of where a project's knowledge lives, carrying the backend and location of both stores plus sprint management. It is written on every install and every bind (FR252), not only in multi-repo or Jira mode as FR122 specified. Because `_bmad-output/` is deliberately tracked (FR58), these bindings are committed and shared by the whole team — superseding FR117, under which they lived in the per-machine gitignored `config.yaml`
 - FR264: The per-machine `_bmad/bmm/config.yaml` continues to expose the resolved paths that skills read today (`knowledgebase_path`, `sprint_management_path`, `planning_artifacts`, `implementation_artifacts`), but is **generated from `project-layout.yaml`** rather than written directly from install answers. Existing skill path-resolution is therefore unchanged — no skill needs to learn a new config location
 - FR265: A project whose `project-layout.yaml` predates F26, or which has only the FR117 single `knowledgebase_path`, is read as both stores pointing at that one location. Migration is offered, never forced: the user is told the project is using the legacy single-store layout and how to split it, and everything keeps working until they do
+
+- FR267: Story files and other implementation artifacts (`implementation_artifacts`) belong to **neither** knowledge store — they follow `sprint_management_path` alongside `sprint-status.yaml`, because a story is sprint execution state rather than a requirement. This confirms and does not change FR120, which already resolves story creation and status through `{sprint_management_path}`. The consequence for F26 is that the binding schema carries exactly two stores plus a sprint-management location, and that a project moving its knowledge stores does not move its stories
 
 ## Quality Attributes (Non-Functional Requirements)
 
