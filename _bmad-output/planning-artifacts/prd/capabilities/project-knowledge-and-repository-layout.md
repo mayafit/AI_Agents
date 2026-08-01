@@ -6,6 +6,11 @@
 > Capabilities F11 (Project Knowledge & Context) and F12 (Multi-Repository
 > Project Layout) — where planning knowledge lives and how agents find it.
 > Architecture: P2-7, P2-10.
+>
+> Also carries the **federated knowledge store** thread of F26 — FR254–FR265,
+> NFR79–NFR83. Architecture: P5-9 (proposed). F26 supersedes FR111 (single
+> knowledgebase question) and FR117 (bindings in the per-machine `config.yaml`);
+> both are retained below as history and marked accordingly.
 
 ---
 
@@ -26,20 +31,43 @@
 
 ### Multi-Repository Project Layout
 
-- FR111: During installation, the installer asks the user where the project knowledgebase is managed — options: current repository (default), local path, or remote git repository
+- FR111: During installation, the installer asks the user where the project knowledgebase is managed — options: current repository (default), local path, or remote git repository. **[SUPERSEDED by FR254 — the single knowledgebase question is replaced by two independent store questions]**
 - FR112: During installation, the installer asks the user where sprint management is managed — options: current repository (default), local path, or remote git repository
 - FR113: When the user selects "remote" for either concern, the installer asks for the git URL and a local destination path for cloning. If the destination directory already exists, the installer displays its contents summary and asks the user to confirm before proceeding — it never overwrites an existing directory
 - FR114: When the user selects "remote" and the local destination does not exist, the installer clones the repository to the specified path
 - FR115: When the user selects "local path" for either concern, the installer validates that the path exists. If it does not exist, the installer alerts the user and asks them to confirm the path or provide a corrected one — it does not silently create the directory
 - FR116: When the user selects "current repository" (default) for both concerns, the installer operates in single-repo mode with no additional configuration — preserving current behavior for projects that manage everything in one repository
-- FR117: The knowledgebase and sprint management paths are stored in `config.yaml` as shared project configuration fields (`knowledgebase_path`, `sprint_management_path`) — available to all BMAD workflows and agents at runtime
+- FR117: The knowledgebase and sprint management paths are stored in `config.yaml` as shared project configuration fields (`knowledgebase_path`, `sprint_management_path`) — available to all BMAD workflows and agents at runtime. **[SUPERSEDED by FR263 — `config.yaml` lives under the gitignored `_bmad/` tree, so these values are per-machine and diverge across a team; the committed `project-layout.yaml` becomes authoritative and `config.yaml` is generated from it]**
 - FR118: The generated `project-context.md` includes the configured knowledgebase and sprint management paths as mandatory agent operating rules — agents are instructed to resolve all planning artifact reads/writes to `{knowledgebase_path}` and all sprint artifact reads/writes to `{sprint_management_path}`
 - FR119: All BMAD workflows that produce planning artifacts (PRD creation/editing/validation, architecture creation, UX design, research, product briefs) resolve their output directory from the configured `{knowledgebase_path}` rather than assuming the current working directory
 - FR120: All BMAD workflows that produce or consume sprint artifacts (sprint planning, story creation, story status lookup, sprint status via `sprint-status.yaml`, bug management, retrospectives) resolve their paths from the configured `{sprint_management_path}`
 - FR121: When the agent activity dashboard is implemented, it resolves story status files and sprint data from the configured `{sprint_management_path}` — correctly reading agent activity across repositories
 - FR122: In multi-repo mode, the installer creates a lightweight cross-reference file in the code repository (`_bmad-output/project-layout.yaml`) documenting the knowledgebase and sprint management paths — so agents activated in the code repo can discover where planning and sprint data live without re-running installation
 
+### Federated Knowledge Stores (F26)
+
+- FR254: During installation the installer asks **separately** for two knowledge stores, in the same style FR111 used for the single knowledgebase: a **system requirements store** and a **software requirements store**. Each question is independent — answering one does not constrain the other — and each accepts the same location options plus a backend choice (FR257). This supersedes FR111. The sprint-management question (FR112) is unchanged and remains a third, separate question
+- FR255: The **system requirements store** holds the artifacts that define *what the system must do* independently of how it is built: the product brief and the PRD (including, for a sharded PRD, its index and all shards)
+- FR256: The **software requirements store** holds the artifacts that define *how the system is built*: the architecture document, UX designs, and epics
+- FR257: Each store independently selects its own **backend** — `file-system` or `confluence`. The two stores may differ: a project may keep system requirements in Confluence for stakeholder visibility while software requirements stay in git alongside the code, or any other combination
+- FR258: When a store selects the `file-system` backend, the installer collects its location using the existing semantics of FR113–FR116 — current repository (default), local path, or remote git repository — including the existing confirmation, validation and clone behaviour, applied per store
+- FR259: When a store selects the `confluence` backend, the installer asks which **Confluence space** the store lives in
+- FR260: When a store selects the `confluence` backend, the installer asks for a **root page** under which that store's artifacts are created. If the answer is left blank, ma-agents generates a root page named for the project (`{project_name}`) and uses it — the user is told the page name that was created
+- FR261: The Confluence backend is **MCP-conditional**, exactly as the Jira sprint backend is. A store configured for `confluence` performs Confluence reads and writes only when a Confluence MCP server is available at runtime; detection, routing and failure handling follow the canonical pattern in `mcp-detection-pattern-spec.md` rather than a second bespoke mechanism. This closes the blocker that has kept Epic 14 Story 14.2 deferred
+- FR262: When a store is configured for `confluence` but no Confluence MCP is available at runtime, skills report the unavailability with actionable guidance and fall back to the store's file-system mirror rather than failing the workflow — no BMAD workflow becomes unusable because an MCP is absent
+- FR263: `_bmad-output/project-layout.yaml` becomes the **authoritative, always-written** record of where a project's knowledge lives, carrying the backend and location of both stores plus sprint management. It is written on every install and every bind (FR252), not only in multi-repo or Jira mode as FR122 specified. Because `_bmad-output/` is deliberately tracked (FR58), these bindings are committed and shared by the whole team — superseding FR117, under which they lived in the per-machine gitignored `config.yaml`
+- FR264: The per-machine `_bmad/bmm/config.yaml` continues to expose the resolved paths that skills read today (`knowledgebase_path`, `sprint_management_path`, `planning_artifacts`, `implementation_artifacts`), but is **generated from `project-layout.yaml`** rather than written directly from install answers. Existing skill path-resolution is therefore unchanged — no skill needs to learn a new config location
+- FR265: A project whose `project-layout.yaml` predates F26, or which has only the FR117 single `knowledgebase_path`, is read as both stores pointing at that one location. Migration is offered, never forced: the user is told the project is using the legacy single-store layout and how to split it, and everything keeps working until they do
+
 ## Quality Attributes (Non-Functional Requirements)
+
+### Federated Knowledge Stores (F26)
+
+- NFR79: ma-agents stores **no Confluence credentials** — authentication is entirely the MCP server's responsibility. `project-layout.yaml` records only the space key and root page identity, so it is safe to commit
+- NFR80: Configuring a Confluence store must not compromise air-gapped operation. Installation, skill loading and every file-system-backed workflow must complete with no network access; only the Confluence-backed reads and writes themselves require connectivity, and their absence degrades per FR262 rather than failing the run
+- NFR81: `project-layout.yaml` must remain deterministic under the two-store model — the same answers produce an identical file, extending NFR36 to the new fields
+- NFR82: Splitting one knowledge location into two must be backward-compatible. Projects that never configure a second store behave exactly as they do today, with no additional prompts on subsequent runs and no change to resolved artifact paths (extends NFR34)
+- NFR83: Store bindings must be resolvable by a skill that was installed globally and has no install-time knowledge of the project — resolution depends only on the project root and the committed `project-layout.yaml`, never on per-machine install state
 
 ### Project Context Generation
 

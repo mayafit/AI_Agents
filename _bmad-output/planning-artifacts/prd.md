@@ -2,7 +2,7 @@
 stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-24', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-25', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-07', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-08', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-05-01', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-05-01b']
 workflowStatus: 'complete'
 completedDate: '2026-03-05'
-lastEdited: '2026-07-31'
+lastEdited: '2026-08-01'
 editHistoryLocation: 'prd/changelog.md'
 inputDocuments: ['docs/index.md', 'docs/project-overview.md', 'docs/architecture.md', 'docs/source-tree-analysis.md', 'docs/development-guide.md', 'README.md', 'CONTRIBUTING.md', 'DEVELOPMENT.md', 'QUICK_START.md', 'SKILLS_STRUCTURE.md', '_bmad-output/planning-artifacts/product-brief-agents-2026-03-08.md']
 workflowType: 'prd'
@@ -21,7 +21,7 @@ classification:
 # Product Requirements Document - agents
 
 **Author:** Alon
-**Date:** 2026-03-05 | **Last Edited:** 2026-07-31
+**Date:** 2026-03-05 | **Last Edited:** 2026-08-01
 
 > **This is the PRD index.** The PRD was decomposed on 2026-07-31 (it was a single 184 KB /
 > 1,011-line file). Content is verbatim; this file carries the front matter and the registers.
@@ -35,10 +35,17 @@ classification:
 > `prd/capabilities/X.md` and `architecture/decisions/X.md` — same filename, both sides of the
 > contract.
 
-**Totals:** 246 FR definitions covering **245 distinct IDs** (high-water mark FR247; FR35 is
-defined twice — Known Issues #1) · 75 NFRs, all distinct (high-water mark NFR75) · 11
-capability domains covering the PRD's 25 declared capability areas. Every ID except FR35
-appears in exactly one file, and the counts match the pre-split document exactly.
+**Totals:** 264 FR definitions covering **263 distinct IDs** (high-water mark FR265; FR35 is
+defined twice — Known Issues #1) · 83 NFRs, all distinct (high-water mark NFR83) · 11
+capability domains covering the PRD's 26 declared capability areas. Every ID except FR35
+appears in exactly one file.
+
+**F26 — Global Installation & Federated Knowledge Stores** is the newest capability area and
+spans two capability files: the install-scope thread lives in
+[bmad-integration-and-bundling](prd/capabilities/bmad-integration-and-bundling.md)
+(FR248–FR253, NFR76–NFR78) and the knowledge-store / Confluence thread in
+[project-knowledge-and-repository-layout](prd/capabilities/project-knowledge-and-repository-layout.md)
+(FR254–FR265, NFR79–NFR83). It supersedes FR111 and FR117.
 
 ---
 
@@ -47,12 +54,12 @@ appears in exactly one file, and the counts match the pre-split document exactly
 | Capability file | PRD capability areas | FRs | NFRs | Architecture |
 |---|---|---|---|---|
 | [skills-platform.md](prd/capabilities/skills-platform.md) | F1 Skill Management & Portability · F2 Skill Enforcement · F15 Developer Infrastructure | 25 | — | [skills-platform.md](architecture/decisions/skills-platform.md) |
-| [bmad-integration-and-bundling.md](prd/capabilities/bmad-integration-and-bundling.md) | F3 BMAD-METHOD Integration (+ Bundled Install) · F4 BMAD Extension Architecture | 16 | NFR16–21 | [bmad-integration-and-bundling.md](architecture/decisions/bmad-integration-and-bundling.md) |
+| [bmad-integration-and-bundling.md](prd/capabilities/bmad-integration-and-bundling.md) | F3 BMAD-METHOD Integration (+ Bundled Install) · F4 BMAD Extension Architecture · **F26** (install scope) | 22 | NFR16–21, 76–78 | [bmad-integration-and-bundling.md](architecture/decisions/bmad-integration-and-bundling.md) |
 | [bmad-platform-currency.md](prd/capabilities/bmad-platform-currency.md) | F25 v6.10.0 *(current)* · F24 v6.9.0 · F23 v6.8.0 · F21 v6.6.0 · F20 6.3.0 · F5 6.2.0 | 52 | NFR29–33, 50–59, 70–75 | [bmad-platform-currency.md](architecture/decisions/bmad-platform-currency.md) |
 | [agent-personas-and-ide-targets.md](prd/capabilities/agent-personas-and-ide-targets.md) | F6 Specialized Agent Personas · F14 OpenCode Support · F22 Cline Workflow Generation | 9 | — | [agent-personas-and-ide-targets.md](architecture/decisions/agent-personas-and-ide-targets.md) |
 | [methodology-and-sdlc-workflows.md](prd/capabilities/methodology-and-sdlc-workflows.md) | F7 MIL-STD-498 · F8 SDLC Workflows · F9 Bug Management · F16 Methodology Onboarding | 27 | — | — |
 | [sprint-and-backlog-management.md](prd/capabilities/sprint-and-backlog-management.md) | F10 Sprint & Backlog Management | 20 | **none** | [sprint-and-backlog-management.md](architecture/decisions/sprint-and-backlog-management.md) |
-| [project-knowledge-and-repository-layout.md](prd/capabilities/project-knowledge-and-repository-layout.md) | F11 Project Knowledge & Context · F12 Multi-Repository Layout | 22 | NFR22–25, 34–37 | [project-knowledge-and-repository-layout.md](architecture/decisions/project-knowledge-and-repository-layout.md) |
+| [project-knowledge-and-repository-layout.md](prd/capabilities/project-knowledge-and-repository-layout.md) | F11 Project Knowledge & Context · F12 Multi-Repository Layout · **F26** (knowledge stores, Confluence) | 34 | NFR22–25, 34–37, 79–83 | [project-knowledge-and-repository-layout.md](architecture/decisions/project-knowledge-and-repository-layout.md) |
 | [agent-activity-dashboard.md](prd/capabilities/agent-activity-dashboard.md) | F13 Agent Activity Dashboard | 7 | NFR26–28 | — |
 | [knowledge-graph-and-atlas.md](prd/capabilities/knowledge-graph-and-atlas.md) | F17 Knowledge Graph + Knowledge Atlas | 37 | NFR38–41, 60–69 | [knowledge-graph-and-atlas.md](architecture/decisions/knowledge-graph-and-atlas.md) |
 | [quality-assurance.md](prd/capabilities/quality-assurance.md) | F18 Software Quality Assurance (SQA) | 14 | NFR42–43 | [quality-assurance.md](architecture/decisions/quality-assurance.md) |
@@ -83,12 +90,12 @@ exact and machine-derived from the shard contents (no approximation, no "partial
 | FR IDs | Capability file | Count |
 |---|---|---|
 | FR1–FR7, FR34–FR38, FR44–FR47, FR51–FR55, FR73, FR204–FR206 | [skills-platform](prd/capabilities/skills-platform.md) | 25 |
-| FR8–FR12, FR74–FR76, FR104–FR106, FR123–FR127 | [bmad-integration-and-bundling](prd/capabilities/bmad-integration-and-bundling.md) | 16 |
+| FR8–FR12, FR74–FR76, FR104–FR106, FR123–FR127, FR248–FR253 | [bmad-integration-and-bundling](prd/capabilities/bmad-integration-and-bundling.md) | 22 |
 | FR94–FR103, FR107–FR110, FR182–FR198, FR207–FR214, FR235–FR247 | [bmad-platform-currency](prd/capabilities/bmad-platform-currency.md) | 52 |
 | FR13–FR33, FR60–FR64, FR72 | [methodology-and-sdlc-workflows](prd/capabilities/methodology-and-sdlc-workflows.md) | 27 |
 | FR35, FR42, FR56–FR57, FR199–FR203 | [agent-personas-and-ide-targets](prd/capabilities/agent-personas-and-ide-targets.md) | 9 |
 | FR65–FR71, FR128–FR140 | [sprint-and-backlog-management](prd/capabilities/sprint-and-backlog-management.md) | 20 |
-| FR58–FR59, FR79–FR86, FR111–FR122 | [project-knowledge-and-repository-layout](prd/capabilities/project-knowledge-and-repository-layout.md) | 22 |
+| FR58–FR59, FR79–FR86, FR111–FR122, FR254–FR265 | [project-knowledge-and-repository-layout](prd/capabilities/project-knowledge-and-repository-layout.md) | 34 |
 | FR87–FR93 | [agent-activity-dashboard](prd/capabilities/agent-activity-dashboard.md) | 7 |
 | FR141–FR157, FR215–FR234 | [knowledge-graph-and-atlas](prd/capabilities/knowledge-graph-and-atlas.md) | 37 |
 | FR158–FR171 | [quality-assurance](prd/capabilities/quality-assurance.md) | 14 |
@@ -98,8 +105,8 @@ exact and machine-derived from the shard contents (no approximation, no "partial
 | NFR span | File |
 |---|---|
 | NFR1–NFR15 | general-quality-attributes |
-| NFR16–NFR21 | bmad-integration-and-bundling |
-| NFR22–NFR25, NFR34–NFR37 | project-knowledge-and-repository-layout |
+| NFR16–NFR21, NFR76–NFR78 | bmad-integration-and-bundling |
+| NFR22–NFR25, NFR34–NFR37, NFR79–NFR83 | project-knowledge-and-repository-layout |
 | NFR26–NFR28 | agent-activity-dashboard |
 | NFR29–NFR33, NFR50–NFR59, NFR70–NFR75 | bmad-platform-currency |
 | NFR38–NFR41, NFR60–NFR69 | knowledge-graph-and-atlas |

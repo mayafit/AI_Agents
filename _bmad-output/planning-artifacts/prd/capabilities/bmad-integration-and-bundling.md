@@ -5,6 +5,9 @@
 >
 > Capabilities F3 (BMAD-METHOD Integration, incl. Bundled Installation) and
 > F4 (BMAD Extension Architecture). Architecture: P2-3, P2-6.
+>
+> Also carries the **install-scope** thread of F26 (Global Installation & Federated
+> Knowledge Stores) — FR248–FR253, NFR76–NFR78. Architecture: P5-9 (proposed).
 
 ---
 
@@ -28,6 +31,21 @@
 - FR125: When bmad-method introduces new CLI parameters that ma-agents has not mapped, the `--yes` flag causes bmad-method to apply its own sensible defaults for those parameters — ensuring no configuration is missed even as bmad-method evolves
 - FR126: The user experiences a single unified installation wizard — bmad-method runs non-interactively with full explicit parameters, with no separate BMAD interactive prompt appearing during the ma-agents installation flow
 - FR127: In non-interactive mode (`--yes --force`), ma-agents uses its own defaults for all parameters and passes them to bmad-method via the same explicit flag mechanism — identical code path as interactive mode with pre-determined answers, ensuring CI/CD installations produce identical BMAD configuration as interactive ones
+
+### Global Installation Scope (F26)
+
+- FR248: Install scope is an **interactive question in the installation wizard** — "Install for this project only, or globally for your user account?" — asked before platform/agent selection, with project-level as the default. The existing `--global` CLI flag is retained as the non-interactive equivalent for `--yes` and CI runs; it is no longer the only way to reach a global install
+- FR249: When global scope is selected, BMAD modules and BMAD agents are installed globally alongside ma-agents skills — superseding the current behaviour where BMAD agents are filtered out of global installs and the user is told to re-run without `--global`. The set of BMAD modules installed globally is the same default set FR123 defines for project installs
+- FR250: Global installation is **spike-gated**. Before FR249 is implemented, a confirmation spike establishes what bmad-method v6.10.0 actually supports for user-level installation — target directory, whether `--directory` accepts a user-scoped path, and how module resolution behaves outside a project. If the spike shows global BMAD install is unsupported upstream, FR249 degrades to installing ma-agents skills globally while reporting clearly that BMAD remains project-scoped, and the remaining F26 requirements proceed unchanged
+- FR251: A global install performs **no project-scoped work** — it does not generate `project-context.md`, does not write `project-layout.yaml`, and does not prompt for knowledge-store locations, because no project is in scope at that moment. These are deferred to the per-project bind step (FR252)
+- FR252: A **project-bind step** (`ma-agents bind`, also offered automatically when a globally-installed skill activates in a project that has no `_bmad-output/project-layout.yaml`) collects only the project-scoped answers — the two knowledge-store bindings (FR254) and sprint management location — and writes `_bmad-output/project-layout.yaml` plus `project-context.md`. It installs no skills and no BMAD modules, so binding a project is fast and safe to re-run
+- FR253: `ma-agents status` reports the active install scope, and for a global install lists which projects on this machine have been bound — so a user can tell at a glance whether a given project will resolve its knowledge correctly
+
+## Quality Attributes — Global Installation Scope (F26)
+
+- NFR76: Adding the scope question must not change project-level install behaviour — a user who accepts the default reaches an install byte-identical to today's, with no additional prompts on subsequent runs (extends NFR34's backward-compatibility contract to install scope)
+- NFR77: Global installation must work fully air-gapped, on the same terms as project installation — bundled BMAD cache, no npm/git/CDN access at install time (re-asserts NFR2/NFR50/NFR57)
+- NFR78: The project-bind step must be idempotent and non-destructive — re-running it against an already-bound project reports the existing bindings and changes nothing unless the user explicitly edits an answer, and it never overwrites an existing `project-context.md` (consistent with NFR23)
 
 ### BMAD Extension Architecture
 
