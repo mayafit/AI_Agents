@@ -35,7 +35,7 @@ classification:
 > `prd/capabilities/X.md` and `architecture/decisions/X.md` — same filename, both sides of the
 > contract.
 
-**Totals:** 266 FR definitions covering **265 distinct IDs** (high-water mark FR267; FR35 is
+**Totals:** 266 FR definitions — **265 live, 1 retired** (FR266, retired at P5-9 before implementation) — covering **265 distinct IDs** (high-water mark FR267; FR35 is
 defined twice — Known Issues #1) · 83 NFRs, all distinct (high-water mark NFR83) · 11
 capability domains covering the PRD's 26 declared capability areas. Every ID except FR35
 appears in exactly one file.
@@ -86,8 +86,9 @@ software, so they are pinned here.
 
 **Non-goals for F26.** Excluded deliberately, so downstream work does not assume them:
 
-- `[NON-GOAL]` Bidirectional Confluence sync with conflict resolution. FR266 establishes a local
-  mirror and requires divergence to be *reported*; reconciliation is out of scope
+- `[NON-GOAL]` Any local mirror or cache of a Confluence-backed store, and therefore any sync or
+  conflict resolution. Settled at P5-9: an unreachable Confluence host is a misconfiguration, not
+  a working mode, so FR262 fails loud and FR266 was retired before implementation
 - `[NON-GOAL]` Per-artifact Confluence page templates or enforced page hierarchy beyond the root
   page of FR260
 - `[NON-GOAL]` Migrating existing projects automatically. FR265 offers migration; it never
@@ -96,7 +97,7 @@ software, so they are pinned here.
 - `[NON-GOAL]` Any backend other than `file-system` and `confluence` (no SharePoint, Notion, Git
   wiki)
 
-**Open items.** Four raised, one closed; the remaining three are all deferred to P5-9 and none blocks epic creation:
+**Open items.** Four raised, two closed; the remaining two are carried by P5-9 and neither blocks epic creation:
 
 1. ~~Where do `implementation_artifacts` (story files) live?~~ **CLOSED 2026-08-01** — they
    follow `sprint_management_path`, per FR267. Consistent with existing FR120. The binding schema
@@ -104,8 +105,9 @@ software, so they are pinned here.
 2. **`[NOTE FOR PM]` FR250 spike outcome** gates how much of the global-install thread is
    deliverable. If bmad-method v6.10.0 cannot install user-level, FR249 shrinks to its
    degradation path
-3. **`[NOTE FOR PM]` Mirror synchronisation semantics** (FR266) — direction, trigger, conflict
-   handling. Deliberately deferred to Architecture Decision P5-9
+3. ~~Mirror synchronisation semantics (FR266)~~ **CLOSED at P5-9 2026-08-01** — moot. The
+   mirror was retired once its air-gap justification was examined: air-gapped means no internet,
+   not no network, and an intra-perimeter Confluence is reachable. FR262 fails loud instead
 4. **`[NOTE FOR PM]` Confluence page structure** — which artifact becomes which child page under
    the root page. Deferred to P5-9
 
