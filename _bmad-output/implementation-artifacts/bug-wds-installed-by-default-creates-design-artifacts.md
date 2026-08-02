@@ -6,10 +6,33 @@ title: The default --modules set installs every bundled module, so wds installs 
 
 # Bug: The default `--modules` set installs every bundled module, so `wds` installs for everyone and scaffolds `design-artifacts/` in projects that never asked for UX tooling
 
-**Status:** backlog
+**Status:** ready-for-dev (PRD amendment landed 2026-08-02)
 **Severity:** medium
 **Affected Component:** `bin/cli.js#selectBmadModules` (the no-flag default branch); `lib/bmad.js#getInstallableBmadModules`; requirement **FR123** (and **FR249**, which reuses FR123's set)
 **Classification:** REQUIREMENTS CHANGE (needs a PRD amendment) + a follow-on code change
+
+## Disposition — PRD amendment landed, bug is now actionable (2026-08-02)
+
+This was classified as blocked on a requirements change. **FR123 has been amended**, so the
+blocker is gone.
+
+New default install set: **bmm + tea + bmb + cis**. `gds` and `wds` remain **bundled but not
+installed by default** — still fully available offline via the `--bmad-modules` multiselect, so
+the air-gap guarantee (NFR2/NFR50/NFR57) is untouched.
+
+Two points settled during the amendment and load-bearing for implementation:
+
+1. **This moves ma-agents towards upstream, not away from it.** Upstream declares
+   `default_selected: false` on all five bundled modules and `true` only on `bmm`; ma-agents
+   reads that field nowhere and force-installs everything. Honouring the narrower default is
+   closer to BMAD's own stated intent — which is why this survived the "don't change BMAD" rule
+   that closed the sibling `docs/` bug.
+2. **NFR73's set-equality guard is not affected.** It governs the offline *bundle* on the
+   resolved registry set at cache-build time, not the runtime install set. No allowlist edit and
+   no cache rebuild are required.
+
+Note this does **not** fix the sibling `docs/` directory: `bmm` is force-included regardless of
+selection, and `bmm` is what declares `{project_knowledge}`. That bug is closed won't-fix.
 
 ## Summary
 

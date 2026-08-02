@@ -6,10 +6,28 @@ title: An empty docs/ directory is created at the project root on every install 
 
 # Bug: An empty `docs/` directory is created at the project root on every install
 
-**Status:** backlog
+**Status:** WON'T FIX (closed 2026-08-02)
 **Severity:** low
 **Affected Component:** upstream `bmad-method` `bmm-skills/module.yaml` (`project_knowledge` + its `directories:` entry) materialised by `createModuleDirectories()`; ma-agents has no post-install prune for it
 **Classification:** CODE FIX (ma-agents-side prune) — becomes a REQUIREMENTS CHANGE only if the team chooses to relocate `project_knowledge` instead
+
+## Disposition — WON'T FIX (2026-08-02)
+
+Closed by product decision: **"if it is something that comes from BMAD, I don't want to change it."**
+
+`docs/` is created entirely by upstream `bmad-method` — `bmm-skills/module.yaml` lists
+`{project_knowledge}` in its `directories:` block and BMAD's `createModuleDirectories`
+materialises it. ma-agents does not vendor `bmm`, so the only available fixes were patching
+upstream or pruning behind it, and the `gds`/`wds` copies ma-agents does ship are themselves
+vendored BMAD module definitions. All three routes mean changing BMAD.
+
+Accepting the directory is low-cost: it is created empty, nothing writes into it during install,
+nothing reads it, and every consumer already guards on its existence (e.g. `bmad-correct-course`
+— *"skip if `{project_knowledge}` does not exist"*). No FR references `project_knowledge`, so
+there is no requirements impact either way.
+
+Re-open only if BMAD starts writing into it, or if an ma-agents workflow acquires a hard
+dependency on the path existing.
 
 ## Summary
 
