@@ -2,8 +2,10 @@
 stepsCompleted: [1, 2, 3, 4, 'phase2-step-01', 'phase2-step-02', 'phase2-step-03', 'phase2-step-04']
 workflowStatus: 'complete'
 completedDate: '2026-03-08'
-lastEdited: '2026-06-28'
+lastEdited: '2026-08-02'
 phase5EditHistory:
+  - date: '2026-08-02'
+    changes: 'Added Epic 31: Global Installation & Federated Knowledge Stores (Phase 5) — PRD capability area F26, Architecture Decision P5-9 (sub-decisions P5-9.1…P5-9.8). Epic number 31, not 30: Epic 30 (BMAD v6.10.0) shipped in v3.17.0 and lives only in sprint-status.yaml — pre-existing drift, not fixed here. 14 stories across four threads with TWO parallel gates. Thread A (binding spine): 31.2 project-layout.yaml becomes the authoritative, unconditional two-store binding record (GATE for threads A/B/C, ready-for-dev; also REMOVES the current delete-on-single-repo branch, since bin/cli.js:604-616 today unlinks the file when both concerns are same-repo); 31.3 generate _bmad/bmm/config.yaml one-way from it, on install and bind only, overwrite-with-notice, config.user.yaml never touched; 31.4 staleness fail-loud preflight so a stale generated config halts instead of resolving to moved stores. Thread B (store split): 31.5 two independent store questions with per-store backend, reusing FR113-FR116 file-system location semantics per store; 31.6 artifact-to-store routing (brief/PRD → system requirements; architecture/UX/epics → software requirements; story files stay on sprint_management_path per FR267); 31.7 legacy single-store compatibility with migration offered, never forced. Thread C (Confluence): 31.8 space + root-page configuration (blank root page generates one named for the project; no credentials on disk); 31.9 MCP-conditional routing per mcp-detection-pattern-spec.md with FAIL LOUD and NO mirror/cache/sync; 31.10 one page per artifact mirroring the source tree under the root page. Thread D (global install — the ONLY spike-gated thread): 31.1 FR250 confirmation spike against a live bmad-method v6.10.0 (GATE, ready-for-dev); 31.11 install scope becomes a wizard question and a global install does no project-scoped work; 31.12 global BMAD module/agent install OR the FR250 degradation path, written for BOTH spike outcomes so a FAIL shrinks this one story and changes nothing in 31.2-31.10 (P5-9.8); 31.13 ma-agents bind (idempotent, installs nothing, never overwrites project-context.md) plus install-scope reporting in ma-agents status. 31.14 release gate (air-gap, determinism, backward-compat, fail-loud proof, FR/NFR traceability including a NEGATIVE check that FR266 has no implementation anywhere, semver cut). Execution: (31.1 ∥ 31.2) → [31.3 → 31.4] ∥ [31.5 → (31.6 ∥ 31.7 ∥ 31.8 → 31.9 → 31.10)] ∥ [31.11 → 31.12]; (31.3 + 31.5 + 31.8) → 31.13; all → 31.14. Covers ALL of F26: FR248-FR265, FR267, NFR76-NFR83. FR266 (Confluence local mirror) was RETIRED at P5-9 before implementation and deliberately has NO story. Supersedes FR111 (→FR254) and FR117 (→FR263). Unblocks Epic 14 Story 14.2, deferred since 2026-03-20 pending exactly the knowledge-backend field FR257 now defines. Six open questions recorded rather than invented as FRs: bound-projects record location, mtime-unsafe staleness comparison, which skills carry the guard, Confluence page identity across renames, research-report store ownership, two-remote-clone UX. Registered in sprint-status.yaml (epic-31 backlog; 31.1 and 31.2 ready-for-dev). Verified against source: bin/cli.js:1441 does filter category=="bmad" agents out of global installs, and bin/cli.js:605 is the project-layout.yaml path inside writeProjectLayoutYaml() — both requirement claims are accurate.'
   - date: '2026-06-28'
     changes: 'Added Epic 29: BMAD Knowledge Atlas (Phase 5) — the visualization tier of the Knowledge Graph (Decision P5-7, extends P3-1; composes with Epic 19 emitToGraph as Atlas-first / reconciliation fast-follow). 6 stories: 29.1 engine skeleton + sealed packaging pipeline + bmad-knowledge skill entrypoint (GATE, ready-for-dev) — esbuild-bundled engine in lib/knowledge-atlas/, no per-project install, git-ignored knowledge-site/ output, MANIFEST registration; 29.2 authoritative scan + deterministic entity extraction → typed manifest (file-id#anchor, content-hash incremental, knowledge-graph.json merge-read, Windows/CRLF determinism); 29.3 reading views + entity cross-linking + backlinks + offline search + home (zero-dependency render, design system, progressive enhancement); 29.4 interactive force-graph view + auto-generated diagrams (traceability spine/epic-tree/sprint board) + orphan/gap view; 29.5 sealed offline packaging hardening (vendor force-graph/Mermaid/search; extend offline-install gate) + full knowledge-graph.json reconciliation; 29.6 release gate (offline generate+view egress-blocked, determinism, graceful degradation, output sanitization, real-project smoke, semver cut). Execution: 29.1 → 29.2 → (29.3 ∥ 29.4) → 29.5 → 29.6. Covers PRD FR215–FR234 / NFR60–NFR69. v1 deterministic core; model-enrichment, auto-refresh hooks, Confluence, timeline/diff, and agent query API explicitly deferred. Registered in sprint-status.yaml (epic-29 backlog; 29.1 ready-for-dev). [Note: Epic 28 (v6.9.0) lacks a phase5EditHistory entry and a sprint-status block — pre-existing PR #123 drift, not addressed here.]'
   - date: '2026-06-08'
@@ -5241,3 +5243,385 @@ scripts/
 - **Composition with Epic 19 (backlog):** the Atlas does not depend on Epic 19 shipping. `emitToGraph` (write path) and the Atlas scan (backfill+render path) converge on the same `file-id#anchor` model; Story 29.5 hardens reconciliation as the Epic-19 fast-follow.
 - **Reuses, doesn't replace, P3-1:** `open-graph` remains the lightweight single-graph renderer; the Atlas is the multi-view site tier over the same data.
 - **Deterministic v1:** model-assisted enrichment (the editorial-narrative tier) is explicitly deferred; v1 guarantees design polish, structure, and interlinking, not authored prose synthesis.
+
+## Epic 31: Global Installation & Federated Knowledge Stores (Phase 5)
+
+**Goal:** Make **where a project's knowledge lives a property of the project, not of the machine it was installed on and not of the install scope** (the F26 thesis). Three threads plus the prerequisite that carries them. (1) **Binding authority** — `_bmad-output/project-layout.yaml` becomes the single authoritative, unconditionally-written record of a project's knowledge topology, and the per-machine `_bmad/bmm/config.yaml` becomes a one-way **generated** artifact derived from it, so all 39 existing skill config references stay exactly as they are. (2) **Two federated knowledge stores** — the single knowledgebase question is replaced by two independent questions (system requirements: brief + PRD; software requirements: architecture + UX + epics), **each choosing its own backend**; sprint management stays a third, separate location and story files follow it, not either store. (3) **A Confluence backend** — MCP-conditional through the same canonical `mcp-detection-pattern-spec.md` pattern the 13 sprint skills use for Jira, with **no mirror, no cache and no sync**: an unreachable Confluence is a misconfiguration and fails loud. (4) **Install scope becomes a wizard question** rather than only the `--global` flag, a global install performs no project-scoped work, and a new `ma-agents bind` step supplies the per-project answers afterwards.
+
+**Value:** Today two developers on one project can silently resolve planning artifacts to different locations, because the bindings live in `_bmad/bmm/config.yaml` and `_bmad/` is gitignored (`.gitignore:20`). A global install writes them nowhere at all, and a globally-installed skill therefore has no way to discover a project's topology. Committing the bindings fixes team divergence and is the precondition that makes global installation coherent at all (NFR83). Splitting the single knowledgebase in two lets a project publish system requirements to Confluence for stakeholder visibility while keeping software requirements in git next to the code — the combination enterprise teams actually ask for. And FR261 closes the blocker that has kept **Epic 14 Story 14.2 (Confluence) deferred since 2026-03-20** pending exactly this: a PRD requirement defining the knowledge backend field.
+
+**Dependencies:** Epic 16 (Multi-Repository Project Layout — done) supplies `collectRepoLayout()`, `writeProjectLayoutYaml()` (`bin/cli.js:604`) and `readExistingLayout()`, all of which this epic extends rather than replaces. Epic 17 Story 17.22 (done) supplies the canonical backend-routing pattern and `mcp-detection-pattern-spec.md` that the Confluence backend reuses verbatim in shape. Epic 13 (Project Context Auto-Generation — done) supplies the template stamping that the bind step reuses. Epic 27 Story 27.15 (done) unified the config path convention this epic now generates into. No dependency on Epic 14 — this epic **unblocks** Story 14.2 rather than waiting on it.
+
+**Execution order:** **Two independent gates start in parallel.** Story 31.1 is the **FR250 confirmation spike** and gates the *global-install thread only* (31.11, 31.12) — per P5-9.8 a negative result shrinks that thread and changes nothing in 31.2–31.10. Story 31.2 is the **binding spine** and gates everything else. Then:
+
+- Wave 0 (parallel, both ready-for-dev): **31.1** (spike — gates thread D) ∥ **31.2** (binding spine — gates threads A/B/C)
+- Wave 1: 31.3 (needs 31.2) ∥ 31.5 (needs 31.2) ∥ 31.11 (needs 31.1)
+- Wave 2: 31.4 (needs 31.3) ∥ 31.6 (needs 31.3 + 31.5) ∥ 31.7 (needs 31.5) ∥ 31.8 (needs 31.5) ∥ 31.12 (needs 31.11)
+- Wave 3: 31.9 (needs 31.8) ∥ 31.13 (needs 31.3 + 31.5 + 31.8)
+- Wave 4: 31.10 (needs 31.9)
+- Wave 5: 31.14 (release gate — needs all)
+
+Compact form: `(31.1 ∥ 31.2) → [31.3 → 31.4] ∥ [31.5 → (31.6 ∥ 31.7 ∥ 31.8 → 31.9 → 31.10)] ∥ [31.11 → 31.12] ; (31.3 + 31.5 + 31.8) → 31.13 ; all → 31.14`.
+
+**The three threads are largely independent and each ships value before the spike resolves.** Thread A (31.2–31.4, binding) is independently shippable and is the highest-value single slice: it makes topology committed and team-shared with no user-visible new questions. Thread B (31.5–31.7, store split) is shippable on top of A. Thread C (31.8–31.10, Confluence) is shippable on top of B. Thread D (31.1, 31.11–31.13) is the only one the spike touches.
+
+**FR Coverage:** FR248, FR249, FR250, FR251, FR252, FR253, FR254, FR255, FR256, FR257, FR258, FR259, FR260, FR261, FR262, FR263, FR264, FR265, FR267, NFR76, NFR77, NFR78, NFR79, NFR80, NFR81, NFR82, NFR83. That is **all 19 live F26 requirements and all 8 F26 NFRs**. FR266 (Confluence local mirror) is **RETIRED at P5-9 before implementation** and has no story — see Out of scope.
+
+**Architecture:** Decision **P5-9** (Federated Knowledge Stores, Binding Authority & Global Install Scope), sub-decisions P5-9.1 … P5-9.8, in `_bmad-output/planning-artifacts/architecture/decisions/project-knowledge-and-repository-layout.md`; the install-scope half is cross-referenced from `architecture/decisions/bmad-integration-and-bundling.md`. Extends P2-10 (Multi-Repository Project Layout) and P2-7 (Project Context Auto-Generation); reuses P2-11's canonical routing pattern (`mcp-detection-pattern-spec.md`). Rejected alternatives and mechanism detail live in `_bmad-output/planning-artifacts/addendum.md`.
+
+**Out of scope:**
+- **Any local mirror or cache of a Confluence-backed store, and therefore any sync direction, sync trigger, authority call or conflict resolution.** FR266 was raised at the PRD reviewer gate and **retired at P5-9 before implementation** once its air-gap justification was examined: this product's air-gap requirement means *no internet* (no npm/git/CDN), not *no network*, and an intra-perimeter Confluence Server or Data Center is reachable on an air-gapped network. A store configured for Confluence that cannot reach Confluence is misconfigured and fails loud (FR262). **If a story in this epic starts describing sync or conflict resolution, it has misread P5-9.6.** The FR266 ID is retired and never reused.
+- Per-artifact Confluence page templates, or any enforced page hierarchy beyond P5-9.7's source-tree mapping.
+- A third store, a store spanning multiple Confluence spaces, or any backend other than `file-system` and `confluence` (no SharePoint, Notion, git wiki).
+- Automatic migration of legacy single-store projects. FR265 **offers** migration and tells the user how; it never performs it unprompted.
+- Folding sprint management (FR112) into either store, or moving story files (`implementation_artifacts`) into either store. FR267 settles both: sprint management stays a third, separate location and stories follow it.
+- Re-pointing the 39 existing skill config references at the committed file. FR264's generated `config.yaml` exists precisely so that none of them change.
+
+### Story 31.1: Spike — Confirm What bmad-method v6.10.0 Supports for User-Level Installation (Gate)
+
+**Status:** ready-for-dev
+**Size:** Small
+**Priority:** Critical (gate — blocks the global-install thread 31.11/31.12 only)
+
+**User Story:** As the ma-agents maintainer, I need to establish against a live bmad-method v6.10.0 what user-level installation actually supports — target directory, whether `--directory` accepts a user-scoped path, and how module resolution behaves outside a project — so that Story 31.12 either implements a known global BMAD install or implements a known degradation path, rather than discovering which mid-build. (FR250)
+
+**Acceptance Criteria:**
+1. Against a **live** `npm install bmad-method@6.10.0` in a scratch directory (release notes alone are not evidence), the spike establishes and records: (a) whether bmad-method has any user-level/global install target at all; (b) whether `--directory` accepts a user-scoped path such as `~/.bmad` and what it writes there; (c) how module resolution behaves when a BMAD agent or skill activates outside a project (does it find a user-level `_bmad/`, and if so by what search order).
+2. The spike records how the ma-agents-side flags already passed by FR123 (`--tools`, `--modules`, `--directory`, `--output-folder`, `--custom-content`) behave under a user-scoped `--directory`, and specifically whether `--output-folder` has any meaning with no project in scope.
+3. The verdict is recorded as an explicit **PASS** or **FAIL** with evidence, appended to Decision P5-9.8 as a spike-outcome note (the decision itself is not rewritten — P5-9.8 is already written for both outcomes).
+4. On **PASS**, the spike names the concrete change set for Story 31.12: which `bin/cli.js` call sites change, and confirms the global filter at `bin/cli.js:1440-1451` and the `if (installScope === 'project')` guard on the whole BMAD integration block (`bin/cli.js:1454`) are the only two places the project-scope assumption is encoded.
+5. On **FAIL**, the spike states the exact three facts FR250's degradation path requires the installer to report: that BMAD remains project-scoped, the command that installs BMAD into a project, and that the F26 knowledge-store requirements are unaffected.
+6. The spike explicitly confirms — either way — that **no part of P5-9.1 through P5-9.7 changes**. The binding architecture is what makes a globally-installed skill resolvable from the project root alone (NFR83) and is independent of where BMAD's own modules live. A FAIL verdict must not be read as blocking 31.2–31.10.
+7. Air-gap posture is confirmed for whichever path the verdict selects: a global install must work fully offline on the same terms as a project install, from the bundled cache, with no npm/git/CDN access (NFR77).
+
+**Technical notes:**
+- **Verified against source:** `bin/cli.js:1440` carries the comment `// Step 3.4: Filter out BMAD agents for global scope (they require project-level install)` and `bin/cli.js:1441` is `if (installScope === 'global') {`. The block filters every agent with `category === 'bmad'` out of `selectedAgentIds`, prints `Warning: BMAD agents require project-level installation and will be skipped for global scope`, and tells the user to `Run again without --global`. FR249's description of current behaviour is accurate.
+- Note the second, larger guard: `bin/cli.js:1454` opens `// Step 3.5: BMAD-METHOD Integration` with `if (installScope === 'project')`, so a global install skips the entire BMAD integration, not only the agent list. A PASS verdict makes this the primary change site.
+- Mirror the shape of Stories 27.1 and 30.1 (live-install confirmation spikes with an explicit PASS/FAIL gate verdict) — this project runs gate-first and those are the precedent.
+
+### Story 31.2: `project-layout.yaml` Becomes the Authoritative, Unconditional Two-Store Binding Record (Spine)
+
+**Status:** ready-for-dev
+**Size:** Medium
+**Priority:** Critical (spine — blocks 31.3, 31.5 and everything downstream of them)
+
+**User Story:** As a developer joining a project that someone else installed, I find the project's knowledge topology committed in `_bmad-output/project-layout.yaml` at the project root — two independently-located stores plus a sprint-management location — so that my machine resolves planning artifacts to exactly the same places as everyone else's, and so that a skill installed globally can discover the topology from the project root alone. (FR263, FR267, FR265 read-path; NFR79, NFR81, NFR83)
+
+**Acceptance Criteria:**
+1. `_bmad-output/project-layout.yaml` carries a versioned schema with **exactly three** location records: `system_requirements_store`, `software_requirements_store` and `sprint_management`. Each store record carries a `backend` (`file-system` | `confluence`) and its backend-specific location fields. There is no fourth store and no `implementation_artifacts` record — story files follow `sprint_management` (FR267).
+2. The file is written **unconditionally** on every install and every bind — not only in multi-repo or Jira mode. The existing "both concerns are same-repo ⇒ do not write" branch is removed (FR263 supersedes FR122's conditional scope).
+3. **The existing delete-on-single-repo behaviour is removed.** `writeProjectLayoutYaml()` currently *unlinks* an existing `project-layout.yaml` when both concerns resolve to same-repo and logs `Removed stale project-layout.yaml (now in single-repo mode)`. Under FR263 the file is authoritative, so an installer run must never delete it. A regression test pins this.
+4. Reading is one-way and one-place: knowledge topology is read from `project-layout.yaml` at the project root and nowhere else (P5-9.1). `project-layout.yaml` is never derived from `config.yaml`.
+5. **Legacy read (FR265 read half):** a `project-layout.yaml` that predates F26 — carrying the FR122 `knowledgebase` / `sprint_management` shape, or a legacy single `knowledgebase_path` — is read as **both stores pointing at that one location**, with no error and no rewrite. Everything keeps working. (The user-facing migration offer is Story 31.7.)
+6. **No credentials (NFR79):** the file records only non-secret identity — for a `confluence` store, the space key and root-page identity and nothing else. A test asserts no credential-shaped field can be written. This is what makes the file committable.
+7. **Deterministic (NFR81):** the same answers produce a byte-identical file across runs and platforms, extending NFR36 to the new fields; the `generated` date remains the only varying field, and path portability (`toPortablePath`) is preserved for both stores.
+8. **Globally-installed resolution (NFR83):** a resolver given only a project root returns the full topology from the committed file with no reference to per-machine install state. A test proves resolution succeeds with `_bmad/` absent entirely.
+9. `_bmad-output/` remains tracked (FR58) — the installer does not add it to `.gitignore`, and a test pins that.
+10. `npm test` green on Linux/CI and Windows.
+
+**Technical notes:**
+- **Verified against source:** `bin/cli.js:604` is `function writeProjectLayoutYaml(layout) {` and `bin/cli.js:605` is `const layoutPath = path.join(process.cwd(), '_bmad-output', 'project-layout.yaml');`. The addendum's and P5-9.1's citation of `bin/cli.js:605` is accurate. The conditional scope is at 606-616 (`const bothSame = …`), and `readExistingLayout()` (from ~line 670) already calls this file "the authoritative source written by Story 16.2" — this story makes the code match the comment.
+- Extend `writeProjectLayoutYaml()` / `readExistingLayout()`; do not invent a new file. Per the addendum, `.ma-agents.json` was **considered and rejected** as the binding file — it is the skills manifest / install-state record and mixing project topology into it would conflate two unrelated lifecycles.
+- Version the schema explicitly (e.g. a top-level `schema_version`) so 31.7's legacy detection is a field check, not a heuristic.
+- Keep the existing `# PORTABILITY: absolute path` annotation behaviour for both stores.
+
+### Story 31.3: Generate `_bmad/bmm/config.yaml` from `project-layout.yaml` — One Way, Install and Bind Only
+
+**Status:** backlog (blocked on 31.2)
+**Size:** Medium
+**Priority:** Critical
+
+**User Story:** As a skill that resolves paths through `_bmad/bmm/config.yaml` today, I keep reading exactly the file I read now, because it is regenerated from the committed `project-layout.yaml` instead of being written directly from install answers — so that none of the 39 existing config references has to change. (FR264; P5-9.2, P5-9.3 write half, P5-9.4)
+
+**Acceptance Criteria:**
+1. `_bmad/bmm/config.yaml` is **generated from** `project-layout.yaml` and exposes the same resolved fields skills read today — `knowledgebase_path`, `sprint_management_path`, `planning_artifacts`, `implementation_artifacts` — plus whatever the two-store split resolves them to. No skill learns a new config location and no `{output_folder}` derivation changes.
+2. Generation direction is **one way only**: committed → per-machine. There is no code path that derives `project-layout.yaml` from `config.yaml` (P5-9.2). A test asserts the reverse write does not exist.
+3. Generation fires on **install and `ma-agents bind` only** (P5-9.3). No skill, workflow or read path regenerates it as a side effect. A test asserts no read path writes.
+4. **Overwrite with notice (P5-9.4):** generation overwrites `config.yaml` wholesale and prints that it did so, naming the file. The file already declares itself installer-managed and regenerated on every install, so this honours its documented contract rather than changing it.
+5. **`config.user.yaml` is never touched (P5-9.4).** A test writes a `config.user.yaml`, runs generation, and asserts it is byte-identical afterwards. It is the only per-developer override surface and must survive.
+6. The generator is deterministic: the same `project-layout.yaml` produces a byte-identical `config.yaml`.
+7. A **generation stamp** is written into `config.yaml` identifying the `project-layout.yaml` state it was generated from, so Story 31.4 can detect drift without depending on filesystem mtimes (see that story's open question).
+8. Legacy projects (FR265) generate a `config.yaml` identical to the one they have today — both stores resolving to the one legacy location means no resolved path changes (NFR82).
+9. `npm test` green on Linux/CI and Windows.
+
+**Technical notes:**
+- Per the addendum, the indirection exists *because* of the 39 references: 7 skills read `{project-root}/_bmad/bmm/config.yaml` explicitly and 32 use `{output_folder}` derived from it. Repointing them would touch every skill and every MIL-498 prompt for no user-visible benefit. Keep the generated field names byte-compatible.
+- Reuse the existing `writeConfigField()` helper and the Epic 27 Story 27.15 unified path convention rather than introducing a third config-writing variant.
+- `_bmad/` is gitignored (`.gitignore:20`, verified) — the generated file is per-machine by design. That is the point, not a defect.
+
+### Story 31.4: Staleness Fail-Loud Guard — Skills Refuse to Run Against a Stale Generated Config
+
+**Status:** backlog (blocked on 31.3)
+**Size:** Medium
+**Priority:** High
+
+**User Story:** As a developer who has just pulled a commit that moved the project's knowledge stores, I get a loud, actionable error naming the drift and telling me to run `ma-agents bind` — instead of a skill silently writing artifacts to where the stores used to be. (P5-9.3 read half; NFR83, consistent with the NFR56 fail-loud posture)
+
+**Acceptance Criteria:**
+1. When a skill activates and the committed `project-layout.yaml` no longer matches the state `config.yaml` was generated from, the skill **fails loud**: it halts, names the drift (which store moved, from where to where), and instructs the user to run `ma-agents bind`. It does not guess and does not proceed against stale paths.
+2. The skill **does not** regenerate `config.yaml` itself. Read paths never write (P5-9.3).
+3. The guard is a **preflight** — it runs before any read or write operation in the skill workflow, in the same gateway position `mcp-detection-pattern-spec.md` §2.6 places backend detection. No skill logic executes before the check.
+4. The guard is embedded as an instruction block in the affected skills, following the existing embedded-template convention (`mcp-detection-pattern-spec.md` §7.1: skills are markdown instruction documents; the pattern is embedded per skill, not a shared importable module), and is deployed unchanged through both pipelines (`skills/` via `lib/installer.js`, `lib/bmad-extension/skills/` via `lib/bmad.js`).
+5. A project with **no** `project-layout.yaml` at all (a pre-F26 project that has never been installed under F26) is not treated as drift — the guard degrades to today's behaviour rather than blocking every skill (NFR82).
+6. The drift comparison is content-based, not mtime-based (see Open Question OQ-2 — mtime ordering is not guaranteed after a `git pull` or fresh clone). It uses the generation stamp Story 31.3 writes.
+7. Tests cover: matched state (no message), drifted state (halt + actionable message + no write), missing `project-layout.yaml` (no halt), and missing `config.yaml` (actionable message pointing at install/bind).
+8. `npm test` green on Linux/CI and Windows.
+
+**Technical notes:**
+- **Scope decision needed before dev** — see Open Question OQ-3: whether the guard goes in all 39 config-referencing skills or only the 7 that read `config.yaml` explicitly. The 32 `{output_folder}` consumers inherit the resolved value, so guarding the 7 readers may be sufficient; that has to be confirmed against the resolution chain, not assumed.
+- Do not build a shared code module. Story 17.22 established the precedent: the routing/preflight pattern is instruction text embedded in each skill; `lib/installer.js` and `lib/bmad.js` deploy skills verbatim and need no change.
+- This is the story that makes P5-9.1's "read from `project-layout.yaml` and nowhere else" enforceable rather than aspirational.
+
+### Story 31.5: Two Independent Knowledge-Store Questions with Per-Store Backend Selection
+
+**Status:** backlog (blocked on 31.2)
+**Size:** Large
+**Priority:** Critical
+
+**User Story:** As a user installing ma-agents into a project, I am asked **separately** where my system requirements live and where my software requirements live, and each question independently offers its own backend and its own location — so that I can keep the PRD in Confluence for stakeholders while the architecture stays in git next to the code, or any other combination. (FR254, FR255, FR256, FR257, FR258; NFR82)
+
+**Acceptance Criteria:**
+1. The installer asks **two** knowledge-store questions in place of FR111's single knowledgebase question — a **system requirements store** and a **software requirements store** — in the same style FR111 used. FR111 is superseded, not extended. The sprint-management question (FR112) is **unchanged** and remains a third, separate question asked as it is today.
+2. The two questions are genuinely independent: answering one places **no** constraint on the other, in backend or in location (FR257, P5-9.5). A test proves all four backend combinations are reachable.
+3. Each store's question first selects a **backend** — `file-system` or `confluence` — and then collects that backend's location. No other backend value is offered.
+4. **`file-system` backend (FR258):** location is collected with the *existing* FR113–FR116 semantics, applied per store — current repository (default), local path, or remote git repository — including the existing-directory confirmation, path validation and clone behaviour. These are reused, not reimplemented.
+5. **`confluence` backend:** the question flow hands off to Story 31.8. Until 31.8 lands, selecting `confluence` is either not offered or is offered and records the backend with a clearly-stated "configuration pending" state — it never silently records an unusable store.
+6. The collected answers are persisted through Story 31.2's schema. `project-layout.yaml` is written unconditionally, including when both stores answer "current repository".
+7. **The store contents are defined and recorded (FR255, FR256):** system requirements = product brief and PRD (for a sharded PRD, its index and all shards); software requirements = architecture document, UX designs, epics. The wizard states this to the user at the point of asking, so the two questions are not ambiguous.
+8. **Backward compatible (NFR82):** a project that accepts the defaults for both stores behaves exactly as a single-knowledgebase project does today — same resolved artifact paths, no additional prompts on subsequent runs.
+9. **Non-interactive mode:** under `--yes`, both stores default to `file-system` / current repository with no prompts, matching FR127's contract and P2-10's CI/CD rule that multi-repo is interactive-only configuration.
+10. `npm test` green on Linux/CI and Windows.
+
+**Technical notes:**
+- Extend `collectRepoLayout()`; the per-concern loop already exists and today iterates `['knowledgebase', 'sprintManagement']`. The change is a three-concern loop with a backend sub-question on the two store concerns.
+- The two-store cut follows the systems-engineering distinction the requirement was framed in (*what the system must do* vs *how it is built*) and deliberately does **not** align with BMAD's phase-based `planning_artifacts` / `implementation_artifacts` split — see the addendum's sizing note.
+- Do not fold sprint management into either store. FR112 and the `[ASSUMPTION]` behind it are explicit that sprint state is tracked separately.
+
+### Story 31.6: Artifact-to-Store Routing — Workflows Resolve Each Artifact to Its Own Store
+
+**Status:** backlog (blocked on 31.3, 31.5)
+**Size:** Large
+**Priority:** High
+
+**User Story:** As a BMAD workflow that produces or consumes a planning artifact, I resolve my output location to the **correct one of the two stores** for the artifact I am handling — brief and PRD to the system requirements store, architecture, UX and epics to the software requirements store — while story and sprint artifacts continue to resolve through `sprint_management_path` exactly as they do today. (FR255, FR256, FR267; extends FR119, confirms FR120)
+
+**Acceptance Criteria:**
+1. Workflows producing **system requirements** artifacts — product brief, PRD (create/update/validate, including a sharded PRD's index and every shard) — resolve their location to the system requirements store.
+2. Workflows producing **software requirements** artifacts — architecture, UX designs, epics — resolve their location to the software requirements store.
+3. Workflows producing or consuming **sprint** artifacts — sprint planning, story creation, story-status lookup, `sprint-status.yaml`, bug management, retrospectives — resolve through `sprint_management_path`, unchanged. **Story files and other `implementation_artifacts` follow sprint management, not either store (FR267)** — a project that moves its knowledge stores does not move its stories. A test pins this.
+4. Every artifact type FR119 names has a declared owning store, including the research outputs (domain, market, technical) that FR255 and FR256 do not assign to either store — see Open Question OQ-5. The routing table has no unassigned artifact type; where the PRD is silent, the choice is recorded as a story-level decision rather than invented as a requirement.
+5. Resolution reads the generated `config.yaml` as it does today (FR264) — no workflow reads `project-layout.yaml` directly and no workflow hardcodes `_bmad-output/` as a relative-path assumption (NFR37).
+6. A **routing table** enumerating every artifact type and its owning store is written into the epic's implementation artifacts and is the single reference the workflows are edited against — so a reviewer can check coverage without reading every workflow.
+7. **Single-store and legacy projects are unaffected:** when both stores resolve to the same location, every artifact lands exactly where it lands today (NFR82).
+8. `npm test` green on Linux/CI and Windows; tests assert each artifact type resolves to its declared store in a two-store fixture and to the one location in a single-store fixture.
+
+**Technical notes:**
+- P2-10's implementation note still holds: path resolution happens inside the BMAD workflows, not in ma-agents code. ma-agents collects (31.5), persists (31.2), generates (31.3) and stamps into `project-context.md`; the workflows consume.
+- The routing table is the reviewable artifact here. Build it before editing workflows.
+- FR118's `project-context.md` repository-layout section gains the two store paths in place of the single knowledgebase path — keep the single-store omission rule (P2-10: single-repo mode omits the section entirely) so NFR34/NFR82 backward compatibility holds.
+
+### Story 31.7: Legacy Single-Store Compatibility and Offered (Never Forced) Migration
+
+**Status:** backlog (blocked on 31.5)
+**Size:** Small
+**Priority:** High
+
+**User Story:** As a maintainer of a project configured before F26, everything keeps working with no action from me, and I am **told** that my project is on the legacy single-store layout and exactly how to split it if I want to — but nothing is migrated unless I ask. (FR265; NFR82)
+
+**Acceptance Criteria:**
+1. A project whose `project-layout.yaml` predates F26, or which has only the FR117 single `knowledgebase_path`, resolves as **both stores pointing at that one location**. Every artifact path is unchanged from today.
+2. The user is told, once and non-blockingly, that the project is using the legacy single-store layout, what that means, and the exact command that splits it. The notice is informational — it never halts a workflow and never blocks an install.
+3. **Migration is offered, never performed unprompted (P5-9.5, P5-9.6 Deferred).** No install, bind, or skill activation rewrites a legacy layout into two stores without an explicit user choice.
+4. When the user does accept the split, the two-store questions from Story 31.5 are asked and the layout is rewritten through Story 31.2's writer. Declining leaves the project byte-identical.
+5. The notice is idempotent and does not nag: repeated installs or activations on an un-split legacy project do not produce escalating or repeated blocking output (consistent with the Story 30.4 one-time-notice pattern).
+6. **NFR82 is proven, not asserted:** a test fixture of a pre-F26 project runs a full install and asserts (a) zero additional prompts, (b) identical resolved artifact paths before and after, (c) an unchanged `config.yaml` apart from the generation stamp.
+7. `npm test` green on Linux/CI and Windows.
+
+**Technical notes:**
+- Detect legacy by the absence of Story 31.2's `schema_version` field, not by heuristics over the field names.
+- Distinguish clearly from Story 31.4's drift error: legacy is *informational and non-blocking*; drift is *loud and blocking*. They must not use the same message channel or the user will learn to ignore both.
+
+### Story 31.8: Confluence Backend Configuration — Space and Root Page
+
+**Status:** backlog (blocked on 31.5)
+**Size:** Medium
+**Priority:** High
+
+**User Story:** As a user who wants a store published to Confluence, I am asked which Confluence space it lives in and which root page its artifacts are created under — and if I leave the root page blank, ma-agents creates one named for my project and tells me the name it used. (FR259, FR260; NFR79)
+
+**Acceptance Criteria:**
+1. When a store selects the `confluence` backend, the installer asks which **Confluence space** the store lives in (FR259).
+2. The installer then asks for a **root page** under which that store's artifacts are created (FR260).
+3. **Blank root page ⇒ generated:** if the answer is left blank, ma-agents generates a root page named for the project (`{project_name}`), uses it, and **tells the user the page name that was created**. The user is never left guessing where the artifacts went.
+4. The space key and the root-page identity are persisted into `project-layout.yaml` through Story 31.2's schema — and **nothing else**. No token, no username, no URL carrying credentials, no session state (NFR79). A test asserts the written record contains only non-secret identity.
+5. **ma-agents stores no Confluence credentials anywhere on disk.** Authentication is entirely the MCP server's responsibility (NFR79, P5-9.6). There is no credential prompt, no credential file, and no credential field in any ma-agents-written artifact.
+6. The two stores configure independently: one may be `confluence` and the other `file-system`, or both `confluence` in different spaces (FR257).
+7. Configuration succeeds without contacting Confluence. Collecting a space key and a root-page name is offline configuration; whether the host is reachable is a **runtime** question answered by Story 31.9 (NFR80). Installation must not require network access.
+8. Under `--yes`, `confluence` is never selected implicitly — non-interactive installs default both stores to `file-system` (consistent with Story 31.5 AC9).
+9. `npm test` green on Linux/CI and Windows.
+
+**Technical notes:**
+- Root-page *creation* against a live Confluence belongs to Story 31.10 (it is an MCP write). This story collects the answer, records the intent, and defines the generated name; 31.10 performs it when the MCP is present.
+- See Open Question OQ-4 on how root-page identity is recorded (human-readable title vs an opaque page id) — that choice interacts with NFR79 and with rename handling in 31.10.
+
+### Story 31.9: MCP-Conditional Confluence Routing — Fail Loud, No Fallback
+
+**Status:** backlog (blocked on 31.8)
+**Size:** Medium
+**Priority:** High
+
+**User Story:** As a user whose store is configured for Confluence on a machine with no Confluence MCP, I get a loud, actionable error naming the store, its space, the fact that no Confluence MCP was detected and how to configure one — instead of a skill silently writing to a local file and letting my team's stakeholder-visible PRD go quietly out of date. (FR261, FR262; NFR80, P5-9.6)
+
+**Acceptance Criteria:**
+1. A store configured for `confluence` performs Confluence reads and writes **only when a Confluence MCP server is available at runtime**. Detection, routing and failure handling follow the canonical pattern in `mcp-detection-pattern-spec.md` — the same pattern the 13 sprint skills use for Jira. **No second bespoke mechanism is created** (FR261, NFR17).
+2. The backend value is read from the resolved configuration as a **gateway check at the start** of the skill workflow, before any read or write, in the position `mcp-detection-pattern-spec.md` §2.6 defines. `file-system` is the default when the backend is absent or empty (§2.7).
+3. **Fail loud, no degradation (FR262):** when the backend is `confluence` and no Confluence MCP is available, the skill **halts**. It does not silently degrade, does not fall back to a local copy, and does not proceed. The error names four things: the affected store, its configured space, that no Confluence MCP was detected, and how to configure one.
+4. **There is no mirror, no cache, and therefore no sync (P5-9.6).** No local copy of Confluence content is written, read, or reconciled anywhere in this story or any other in the epic. A test asserts no local artifact is produced on the Confluence path.
+5. The MCP-present path routes the operation to the MCP and treats Confluence as the source of truth for that store; the `file-system` branch is completely unchanged (`mcp-detection-pattern-spec.md` §6.6's additive-backend rule).
+6. **Air-gap posture is preserved and correctly stated (NFR80):** installation, skill loading, and every `file-system`-backed workflow complete with **no network access at all**. A `confluence`-backed store additionally requires its Confluence host to be reachable — which an intra-perimeter Confluence Server or Data Center satisfies on an air-gapped network. A project that must operate with no network whatsoever keeps both stores `file-system`-backed. A test proves the fully-`file-system` configuration completes with egress blocked.
+7. The routing block is embedded per skill and deployed unchanged through both pipelines, per `mcp-detection-pattern-spec.md` §7.1–§7.3. No change to `lib/installer.js` or `lib/bmad.js`.
+8. `npm test` green on Linux/CI and Windows; tests cover MCP-present routing, MCP-absent fail-loud (message content asserted), and `file-system` unchanged.
+
+**Technical notes:**
+- Reuse the spec's shape deliberately: a reviewer who knows the Jira path should be able to read the Confluence path without learning a second convention. That reuse is the stated reason FR261 names the spec rather than describing a mechanism.
+- This story is where Epic 14 Story 14.2's long-standing blocker is actually discharged — 14.2 was deferred pending "a new PRD FR defining the `knowledge_backend` field". FR257's per-store `backend` is that field.
+- The fail-loud posture is deliberate and matches NFR56's precedent elsewhere in the product. Resist any reviewer suggestion to add a "just this once" local fallback — that is FR266, and it is retired.
+
+### Story 31.10: Confluence Page Tree — One Page Per Artifact, Mirroring the Source Tree
+
+**Status:** backlog (blocked on 31.9)
+**Size:** Large
+**Priority:** Medium
+
+**User Story:** As a stakeholder reading a Confluence-backed store, I find one page per markdown artifact, nested under the store's root page in the same shape as the source folders — so a sharded PRD is an index page with its capability shards as child pages, and each artifact keeps its own page history and comments. (P5-9.7; completes FR255, FR256, FR260)
+
+**Acceptance Criteria:**
+1. One Confluence page is created per markdown artifact in the store, nested under the FR260 root page to **match the source folder structure** (P5-9.7). A sharded PRD becomes an index page with its capability shards as child pages.
+2. The mapping is not flattened: the tree shape is preserved rather than producing a wall of sibling pages, and it is not collapsed into a single page per store — both alternatives are explicitly rejected at P5-9.7 because they destroy per-artifact page history and comments.
+3. When the FR260 root page was left blank at configuration time, it is created here, named `{project_name}`, and the created page name is reported to the user.
+4. Writes go exclusively through the Confluence MCP detected in Story 31.9; the fail-loud gate applies to every operation in this story. No local copy is written (P5-9.6).
+5. Re-running against an already-published store updates existing pages rather than duplicating them, so page history and comments survive. Identity resolution follows the decision recorded for Open Question OQ-4.
+6. Only the artifacts belonging to that store are published. A `confluence`-backed system requirements store publishes brief and PRD; it does not publish architecture, UX, epics, story files or `sprint-status.yaml` (FR255, FR256, FR267).
+7. **Out of scope and enforced as such:** per-artifact page templates and any enforced hierarchy beyond this tree mapping are deferred at P5-9 and are not implemented here.
+8. `npm test` green on Linux/CI and Windows; tests use a mocked MCP surface and assert tree shape, update-not-duplicate on re-run, and store-scoped artifact selection.
+
+**Technical notes:**
+- This story is the largest genuinely-new surface in the epic and the one most exposed to OQ-4 (page identity). Settle OQ-4 before starting; without it, a renamed or re-sharded artifact orphans its page.
+- Keep the operation set small and explicitly enumerated, the way `mcp-detection-pattern-spec.md` §3 enumerates the sprint operations catalog — an unenumerated operation set is how the Jira path nearly grew a second convention.
+
+### Story 31.11: Install Scope Becomes a Wizard Question; a Global Install Does No Project-Scoped Work
+
+**Status:** backlog (blocked on 31.1)
+**Size:** Medium
+**Priority:** High
+
+**User Story:** As a user running the installer, I am asked "Install for this project only, or globally for your user account?" before platform and agent selection, with project-level as the default — and if I choose global, the installer does no project-scoped work at all, because no project is in scope at that moment. (FR248, FR251; NFR76, NFR77)
+
+**Acceptance Criteria:**
+1. Install scope is an **interactive question in the installation wizard**, asked **before** platform/agent selection, with **project-level as the default** (FR248).
+2. The existing `--global` CLI flag is **retained** as the non-interactive equivalent for `--yes` and CI runs. It is no longer the only way to reach a global install, and it is not removed (FR248).
+3. **A global install performs no project-scoped work (FR251):** it does not generate `project-context.md`, does not write `project-layout.yaml`, and does not prompt for knowledge-store locations. These are deferred to the bind step (Story 31.13). A test asserts a global install writes nothing under any project root.
+4. **NFR76 — the default path is byte-identical to today.** A user who accepts the project-level default reaches an install byte-identical to the current one, with no additional prompts on subsequent runs. A test compares the full install output tree before and after. This extends NFR34's backward-compatibility contract to install scope and is the acceptance criterion most likely to catch a regression.
+5. **NFR77 — global install is fully air-gapped**, on the same terms as project installation: bundled BMAD cache, no npm/git/CDN access at install time. Proven with egress blocked, re-asserting NFR2/NFR50/NFR57.
+6. When a globally-installed skill activates in a project with no `_bmad-output/project-layout.yaml`, the bind step is **offered** (the offer is here; the command is Story 31.13).
+7. `npm test` green on Linux/CI and Windows.
+
+**Technical notes:**
+- The scope prompt already exists in partial form: `bin/cli.js` around line 1420 offers `Project level (current directory)` / `Global (user-level settings)` / `Custom path...`. FR248 promotes this to a first-class question asked earlier in the flow, ahead of platform/agent selection.
+- Per P5-9.8, **the bind step is the only thing that writes project-scoped state**, and that holds whether or not BMAD itself can be installed globally. This story is therefore correct under either Story 31.1 verdict; only Story 31.12 changes shape.
+- Do not let the scope question leak into the project-level path. NFR76 means the default answer must produce the same bytes, not merely equivalent behaviour.
+
+### Story 31.12: Global BMAD Module and Agent Installation — or the FR250 Degradation Path
+
+**Status:** backlog (blocked on 31.1, 31.11) — **scope determined by the Story 31.1 gate verdict**
+**Size:** Medium if 31.1 PASSes; Small if it FAILs
+**Priority:** High
+
+**User Story:** As a user choosing a global install, BMAD modules and BMAD agents are installed globally alongside my ma-agents skills — or, if bmad-method cannot support that, I am told plainly that BMAD remains project-scoped, given the command that installs it into a project, and told that my knowledge-store configuration is unaffected. (FR249, FR250 degradation path; NFR77)
+
+**Acceptance Criteria:**
+
+*On a Story 31.1 **PASS** verdict:*
+1. When global scope is selected, BMAD modules and BMAD agents are installed globally alongside ma-agents skills (FR249). The current filter at `bin/cli.js:1440-1451` — which strips every `category === 'bmad'` agent and tells the user to re-run without `--global` — is **lifted**, and the `if (installScope === 'project')` guard on the BMAD integration block at `bin/cli.js:1454` is widened to cover the global path.
+2. The set of BMAD modules installed globally is **the same default set FR123 defines for project installs** — every non-retired module from `lib/bmad-cache/cache-manifest.json`, with `bmm` force-included, experimental-channel modules filtered out, and the `--bmad-modules` override honoured identically.
+3. Global BMAD installation is **fully air-gapped** (NFR77): it resolves from the bundled cache with no npm/git/CDN access, proven with egress blocked.
+4. The existing warning text and the "re-run without `--global`" guidance are removed, not left stale.
+
+*On a Story 31.1 **FAIL** verdict:*
+5. ma-agents skills install globally and BMAD remains project-scoped, and the installer reports **exactly three things** (FR250): that BMAD remains project-scoped, the command that installs BMAD into a project, and that the F26 knowledge-store requirements are unaffected.
+6. The message is a clear, non-alarming statement of a supported configuration — not a warning and not an error. A global install with project-scoped BMAD is a working mode, not a degraded one.
+
+*Either way:*
+7. **No part of Stories 31.2–31.10 changes** as a result of this story's shape (P5-9.8). A test proves a globally-installed skill resolves a bound project's topology from the project root alone (NFR83) under both outcomes.
+8. `npm test` green on Linux/CI and Windows.
+
+**Technical notes:**
+- This story is deliberately the **only** place the spike verdict is felt. It is written for both outcomes so a FAIL shrinks it to a messaging change rather than reopening the epic. Mirror the Story 30.5 precedent, which required "an explicit fallback so a negative result degrades gracefully".
+- If PASS: the two change sites named in Story 31.1 AC4 are the whole surface. Resist widening.
+
+### Story 31.13: `ma-agents bind` — Per-Project Binding for Globally-Installed ma-agents, plus Scope Reporting in `ma-agents status`
+
+**Status:** backlog (blocked on 31.3, 31.5, 31.8)
+**Size:** Medium
+**Priority:** High
+
+**User Story:** As a user who installed ma-agents globally, I run `ma-agents bind` inside a project to answer only the project-scoped questions — the two knowledge-store bindings and the sprint-management location — and get a committed `project-layout.yaml` and a `project-context.md`, without installing a single skill or BMAD module. And `ma-agents status` tells me which scope I am on and which projects on this machine are bound. (FR252, FR253; NFR78, NFR83)
+
+**Acceptance Criteria:**
+1. `ma-agents bind` collects **only** the project-scoped answers — the two knowledge-store bindings (FR254, reusing Story 31.5's and 31.8's collection flow) and the sprint-management location (FR112) — and writes `_bmad-output/project-layout.yaml` plus `project-context.md`.
+2. `ma-agents bind` **installs no skills and no BMAD modules**. A test asserts a bind run produces no skill directories and no `_bmad/` module tree beyond the generated `config.yaml` (FR264 generation fires on bind — P5-9.3).
+3. Bind is also **offered automatically** when a globally-installed skill activates in a project that has no `_bmad-output/project-layout.yaml` (FR252). The offer never runs bind without the user's choice.
+4. **Idempotent and non-destructive (NFR78):** re-running bind against an already-bound project **reports the existing bindings and changes nothing** unless the user explicitly edits an answer. A test runs bind twice and asserts the second run leaves every file byte-identical.
+5. **Bind never overwrites an existing `project-context.md` (NFR78, consistent with NFR23 and FR84).** If one exists, it is left untouched and generation is skipped with a notice.
+6. Bind regenerates `config.yaml` from the layout it just wrote (FR264, P5-9.3) and never touches `config.user.yaml` (P5-9.4).
+7. **`ma-agents status` reports the active install scope**, and for a global install lists which projects on this machine have been bound and, **for each, whether a readable `project-layout.yaml` was found at its root** (FR253) — so a project that was bound and later moved or deleted is visible as such rather than silently listed as healthy.
+8. The bound-project record used by AC7 is per-machine and lives outside any project (see Open Question OQ-1); it is not written into any project's committed artifacts, and losing it degrades `status` output only — it never affects resolution, which depends on the project root alone (NFR83).
+9. `npm test` green on Linux/CI and Windows.
+
+**Technical notes:**
+- **Verified:** `bin/cli.js` already routes a `status` command (`case 'status':` at line 2081); there is no `bind` command today. This story adds one and extends the other.
+- The bind step is the seam P5-9.8 relies on: it is the only writer of project-scoped state, which is why the FR250 spike gates *how much* of global install ships rather than *whether* the architecture holds. Keep it independent of the spike outcome.
+- Reuse Story 31.5's collection functions directly. A second, drifting copy of the store questions inside bind is the most likely defect this story can introduce.
+
+### Story 31.14: Release Gate — Air-Gap, Determinism, Backward Compatibility, Fail-Loud Proof, Traceability, Semver Cut
+
+**Status:** backlog (blocked on 31.4, 31.6, 31.7, 31.10, 31.12, 31.13)
+**Size:** Small
+**Priority:** High
+
+**User Story:** As the ma-agents maintainer, before publishing I have proof that the two-store split changed nothing for existing projects, that the binding record is deterministic and credential-free, that every fail-loud path actually fails loud, and that a fully `file-system` configuration installs and runs with no network at all — plus a clean semver cut. (NFR76, NFR77, NFR79, NFR80, NFR81, NFR82, NFR83)
+
+**Acceptance Criteria:**
+1. **Air-gap gate (NFR77, NFR80):** the existing offline-install harness (`offline-install.yml`, the Epic 22 / NFR50 gate) is extended to cover a two-store, fully `file-system` install **and** a global install, both with all egress blocked, both succeeding with zero network calls. Re-asserts NFR2/NFR50/NFR57.
+2. **Backward compatibility (NFR76, NFR82):** a pre-F26 project fixture and a default-answers project fixture both install to a byte-identical result versus the pre-epic baseline (modulo the generation stamp), with **zero additional prompts** on first and subsequent runs.
+3. **Determinism (NFR81):** the same answers produce a byte-identical `project-layout.yaml` and a byte-identical generated `config.yaml` across Linux and Windows runs; CRLF/LF inputs do not change output.
+4. **No credentials on disk (NFR79):** a scan of every ma-agents-written artifact after a Confluence-configured install finds no credential-shaped value; `project-layout.yaml` carries only the space key and root-page identity.
+5. **Fail-loud paths proven (FR262, P5-9.3):** the Confluence-without-MCP error and the stale-config drift error are both exercised end to end and assert message content — affected store, space, cause, remedy — not merely a non-zero exit.
+6. **Global resolution proven (NFR83):** a skill installed globally, on a machine with no per-machine install state for the project, resolves a bound project's topology from the project root alone.
+7. **FR/NFR traceability:** every one of FR248–FR265, FR267 and NFR76–NFR83 is traced to a landed story, and **FR266 is confirmed to have no implementation anywhere in the diff** — no mirror, no cache, no sync, no conflict-resolution code path.
+8. Docs updated: the two store questions, `ma-agents bind`, the install-scope question, the Confluence backend and its MCP requirement, and the fail-loud behaviours. A new ma-agents semver version is cut per the project's versioning strategy and `CHANGELOG.md` updated (feature addition, no breaking change to the public CLI — MINOR, consistent with prior epics).
+9. Full `npm test` green on **both** Linux/CI and Windows.
+
+**Technical notes:**
+- Mirrors the Epic 27 / 29 / 30 release-gate stories (offline gate + multi-platform green + traceability + semver cut).
+- AC7's negative check is deliberate. FR266 was retired *before* implementation and an accidental mirror is the single most likely way this epic acquires the subsystem P5-9.6 removed.
+- Run any test file touched by the store split **directly** as well as through `npm test` — the chained test script halts on the known MIL-498 CRLF drift at position 13 and can mask downstream breakage (the Story 30.4 / 30.8 precedent).
+
+### Epic 31 — Cross-Epic Notes
+
+- **Unblocks Epic 14 Story 14.2 (Confluence MCP Integration), deferred since 2026-03-20.** Story 14.2 was blocked on "a new PRD FR defining the `knowledge_backend` field before any implementation work can be scoped". FR257's per-store `backend` is that field. Per the addendum, **14.2 should be reframed against FR254–FR262 rather than implemented as originally scoped** — its original framing predates the two-store model and the retirement of FR266. Epic 14's own entry is left unedited here; reframing 14.2 is a separate correct-course decision for whoever picks Epic 14 up.
+- **Extends, does not replace, Epic 16 (Multi-Repository Project Layout).** FR113–FR116's location semantics, `collectRepoLayout()`, `writeProjectLayoutYaml()` and `readExistingLayout()` are all reused. What changes is that the file becomes unconditional and authoritative (FR263 supersedes FR122's conditional scope) and that it carries two stores instead of one knowledgebase (FR254 supersedes FR111, FR263 supersedes FR117).
+- **Reuses, does not fork, the P2-11 backend-routing pattern.** The Confluence backend is a second consumer of `mcp-detection-pattern-spec.md`, not a second mechanism (FR261, NFR17). §6.6 of that spec already anticipates additive backends.
+- **Composes with Epic 29 (Knowledge Atlas).** Story 29.7 (config-aware knowledge-source discovery, done) already resolves the Atlas's source location from configuration. Once the stores split, the Atlas scans two locations rather than one; no Atlas change is scoped in this epic, but the interaction should be confirmed at the Story 31.14 gate.
+- **Epic-numbering note:** `epics.md` tops out at Epic 29, but `sprint-status.yaml` already carries `epic-30` (BMAD v6.10.0 Integration, shipped in v3.17.0 and never written into this file — pre-existing PR drift, not addressed here). **31 is the correct next number and is unused in both files.**
+
+### Epic 31 — Open Questions
+
+Recorded rather than resolved by invention. None blocks the gate stories (31.1, 31.2); each is named in the story that must settle it.
+
+- **OQ-1 — Where does the bound-projects record live?** FR253 requires `ma-agents status` to list which projects on this machine have been bound, but no FR and no P5-9 sub-decision names the file that holds that list. It cannot be project-scoped state (it is a machine-level index), and NFR83 forbids resolution from depending on it. Candidate: a user-level record alongside the global install. **Settle in Story 31.13.**
+- **OQ-2 — How is `config.yaml` staleness actually computed?** P5-9.3 says the skill fails loud when `project-layout.yaml` is "newer than" the generated `config.yaml`, but filesystem mtime ordering is not guaranteed after a `git pull`, a fresh clone, or a checkout — the committed file can legitimately land with an older mtime than the generated one. Stories 31.3 and 31.4 assume a content-based generation stamp instead. **Confirm before Story 31.4.**
+- **OQ-3 — Which skills carry the staleness guard?** The 39 config references split into 7 skills that read `_bmad/bmm/config.yaml` explicitly and 32 that consume `{output_folder}` derived from it. Whether the guard belongs in all 39 or only in the 7 readers depends on the resolution chain and has not been decided. **Settle in Story 31.4.**
+- **OQ-4 — How is a Confluence page's identity recorded?** P5-9.7 maps one page per markdown artifact, and Story 31.10 must update rather than duplicate on re-run. NFR79 says `project-layout.yaml` records "only the space key and root page identity", which does not say whether per-artifact pages are matched by title (breaks on rename/reshard) or by a stored page id (a growing per-artifact record the layout file was not designed to carry). **Settle before Story 31.10.**
+- **OQ-5 — Research reports belong to neither store as written.** FR255 assigns the product brief and PRD to the system requirements store; FR256 assigns architecture, UX and epics to the software requirements store. FR119 also requires *research* outputs (domain, market, technical) to resolve from configuration, and today they sit in `planning-artifacts/` alongside the brief — but no F26 requirement says which store owns them. This is a genuine PRD gap, **not** grounds for inventing an FR. **Settle in Story 31.6** as a recorded story-level routing decision, or raise it to the PM for an FR.
+- **OQ-6 — Two remote-git stores mean two clones.** FR258 applies FR113–FR116's remote-clone semantics *per store*, so a project can now ask the installer to clone two repositories in one run. Nothing forbids it and it is not a contradiction, but the confirmation and failure UX for a partial two-clone install is unspecified. Minor; **settle in Story 31.5** or accept the sequential single-clone behaviour applied twice.
