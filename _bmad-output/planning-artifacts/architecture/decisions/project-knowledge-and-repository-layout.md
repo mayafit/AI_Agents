@@ -285,8 +285,14 @@ or Jira mode as FR122 / Story 16.2 originally scoped it (`bin/cli.js:605`).
 `_bmad/bmm/config.yaml` remains exactly what skills read, but is **generated from**
 `project-layout.yaml` rather than written directly from install answers (FR264).
 
-- **Prevents:** changing 39 existing skill config references — 7 skills read
+- **Prevents:** changing the config *location* for 39 existing skill references — 7 skills read
   `{project-root}/_bmad/bmm/config.yaml` explicitly, 32 use `{output_folder}` derived from it.
+- **Rule (amended 2026-08-02):** the generated config carries the existing single-valued fields **plus**
+  `system_requirements_path` and `software_requirements_path`. Legacy `planning_artifacts` and
+  `knowledgebase_path` are retained and resolve to the **software requirements store**, so untouched
+  references keep working. Only the FR119 workflows that write store-specific artifacts read the new
+  fields. A single-valued path field cannot serve two stores in different locations, so the original
+  "all 39 unchanged" framing was over-claimed; the location is unchanged, the field set is extended.
 - **Rule:** generation flows committed → per-machine and never the reverse. `project-layout.yaml`
   is never derived from `config.yaml`.
 
@@ -306,8 +312,12 @@ or Jira mode as FR122 / Story 16.2 originally scoped it (`bin/cli.js:605`).
 - **Rule:** generation overwrites `config.yaml` wholesale and reports that it did so. The file
   already declares itself installer-managed and regenerated on every install, so overwrite honours
   its documented contract rather than changing it.
-- **Rule:** `config.user.yaml` is **never** touched by generation. It is the documented home for
-  per-developer pins and must survive, or developers lose their only override surface.
+- **Rule:** the per-developer override files are **never** touched by generation. Verified against a real
+  install, those are `_bmad/config.user.toml` and `_bmad/custom/config.user.toml` — **not**
+  `config.user.yaml`, which does not exist. This install keeps module configs in YAML
+  (`_bmad/bmm/config.yaml`, `core/`, `ma-skills/`) and root/user configs in TOML; Epic 27 Story 27.15
+  tracks that split. **[AMENDED 2026-08-02 — P5-9.4 originally named `config.user.yaml`, so the
+  protection and its test would have passed vacuously against a file that is never created.]**
 
 #### P5-9.5 — Store model
 
@@ -359,7 +369,7 @@ work, and `ma-agents bind` supplies the per-project answers afterwards (FR251, F
   not BMAD itself can be installed globally, which is what makes the FR250 spike a gate on *scope*
   rather than on *architecture*.
 - **If the spike passes:** BMAD modules and agents install globally alongside ma-agents skills,
-  lifting the current filter at `bin/cli.js:1441`.
+  lifting the current filter at `bin/cli.js:1440-1452`, and the project-only guard at `bin/cli.js:1455`.
 - **If the spike fails:** ma-agents skills install globally, BMAD stays project-scoped, and the
   installer reports the three facts FR250 requires. **No part of P5-9.1–P5-9.7 changes** — the
   binding architecture is what makes a globally-installed skill resolvable from the project root

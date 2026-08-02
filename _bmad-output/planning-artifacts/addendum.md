@@ -42,6 +42,12 @@ existing references**. Seven skills read `{project-root}/_bmad/bmm/config.yaml` 
 use `{output_folder}` derived from it. Repointing all of them would touch every skill and every
 mil498 prompt, with a large regression surface and no user-visible benefit.
 
+**Amended 2026-08-02.** The indirection preserves the config *location*, not the whole field set.
+Two stores in different locations cannot share a single-valued `planning_artifacts`, so the
+generated config gains `system_requirements_path` and `software_requirements_path`; the legacy
+fields remain and resolve to the software store. Only the FR119 workflows that write
+store-specific artifacts read the new fields. Surfaced by the implementation-readiness review.
+
 Generation direction is one-way, committed → per-machine:
 
 ```
@@ -58,8 +64,10 @@ Open mechanism questions for P5-9:
 - What happens to a hand-edited `config.yaml`? Overwrite, warn, or merge. Note the existing
   file header already declares itself installer-managed and overwritable, which argues for
   overwrite-with-notice.
-- Does `config.user.yaml` (personal overrides) survive generation? It must — it is the documented
-  place for per-developer pins.
+- ~~Does `config.user.yaml` survive generation?~~ **ANSWERED at P5-9.4, and the premise was wrong.**
+  `config.user.yaml` does not exist in this install. Per-developer overrides are
+  `_bmad/config.user.toml` and `_bmad/custom/config.user.toml`; module configs are YAML, root and user
+  configs are TOML (Epic 27 Story 27.15 tracks the split). Generation never touches either TOML file.
 
 ## Mechanism — MCP-conditional Confluence routing
 
@@ -75,7 +83,7 @@ path can read the Confluence path without learning a second convention.
 
 The `knowledge_backend` field name in `epics.md` Story 14.2's deferral note is the field F26
 realises as the per-store `backend` value (FR257). Story 14.2 should be reframed against FR254–
-FR266 rather than implemented as originally scoped.
+FR265 and FR267 rather than implemented as originally scoped (FR266 was retired at P5-9).
 
 ## Sizing note — why the two-store cut is where it is
 
@@ -85,5 +93,6 @@ the artifacts are already produced and reviewed — brief and PRD by product, ar
 by engineering — which is also why the two often want different homes and different visibility.
 
 The cut does not align with BMAD's existing `planning_artifacts` / `implementation_artifacts`
-split, which is phase-based rather than concern-based. That mismatch is the root of Open Item #1
-(where story files belong) and is the thing to resolve before epic creation.
+split, which is phase-based rather than concern-based. That mismatch was the root of Open Item #1,
+**closed 2026-08-01**: story files follow `sprint_management_path` and belong to neither knowledge
+store (FR267), which is also consistent with the pre-existing FR120.
