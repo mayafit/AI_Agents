@@ -84,7 +84,7 @@ function buildBmadArgs(installContext) {
   const args = [
     'node', `"${bmadPath}"`, 'install',
     '--directory', `"${installContext.projectRoot}"`,           // FR123: project path (quoted for spaces)
-    '--modules', installContext.selectedModules.join(','),      // default: every non-retired module from cache manifest; override via --bmad-modules
+    '--modules', installContext.selectedModules.join(','),      // FR123 (amended 2026-08-02): default bmm+tea+bmb+cis; gds/wds bundled but opt-in; override via --bmad-modules
     '--tools', installContext.selectedTools.join(','),          // FR123: e.g., "claude-code,cursor,opencode"
     '--user-name', `"${installContext.userName}"`,              // FR123: from ma-agents wizard
     '--communication-language', installContext.commLang,        // FR123: default "English"

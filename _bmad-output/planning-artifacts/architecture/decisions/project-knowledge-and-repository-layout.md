@@ -307,7 +307,7 @@ or Jira mode as FR122 / Story 16.2 originally scoped it (`bin/cli.js:605`).
   committed topology.
 - Consistent with the fail-loud posture NFR56 establishes for the module-registry reader.
 
-#### P5-9.4 — Hand-edited `config.yaml` is overwritten with notice; `config.user.yaml` survives
+#### P5-9.4 — Hand-edited `config.yaml` is overwritten with notice; the per-developer override files survive
 
 - **Rule:** generation overwrites `config.yaml` wholesale and reports that it did so. The file
   already declares itself installer-managed and regenerated on every install, so overwrite honours
@@ -361,9 +361,14 @@ follow it rather than either store (FR267).
 
 #### P5-9.8 — Install scope, designed for both spike outcomes
 
-Install scope becomes an interactive wizard question with project-level as the default; `--global`
-survives as the non-interactive equivalent (FR248). A global install performs no project-scoped
-work, and `ma-agents bind` supplies the per-project answers afterwards (FR251, FR252).
+Install scope **already is** an interactive wizard question with project-level as the default
+(`bin/cli.js:1414-1437`) and is retained as-is; `--global` survives as the non-interactive
+equivalent (FR248 as amended 2026-08-02). What changes is the *consequence* of a global answer:
+BMAD is no longer silently dropped (FR249), no project-scoped work is performed (FR251), the
+chosen scope is recorded, and `ma-agents bind` supplies the per-project answers afterwards
+(FR252). **[AMENDED 2026-08-03 — this paragraph said the question "becomes" a wizard question,
+written before source verification showed it already ships. Narrowed to match amended FR248; none
+of the rules below change.]**
 
 - **Rule:** the bind step is the only thing that writes project-scoped state. This holds whether or
   not BMAD itself can be installed globally, which is what makes the FR250 spike a gate on *scope*

@@ -2,7 +2,7 @@
 stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-24', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-25', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-07', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-08', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-05-01', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-05-01b']
 workflowStatus: 'complete'
 completedDate: '2026-03-05'
-lastEdited: '2026-08-01'
+lastEdited: '2026-08-03'
 editHistoryLocation: 'prd/changelog.md'
 inputDocuments: ['docs/index.md', 'docs/project-overview.md', 'docs/architecture.md', 'docs/source-tree-analysis.md', 'docs/development-guide.md', 'README.md', 'CONTRIBUTING.md', 'DEVELOPMENT.md', 'QUICK_START.md', 'SKILLS_STRUCTURE.md', '_bmad-output/planning-artifacts/product-brief-agents-2026-03-08.md']
 workflowType: 'prd'
@@ -21,7 +21,7 @@ classification:
 # Product Requirements Document - agents
 
 **Author:** Alon
-**Date:** 2026-03-05 | **Last Edited:** 2026-08-01
+**Date:** 2026-03-05 | **Last Edited:** 2026-08-03
 
 > **This is the PRD index.** The PRD was decomposed on 2026-07-31 (it was a single 184 KB /
 > 1,011-line file). Content is verbatim; this file carries the front matter and the registers.
@@ -35,10 +35,14 @@ classification:
 > `prd/capabilities/X.md` and `architecture/decisions/X.md` — same filename, both sides of the
 > contract.
 
-**Totals:** 266 FR definitions — **265 live, 1 retired** (FR266, retired at P5-9 before implementation) — covering **265 distinct IDs** (high-water mark FR267; FR35 is
-defined twice — Known Issues #1) · 83 NFRs, all distinct (high-water mark NFR83) · 11
-capability domains covering the PRD's 26 declared capability areas. Every ID except FR35
-appears in exactly one file.
+**Totals** (recomputed from the shard contents 2026-08-03, fence-aware): **266 FR definition
+lines** covering **265 distinct FR IDs** — FR35 is defined twice (Known Issues #1), so definitions
+exceed distinct IDs by one. Of those 265 distinct IDs, **264 are live and 1 is retired** (FR266,
+retired at P5-9 before implementation, ID never reused). High-water mark **FR267**; FR77 and FR78
+were never defined (Known Issues #2), so the high-water mark overstates the ID count by two.
+**83 NFR definitions covering 83 distinct NFR IDs**, no duplicates and no gaps, high-water mark
+**NFR83**. 11 capability domains covering the PRD's 26 declared capability areas. Every ID except
+FR35 appears in exactly one file.
 
 **F26 — Global Installation & Federated Knowledge Stores** is the newest capability area and
 spans two capability files: the install-scope thread lives in
@@ -177,7 +181,7 @@ exact and machine-derived from the shard contents (no approximation, no "partial
 
 ## Related documents
 
-- [architecture.md](architecture.md) — architecture index + decision register (P2-1 … P5-8)
+- [architecture.md](architecture.md) — architecture index + decision register (P2-1 … P5-9; next free ID P5-10)
 - [epics.md](epics.md) — epics and stories
 - [../implementation-artifacts/sprint-status.yaml](../implementation-artifacts/sprint-status.yaml) — delivery status; the authority on what actually shipped
 
@@ -212,7 +216,7 @@ Recorded, deliberately **not** fixed — no requirement text or ID was altered.
    [agent-personas-and-ide-targets.md](prd/capabilities/agent-personas-and-ide-targets.md),
    so a reader of one will not see the other. One of them needs a new ID.
 2. **FR77 and FR78 are never defined.** The sequence skips them with no recorded reason, so
-   FR247 as high-water mark overstates the count by two.
+   FR267 as high-water mark overstates the distinct-ID count by two.
 3. **F10 Sprint & Backlog Management has 20 FRs and zero NFRs.** Its NFR section exists but
    defines no quality attributes at all — no performance, reliability or scale constraint on
    the sprint model.

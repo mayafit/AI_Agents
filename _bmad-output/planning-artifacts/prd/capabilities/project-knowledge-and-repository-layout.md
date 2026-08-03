@@ -8,7 +8,7 @@
 > Architecture: P2-7, P2-10.
 >
 > Also carries the **federated knowledge store** thread of F26 — FR254–FR267,
-> NFR79–NFR83. Architecture: P5-9 (proposed). F26 supersedes FR111 (single
+> NFR79–NFR83. Architecture: P5-9 (written and registered 2026-08-02). F26 supersedes FR111 (single
 > knowledgebase question) and FR117 (bindings in the per-machine `config.yaml`);
 > both are retained below as history and marked accordingly.
 
