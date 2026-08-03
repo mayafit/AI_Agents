@@ -136,9 +136,34 @@ would "silently rot if nobody actions it before 31.2 starts" — was valid and i
 reconciliation was relayed to 31.2's implementer before it had written any code, and is recorded
 below. Confirmation that 31.2 honoured it is a review checkpoint for that story.
 
-**Left unfixed by design:** FR123's `--custom-content` is stale (6.10.0 renamed it `--custom-source`).
-That is capability **F3, not F26** — it belongs in a separate defect, not this epic. ma-agents already
-probes and downgrades (`lib/bmad.js:679-711`), so nothing is broken.
+**Left unfixed by design, and now FILED as durable bug reports** (so wave-2 planning picks them up
+rather than relying on this ledger):
+
+| Filed as | What | Why not fixed here |
+|---|---|---|
+| `bug-fr123-custom-content-flag-name-stale-upstream-renamed-custom-source.md` | FR123 names `--custom-content`; upstream renamed it `--custom-source` at 6.3.0 | Capability **F3, not F26**. Documentation-only — `resolveCustomContentFlag()` (`lib/bmad.js:679-711`) already probes for both names, so nothing is broken. The *fix is a PRD amendment*, which this run is forbidden to make. |
+| `bug-uninstall-skill-hardcodes-project-scope-on-update.md` | `bin/cli.js:1668` and `:1680` pass a literal `'project'` to `uninstallSkill` instead of the live `installScope` | Pre-existing latent **global-update** defect, no F26 requirement behind it. Verified against source: `uninstallSkill(skillId, agentIds, customPath = '', scope = 'project')` (`lib/installer.js:2088`) — the fourth parameter is a real behavioural switch, so the literal defeats it and a global-scope deselection silently no-ops. |
+
+Both reports carry the full ten-site map (five correct `installScope` gates + five hardcoded literals)
+so a fix is scoped deliberately rather than by grep, and both explicitly warn against folding the
+change into Story 31.11/31.12 as a drive-by. The three Step-0 literals (`:1214`, `:1246`, `:1256`) are
+recorded as **defensible but undecided** — they run before scope is chosen — with an AC requiring an
+explicit decision rather than silence.
+
+### Story 31.2 — `package.json` modification: checked and cleared
+
+Flagged during the in-flight check because it is not obviously required by any of 31.2's ten ACs.
+**Resolved: justified and correct.** The only change is one addition to the `test` script chain —
+`node test/project-layout-binding-spine.test.js`, i.e. the story registering its own new test file.
+Verified mechanically: nothing removed from the chain (the added entry is the sole difference), and
+**no dependency change of any kind** — no `dependencies` / `devDependencies` edit, no version bump.
+Scripts only.
+
+This is *required* rather than optional in this repo: `test` is an explicit `&&`-chained list of test
+files, not a glob, so a new test file absent from that chain never runs in the suite. A story adding a
+test file and **not** touching `package.json` would be the defect. Two residual checks remain for
+review: that the registered filename matches the file actually written, and that the entry sits
+sensibly in the chain order.
 
 ## Story 31.1 — FR250 spike verdict: **FAIL**
 
