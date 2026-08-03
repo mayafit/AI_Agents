@@ -422,11 +422,24 @@ Two incidental confirmations from the same live install: `_bmad/` holds `config.
 `config.user.toml` with module configs in YAML and **no `config.user.yaml`**, independently
 verifying the 2026-08-02 amendment to P5-9.4; and the project-scope assumption in `bin/cli.js` is
 encoded at **five** scope-gated sites (1441, 1455, 1616, 1759, 1768), not two — the three beyond the
-pair named above are the FR251 project-scoped-work gates and are already correct.
+pair named above are the FR251 project-scoped-work gates and are already correct. A further **five**
+sites hardcode a `'project'` literal (1214, 1246, 1256, 1668, 1680); the first three are pre-wizard
+Step-0 cleanup where the assumption is defensible, while 1668/1680 are a latent global-*update*
+defect. Story 31.11 should be handed all ten rather than re-deriving them.
 
 Re-open condition: this gate flips to PASS only when upstream ships both a user-level resolution
 search order (or environment override) **and** a way to install without materialising project-scoped
 output directories at the target.
+
+**Concrete watch trigger:** upstream issue `bmad-code-org/BMAD-METHOD` **#1728 — "feat: global
+install + bmad-link/unlink for multi-project workflows"** (OPEN, `priority:high`, created
+2026-02-21) proposes precisely that — a `--global` flag targeting `~/.bmad/` plus `bmad link` /
+`unlink` for per-project binding. It is **not present in 6.10.0** (verified by execution:
+`bmad install --global` → `error: unknown option '--global'`), so it **confirms this FAIL rather
+than flipping it**, but it turns the re-open condition into something watchable. Track #1728; when it
+ships, re-run this spike against that version and re-test it against both conditions above. Its
+`bmad link` concept is the upstream analogue of `ma-agents bind` (FR252) — if both come to exist,
+Story 31.13 should reconcile them rather than duplicate.
 
 #### Deferred
 

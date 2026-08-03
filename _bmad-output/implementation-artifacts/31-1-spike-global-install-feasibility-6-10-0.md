@@ -1,6 +1,6 @@
 # Story 31.1: Spike/GATE — Confirm What bmad-method v6.10.0 Supports for User-Level Installation
 
-Status: review
+Status: done
 
 ## Story
 
@@ -86,11 +86,19 @@ under `$HOME`). The `~`-literal form was tested separately and directly (see AC1
 
 **Not met as a capability; established as a fact.**
 
-- **[READ]** The `install` command exposes 17 options
+- **[RUN]** The direct test, which settles it in two seconds:
+  ```
+  $ node node_modules/bmad-method/tools/installer/bmad-cli.js install --global
+  error: unknown option '--global'
+  EXIT=1
+  ```
+  Commander rejects the flag outright — it is not a no-op, not a deprecated alias, not silently
+  ignored. It does not exist.
+- **[READ]** The `install` command exposes 19 options
   (`tools/installer/commands/install.js:12-51`): `--debug`, `--directory`, `--modules`, `--tools`,
   `--list-tools`, `--set`, `--list-options`, `--action`, `--user-name`,
   `--communication-language`, `--document-output-language`, `--output-folder`, `--custom-source`,
-  `--yes`, `--channel` / `--all-stable` / `--all-next`, `--next`, `--pin`. **There is no
+  `--yes`, `--channel`, `--all-stable`, `--all-next`, `--next`, `--pin`. **There is no
   `--global`, `--user`, `--scope`, or equivalent.**
 - **[READ]** A case-insensitive sweep of the entire `tools/` tree for
   `user-level | userLevel | globalInstall | installScope | --global` returns **zero matches**. The
@@ -212,13 +220,20 @@ problem.
 | `--directory` | Accepted; becomes `config.directory` → `path.resolve()` → the sole install root. Tilde-expanded via `UI.expandUserPath` (Windows forward-slash caveat above). Validated for writability only. | [RUN] + [READ] `ui.js:205-215`, `install-paths.js:15-18` |
 | `--modules` | Unaffected by scope. `bmm`/`core` are built-in (copied from the package); externals come from the user-level `~/.bmad/cache/…` clone cache, which is **already** user-level regardless of install scope. `--modules bmm` completed with zero network. | [RUN] "2 module(s) installed"; [READ] `project-root.js:64-82` |
 | `--tools` | Unaffected by scope, and **actively harmful** here: `--tools claude-code` wrote 46 skills to `<--directory>/.claude/skills`. With `--directory ~` that is the real user-level Claude dir; with any other user-scoped path it is a dead `.claude/` nobody reads. No tool handler has a user-level target variant. | [RUN]; [READ] `ide/_config-driven.js`, `ide/platform-codes.yaml` |
-| `--output-folder` | **Has no meaning with no project in scope.** It is stored verbatim (`core.output_folder: _bmad-output`) and used two ways, both project-shaped: (1) the installer *eagerly creates* `<--directory>/_bmad-output/planning-artifacts`, `…/implementation-artifacts` and `<--directory>/docs`; (2) it is baked into config as the literal `{project-root}/_bmad-output/…`, resolved per-project at runtime. So the flag simultaneously **scaffolds a phantom project tree in the user's home directory** *and* **describes a path that is never the global install's own**. Under a global install the correct value for this flag does not exist. | [RUN] the three directories on disk + `bmm/config.yaml`; [READ] `installer.js:1659-1660`, `ui.js:826-828,863` |
+| `--output-folder` | **Has no meaning with no project in scope.** It is stored verbatim (`core.output_folder: _bmad-output`) and used two ways, both project-shaped: (1) the installer *eagerly creates* `<--directory>/_bmad-output/planning-artifacts`, `…/implementation-artifacts` and `<--directory>/docs`; (2) it is baked into config as the literal `{project-root}/_bmad-output/…`, resolved per-project at runtime. So the flag simultaneously **scaffolds a phantom project tree in the user's home directory** *and* **describes a path that is never the global install's own**. Under a global install the correct value for this flag does not exist. | [RUN] the three directories on disk + `bmm/config.yaml`; [READ] eager materialisation at `modules/official-modules.js:738` (the `directories:` block handler — the same mechanism behind bug B2 and the empty-`docs/` bug), `ui.js:826-828,863` |
 | `--custom-content` | **Renamed upstream.** 6.10.0 exposes **`--custom-source`** (`install.js:36`); `--custom-content` is the pre-6.3.0 name. ma-agents already handles this — `resolveCustomContentFlag()` probes the installed package and downgrades (`lib/bmad.js:679-711`), so no ma-agents change is needed. Behaviour is scope-independent: it resolves a staged plugin path, and the staging path ma-agents uses is project-local (`.ma-agents-plugin-stage/`), which under a global install has no project to be local to. | [READ] `install.js:36`, `lib/bmad.js:679-711,763-769` |
 
 **Summary for AC2:** not one of the five flags carries a scope concept. Every flag that has a
 project-relative meaning (`--output-folder`, `--tools`, `--custom-source`) silently reinterprets
 that meaning as *relative to `--directory`*, which under a global install produces a phantom
 project rather than a global installation.
+
+**Supporting evidence from upstream's own conflict detection.** `ConfigDrivenIdeSetup.findAncestorConflict`
+(`tools/installer/ide/_config-driven.js:944-968`) treats an ancestor install that shares `target_dir`
+as a **conflict**, on the stated grounds that "IDEs like Claude Code inherit commands from parent
+directories". A `--directory ~` install is an ancestor of every project under `$HOME` — so upstream's
+own code would flag it for each of them. Upstream does not merely lack a global install; its
+conflict detection actively argues against simulating one this way.
 
 ### AC3 — Verdict recorded as an explicit PASS/FAIL, appended to P5-9.8 as a spike-outcome note
 
@@ -259,11 +274,26 @@ Citation re-verification against `bin/cli.js` in this worktree — **all three v
 | **1759** | `reconcileAgentsSharedSkills(process.cwd(), …)` | **scope gate — NOT anticipated** |
 | **1768** | `project-context.md` repo-layout update | **scope gate — NOT anticipated** |
 
-Plus two **hardcoded** `'project'` literals at **1668** and **1680** (`uninstallSkill(…, 'project')`
-on the update path) which ignore `installScope` entirely — a latent bug for a global *update*,
-independent of this epic.
+The five behaviour-gating sites above are **complete** — an exhaustive sweep confirms there is no
+sixth `installScope` gate.
 
-Reading of that for the epic: the three unanticipated gates (1616, 1759, 1768) are exactly the
+Separately, **five** sites hardcode a `'project'` literal and ignore `installScope` entirely
+(count corrected 2026-08-03 after an exhaustive review sweep — the spike's first pass found only the
+last two):
+
+| Line | Site | Defensibility |
+|---|---|---|
+| 1214 | Step-0 pre-wizard cleanup | Runs **before** scope is chosen, so a `'project'` assumption is defensible there |
+| 1246 | Step-0 pre-wizard cleanup | same |
+| 1256 | Step-0 pre-wizard cleanup | same |
+| **1668** | `uninstallSkill(…, 'project')` on the update path | **Latent bug** — runs after scope is known and ignores it |
+| **1680** | `uninstallSkill(…, 'project')` on the update path | **Latent bug** — same |
+
+The class is identical at all five; only 1668/1680 are reachable after scope is known, which is what
+makes them a latent global-*update* defect. **Story 31.11 should be handed all five**, not two, so it
+decides deliberately which are correct-as-written rather than re-deriving the set.
+
+Reading of that for the epic: the three unanticipated *gates* (1616, 1759, 1768) are exactly the
 project-scoped work **FR251 says a global install must not perform**, and they are **already
 correctly gated**. So this finding is good news for Story 31.11 (less to build than feared) even
 though it falsifies AC4's "only two" framing. See "Notes for the planning chain" for the one
@@ -282,6 +312,12 @@ exactly these three, with this content:
    replaces today's `Run again without --global to install BMAD agents into the current project.`
    at `bin/cli.js:1449`, which is directionally right but frames a supported outcome as a user
    error.
+   **Qualification for 31.12 — do not over-promise this command.** That invocation *reaches* the
+   BMAD install only when **both** conditions hold: at least one **IDE-category agent is selected**
+   (`bin/cli.js:1474`), **and** the user answers yes to `BMAD-METHOD not detected. Would you like to
+   install it?` (`bin/cli.js:1500-1505`). 31.12's message must therefore not imply that one
+   invocation guarantees a BMAD install — phrase it as the command that *offers* the project-scoped
+   BMAD install, or state the two conditions.
 3. **The F26 knowledge-store requirements are unaffected.** The two federated stores, the
    committed `_bmad-output/project-layout.yaml` binding record and `ma-agents bind` all work
    identically under a global install — knowledge topology is a property of the project, read from
@@ -342,8 +378,11 @@ network-dependent than today's project install, because it drops the BMAD invoca
   5 s timeout inside a `try/catch` that comments "Silently fail - network issues or npm not
   available". Non-fatal, scope-independent, and pre-existing (it is equally present for project
   installs today, and Epic 27's `--network none` proof already covered it).
-- **[READ]** No CDN fetch and no git operation exists on the ma-agents global-skills path (`--tools`
-  handling is pure file copy).
+- **[READ]** No CDN fetch and no git operation exists on the ma-agents global-skills path. The
+  correct citation is **`lib/installer.js`** — ma-agents' own skill-installation module, which
+  performs pure file copy with **zero network calls** (independently confirmed on review). (An
+  earlier draft cited BMAD's `--tools` handling here; that is the wrong subsystem — the global
+  ma-agents-skills path does not go through BMAD at all, which is the whole point of this verdict.)
 
 **One thing 31.12 must NOT do in the name of air-gap:** it must not pre-populate or write anything
 into `~/.bmad/` as a substitute for a global install. AC1(c) proves nothing would ever read it.
@@ -376,16 +415,29 @@ from inside an unrelated project — concretely, `Installer.findBmadDir` becomin
 project-scoped output directories at the install target. (a) alone is insufficient — the
 `{project-root}` placeholder in `bmm/config.yaml` must also gain a global meaning.
 
+**Concrete watch trigger — upstream issue #1728.** `bmad-code-org/BMAD-METHOD` issue **#1728,
+"feat: global install + bmad-link/unlink for multi-project workflows"** (**OPEN**, `priority:high`,
+created 2026-02-21) proposes exactly this: a `--global` flag installing to `~/.bmad/`, plus
+`bmad link` / `bmad unlink` for per-project binding. It is **not in 6.10.0** — verified by running
+the flag (`error: unknown option '--global'`), so it **confirms this FAIL rather than flipping it**.
+Its value is that it makes the re-open condition watchable rather than abstract: **track #1728**, and
+when it ships, re-run this spike against that version and check it against (a) and (b) above. Note
+its `bmad link` concept is the upstream analogue of `ma-agents bind` (FR252) — if both exist, Story
+31.13 should reconcile them rather than duplicate.
+
 ---
 
 ## Notes for the planning chain (recorded, not acted on)
 
 Per the story's hard boundary, nothing below was "fixed" in any planning artifact.
 
-1. **AC4's "only two places" is falsified** (see AC4). Five scope gates, not two, plus two
-   hardcoded `'project'` literals at `bin/cli.js:1668,1680`. This does not change the verdict and
-   is net-favourable — three of the five are already-correct FR251 gates. Story 31.11 should be
-   told they exist rather than re-deriving them.
+1. **AC4's "only two places" is falsified** (see AC4). **Five** scope gates, not two (1441, 1455,
+   1616, 1759, 1768 — confirmed complete, no sixth), plus **five** hardcoded `'project'` literals
+   (`bin/cli.js:1214, 1246, 1256, 1668, 1680`). This does not change the verdict and is
+   net-favourable — three of the five gates are already-correct FR251 gates, and three of the five
+   literals sit in pre-wizard Step-0 cleanup where a `'project'` assumption is defensible. Only
+   1668/1680 are a genuine latent global-*update* defect. **Story 31.11 should be handed all ten
+   sites** rather than re-deriving them.
 2. **Real interaction between `bin/cli.js:1616` and Story 31.2 AC2.** Line 1616 gates
    `writeProjectLayoutYaml(repoLayout)` on `installScope === 'project'`. Story 31.2 AC2 requires
    that file be written **unconditionally** on every install. Under a *global* install there is no
