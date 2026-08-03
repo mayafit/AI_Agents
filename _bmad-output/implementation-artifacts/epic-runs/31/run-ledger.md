@@ -86,8 +86,59 @@ Worktrees:
 
 | id | wave | status | worktree | branch | fix_rounds | note |
 |---|---|---|---|---|---|---|
-| 31.1 | 1 | review | `.worktrees/epic-31-story-31.1` | `feature/epic-31-story-31.1` | 0 | spike complete — **VERDICT: FAIL**. Awaiting orchestrator review before integration. |
-| 31.2 | 1 | in-progress | `.worktrees/epic-31-story-31.2` | `feature/epic-31-story-31.2` | 0 | binding spine; AC2 interpretation correction relayed mid-flight (see below) |
+| 31.1 | 1 | **merged** | `.worktrees/epic-31-story-31.1` | `feature/epic-31-story-31.1` | 0 | **VERDICT: FAIL.** Reviewed (SUPPORTED, no blocking findings, 7/7 ACs met), 6 non-blocking items folded in, merged to `feature/epic-31` as `b637ab4`. |
+| 31.2 | 1 | in-progress | `.worktrees/epic-31-story-31.2` | `feature/epic-31-story-31.2` | 0 | binding spine; AC2 interpretation correction relayed mid-flight and honoured (see below) |
+
+### Story 31.1 review outcome (review tier, opus)
+
+**Verdict assessment: SUPPORTED. No blocking findings.** The append-only hard constraint on Decision
+P5-9 passes (`git diff --numstat` = **61 additions / 0 deletions** against the base after the
+fold-in). 17 of 18 citations byte-exact. The reviewer independently re-derived both load-bearing
+facts against a *fresh* 6.10.0 install — including **running** `bmad install --global` →
+`error: unknown option '--global'`. All seven ACs met; the `done` status is justified.
+
+Six non-blocking items were folded in before integration (commit `e1cfca7`):
+
+1. **Status contradiction resolved** — the deliverable's front matter said `review` while
+   `sprint-status.yaml` said `done`. The reviewer called this the closest thing to a real defect in
+   the diff. Now `done`, the review having passed.
+2. **Upstream issue #1728 cited** in both the spike's re-open condition and the P5-9.8 note.
+   `bmad-code-org/BMAD-METHOD` **#1728 "feat: global install + bmad-link/unlink for multi-project
+   workflows"** is **OPEN**, `priority:high`, created 2026-02-21, and proposes exactly `--global` →
+   `~/.bmad/` plus `bmad link`/`unlink`. **Not in 6.10.0** (verified by running the flag), so it
+   **confirms the FAIL rather than flipping it** — but it converts an abstract re-open condition into
+   a concrete, watchable trigger. Its `bmad link` is the upstream analogue of `ma-agents bind`
+   (FR252); if both come to exist, **Story 31.13 should reconcile rather than duplicate**.
+3. **Hardcoded-`'project'` count corrected from two to five** — `bin/cli.js:1214, 1246, 1256, 1668,
+   1680`. The first three are pre-wizard Step-0 cleanup, where a `'project'` assumption is
+   defensible; only **1668/1680** are the genuine latent global-*update* defect. **Story 31.11 is
+   handed all ten sites** (five gates + five literals) rather than re-deriving them. The five
+   behaviour-gating `installScope` sites are confirmed **complete — no sixth gate exists.**
+4. **Misattributed citation fixed** — eager output-directory materialisation is
+   `modules/official-modules.js:738`, not `core/installer.js:1659-1660` (which is
+   `_readOutputFolder`'s `{project-root}/` strip). Two precision fixes alongside: "17 options" → **19**
+   (`--channel`/`--all-stable`/`--all-next` had been counted as one), and AC7's no-network claim now
+   cites **`lib/installer.js`** (zero network calls, confirmed) instead of BMAD's `--tools` handling,
+   which was the wrong subsystem — the global ma-agents-skills path does not go through BMAD at all.
+5. **AC5 fact (ii) qualified before 31.12 consumes it** — `cd <project> && ma-agents install` reaches
+   the BMAD install only when **both** an IDE-category agent is selected (`bin/cli.js:1474`) **and**
+   the user confirms the "BMAD-METHOD not detected" prompt (`:1500-1505`). 31.12's message must not
+   imply one invocation guarantees a BMAD install.
+6. **Free evidence upgrade** — added the `bmad install --global` → `error: unknown option '--global'`
+   [RUN] proof for AC1(a) (which had leaned on source-reading where execution was two seconds away),
+   plus `ConfigDrivenIdeSetup.findAncestorConflict` (`ide/_config-driven.js:944-968`): upstream treats
+   an ancestor install sharing `target_dir` as a **conflict** because "IDEs like Claude Code inherit
+   commands from parent directories", so a `--directory ~` install would trip upstream's own conflict
+   detection for every project under `$HOME`. Upstream's code argues for FAIL.
+
+**Reviewer finding #11** — that the spike prescribing the AC2/FR251 resolution was mild overreach and
+would "silently rot if nobody actions it before 31.2 starts" — was valid and is **discharged**: the
+reconciliation was relayed to 31.2's implementer before it had written any code, and is recorded
+below. Confirmation that 31.2 honoured it is a review checkpoint for that story.
+
+**Left unfixed by design:** FR123's `--custom-content` is stale (6.10.0 renamed it `--custom-source`).
+That is capability **F3, not F26** — it belongs in a separate defect, not this epic. ma-agents already
+probes and downgrades (`lib/bmad.js:679-711`), so nothing is broken.
 
 ## Story 31.1 — FR250 spike verdict: **FAIL**
 
