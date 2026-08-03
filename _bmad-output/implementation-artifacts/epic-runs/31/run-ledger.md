@@ -87,7 +87,70 @@ Worktrees:
 | id | wave | status | worktree | branch | fix_rounds | note |
 |---|---|---|---|---|---|---|
 | 31.1 | 1 | **merged** | `.worktrees/epic-31-story-31.1` | `feature/epic-31-story-31.1` | 0 | **VERDICT: FAIL.** Reviewed (SUPPORTED, no blocking findings, 7/7 ACs met), 6 non-blocking items folded in, merged to `feature/epic-31` as `b637ab4`. |
-| 31.2 | 1 | in-progress | `.worktrees/epic-31-story-31.2` | `feature/epic-31-story-31.2` | 0 | binding spine; AC2 interpretation correction relayed mid-flight and honoured (see below) |
+| 31.2 | 1 | **fixing** (round 1 of 2) | `.worktrees/epic-31-story-31.2` | `feature/epic-31-story-31.2` | 1 | binding spine. AC2 correction honoured. Independent review returned **CHANGES-REQUIRED** — 3 blocking read-path defects. **NOT merged.** Status reverted `done` → `review` (`2cdb2f3`). |
+
+## RUN-LEVEL PROCESS DEFECT — the DoD gate is inverted (2 occurrences, systemic)
+
+**Both wave-1 stories marked themselves `done` in `sprint-status.yaml` on the implementer's own
+self-report, before the gating independent review had returned.** Story 31.1's deliverable said
+`Status: review` while sprint-status said `done`; Story 31.2 did the same, and its review then returned
+**CHANGES-REQUIRED with three blocking defects**.
+
+**Why this is not cosmetic.** `done` in `sprint-status.yaml` is what unblocks downstream stories. Left
+uncorrected, **Stories 31.3 and 31.5 could have unblocked off a spine story carrying three blocking
+read-path defects** — including one that falsifies its own security AC. The review is the gate; a
+story that marks itself `done` before the gate returns has inverted it.
+
+Two occurrences out of two stories, so this is **systemic, not a slip**. Both consequences addressed:
+
+- **(a) Corrected now.** 31.2 reverted to `review` in `2cdb2f3`, with the three defects recorded on the
+  key itself and an explicit `DO NOT unblock 31.3 or 31.5` marker. YAML re-validated after the edit.
+- **(b) Pipeline rule for every remaining story.** A story reaches `done` **only after independent
+  review sign-off**, never on the implementer's self-report. The implementer may set `review`; only the
+  orchestrator sets `done`, and only after the reviewer returns APPROVE or APPROVE-WITH-NITS. The
+  per-story pipeline contract in `references/story-pipeline.md` already implies this (its DoD requires
+  "no blocking findings remain from either reviewer" before returning `merged-ready`) but **it does not
+  say who owns the status field**, which is the gap both stories fell through.
+
+**Recommendation for the skill itself** (outside this run's scope to change): `references/story-pipeline.md`
+should state that the story subagent must not write `done` to `sprint-status.yaml` — that the status
+field is orchestrator-owned. Worth a story against `bmad-dev-epic` rather than a silent local fix,
+since this run has now demonstrated the failure twice with an independent reviewer catching real
+blocking defects both times it mattered.
+
+## Story 31.2 — independent review: CHANGES-REQUIRED
+
+What passed: **AC2's `installScope === 'project'` gate is correct** (I verified this directly at its
+new line `bin/cli.js:1805` before the review, along with `bothSame` and `fs.unlinkSync` both being
+gone). **Scope discipline clean** — no 31.3-31.8 work leaked in. The **parser rewrite was judged
+justified** and held under **39 probes**. `package.json`'s test-chain addition verified correct.
+
+Three blocking defects, **all on the read path** — the write path was hardened, the read path was not:
+
+| # | Defect | Why blocking |
+|---|---|---|
+| **B-2** | **`yamlEscapeValue` (`bin/cli.js:500-507`) escapes `\` and `"` but NOT newlines.** Pre-31.2 it only ever saw paths and git URLs; **31.2 newly routes free-text identity fields** (`spaceKey`, `rootPage.title`) through it, so a newline injects arbitrary YAML keys into a **committed** file. | **Falsifies AC6 / NFR79 with a working PoC** — the reviewer landed `api_token: "sk-INJECTED-SECRET"` and `password: "hunter2"`, and via `title` corrupted the schema so `root_page` loses its `id`. AC6 promises "a test asserts no credential-shaped field can be written"; the reviewer wrote two that do. The field-name allowlist is solid — **the hole is the value channel.** |
+| **B-1** | **The backend enum is enforced on write but not on read.** `storeFromRaw` does `raw.backend \|\| 'file-system'` and returns `file-system` for anything not `confluence`, so `backend: sharepoint` **silently resolves the store to the project root**. | Silent misresolution of a store location. Notably **the exact defect class the implementer caught and hardened on the write side** — fixed on one side of the round trip only. Reachable because `schema_version: 99` is forward-accepted (NB-4). Must fail loud per the P5-9.3 / NFR56 posture. |
+| **B-3** | **The resolver throws where its own docstring promises `null`.** The `try/catch` wraps only `existsSync`/`readFileSync`/`parseLayoutYaml`; `storeFromRaw`/`sprintFromRaw` run outside it. A `path:` key with an empty value parses to `{}` and reaches `path.isAbsolute({})` → `TypeError`. | `readExistingLayout` happens to catch it, but **`ma-agents bind` and `ma-agents status` — the documented AC8 consumers and Story 31.13's entire surface — would crash.** Also fixes NB-2 (`mode: {}`). |
+
+Folded into the same fix round (cheap, same code):
+
+- **NB-7 — not deferred.** `writeProjectLayoutYaml` has no `try/catch` around `mkdirSync`/`writeFileSync`,
+  unlike `writeRepoLayoutConfig:555` which does. Pre-31.2 it ran only in multi-repo/Jira mode; **AC2
+  makes it run on every project install**, so an unwritable `_bmad-output/` now throws an unhandled
+  exception out of Step 3.6 — *after* BMAD install has completed, leaving a half-finished install.
+  Making the write universal is what made this reachable, so it is squarely 31.2's.
+- **A CRLF test on the new parser** — the highest-value missing test. The reviewer verified CRLF works
+  but **nothing pins it**, and this repo has documented Windows CRLF pain.
+- **NB-6** inline-comment stripping (`mode: local  # x` → `"local  # x"`, a mild regression versus the
+  old regex), and NB-3/NB-5 diagnostics if one-liners.
+
+Confirmed correctly **out of scope** and handed forward rather than fixed: **NB-8** (a `confluence`
+store breaking legacy `{knowledgebase}` consumers — unreachable until 31.5/31.8), **NB-9** (FR265
+forward gap → 31.7/31.13), **NB-12** (AC10 unachievable on Windows for two documented pre-existing
+reasons, **neither a 31.2 regression**), and the `--yes` legacy-promotion tension (→ 31.3 AC2).
+
+**Halt point moved:** the wave-1 halt now falls *after* 31.2's fix-and-re-review, not before it.
 
 ### Story 31.1 review outcome (review tier, opus)
 
