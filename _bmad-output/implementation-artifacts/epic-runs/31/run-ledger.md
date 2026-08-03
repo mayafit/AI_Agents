@@ -86,7 +86,80 @@ Worktrees:
 
 | id | wave | status | worktree | branch | fix_rounds | note |
 |---|---|---|---|---|---|---|
-| 31.1 | 1 | in-progress | `.worktrees/epic-31-story-31.1` | `feature/epic-31-story-31.1` | 0 | spike — live bmad-method@6.10.0 install; verdict gates thread D only |
-| 31.2 | 1 | in-progress | `.worktrees/epic-31-story-31.2` | `feature/epic-31-story-31.2` | 0 | binding spine; removes the `fs.unlinkSync` delete-on-single-repo branch at `bin/cli.js:612` |
+| 31.1 | 1 | review | `.worktrees/epic-31-story-31.1` | `feature/epic-31-story-31.1` | 0 | spike complete — **VERDICT: FAIL**. Awaiting orchestrator review before integration. |
+| 31.2 | 1 | in-progress | `.worktrees/epic-31-story-31.2` | `feature/epic-31-story-31.2` | 0 | binding spine; AC2 interpretation correction relayed mid-flight (see below) |
+
+## Story 31.1 — FR250 spike verdict: **FAIL**
+
+bmad-method@6.10.0 has **no user-level install target**, and — decisively — **no module-resolution
+search order that could find a user-level `_bmad/` from inside a project.** Evidence:
+
+- `findBmadDir` is a single `path.join` with **no upward walk**.
+- `resolve_config.py` hard-fails when the project-local `_bmad/` is absent.
+- **~211 `{project-root}/_bmad/...` literals** across the 46 installed skills.
+- There is **no `BMAD_HOME`** or equivalent environment escape hatch.
+- `--directory $HOME` "works" in the sense that it writes files, but it manufactures a **phantom
+  project that nothing reads**. That is not a global install.
+
+### What this implies for Story 31.12 — the single most important output of wave 1
+
+Story 31.12 becomes the **FR250 degradation path**, not an installer capability. It is a
+**messaging-and-gating change**: ma-agents skills install globally, BMAD stays project-scoped, and
+the installer reports the three facts FR250 requires (BMAD remains project-scoped; the command that
+installs BMAD into a project; that the F26 knowledge-store requirements are unaffected). This is
+**smaller than the PASS branch** would have been. Per P5-9.8 and Story 31.1 AC6, **no part of
+P5-9.1–P5-9.7 changes and Stories 31.2–31.10 are unaffected** — a FAIL is explicitly not a blocker
+on them. This is exactly why the run was scoped gate-first: no effort was spent on 31.12 against an
+assumed verdict.
+
+### Finding — the `installScope` call-site map is larger than the planning anticipated
+
+Story 31.1 AC4 asserts the global filter (`bin/cli.js:1440-1452`) and the project-only guard
+(`bin/cli.js:1455`) are **"the only two places the project-scope assumption is encoded."** The spike
+found **five**:
+
+| line | site | anticipated? |
+|---|---|---|
+| 1441 | global BMAD agent filter | yes |
+| 1455 | `if (installScope === 'project')` — whole BMAD-METHOD integration block | yes |
+| 1616 | `writeRepoLayoutConfig` + `writeProjectLayoutYaml` | **no** |
+| 1759 | `reconcileAgentsSharedSkills` | **no** |
+| 1768 | `project-context.md` repo-layout update | **no** |
+
+Favourably, the three unanticipated sites are exactly the project-scoped work FR251 forbids under
+global scope, and they are **already correctly gated** — so this is less work than feared, not more.
+AC4's "only two" claim is nonetheless **factually wrong**. It is moot for the verdict (AC4 is the
+PASS branch; this spike returned FAIL) but it is a real defect in the planning chain and is reported
+rather than silently corrected. **`epics.md` was not edited.**
+
+Also found and **deliberately not fixed**: two hardcoded `'project'` literals at `bin/cli.js:1668`
+and `:1680` (`uninstallSkill` on the update path) ignore `installScope` entirely — a latent
+global-*update* bug, independent of this epic and out of scope for both wave-1 stories. Needs
+filing as a defect.
+
+## Mid-flight correction issued to Story 31.2 — AC2 vs FR251
+
+The spike surfaced a genuine conflict in Story 31.2 AC2 while 31.2 was still in flight (its branch
+had no commits yet, so the correction reached the implementer in time).
+
+**The conflict.** AC2 requires `project-layout.yaml` be written "**unconditionally** on every
+install". But `bin/cli.js:1616` gates `writeRepoLayoutConfig` + `writeProjectLayoutYaml` on
+`installScope === 'project'`, and **FR251 requires that a global install does not write it** — a
+global install performs no project-scoped work. Read literally, AC2 contradicts FR251.
+
+**Reconciliation (not a planning error).** P5-9.1 says "every install and every bind", meaning
+*within a project-scoped install or bind*. AC2's phrasing dropped that qualifier. The intended
+reading is therefore:
+
+- **KEEP** the `installScope === 'project'` gate at `bin/cli.js:1616`. Removing it would violate
+  FR251 and make a global install scaffold project files into a directory with no project.
+- **REMOVE** only the `bothSame` early-return and the `fs.unlinkSync` at `bin/cli.js:612` — the
+  AC2 + AC3 work, unchanged.
+- "Unconditional" in AC2 means **unconditional with respect to repo layout** (single-repo vs
+  multi-repo vs Jira), **not** with respect to install scope.
+
+Per the run's boundaries the PRD, Decision P5-9 and `epics.md` were **not edited** to resolve this.
+The interpretation is recorded here and in Story 31.2's completion notes so the reviewer sees the
+reasoning rather than an apparent AC miss. **A future planning pass should tighten AC2's wording.**
 
 <!-- updated at every state transition -->
