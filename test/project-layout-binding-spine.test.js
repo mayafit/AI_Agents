@@ -352,9 +352,291 @@ test('writeProjectLayoutYaml never touches .gitignore', () => {
 });
 
 // ─── Summary ───────────────────────────────────────────────────────────────
+// --- Regression: the three blocking findings from the 31.2 independent review ---
+console.log('\nRegression - blocking review findings B-1 / B-2 / B-3');
+
+test('B-2: a LF in spaceKey is rejected, not injected into the committed file', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    let threw = false;
+    try {
+      writeProjectLayoutYaml({
+        systemRequirementsStore: {
+          backend: 'confluence',
+          spaceKey: 'ENG"\n  api_token: "sk-INJECTED-SECRET',
+          rootPage: { title: 'T', id: null },
+        },
+        softwareRequirementsStore: { mode: 'same', path: '.' },
+        sprintManagement: { mode: 'same', path: '.' },
+      });
+    } catch (e) { threw = true; }
+    assert(threw, 'LF must be rejected before any bytes are written');
+    const f = path.join(tmpDir, '_bmad-output', 'project-layout.yaml');
+    if (fs.existsSync(f)) {
+      const body = fs.readFileSync(f, 'utf-8');
+      assert(!/api_token/.test(body), 'no injected api_token key may reach the file');
+      assert(!/INJECTED/.test(body), 'no injected value may reach the file');
+    }
+  } finally { cleanup(); }
+});
+
+test('B-2: a CR in spaceKey is rejected, not injected into the committed file', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    let threw = false;
+    try {
+      writeProjectLayoutYaml({
+        systemRequirementsStore: {
+          backend: 'confluence',
+          spaceKey: 'ENG"\r  api_token: "sk-INJECTED-SECRET',
+          rootPage: { title: 'T', id: null },
+        },
+        softwareRequirementsStore: { mode: 'same', path: '.' },
+        sprintManagement: { mode: 'same', path: '.' },
+      });
+    } catch (e) { threw = true; }
+    assert(threw, 'CR must be rejected before any bytes are written');
+    const f = path.join(tmpDir, '_bmad-output', 'project-layout.yaml');
+    if (fs.existsSync(f)) {
+      const body = fs.readFileSync(f, 'utf-8');
+      assert(!/api_token/.test(body), 'no injected api_token key may reach the file');
+      assert(!/INJECTED/.test(body), 'no injected value may reach the file');
+    }
+  } finally { cleanup(); }
+});
+
+test('B-2: a U+0085 in spaceKey is rejected, not injected into the committed file', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    let threw = false;
+    try {
+      writeProjectLayoutYaml({
+        systemRequirementsStore: {
+          backend: 'confluence',
+          spaceKey: 'ENG"\u0085  api_token: "sk-INJECTED-SECRET',
+          rootPage: { title: 'T', id: null },
+        },
+        softwareRequirementsStore: { mode: 'same', path: '.' },
+        sprintManagement: { mode: 'same', path: '.' },
+      });
+    } catch (e) { threw = true; }
+    assert(threw, 'U+0085 must be rejected before any bytes are written');
+    const f = path.join(tmpDir, '_bmad-output', 'project-layout.yaml');
+    if (fs.existsSync(f)) {
+      const body = fs.readFileSync(f, 'utf-8');
+      assert(!/api_token/.test(body), 'no injected api_token key may reach the file');
+      assert(!/INJECTED/.test(body), 'no injected value may reach the file');
+    }
+  } finally { cleanup(); }
+});
+
+test('B-2: a U+2028 in spaceKey is rejected, not injected into the committed file', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    let threw = false;
+    try {
+      writeProjectLayoutYaml({
+        systemRequirementsStore: {
+          backend: 'confluence',
+          spaceKey: 'ENG"\u2028  api_token: "sk-INJECTED-SECRET',
+          rootPage: { title: 'T', id: null },
+        },
+        softwareRequirementsStore: { mode: 'same', path: '.' },
+        sprintManagement: { mode: 'same', path: '.' },
+      });
+    } catch (e) { threw = true; }
+    assert(threw, 'U+2028 must be rejected before any bytes are written');
+    const f = path.join(tmpDir, '_bmad-output', 'project-layout.yaml');
+    if (fs.existsSync(f)) {
+      const body = fs.readFileSync(f, 'utf-8');
+      assert(!/api_token/.test(body), 'no injected api_token key may reach the file');
+      assert(!/INJECTED/.test(body), 'no injected value may reach the file');
+    }
+  } finally { cleanup(); }
+});
+
+test('B-2: a U+2029 in spaceKey is rejected, not injected into the committed file', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    let threw = false;
+    try {
+      writeProjectLayoutYaml({
+        systemRequirementsStore: {
+          backend: 'confluence',
+          spaceKey: 'ENG"\u2029  api_token: "sk-INJECTED-SECRET',
+          rootPage: { title: 'T', id: null },
+        },
+        softwareRequirementsStore: { mode: 'same', path: '.' },
+        sprintManagement: { mode: 'same', path: '.' },
+      });
+    } catch (e) { threw = true; }
+    assert(threw, 'U+2029 must be rejected before any bytes are written');
+    const f = path.join(tmpDir, '_bmad-output', 'project-layout.yaml');
+    if (fs.existsSync(f)) {
+      const body = fs.readFileSync(f, 'utf-8');
+      assert(!/api_token/.test(body), 'no injected api_token key may reach the file');
+      assert(!/INJECTED/.test(body), 'no injected value may reach the file');
+    }
+  } finally { cleanup(); }
+});
+
+test('B-2: a rootPage.title line break cannot corrupt the schema', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    let threw = false;
+    try {
+      writeProjectLayoutYaml({
+        systemRequirementsStore: {
+          backend: 'confluence',
+          spaceKey: 'ENG',
+          rootPage: { title: 'T"\n  password: "hunter2', id: 'keep-me' },
+        },
+        softwareRequirementsStore: { mode: 'same', path: '.' },
+        sprintManagement: { mode: 'same', path: '.' },
+      });
+    } catch (e) { threw = true; }
+    assert(threw, 'a line break in rootPage.title must be rejected');
+    const f = path.join(tmpDir, '_bmad-output', 'project-layout.yaml');
+    if (fs.existsSync(f)) {
+      assert(!/password/.test(fs.readFileSync(f, 'utf-8')), 'no injected password key may reach the file');
+    }
+  } finally { cleanup(); }
+});
+
+test('B-2: legitimate values containing spaces are still written normally', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    writeProjectLayoutYaml({
+      knowledgebase: { mode: 'local', path: path.join(tmpDir, 'Program Files', 'kb') },
+      sprintManagement: { mode: 'same', path: '.' },
+    });
+    const body = fs.readFileSync(path.join(tmpDir, '_bmad-output', 'project-layout.yaml'), 'utf-8');
+    assert(/Program Files/.test(body), 'a space-containing path must not trip the line-break guard');
+  } finally { cleanup(); }
+});
+
+test('B-1: an unknown backend fails loud instead of silently resolving to the project root', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const yaml = [
+      'schema_version: 3',
+      'system_requirements_store:',
+      '  backend: sharepoint',
+      '  site_url: "https://sp.example.com/sites/eng"',
+      'software_requirements_store:',
+      '  backend: file-system',
+      '  mode: same',
+      '  path: "."',
+    ].join('\n');
+    fs.mkdirSync(path.join(tmpDir, '_bmad-output'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '_bmad-output', 'project-layout.yaml'), yaml, 'utf-8');
+    let err = null;
+    try { resolveProjectTopology(tmpDir); } catch (e) { err = e; }
+    assert(err, 'an unrecognised backend must throw rather than resolve');
+    assert(/sharepoint/.test(err.message), 'the error must name the offending value');
+    assert(/file-system|confluence/.test(err.message), 'the error must name the legal options');
+  } finally { cleanup(); }
+});
+
+test('B-1: an ABSENT backend still defaults to file-system (pre-F26 legacy block, AC5)', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const yaml = ['knowledgebase:', '  mode: same', '  path: "."'].join('\n');
+    fs.mkdirSync(path.join(tmpDir, '_bmad-output'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '_bmad-output', 'project-layout.yaml'), yaml, 'utf-8');
+    const t = resolveProjectTopology(tmpDir);
+    assert(t, 'a legacy block with no backend must still resolve');
+    assert.strictEqual(t.systemRequirementsStore.backend, 'file-system');
+  } finally { cleanup(); }
+});
+
+test('B-3: an empty-value scalar does not throw a TypeError out of the resolver', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const yaml = [
+      'schema_version: 3',
+      'system_requirements_store:',
+      '  backend: file-system',
+      '  mode: same',
+      '  path:',
+      'software_requirements_store:',
+      '  backend: file-system',
+      '  mode: same',
+      '  path: "."',
+    ].join('\n');
+    fs.mkdirSync(path.join(tmpDir, '_bmad-output'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '_bmad-output', 'project-layout.yaml'), yaml, 'utf-8');
+    let t = null, err = null;
+    try { t = resolveProjectTopology(tmpDir); } catch (e) { err = e; }
+    assert(!err || err.constructor.name !== 'TypeError', 'must not throw a TypeError');
+    if (t) assert.strictEqual(typeof t.systemRequirementsStore.path, 'string', 'path must resolve to a string');
+  } finally { cleanup(); }
+});
+
+test('B-3: an empty-value mode does not leak an object into the topology', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const yaml = [
+      'schema_version: 3',
+      'system_requirements_store:',
+      '  backend: file-system',
+      '  mode:',
+      '  path: "."',
+      'software_requirements_store:',
+      '  backend: file-system',
+      '  mode: same',
+      '  path: "."',
+    ].join('\n');
+    fs.mkdirSync(path.join(tmpDir, '_bmad-output'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '_bmad-output', 'project-layout.yaml'), yaml, 'utf-8');
+    const t = resolveProjectTopology(tmpDir);
+    if (t) assert.strictEqual(typeof t.systemRequirementsStore.mode, 'string', 'mode must be a string, never {}');
+  } finally { cleanup(); }
+});
+
+test('parser: a CRLF project-layout.yaml resolves identically to LF', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const body = [
+      'schema_version: 3',
+      'system_requirements_store:',
+      '  backend: file-system',
+      '  mode: same',
+      '  path: "."',
+      'software_requirements_store:',
+      '  backend: file-system',
+      '  mode: same',
+      '  path: "."',
+      'sprint_management:',
+      '  mode: same',
+      '  path: "."',
+    ];
+    // Two sibling project roots inside ONE tmp dir: withTmpDir() chdirs, so
+    // nesting two of them would chdir back into a directory already removed.
+    // resolveProjectTopology takes an explicit root, so cwd is irrelevant here.
+    const roots = {};
+    for (const [name, eol] of [['lf', '\n'], ['crlf', '\r\n']]) {
+      const root = path.join(tmpDir, name);
+      fs.mkdirSync(path.join(root, '_bmad-output'), { recursive: true });
+      fs.writeFileSync(path.join(root, '_bmad-output', 'project-layout.yaml'), body.join(eol), 'utf-8');
+      roots[name] = root;
+    }
+    const lf = resolveProjectTopology(roots.lf);
+    const crlf = resolveProjectTopology(roots.crlf);
+    assert(lf, 'the LF fixture must resolve');
+    assert(crlf, 'the CRLF fixture must resolve - this repo has documented Windows CRLF pain');
+    assert.strictEqual(crlf.systemRequirementsStore.backend, lf.systemRequirementsStore.backend);
+    assert.strictEqual(crlf.systemRequirementsStore.mode, lf.systemRequirementsStore.mode);
+    assert.strictEqual(crlf.softwareRequirementsStore.mode, lf.softwareRequirementsStore.mode);
+    assert.strictEqual(crlf.sprintManagement.mode, lf.sprintManagement.mode);
+    assert.strictEqual(crlf.schemaVersion, lf.schemaVersion);
+  } finally { cleanup(); }
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (errors.length > 0) {
   console.log('\nFailed tests:');
   errors.forEach(e => console.log(`  - ${e.name}: ${e.error}`));
 }
+
 if (failed > 0) process.exit(1);
