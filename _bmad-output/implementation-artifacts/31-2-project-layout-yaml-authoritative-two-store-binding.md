@@ -66,7 +66,10 @@ project topology into it conflates two unrelated lifecycles.
       `{knowledgebase, sprintManagement}` onto both new stores.
 - [x] 1.3 Add `resolveProjectTopology(projectRoot)` — the AC8/NFR83 binding resolver: reads
       `project-layout.yaml` only, no `_bmad/` reference, handles both schema v2 and legacy v1
-      shapes, returns `null` on absence/corruption.
+      shapes, and returns a **discriminated result** — `{ok:true, topology}` or
+      `{ok:false, reason:'unbound'|'unreadable'|'invalid'|'too-new', message}`. It never returns
+      `null` and never throws (the earlier null-on-absence/corruption contract was superseded by
+      fix round 2's R-2 and extended with `too-new` in round 3).
 - [x] 1.4 Rewrite `readExistingLayout()` on top of `resolveProjectTopology()`, collapsing the two
       stores onto the legacy `{knowledgebase, sprintManagement}` shape every existing consumer
       expects; keep its own `config.yaml` fallback (FR265's config-only legacy path) — scoped to
@@ -81,7 +84,7 @@ project topology into it conflates two unrelated lifecycles.
       skip/delete behaviour are rewritten to assert the opposite (AC2/AC3); the structure
       assertion is updated for the new section names.
 - [x] 2.2 Add `test/project-layout-binding-spine.test.js` covering AC1, AC4, AC5, AC6, AC7, AC8,
-      AC9 directly. **13 tests as first written; 25 after fix round 1; 57 after fix round 2** —
+      AC9 directly. **13 tests as first written; 25 after fix round 1; 57 after fix round 2; 69 after fix round 3** —
       see the Change Log and Test Evidence for what each round added and why.
 - [x] 2.3 Register the new test file in `package.json`'s `test` script.
 - [x] 2.4 Verify `test/config-lost-on-update.test.js`, `test/portable-paths.test.js`,
@@ -100,8 +103,8 @@ AC8-vs-31.6-AC5:
 
 - `resolveProjectTopology(projectRoot)` — the AC8/NFR83 **binding resolver** used by `ma-agents
   bind`/`ma-agents status` (31.13) — depends on `project-layout.yaml` alone, full stop. It never
-  reads `config.yaml`. Verified by test (`resolveProjectTopology returns null when only config.yaml
-  exists`).
+  reads `config.yaml`. Verified by test (`resolveProjectTopology reports `unbound` when only config.yaml exists (no
+  fallback)`).
 - `readExistingLayout()` — an **install-time/reconfigure-wizard helper**, never called by any
   runtime skill — keeps its pre-existing `config.yaml` fallback so a project that predates
   `project-layout.yaml`'s unconditional-write behaviour still pre-populates the wizard correctly
@@ -182,10 +185,11 @@ shape unchanged — it has no `backend` field; it is not one of the two backend-
 ### The AC8/NFR83 resolver
 
 `resolveProjectTopology(projectRoot)` in `bin/cli.js` (exported). Pure: reads
-`<projectRoot>/_bmad-output/project-layout.yaml`, nothing else; returns `null` if absent/corrupt;
-returns
-`{ schemaVersion, generated, systemRequirementsStore, softwareRequirementsStore, sprintManagement }`
-otherwise, with each store already `resolveStoredPath`-resolved to an absolute path. This is the
+`<projectRoot>/_bmad-output/project-layout.yaml`, nothing else. Returns a discriminated result:
+`{ok:false, reason:'unbound'|'unreadable'|'invalid'|'too-new', message}` when the file carries no
+usable binding, otherwise `{ok:true, topology:
+{ schemaVersion, generated, systemRequirementsStore, softwareRequirementsStore, sprintManagement }}`,
+with each store already `resolveStoredPath`-resolved to an absolute path. This is the
 library function `ma-agents bind` and `ma-agents status` (Story 31.13 — not built here) are meant
 to call. A globally-installed **BMAD skill** does not call it directly; per Story 31.6 AC5 skills
 keep reading the generated `config.yaml`, satisfying NFR83 indirectly via the bind offer (31.11 AC6
@@ -373,3 +377,15 @@ called with the string literal `'project'` (not `installScope`) at several sites
 | | **R-5** — an empty `backend:` scalar reached the enum check as `{}` and threw `Unknown knowledge-store backend {}` — unactionable, and the opposite of what the identical malformation on `path:` does. An absent *and* an empty `backend:` now both mean "never stated" and default to `file-system`; only a non-empty string outside the enum still fails loud. |
 | | **R-6** — removed the fabricated citation `implementation-readiness-f26.md NB-3`. No `NB-` identifier exists anywhere in `_bmad-output/` (verified by grep); the two `NB-7` comments were reworded for the same reason. The one surviving citation, `implementation-readiness-f26.md finding F-3`, was verified to exist. A test now walks every `implementation-readiness-f26.md <ID>` citation in `bin/cli.js` and asserts each resolves in that document. |
 | | **Test work** — the vacuous CRLF test was replaced (three tests that assert on channels `trim()` cannot launder: interior whitespace, an *encoded* CR, and a *raw* U+2028 inside quotes); `gitUrl` coercion covered; non-ASCII (Hebrew/Arabic/CJK/emoji) space keys, titles and paths pinned as **accepted**, so an over-broad guard cannot pass; warn-and-continue / `UNBOUND` covered for both branches, with the I/O failure injected through real filesystem conditions Windows enforces (`_bmad-output` as a file gives EEXIST; a 0444 file gives EPERM) rather than skipped; the five B-2 injection assertions made unconditional (they had been nested inside `if (fs.existsSync(f))` and so never ran in the passing case); and `js-yaml` adopted as a real-parser oracle throughout, degrading to explicit escaping assertions rather than skipping if it ever stops resolving. |
+| 2026-08-05 | **Fix round 3** — closed the two blocking findings from a third independent review. Both had a reproduced proof-of-concept before the fix and a re-run of the same PoC after it. Suite 57 -> 69 tests; all 7 code changes mutation-verified (each reverted individually, each turned the suite red). |
+| | **N-1** — `mode` was the last **unvalidated, raw-interpolated value channel**. The serializers emitted `` mode: ${mode} `` with no escaping and no enum check, and `storeFromRaw` / `sprintFromRaw` read it back through `scalarString()` with no validation — so writer and reader disagreed on the legal value set for exactly one field, while `backend` had already been closed on both sides. A committed `mode: "same
+  api_token: ghp_DEADBEEF"` (legal YAML, accepted by js-yaml) round-tripped through the plain `install --yes` update sequence — `readExistingLayout` → `collectRepoLayout({yes:true})`, which returns `existingLayout` **verbatim** → `writeProjectLayoutYaml` — and emitted a real `api_token:` **key** into the committed file, amplified into **both** store records, falsifying AC6/NFR79 through the same class the first review flagged for `root_page.title`. Three further payloads were reproduced: `"same
+schema_version: 99"` (wrote a second `schema_version:`, poisoning the file into `invalid` so round 2's non-destruction guard then refused to repair it *permanently*), `"same
+  token: x
+malicious: y"` (produced a file js-yaml rejects outright), and `sprint_management.mode: "jira
+  secret: s"` (failed the `sprint.mode === 'jira'` equality check, so the Jira branch was skipped, the binding silently degraded to a file-system store, and `secret: s` landed at valid indentation). **Fix:** a closed enum in both directions — `same`｜`local`｜`remote` for a store, plus `jira` for sprint management (the sets `collectRepoLayout` actually offers). Escaping was rejected as the instrument: `mode: ${yamlEscapeValue(mode)}` turns `config-storage.test.js` red, because `mode: same` is deliberately unquoted. **Unknown mode on read is `invalid`, not coerced to `same`** — matching `backend`, because `mode` decides whether a path is cloned and whether sprint artifacts live in Jira or on disk, so guessing would silently repoint a store; and coercion would *launder* a tampered value into a clean file on the next write instead of reporting it. An absent or empty `mode:` still defaults to `same` (same "never stated" contract as R-5's `backend:`), and a confluence store returns before the enum, so P5-9.5's store independence is untouched. On write an unknown mode throws before any bytes exist; the two install-time call sites already degrade that to warn-and-leave-UNBOUND. |
+| | **N-2** — the round-2 non-destruction guard was **adjudicated by a parser more lenient than js-yaml**. `parseLayoutYaml` skips any line without a colon and is indentation-agnostic about tabs, so it "read" files a real parser rejects and `resolveProjectTopology` returned `ok:true` for genuinely corrupt content — defeating the guard. Reproduced with a **git merge conflict**, which matters because `project-layout.yaml` is committed and its `generated:` date changes on every install: all three marker lines (`<<<<<<< HEAD`, `=======`, `>>>>>>> origin/main`) are colon-free and were silently dropped, leaving the **last-writer** side; the write then proceeded and destroyed both the markers and the HEAD side with no warning. Tab-indented YAML is the same class. **Fix:** a validation-only `yaml.load()` gate inside `resolveProjectTopology`, classifying a throw as `reason:'unreadable'`. `parseLayoutYaml` remains the reader — this adds a validity gate, not a parser swap. js-yaml was already a direct dependency and is already loaded on every run via `lib/bmad.js`, so there is no new dependency and no new startup cost. The gate cannot throw out of the function (pinned by a totality test over 10 malformed inputs), and a valid file — freshly written, legacy v1, confluence, or Jira — is not newly rejected. |
+| | **`too-new` is now its own reason.** A `schema_version` above this build's was classified `invalid`; the *behaviour* was right (refuse to read, refuse to overwrite) but indistinguishable from corruption. Split into `reason:'too-new'` so Story 31.13's `ma-agents status` can say "upgrade ma-agents" rather than "this file is corrupt". Cheap and contained: the write guard and `readExistingLayout` both branch on `!== 'unbound'`, so neither needed a change. |
+| | **Remedy wording.** The refusal message told the user to run `ma-agents bind`, which **ships in Story 31.13 and does not exist in this release**. It now leads with "delete `_bmad-output/project-layout.yaml` and re-run the installer"; the three `UNBOUND` warnings likewise lead with re-running the installer and mention `ma-agents bind` only as a future convenience. |
+| | **Documentation compressed.** The round-2 delta was 209 code lines against 225 comment lines. The `yamlEscapeValue` jsdoc (35 lines) and the `resolveProjectTopology` contract jsdoc (29 lines) both re-litigated superseded review rounds in prose already present verbatim in the commit message and in the rows above; reduced to 13 and 24 lines respectively — the invariant plus a pointer here. No live contract was removed. |
+| | **Out of scope, confirmed unaffected.** Two known defects belong to Story 31.5, not this story, and were verified to behave identically after these changes: `readExistingLayout` collapsing two *distinct* stores onto the software store (a `system_requirements_store` with its own `space_key` is still lost), and `showCurrentLayout` printing `Mode: undefined / Path: undefined` for a **valid** confluence store. Neither was touched. |

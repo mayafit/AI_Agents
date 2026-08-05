@@ -54,17 +54,36 @@ function test(name, fn) {
   }
 }
 
+// The N-1 proof-of-concept has to drive the real `install --yes` update
+// sequence, and `collectRepoLayout` is async. Queued here and drained before
+// the summary rather than restructuring every existing synchronous test.
+const asyncTests = [];
+function testAsync(name, fn) { asyncTests.push([name, fn]); }
+async function drainAsyncTests() {
+  for (const [name, fn] of asyncTests) {
+    try {
+      await fn();
+      console.log(`  ✓ ${name}`);
+      passed++;
+    } catch (err) {
+      console.error(`  ✗ ${name}: ${err.message}`);
+      failed++;
+      errors.push({ name, error: err.message });
+    }
+  }
+}
+
 // ─── Load module ─────────────────────────────────────────────────────────────
 let writeProjectLayoutYaml, readExistingLayout, resolveProjectTopology,
   PROJECT_LAYOUT_SCHEMA_VERSION, showCurrentLayout, writeRepoLayoutConfig,
-  yamlEscapeValue, parseLayoutYaml,
-  BINDING_UNBOUND, BINDING_UNREADABLE, BINDING_INVALID;
+  yamlEscapeValue, parseLayoutYaml, collectRepoLayout,
+  BINDING_UNBOUND, BINDING_UNREADABLE, BINDING_INVALID, BINDING_TOO_NEW;
 try {
   ({
     writeProjectLayoutYaml, readExistingLayout, resolveProjectTopology,
     PROJECT_LAYOUT_SCHEMA_VERSION, showCurrentLayout, writeRepoLayoutConfig,
-    yamlEscapeValue, parseLayoutYaml,
-    BINDING_UNBOUND, BINDING_UNREADABLE, BINDING_INVALID,
+    yamlEscapeValue, parseLayoutYaml, collectRepoLayout,
+    BINDING_UNBOUND, BINDING_UNREADABLE, BINDING_INVALID, BINDING_TOO_NEW,
   } = require('../bin/cli.js'));
 } catch (e) {
   console.error('\n  FATAL: Cannot load exports from cli.js');
@@ -743,7 +762,10 @@ test('a schema_version NEWER than this build is gated as invalid and not overwri
     ]);
     const result = resolveProjectTopology(tmpDir);
     assert.strictEqual(result.ok, false, 'a too-new schema must not be read as if it were v2');
-    assert.strictEqual(result.reason, BINDING_INVALID);
+    assert.strictEqual(result.reason, BINDING_TOO_NEW,
+      '"too new" has its own reason so 31.13 `ma-agents status` can say "upgrade ma-agents" ' +
+      'rather than "this file is corrupt"; the BEHAVIOUR is identical to `invalid`');
+    assert.notStrictEqual(BINDING_TOO_NEW, BINDING_INVALID, 'the two reasons must be distinguishable');
     assert.ok(new RegExp(`schema_version ${PROJECT_LAYOUT_SCHEMA_VERSION + 1}`).test(result.message),
       `the message must name the declared version, got: ${result.message}`);
 
@@ -1571,14 +1593,434 @@ test('a non-ASCII PATH is accepted and stays portable', () => {
   }
 });
 
-// ─── Summary ───────────────────────────────────────────────────────────────
-console.log(`\n${passed} passed, ${failed} failed`);
-if (!yamlOracle) {
-  console.log('  NOTE: js-yaml did not resolve — oracle assertions degraded to explicit escaping checks.');
-}
-if (errors.length > 0) {
-  console.log('\nFailed tests:');
-  errors.forEach(e => console.log(`  - ${e.name}: ${e.error}`));
-}
 
-if (failed > 0) process.exit(1);
+// ─── R-7 — `mode` is a closed enum in BOTH directions (N-1) ─────────────
+//
+// `mode` was the last field the writer raw-interpolated (`mode: ${mode}`) and the
+// reader merely string-coerced, so it was a value channel that became SYNTAX on
+// the next write. `backend` had been closed on both sides; these pin the same for
+// `mode`. Escaping is deliberately NOT the instrument — `mode: same` is emitted
+// unquoted and config-storage.test.js asserts that — so the values are validated.
+console.log('\nR-7 — `mode` is a closed enum in both directions (N-1)');
+
+// Asserted against, not imported: if cli.js widens or narrows the enum, these
+// tests must be revisited deliberately rather than silently tracking it.
+const STORE_MODE_MEMBERS = ['same', 'local', 'remote'];
+
+// The exact PoC: a committed file that is LEGAL YAML and passes js-yaml, whose
+// `mode:` scalar carries a newline plus a credential-shaped key. Pre-fix this
+// round-tripped through the plain `install --yes` update sequence and emitted a
+// real `api_token:` key into the committed file, amplified into BOTH store
+// records — falsifying AC6/NFR79 through the same class the first review round
+// flagged for `root_page.title`.
+const POISONED_MODE_FIXTURE = [
+  'schema_version: 2',
+  'generated: "2026-08-01"',
+  'system_requirements_store:',
+  '  backend: file-system',
+  '  mode: same',
+  '  path: "."',
+  'software_requirements_store:',
+  '  backend: file-system',
+  '  mode: "same' + BS + 'n  api_token: ghp_DEADBEEF"',
+  '  path: "."',
+  'sprint_management:',
+  '  mode: same',
+  '  path: "."',
+];
+
+testAsync('N-1 PoC — the full `install --yes` update sequence cannot amplify a poisoned `mode:` into the file', async () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const before = writeLayoutFixture(tmpDir, POISONED_MODE_FIXTURE);
+
+    // The fixture is legal YAML — that is what makes it a committable payload
+    // rather than something a parser would have caught.
+    if (yamlOracle) {
+      const doc = yamlOracle.load(before);
+      assert.strictEqual(doc.software_requirements_store.mode, 'same\n  api_token: ghp_DEADBEEF',
+        'the fixture must be legal YAML carrying the payload as a VALUE');
+    }
+
+    // Step 1 — readExistingLayout. Must not hand the payload onward.
+    let existing;
+    const readOutput = capture(() => { existing = readExistingLayout(); });
+    assert.strictEqual(existing, null,
+      'a store whose `mode` is not an enum member is an invalid binding, not pre-population');
+    assert.ok(/invalid/.test(readOutput), `the user must be told, got: ${readOutput}`);
+
+    // Step 2 — collectRepoLayout({yes:true}) returns `existingLayout` VERBATIM
+    // (bin/cli.js, the "No env vars: preserve existing layout" branch). That
+    // verbatim passthrough is the amplification vector, so pin it explicitly.
+    const repoLayout = await collectRepoLayout({ yes: true }, existing);
+    assert.ok(repoLayout && repoLayout.knowledgebase, 'the wizard must still yield a usable layout');
+    assert.ok(STORE_MODE_MEMBERS.includes(repoLayout.knowledgebase.mode),
+      `only an enum member may leave collectRepoLayout, got ${JSON.stringify(repoLayout.knowledgebase.mode)}`);
+
+    // Step 3 — writeProjectLayoutYaml. The non-destruction guard must refuse.
+    const writeOutput = capture(() => writeProjectLayoutYaml(repoLayout));
+    assert.ok(/Refusing to overwrite/.test(writeOutput), `must refuse, got: ${writeOutput}`);
+
+    const after = fs.readFileSync(layoutPathOf(tmpDir), 'utf-8');
+    assert.strictEqual(after, before, 'the file must be byte-identical');
+    assert.ok(!/^\s*api_token:/m.test(after),
+      'no `api_token:` KEY may exist in the committed file (AC6 / NFR79)');
+    assert.strictEqual((after.match(/^\s*schema_version:/gm) || []).length, 1,
+      'and no second schema_version: key');
+  } finally {
+    cleanup();
+  }
+});
+
+test('an unknown `mode:` on READ is `invalid` — fail loud, exactly as an unknown `backend:` is', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const before = writeLayoutFixture(tmpDir, POISONED_MODE_FIXTURE);
+    const result = resolveProjectTopology(tmpDir);
+    assert.strictEqual(result.ok, false, 'an unknown mode must not resolve');
+    assert.strictEqual(result.reason, BINDING_INVALID,
+      'coercing to `same` would silently repoint the store AND launder the tampered value ' +
+      'into a clean file on the next write');
+    assert.ok(/mode/.test(result.message), `the message must name the field, got: ${result.message}`);
+    assert.ok(/same/.test(result.message) && /local/.test(result.message) && /remote/.test(result.message),
+      `and enumerate the legal set, got: ${result.message}`);
+    // Not merely reported — the guard must hold too.
+    capture(() => writeProjectLayoutYaml({ knowledgebase: { mode: 'same', path: '.' }, sprintManagement: { mode: 'same', path: '.' } }));
+    assert.strictEqual(fs.readFileSync(layoutPathOf(tmpDir), 'utf-8'), before, 'left unchanged');
+  } finally {
+    cleanup();
+  }
+});
+
+test('a poisoned sprint_management `mode:` cannot degrade the Jira binding to a file-system store', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    // Pre-fix this failed the `sprint.mode === 'jira'` equality check, so the
+    // Jira branch was skipped, the binding silently became a file-system store,
+    // and `secret: s` was emitted at valid indentation.
+    const before = writeLayoutFixture(tmpDir, [
+      'schema_version: 2',
+      'system_requirements_store:', '  backend: file-system', '  mode: same', '  path: "."',
+      'software_requirements_store:', '  backend: file-system', '  mode: same', '  path: "."',
+      'sprint_management:',
+      '  mode: "jira' + BS + 'n  secret: s"',
+      '  path: "."',
+    ]);
+    const result = resolveProjectTopology(tmpDir);
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.reason, BINDING_INVALID);
+    assert.ok(/sprint_management/.test(result.message),
+      `the message must name the record, got: ${result.message}`);
+    assert.ok(/jira/.test(result.message),
+      `and enumerate jira as legal for this record, got: ${result.message}`);
+    capture(() => writeProjectLayoutYaml({ knowledgebase: { mode: 'same', path: '.' }, sprintManagement: { mode: 'same', path: '.' } }));
+    const after = fs.readFileSync(layoutPathOf(tmpDir), 'utf-8');
+    assert.strictEqual(after, before, 'left unchanged');
+    assert.ok(!/^\s*secret:/m.test(after), 'no `secret:` KEY may reach the committed file');
+  } finally {
+    cleanup();
+  }
+});
+
+test('an unknown `mode` can never be WRITTEN — the serializers reject before any bytes exist', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    for (const bad of ['notion', 'SAME', 'jira', 'same' + BS + BS + 'n  api_token: x', 'same\n  api_token: x']) {
+      let threw = null;
+      try {
+        capture(() => writeProjectLayoutYaml({
+          knowledgebase: { mode: bad, path: '.' },
+          sprintManagement: { mode: 'same', path: '.' },
+        }));
+      } catch (e) { threw = e; }
+      assert.ok(threw, `a knowledge store mode ${JSON.stringify(bad)} must be rejected on write`);
+      assert.ok(/mode/.test(threw.message), `the message must name the field, got: ${threw.message}`);
+      assert.ok(!fs.existsSync(layoutPathOf(tmpDir)),
+        `no bytes may be produced for mode ${JSON.stringify(bad)}`);
+    }
+    // `jira` is legal for sprint_management and ONLY for sprint_management.
+    for (const bad of ['notion', 'jira\n  secret: s']) {
+      let threw = null;
+      try {
+        capture(() => writeProjectLayoutYaml({
+          knowledgebase: { mode: 'same', path: '.' },
+          sprintManagement: { mode: bad, path: '.' },
+        }));
+      } catch (e) { threw = e; }
+      assert.ok(threw, `a sprint_management mode ${JSON.stringify(bad)} must be rejected on write`);
+      assert.ok(!fs.existsSync(layoutPathOf(tmpDir)), 'no bytes may be produced');
+    }
+  } finally {
+    cleanup();
+  }
+});
+
+test('every legal mode still round-trips, is emitted UNQUOTED, and parses under a real parser', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const kbDir = path.join(tmpDir, 'kb');
+    for (const mode of STORE_MODE_MEMBERS) {
+      fs.rmSync(layoutPathOf(tmpDir), { force: true });
+      const store = mode === 'same' ? { mode, path: '.' }
+        : mode === 'local' ? { mode, path: kbDir }
+          : { mode, path: kbDir, gitUrl: 'https://example.invalid/kb.git' };
+      capture(() => writeProjectLayoutYaml({ knowledgebase: store, sprintManagement: { ...store } }));
+      const content = fs.readFileSync(layoutPathOf(tmpDir), 'utf-8');
+      assert.ok(content.includes(`  mode: ${mode}\n`),
+        `mode ${mode} must be emitted UNQUOTED (config-storage.test.js pins this), got: ${content}`);
+      const doc = assertEmittedYamlIsValid(content, `legal mode ${mode}`);
+      if (doc) {
+        assert.strictEqual(doc.system_requirements_store.mode, mode);
+        assert.strictEqual(doc.sprint_management.mode, mode);
+      }
+      const t = topologyOf(resolveProjectTopology(tmpDir));
+      assert.strictEqual(t.systemRequirementsStore.mode, mode, 'and reads back');
+      assert.strictEqual(t.sprintManagement.mode, mode);
+    }
+    // sprint_management's fourth member.
+    fs.rmSync(layoutPathOf(tmpDir), { force: true });
+    capture(() => writeProjectLayoutYaml({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'jira', jiraUrl: 'https://jira.invalid', jiraProjectKey: 'K' },
+    }));
+    const content = fs.readFileSync(layoutPathOf(tmpDir), 'utf-8');
+    assert.ok(content.includes('  mode: jira\n'), 'jira is emitted unquoted');
+    assertEmittedYamlIsValid(content, 'legal mode jira');
+    assert.strictEqual(topologyOf(resolveProjectTopology(tmpDir)).sprintManagement.mode, 'jira');
+  } finally {
+    cleanup();
+  }
+});
+
+test('an ABSENT or EMPTY `mode:` still defaults to `same` rather than tripping the enum', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    // Same contract as `backend` (R-5): "the field was never stated" is a
+    // default, not an unknown value. Validation must not turn a legitimate
+    // pre-F26 record into an invalid binding.
+    writeLayoutFixture(tmpDir, [
+      'schema_version: 2',
+      'system_requirements_store:', '  backend: file-system', '  path: "."',
+      'software_requirements_store:', '  backend: file-system', '  mode:', '  path: "."',
+      'sprint_management:', '  path: "."',
+    ]);
+    const t = topologyOf(resolveProjectTopology(tmpDir));
+    assert.strictEqual(t.systemRequirementsStore.mode, 'same', 'absent mode: -> same');
+    assert.strictEqual(t.softwareRequirementsStore.mode, 'same', 'empty mode: -> same');
+    assert.strictEqual(t.sprintManagement.mode, 'same', 'absent sprint mode: -> same');
+  } finally {
+    cleanup();
+  }
+});
+
+test('a confluence store has no `mode` at all, and the enum does not invent one', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    writeLayoutFixture(tmpDir, [
+      'schema_version: 2',
+      'system_requirements_store:', '  backend: confluence', '  space_key: "SPACE"',
+      '  root_page:', '    title: "T"', '    id: "1"',
+      'software_requirements_store:', '  backend: confluence', '  space_key: "SPACE"',
+      '  root_page:', '    title: "T"', '    id: "1"',
+      'sprint_management:', '  mode: same', '  path: "."',
+    ]);
+    const t = topologyOf(resolveProjectTopology(tmpDir));
+    assert.strictEqual(t.systemRequirementsStore.backend, 'confluence');
+    assert.strictEqual(t.systemRequirementsStore.mode, undefined,
+      'the confluence branch returns before the mode enum — P5-9.5, the stores are independent');
+  } finally {
+    cleanup();
+  }
+});
+
+// ─── R-8 — the non-destruction guard is adjudicated by a REAL parser (N-2) ────
+//
+// `parseLayoutYaml` is deliberately lenient: it skips any line without a colon
+// and is indentation-agnostic about tabs. So it "read" files js-yaml rejects, and
+// the guard returned ok:true for genuinely corrupt content — defeating itself.
+// project-layout.yaml is COMMITTED and its `generated:` date changes on every
+// install, so a merge conflict is ordinary, not exotic.
+console.log('\nR-8 — the non-destruction guard is adjudicated by a real parser (N-2)');
+
+const MERGE_CONFLICT_FIXTURE = [
+  'schema_version: 2',
+  '<<<<<<< HEAD',
+  'system_requirements_store:',
+  '  backend: confluence',
+  '  space_key: "MINE"',
+  'software_requirements_store:',
+  '  backend: confluence',
+  '  space_key: "MINE"',
+  '=======',
+  'system_requirements_store:',
+  '  backend: file-system',
+  '  mode: local',
+  '  path: "d:/THEIRS"',
+  'software_requirements_store:',
+  '  backend: file-system',
+  '  mode: local',
+  '  path: "d:/THEIRS"',
+  '>>>>>>> origin/main',
+  'sprint_management:',
+  '  mode: same',
+  '  path: "."',
+];
+
+test('N-2 PoC — a git merge conflict is `unreadable` and is NOT silently resolved by overwriting', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const before = writeLayoutFixture(tmpDir, MERGE_CONFLICT_FIXTURE);
+
+    // The premise: the lenient reader is happy, a real parser is not. Without
+    // both halves this test would not be pinning anything.
+    if (yamlOracle) {
+      let rejected = false;
+      try { yamlOracle.load(before); } catch (e) { rejected = true; }
+      assert.ok(rejected, 'js-yaml must reject a conflicted file — otherwise this PoC is vacuous');
+    }
+    const lenient = parseLayoutYaml(before);
+    assert.ok(lenient.system_requirements_store,
+      'parseLayoutYaml drops the marker lines and reads the LAST-WRITER side — this is why the ' +
+      'guard needed a stricter adjudicator, not a different reader');
+    assert.strictEqual(lenient.system_requirements_store.path, 'd:/THEIRS',
+      'and it silently picks THEIRS');
+
+    const result = resolveProjectTopology(tmpDir);
+    assert.strictEqual(result.ok, false,
+      'ok:true here is what let writeProjectLayoutYaml destroy one side of a merge');
+    assert.strictEqual(result.reason, BINDING_UNREADABLE,
+      'bytes exist but nothing trustworthy can be extracted');
+    assert.ok(/not valid YAML/.test(result.message),
+      `the message must say why, got: ${result.message}`);
+
+    const output = capture(() => writeProjectLayoutYaml({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' },
+    }));
+    assert.ok(/Refusing to overwrite/.test(output), `must refuse, got: ${output}`);
+    const after = fs.readFileSync(layoutPathOf(tmpDir), 'utf-8');
+    assert.strictEqual(after, before, 'byte-identical');
+    assert.ok(after.includes('<<<<<<<') && after.includes('>>>>>>>'),
+      'the conflict markers must survive so the developer can still resolve the merge');
+    assert.ok(after.includes('MINE'), 'and the HEAD side must not be destroyed');
+  } finally {
+    cleanup();
+  }
+});
+
+test('the likeliest conflict — on the `generated:` date alone — is caught too', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    // Every install rewrites `generated:`, so this is the conflict a team will
+    // actually hit. Pre-fix all three marker lines were colon-free and dropped,
+    // so the resolver returned a perfectly plausible ok:true and the file was
+    // overwritten with the markers gone.
+    const before = writeLayoutFixture(tmpDir, [
+      'schema_version: 2',
+      '<<<<<<< HEAD',
+      'generated: "2026-08-01"',
+      '=======',
+      'generated: "2026-08-05"',
+      '>>>>>>> origin/main',
+      'system_requirements_store:', '  backend: file-system', '  mode: same', '  path: "."',
+      'software_requirements_store:', '  backend: file-system', '  mode: same', '  path: "."',
+      'sprint_management:', '  mode: same', '  path: "."',
+    ]);
+    const result = resolveProjectTopology(tmpDir);
+    assert.strictEqual(result.ok, false, 'a plausible-looking but conflicted file must not resolve');
+    assert.strictEqual(result.reason, BINDING_UNREADABLE);
+    capture(() => writeProjectLayoutYaml({ knowledgebase: { mode: 'same', path: '.' }, sprintManagement: { mode: 'same', path: '.' } }));
+    assert.strictEqual(fs.readFileSync(layoutPathOf(tmpDir), 'utf-8'), before, 'left unchanged');
+  } finally {
+    cleanup();
+  }
+});
+
+test('tab-indented YAML is the same class and is also `unreadable`', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const TAB = String.fromCharCode(9);
+    const before = writeLayoutFixture(tmpDir, [
+      'schema_version: 2',
+      'system_requirements_store:', TAB + 'backend: file-system', TAB + 'mode: same', TAB + 'path: "."',
+      'software_requirements_store:', TAB + 'backend: file-system', TAB + 'mode: same', TAB + 'path: "."',
+    ]);
+    const result = resolveProjectTopology(tmpDir);
+    assert.strictEqual(result.ok, false, 'tabs are illegal YAML indentation');
+    assert.strictEqual(result.reason, BINDING_UNREADABLE);
+    capture(() => writeProjectLayoutYaml({ knowledgebase: { mode: 'same', path: '.' }, sprintManagement: { mode: 'same', path: '.' } }));
+    assert.strictEqual(fs.readFileSync(layoutPathOf(tmpDir), 'utf-8'), before, 'left unchanged');
+  } finally {
+    cleanup();
+  }
+});
+
+test('the validity gate never rejects a file this module itself wrote, and stays TOTAL', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    // A file the writer produced must still resolve. The gate is a guard against
+    // foreign corruption, not a new way to break a working project.
+    capture(() => writeProjectLayoutYaml({
+      knowledgebase: { mode: 'local', path: path.join(tmpDir, 'kb') },
+      sprintManagement: { mode: 'jira', jiraUrl: 'https://jira.invalid', jiraProjectKey: 'K' },
+    }));
+    assert.ok(resolveProjectTopology(tmpDir).ok, 'a freshly written binding must still resolve');
+
+    // Legacy pre-F26 shape must not be newly rejected either.
+    writeLayoutFixture(tmpDir, ['knowledgebase:', '  mode: local', '  path: "../kb"',
+      'sprint_management:', '  mode: same', '  path: "."']);
+    assert.ok(resolveProjectTopology(tmpDir).ok, 'a legacy v1 file must not be newly rejected (AC5)');
+
+    // Totality: the gate must not be able to throw out of the resolver, whatever
+    // bytes are in the file.
+    for (const junk of ['[', '{a', '*', '&', '!!python/object:x {}', '"', ': :', 'a: *undefined_anchor',
+      'a: 1' + String.fromCharCode(9) + String.fromCharCode(9), String.fromCharCode(0)]) {
+      writeLayoutFixture(tmpDir, junk);
+      let threw = null, r = null;
+      try { r = resolveProjectTopology(tmpDir); } catch (e) { threw = e; }
+      assert.strictEqual(threw, null,
+        `resolveProjectTopology must stay TOTAL for ${JSON.stringify(junk)} — it threw: ${threw && threw.message}`);
+      assert.ok(r && typeof r === 'object' && typeof r.ok === 'boolean',
+        'and always return a discriminated result');
+      if (!r.ok) {
+        assert.ok([BINDING_UNBOUND, BINDING_UNREADABLE, BINDING_INVALID, BINDING_TOO_NEW].includes(r.reason),
+          `the reason must be a member of the closed set, got ${JSON.stringify(r.reason)}`);
+      }
+    }
+  } finally {
+    cleanup();
+  }
+});
+
+test('the refusal message leads with a remedy that EXISTS in this release', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    writeLayoutFixture(tmpDir, MERGE_CONFLICT_FIXTURE);
+    const output = capture(() => writeProjectLayoutYaml({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' },
+    }));
+    // `ma-agents bind` ships in Story 31.13, so it must not be the instruction a
+    // user of THIS release is given.
+    assert.ok(/delete _bmad-output\/project-layout\.yaml and re-run the installer/.test(output),
+      `the remedy must be actionable today, got: ${output}`);
+    assert.ok(!/ma-agents bind/.test(output),
+      `must not instruct the user to run a command this release does not ship, got: ${output}`);
+  } finally {
+    cleanup();
+  }
+});
+
+// ─── Summary ───────────────────────────────────────────────────────────────
+drainAsyncTests().then(() => {
+  console.log(`\n${passed} passed, ${failed} failed`);
+  if (!yamlOracle) {
+    console.log('  NOTE: js-yaml did not resolve — oracle assertions degraded to explicit escaping checks.');
+  }
+  if (errors.length > 0) {
+    console.log('\nFailed tests:');
+    errors.forEach(e => console.log(`  - ${e.name}: ${e.error}`));
+  }
+
+  if (failed > 0) process.exit(1);
+});
