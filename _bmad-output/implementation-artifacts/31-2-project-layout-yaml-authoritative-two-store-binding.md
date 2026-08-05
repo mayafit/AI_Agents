@@ -80,8 +80,9 @@ project topology into it conflates two unrelated lifecycles.
 - [x] 2.1 Update `test/config-storage.test.js`: the two tests that asserted the now-removed
       skip/delete behaviour are rewritten to assert the opposite (AC2/AC3); the structure
       assertion is updated for the new section names.
-- [x] 2.2 Add `test/project-layout-binding-spine.test.js` (12 new tests) covering AC1, AC4, AC5,
-      AC6, AC7, AC8, AC9 directly.
+- [x] 2.2 Add `test/project-layout-binding-spine.test.js` covering AC1, AC4, AC5, AC6, AC7, AC8,
+      AC9 directly. **13 tests as first written; 25 after fix round 1; 57 after fix round 2** —
+      see the Change Log and Test Evidence for what each round added and why.
 - [x] 2.3 Register the new test file in `package.json`'s `test` script.
 - [x] 2.4 Verify `test/config-lost-on-update.test.js`, `test/portable-paths.test.js`,
       `test/config-layout.test.js`, `test/cicd-remote-mode.test.js` still pass unmodified (they do
@@ -214,7 +215,7 @@ Targeted files run directly (`node test/<file>.test.js`), per the task's testing
 | `test/portable-paths.test.js` | 20/20 pass, **unmodified** | 20/20 pass |
 | `test/config-layout.test.js` | 6/6 pass, **unmodified** | 6/6 pass |
 | `test/cicd-remote-mode.test.js` | 9/9 pass, **unmodified** (doesn't touch this surface) | 9/9 pass |
-| `test/project-layout-binding-spine.test.js` (new) | 13/13 pass | N/A (new file) |
+| `test/project-layout-binding-spine.test.js` (new) | **57/57 pass** (13 at first write -> 25 after fix round 1 -> 57 after fix round 2) | N/A (new file) |
 | `test/generate-project-context.test.js` | 27/27 pass (unaffected — operates on layout objects, not the file) | not re-run (no code touched) |
 | `test/cross-repo-validation.test.js` | 7/7 pass (unaffected — exercises `writeRepoLayoutConfig`/config.yaml, not this file) | not re-run |
 | `test/repo-layout.test.js` | 13/13 pass | not re-run |
@@ -223,12 +224,27 @@ Targeted files run directly (`node test/<file>.test.js`), per the task's testing
 | `test/cli.test.js` | 12/12 pass | not re-run |
 | `test/bmad-output-policy.test.js` | 10/11 pass — 1 failure | **Same 1 failure reproduced on `main` @ `ccac270`**, identical assertion/message (`Section must be within the first few major sections, found 8 H2s before it`, `bmad-output-policy.test.js:118`) — **pre-existing, not a regression**, exactly the case flagged in the task brief. AC9 is otherwise covered by this suite's other 10 cases (`ensureBmadOutputTracked()`, Story 10.1) plus a new direct check in `project-layout-binding-spine.test.js` that `writeProjectLayoutYaml()` itself never touches `.gitignore`. |
 
-Total: 162 passing, 1 pre-existing (baseline-confirmed) failure, 0 regressions.
+Total after fix round 2: **206 passing**, 1 pre-existing (baseline-confirmed) failure, 0
+regressions. The affected-suite counts that gate this story are: binding-spine 57, config-storage
+16, config-lost-on-update 13, portable-paths 20, config-layout 6, reconfigure 12, repo-layout 13.
+
+**Mutation-tested.** Fix round 2's suite was validated by reverting each of the 18 individual code
+fixes in turn and confirming the suite goes red for each. All 18 mutations were killed; 0 survived.
+This step exists because fix round 1 shipped a CRLF test that asserted nothing — `parseLayoutYaml`
+calls `rawLine.trim()`, which strips a trailing `\r` regardless, so the test passed identically with
+the `\r?` removed from the split regex. That test has been replaced (see "Reader fidelity" below).
 
 ### Self-review (`code-review` skill)
 
+**This section describes the ORIGINAL implementation's self-review only, and it materially
+understated the defect load. Read it with the Change Log.** The self-review reported "one real
+finding". An independent review then returned CHANGES-REQUIRED with three blocking findings (B-1,
+B-2, B-3), and an independent *re-review* of that fix round returned six more (R-1 … R-6),
+including one crash the fix round itself introduced. A self-review claiming a single finding on a
+change of this size was not a reliable signal, and is not treated as one here.
+
 Ran the `code-review` skill against this diff before finalizing, per the project's git-workflow
-discipline. One real finding, fixed: `serializeStore()` originally treated any `store.backend` value
+discipline. One finding was found and fixed at that time: `serializeStore()` originally treated any `store.backend` value
 other than exactly `'confluence'` as file-system — an unrecognized/typo'd backend (e.g.
 `'sharepoint'`) would silently be written as `backend: file-system` with no signal. Fixed by
 validating the backend against the closed AC1 enum (`file-system` | `confluence` | undefined) and
@@ -278,7 +294,25 @@ All of these were reverted/cleaned (`git checkout` on tracked files, `git clean`
 
 ## Unresolved Findings
 
-None that block this story. One latent, pre-existing, genuinely out-of-scope bug noted for future
+### Out of scope for 31.2, but they block Story 31.5 — raised by the fix-round-2 re-review
+
+Both were confirmed still present after fix round 2 (verified by direct probe, not by inspection).
+Neither was chased here, per the scope boundary; both need a story or bug of their own before 31.5.
+
+1. **`readExistingLayout()` collapses two independent stores onto one.** It returns the
+   `softwareRequirementsStore` as the single `knowledgebase` value. That is harmless today because
+   nothing yet writes two *different* stores, but a project whose `system_requirements_store` and
+   `software_requirements_store` point at different locations loses the system store on any
+   reconfigure round trip — violating P5-9.5's "the two stores are independent". Probe: a fixture
+   with `/sys/store` and `/soft/store` returns `/soft/store` and drops the other.
+2. **`showCurrentLayout()` prints `Mode: undefined / Path: undefined` for a confluence store.** It
+   assumes every concern has `{mode, path}`; a confluence store has `{backend, spaceKey, rootPage}`.
+   Fix round 2 added a distinct report for an *invalid* binding, which does not touch this: a
+   *valid* confluence binding still renders two `undefined`s. Probe confirmed unchanged.
+
+### Pre-existing, unrelated
+
+One latent, pre-existing, genuinely out-of-scope bug noted for future
 filing (not fixed here, per instruction not to chase unrelated defects): `uninstallSkill()` is
 called with the string literal `'project'` (not `installScope`) at several sites in the update path
 (`bin/cli.js`, originally cited as 1668/1680; now several call sites including ~1396/1428/1438/
@@ -302,9 +336,11 @@ called with the string literal `'project'` (not `installScope`) at several sites
 - [x] AC10 — all targeted test files green except one pre-existing, baseline-confirmed failure
       unrelated to this change.
 - [x] Self-review complete — ran the `code-review` skill against the diff, found and fixed one
-      real issue (unvalidated backend value silently coerced to file-system; see Test Evidence),
-      pinned with a new regression test. No PR opened, no push, no merge — orchestrator serializes
-      integration per the task's hard boundaries.
+      issue at that time (unvalidated backend value silently coerced to file-system; see Test
+      Evidence), pinned with a new regression test. **That self-review under-reported: two
+      subsequent independent reviews found 3 + 6 further findings, all now closed — see the Change
+      Log.** No PR opened, no push, no merge — orchestrator serializes integration per the task's
+      hard boundaries.
 - [x] `sprint-status.yaml` updated (status only, comment preserved).
 - [ ] Independent human/reviewer sign-off before this story is folded into `feature/epic-31` — this
       agent's self-review is not a substitute for that gate.
@@ -316,7 +352,10 @@ called with the string literal `'project'` (not `installScope`) at several sites
   `sprintFromRaw`, `serializeFileSystemStore`, `serializeConfluenceStore`, `serializeStore`,
   `serializeSprintManagement`, `PROJECT_LAYOUT_SCHEMA_VERSION`); exports extended.
 - `test/config-storage.test.js` — 2 tests rewritten (AC2/AC3), 1 updated (new section names).
-- `test/project-layout-binding-spine.test.js` (new) — 12 tests, AC1/AC4/AC5/AC6/AC7/AC8/AC9.
+- `test/project-layout-binding-spine.test.js` (new) — **57 tests**: AC1/AC4/AC5/AC6/AC7/AC8/AC9
+  plus regression sections B-2 and R-1 … R-6, warn-and-continue coverage, reader-fidelity coverage,
+  and non-ASCII acceptance. Uses `js-yaml` (already a direct dependency) as a real-YAML-parser
+  oracle alongside the module's own line-based reader.
 - `package.json` — registered the new test file in the `test` script.
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — status updated.
 
@@ -324,4 +363,13 @@ called with the string literal `'project'` (not `installScope`) at several sites
 
 | Date | Change |
 |------|--------|
-| 2026-08-03 | Story implemented in worktree `feature/epic-31-story-31.2`. |
+| 2026-08-03 | Story implemented in worktree `feature/epic-31-story-31.2`. 13 tests in the new binding-spine suite. |
+| 2026-08-04 | **Fix round 1** (commit `c8a59b8`) — closed the three blocking findings from the independent review. **B-1:** the backend enum was closed on read as well as write (`storeFromRaw` threw on an unrecognised `backend:` instead of silently resolving the store to the project root). **B-2:** `yamlEscapeValue` began rejecting the five YAML line-break characters. **B-3:** empty-value scalars (`path:` / `mode:`) were coerced to their defaults instead of leaking `{}`. Suite 13 -> 25 tests. *Fix round 2 found this round closed B-2 and B-3 only halfway and introduced a new crash — see below.* |
+| 2026-08-05 | **Fix round 2** — closed the six findings from the independent re-review of fix round 1. Suite 25 -> 57 tests, all 18 code fixes mutation-verified. |
+| | **R-1** — `yamlEscapeValue` is now a *total, correct* escaper: it always emits a parseable YAML double-quoted scalar (escaping `\`, `"`, all C0/C1 controls, U+0085/U+2028/U+2029, NBSP and U+FEFF as `\uXXXX`) and **never throws**. Round 1's second branch escaped nothing, so 5 of 10 adversarial values (trailing `\`, NUL, VT, FF, U+0001) emitted a file js-yaml rejects outright. The line-break *rejection* moved to `assertSingleLineIdentity`, called from `serializeConfluenceStore` — the layer that knows which file and field it is writing. Round 1's shared throw surfaced as `Cannot write config.yaml: Refusing to write ... into project-layout.yaml`, naming the wrong file and leaving `config.yaml` at 0 bytes; that claim about firing "BEFORE any bytes are written" was false for `writeConfigField`. Also fixed in the same function: `writeConfigField` used the string form of `String.replace`, so a `$&` / `$1` in a legitimate path was expanded as a replacement pattern. |
+| | **R-2** — `resolveProjectTopology` now returns a **discriminated result** (`{ok:true, topology}` / `{ok:false, reason:'unbound'\|'unreadable'\|'invalid', message}`) and never throws. Round 1's documented "structural -> `null`, semantic -> throws" pair was honoured by zero callers: `readExistingLayout` caught the semantic throw and fell into the structural path, so a `backend: notion` project was reported by `showCurrentLayout` as `Single-repo layout (default)` and then AC2's unconditional write **permanently destroyed** the notion binding. All three callers fixed, and a **non-destruction guard** added inside `writeProjectLayoutYaml` itself — the single choke point every overwrite passes through, so 31.3 / 31.4 / 31.13 cannot forget it. Added the missing `schema_version` too-new gate (a `schema_version: 3` file previously entered the v2 branch); fixtures that declared `schema_version: 3` against a v2 schema were corrected to `2`. |
+| | **R-3** — the **confluence** branch of `storeFromRaw` used bare `!= null` checks with no coercion, so an empty `space_key:` / `title:` / `id:` scalar resolved to `{}` and the next write emitted `space_key: "[object Object]"`. Now routed through a shared `scalarString()`. The identical uncoerced read in `sprintFromRaw` (`raw.jira_url \|\| ''` — `{}` is truthy and survives `\|\|`) was fixed in the same pass rather than left as a second half-fix. |
+| | **R-4** — reader and writer now agree on one legal value set. A `path` containing U+2028 / U+2029 / U+0085 (legal in a real directory name on Linux *and* Windows, writable by a pre-31.2 ma-agents) read back intact under round 1 and then threw out of AC2's unconditional rewrite at `bin/cli.js`'s install call site, reaching `main().catch` and printing a stack trace **after the BMAD install had completed**. Fixed at the root: those characters are escaped, not rejected, and `parseLayoutYaml` gained `yamlUnescapeDoubleQuoted` as the exact inverse. Its quote test also moved from `.` to `[\s\S]`, since `.` does not match the JS line terminators and so failed to detect the quotes around such a value. Both install-time call sites additionally wrap the call, so the remaining deliberate throws degrade to warn-and-leave-UNBOUND rather than a stack trace. |
+| | **R-5** — an empty `backend:` scalar reached the enum check as `{}` and threw `Unknown knowledge-store backend {}` — unactionable, and the opposite of what the identical malformation on `path:` does. An absent *and* an empty `backend:` now both mean "never stated" and default to `file-system`; only a non-empty string outside the enum still fails loud. |
+| | **R-6** — removed the fabricated citation `implementation-readiness-f26.md NB-3`. No `NB-` identifier exists anywhere in `_bmad-output/` (verified by grep); the two `NB-7` comments were reworded for the same reason. The one surviving citation, `implementation-readiness-f26.md finding F-3`, was verified to exist. A test now walks every `implementation-readiness-f26.md <ID>` citation in `bin/cli.js` and asserts each resolves in that document. |
+| | **Test work** — the vacuous CRLF test was replaced (three tests that assert on channels `trim()` cannot launder: interior whitespace, an *encoded* CR, and a *raw* U+2028 inside quotes); `gitUrl` coercion covered; non-ASCII (Hebrew/Arabic/CJK/emoji) space keys, titles and paths pinned as **accepted**, so an over-broad guard cannot pass; warn-and-continue / `UNBOUND` covered for both branches, with the I/O failure injected through real filesystem conditions Windows enforces (`_bmad-output` as a file gives EEXIST; a 0444 file gives EPERM) rather than skipped; the five B-2 injection assertions made unconditional (they had been nested inside `if (fs.existsSync(f))` and so never ran in the passing case); and `js-yaml` adopted as a real-parser oracle throughout, degrading to explicit escaping assertions rather than skipping if it ever stops resolving. |
