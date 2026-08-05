@@ -32,6 +32,9 @@ const prompts = require('prompts');
 const chalk = require('chalk');
 const path = require('path');
 const fs = require('fs');
+// Used ONLY as a validity oracle for the authoritative binding file (see
+// resolveProjectTopology). Already loaded on every run via lib/bmad.js.
+const yaml = require('js-yaml');
 const { execFileSync } = require('child_process');
 const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout, migrateRetiredSkills, reconcileAgentsSharedSkills } = require('../lib/installer');
 const { getProfile, setProfile, resolveProfile, getBmadModules, setBmadModules, showDemerzelDeprecationNoticeOnce, getCustomMarketplaceSelection } = require('../lib/profile');
@@ -497,13 +500,103 @@ function normalizePath(p) {
   return p.replace(/\\/g, '/');
 }
 
+// Characters that cannot appear RAW inside a YAML double-quoted scalar without
+// either terminating it early or producing something a real YAML parser rejects:
+//   \ and "         - the two structural characters of the scalar itself.
+//   U+0000-U+001F   - C0 controls. Includes CR/LF (which would break out of the
+//                     scalar and inject a sibling key) and TAB/NUL/VT/FF, which
+//                     YAML forbids raw and js-yaml rejects outright.
+//   U+007F-U+009F   - DEL and the C1 controls, likewise forbidden raw. U+0085
+//                     (NEL) lives in this range and is a YAML line break.
+//   U+2028 / U+2029 - Unicode line/paragraph separators; YAML line breaks.
+//   U+00A0 / U+FEFF - legal raw, but JS String.prototype.trim() treats both as
+//                     whitespace, so leaving them raw would make this module's
+//                     own line-based reader lossy. Escaped for round-trip
+//                     fidelity rather than for safety.
+const YAML_DQ_MUST_ESCAPE = /[\\"\u0000-\u001f\u007f-\u009f\u00a0\u2028\u2029\ufeff]/g;
+
+/**
+ * Renders any value as a VALID YAML double-quoted scalar.
+ *
+ * INVARIANT: total. It never throws, and there is no input for which it emits
+ * something a conforming YAML parser rejects. Correct escaping subsumes the
+ * injection defence entirely - an escaped CR/LF cannot break out of the scalar -
+ * so there is nothing left here to reject. Any *policy* rejection of line breaks
+ * belongs at the serializer boundary, which knows the file and field name (see
+ * assertSingleLineIdentity). Paired with yamlUnescapeDoubleQuoted so writer and
+ * reader agree on exactly one legal value set.
+ *
+ * Shared with writeConfigField (_bmad/bmm/config.yaml), which is why a throw here
+ * would name the wrong file. Why the earlier *rejecting* escaper was withdrawn is
+ * in the commit message and the story record.
+ */
 function yamlEscapeValue(v) {
-  if (!v) return '""';
+  if (v == null || v === '') return '""';
   const s = String(v);
-  if (/[:"#\[\]{}&*!|>%@`]/.test(s) || s !== s.trim() || s === '') {
-    return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  return '"' + s.replace(YAML_DQ_MUST_ESCAPE, (ch) => {
+    if (ch === '\\') return '\\\\';
+    if (ch === '"') return '\\"';
+    return '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0');
+  }) + '"';
+}
+
+/**
+ * The exact inverse of yamlEscapeValue for the three escape forms this module
+ * emits (backslash-backslash, backslash-quote, \uXXXX), plus the remainder of
+ * the YAML 1.2 double-quoted escape set so that a hand-edited file - or one
+ * written by a real YAML emitter - still reads correctly. An unknown escape
+ * degrades to the escaped character itself rather than throwing: this reader's
+ * job is to resolve a binding, and resolveProjectTopology classifies unusable
+ * content separately.
+ */
+function yamlUnescapeDoubleQuoted(s) {
+  return s.replace(/\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[\s\S])/g, (_m, esc) => {
+    if (esc.length === 5 && esc[0] === 'u') return String.fromCharCode(parseInt(esc.slice(1), 16));
+    if (esc.length === 3 && esc[0] === 'x') return String.fromCharCode(parseInt(esc.slice(1), 16));
+    switch (esc) {
+      case '0': return '\u0000';
+      case 'a': return '\u0007';
+      case 'b': return '\b';
+      case 't': return '\t';
+      case 'n': return '\n';
+      case 'v': return '\v';
+      case 'f': return '\f';
+      case 'r': return '\r';
+      case 'e': return '\u001b';
+      case 'N': return '\u0085';
+      case '_': return '\u00a0';
+      case 'L': return '\u2028';
+      case 'P': return '\u2029';
+      default: return esc;
+    }
+  });
+}
+
+/**
+ * The POLICY guard that the first round's B-2 throw was reaching for, relocated
+ * to the layer that knows which file it is writing. Applies ONLY to the
+ * free-text human-identity fields of a confluence store (space key, root-page
+ * title/id) - NOT to paths or git URLs, because U+2028 / U+2029 / U+0085 are all
+ * legal in a real directory name on both Linux and Windows, were writable by a
+ * pre-31.2 ma-agents, and must therefore keep round-tripping rather than crash
+ * an install that has already completed.
+ *
+ * Escaping already makes these values SAFE; this guard only enforces that a
+ * multi-line Confluence space key or page title is nonsense input worth
+ * reporting (P5-9.3 fail-loud posture), and it names the real file and field so
+ * the message is actionable.
+ */
+function assertSingleLineIdentity(value, fieldName) {
+  if (value == null) return value;
+  const s = String(value);
+  if (/[\r\n\u2028\u2029\u0085]/.test(s)) {
+    throw new Error(
+      `Refusing to write _bmad-output/project-layout.yaml: the confluence store's ` +
+      `${fieldName} contains a line break, which is not valid identity for a ` +
+      `Confluence space or page: ${JSON.stringify(s)}`
+    );
   }
-  return '"' + s + '"';
+  return s;
 }
 
 function toPortablePath(absolutePath, projectRoot) {
@@ -532,7 +625,11 @@ function writeConfigField(content, fieldName, value) {
   const regex = new RegExp(`^${fieldName}:.*$`, 'm');
   const newLine = `${fieldName}: ${yamlEscapeValue(value)}`;
   if (regex.test(content)) {
-    return content.replace(regex, newLine);
+    // Function replacer, NOT the string form: a `$&` / `$'` / `$1` sequence in a
+    // legitimate path or Jira URL would otherwise be expanded as a replacement
+    // pattern and corrupt config.yaml. Same class as the escaping bug above - a
+    // value channel being treated as syntax.
+    return content.replace(regex, () => newLine);
   }
   return content.trimEnd() + '\n' + newLine + '\n';
 }
@@ -601,61 +698,125 @@ function writeRepoLayoutConfig(layout) {
   }
 }
 
-function writeProjectLayoutYaml(layout) {
-  const layoutPath = path.join(process.cwd(), '_bmad-output', 'project-layout.yaml');
-  // Only skip writing when BOTH concerns are truly same-repo (jira requires config recording)
-  const bothSame = layout.knowledgebase.mode === 'same' && layout.sprintManagement.mode === 'same';
+// ─── project-layout.yaml — schema v2: the two-store binding spine (Story 31.2) ──
+//
+// P5-9.1: this file is the SINGLE authoritative record of where a project's
+// knowledge lives, written unconditionally on every install and every bind.
+// Exactly three location records (AC1): `system_requirements_store`,
+// `software_requirements_store`, `sprint_management` — no fourth store, no
+// `implementation_artifacts` record (story files follow sprint_management,
+// FR267). Each of the two knowledge stores carries a `backend`
+// (`file-system` | `confluence`) plus its backend-specific fields. A
+// `confluence` store records ONLY the space key and a `{title, id}` root-page
+// identity (NFR79) — never credentials; `serializeConfluenceStore` below
+// enumerates exactly those fields and reads nothing else off the input
+// object, so a stray credential-shaped property can never reach the file.
+//
+// Story 31.5 has not landed yet: the installer still asks a single
+// knowledgebase question, so both stores are pointed at that one answer
+// (mapped in `writeProjectLayoutYaml` below) — this is what keeps the
+// existing single-knowledgebase wizard working unmodified until 31.5 splits
+// it into two independent questions.
+const PROJECT_LAYOUT_SCHEMA_VERSION = 2;
 
-  if (bothSame) {
-    // Single-repo mode: delete stale file if exists
-    if (fs.existsSync(layoutPath)) {
-      fs.unlinkSync(layoutPath);
-      console.log(chalk.blue('  Removed stale project-layout.yaml (now in single-repo mode)'));
+// N-1: `mode` is a CLOSED enum in both directions, exactly like `backend`.
+// It was previously the one field raw-interpolated on write (`mode: ${mode}`)
+// and merely string-coerced on read, so a hand-edited `mode:` was a value
+// channel that became SYNTAX on the next write - it round-tripped through
+// readExistingLayout -> collectRepoLayout(--yes) -> writeProjectLayoutYaml and
+// emitted whatever it contained (an `api_token:` key, a second
+// `schema_version:`) at valid indentation, into both store records. Escaping is
+// the wrong instrument here: `mode: same` is deliberately unquoted, so the
+// values are validated instead and only enum members are ever emitted.
+//
+// The sets come from collectRepoLayout: every store mode is same|local|remote,
+// and sprint_management additionally offers jira.
+const STORE_MODES = new Set(['same', 'local', 'remote']);
+const SPRINT_MODES = new Set(['same', 'local', 'remote', 'jira']);
+
+// Read half. Throws; resolveProjectTopology converts it to `invalid`. Failing
+// loud rather than coercing to 'same' mirrors the `backend` enum for the same
+// reason: `mode` decides whether a path is cloned, and whether sprint artifacts
+// live in Jira or on disk, so guessing would silently repoint a store. It also
+// keeps the non-destruction guard engaged instead of laundering a tampered
+// value into a clean file on the next write.
+function requireKnownMode(mode, legal, fieldName) {
+  if (legal.has(mode)) return mode;
+  throw new Error(
+    `Unknown ${fieldName} mode ${JSON.stringify(mode)} in ` +
+    `_bmad-output/project-layout.yaml. Expected one of ` +
+    `${[...legal].map((m) => JSON.stringify(m)).join(', ')}. Refusing to guess.`
+  );
+}
+
+// Write half. An unknown mode must never reach the file, so this throws before
+// any bytes are produced - same contract as serializeStore's backend enum, and
+// the two install-time call sites already degrade such a throw to
+// warn-and-leave-UNBOUND. Returns the validated member, which by construction
+// contains no character needing YAML quoting.
+function assertWritableMode(mode, legal, fieldName) {
+  if (legal.has(mode)) return mode;
+  throw new Error(
+    `Refusing to write _bmad-output/project-layout.yaml: invalid ${fieldName} mode ` +
+    `${JSON.stringify(mode)} — must be one of ${[...legal].join(', ')}`
+  );
+}
+
+// Minimal indentation-aware reader for the subset of YAML this module itself
+// writes (flat scalars, one level of nesting for a store's `root_page`).
+// Deliberately not a general YAML parser — scoped to project-layout.yaml's
+// own shape, old (FR122/16.2) and new (schema v2) alike, matching this
+// codebase's existing hand-rolled-parser convention for this file rather
+// than introducing a new dependency on a hot path.
+function parseLayoutYaml(content) {
+  const root = {};
+  const stack = [{ indent: -1, obj: root }];
+  for (const rawLine of content.split(/\r?\n/)) {
+    if (!rawLine.trim() || rawLine.trim().startsWith('#')) continue;
+    const indent = rawLine.match(/^\s*/)[0].length;
+    const line = rawLine.trim();
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) continue;
+    const key = line.slice(0, colonIdx).trim();
+    let value = line.slice(colonIdx + 1).trim();
+
+    while (stack.length > 1 && indent <= stack[stack.length - 1].indent) stack.pop();
+    const parent = stack[stack.length - 1].obj;
+
+    if (value === '') {
+      const child = {};
+      parent[key] = child;
+      stack.push({ indent, obj: child });
+    } else {
+      // R-4: decode with the exact inverse of yamlEscapeValue. The old
+      // two-replace form handled only \" and \\, so every other escape the
+      // writer emits read back as literal backslash-text - a reader/writer
+      // disagreement that made the round trip lossy and non-idempotent.
+      // `[\s\S]` rather than `.` in the quote test because `.` does not match
+      // U+2028/U+2029/CR/LF, so a hand-written file carrying one of those raw
+      // silently failed quote-detection and kept its surrounding quotes.
+      if (/^"[\s\S]*"$/.test(value)) value = yamlUnescapeDoubleQuoted(value.slice(1, -1));
+      else if (value === 'null' || value === '~') value = null;
+      parent[key] = value;
     }
-    return;
   }
+  return root;
+}
 
-  // Multi-repo or Jira mode: generate project-layout.yaml
-  fs.mkdirSync(path.join(process.cwd(), '_bmad-output'), { recursive: true });
-
-  const date = new Date().toISOString().slice(0, 10);
-  let content = `# Generated by ma-agents — do not edit manually\n`;
-  content += `# Tells agents where to find planning and sprint data\n`;
-  content += `generated: "${date}"\n`;
-
-  const projectRoot = process.cwd();
-
-  // Knowledgebase section
-  const kbPortable = toPortablePath(layout.knowledgebase.path, projectRoot);
-  content += `knowledgebase:\n`;
-  content += `  mode: ${layout.knowledgebase.mode}\n`;
-  content += `  path: ${yamlEscapeValue(kbPortable.portable)}\n`;
-  if (kbPortable.isAbsolute) {
-    content += `  # PORTABILITY: absolute path — other developers may need to reconfigure\n`;
-  }
-  if (layout.knowledgebase.mode === 'remote' && layout.knowledgebase.gitUrl) {
-    content += `  gitUrl: ${yamlEscapeValue(layout.knowledgebase.gitUrl)}\n`;
-  }
-
-  // Sprint management section
-  content += `sprint_management:\n`;
-  content += `  mode: ${layout.sprintManagement.mode}\n`;
-  if (layout.sprintManagement.mode === 'jira') {
-    content += `  jira_url: ${yamlEscapeValue(layout.sprintManagement.jiraUrl)}\n`;
-    content += `  jira_project_key: ${yamlEscapeValue(layout.sprintManagement.jiraProjectKey)}\n`;
-  } else {
-    const spPortable = toPortablePath(layout.sprintManagement.path, projectRoot);
-    content += `  path: ${yamlEscapeValue(spPortable.portable)}\n`;
-    if (spPortable.isAbsolute) {
-      content += `  # PORTABILITY: absolute path — other developers may need to reconfigure\n`;
-    }
-    if (layout.sprintManagement.mode === 'remote' && layout.sprintManagement.gitUrl) {
-      content += `  gitUrl: ${yamlEscapeValue(layout.sprintManagement.gitUrl)}\n`;
-    }
-  }
-
-  fs.writeFileSync(layoutPath, content, 'utf-8');
-  console.log(chalk.gray(`  Created _bmad-output/project-layout.yaml`));
+/**
+ * parseLayoutYaml renders an EMPTY scalar (`path:` / `backend:` / `space_key:`
+ * with nothing after the colon) as `{}`, because an empty value is how this
+ * reader signals "a nested block follows". Every field read off a parsed record
+ * must therefore go through this coercion, or the object leaks downstream and
+ * surfaces either as a TypeError (`path.isAbsolute({})`) or, worse, as the string
+ * `"[object Object]"` written back into the authoritative file on the next save.
+ *
+ * Returns the string, or null for anything that is not a usable non-empty
+ * scalar (`{}`, null, an empty string, a number - parseLayoutYaml never
+ * produces one, but a caller could).
+ */
+function scalarString(v) {
+  return (typeof v === 'string' && v !== '') ? v : null;
 }
 
 function resolveStoredPath(storedPath, projectRoot) {
@@ -667,54 +828,498 @@ function resolveStoredPath(storedPath, projectRoot) {
   return normalizePath(path.resolve(projectRoot, storedPath));
 }
 
+// Raw parsed section -> internal store shape, with portable-path resolution.
+// Every field is read through scalarString(), so an empty scalar anywhere in the
+// record degrades to that field's documented default instead of leaking a `{}`
+// into the topology (see scalarString above).
+function storeFromRaw(raw, projectRoot) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  // The backend enum is CLOSED on read as well as on write: an unrecognised
+  // value must not silently fall through to file-system and, with no `path:`
+  // present, resolve the store to the PROJECT ROOT. Fail loud per the P5-9.3 /
+  // NFR56 posture; resolveProjectTopology turns this throw into an `invalid`
+  // result.
+  //
+  // R-5: an ABSENT `backend:` and an EMPTY `backend:` are both "the field was
+  // never stated" and both default to file-system (AC5's pre-F26 legacy block).
+  // Previously only absence was handled, so an empty scalar reached the enum
+  // check as `{}` and produced the unactionable message
+  // `Unknown knowledge-store backend {}` - a throw where the contract promises
+  // coercion, and the exact opposite of what the identical malformation on
+  // `path:` does. Only a non-empty STRING that is not one of the two legal
+  // values is a genuine unknown backend.
+  const backend = scalarString(raw.backend) || 'file-system';
+  if (backend !== 'file-system' && backend !== 'confluence') {
+    throw new Error(
+      `Unknown knowledge-store backend ${JSON.stringify(backend)} in ` +
+      `_bmad-output/project-layout.yaml. Expected "file-system" or "confluence". ` +
+      `Refusing to guess - an unrecognised backend would otherwise resolve this ` +
+      `store to the project root.`
+    );
+  }
+  if (backend === 'confluence') {
+    // R-3: this branch previously used bare `!= null` checks with no string
+    // coercion, so an empty `space_key:` / `title:` / `id:` scalar resolved to
+    // `{}` and the next write emitted `space_key: "[object Object]"` into the
+    // authoritative file. Identical defect class to the file-system branch
+    // below, in the branch the first fix round did not touch.
+    const rp = (raw.root_page && typeof raw.root_page === 'object') ? raw.root_page : {};
+    return {
+      backend: 'confluence',
+      spaceKey: scalarString(raw.space_key),
+      rootPage: {
+        title: scalarString(rp.title),
+        id: scalarString(rp.id),
+      },
+    };
+  }
+  const mode = requireKnownMode(scalarString(raw.mode) || 'same', STORE_MODES, 'knowledge-store');
+  const rawPath = scalarString(raw.path) || '.';
+  const resolvedPath = resolveStoredPath(rawPath, projectRoot);
+  const entry = { backend: 'file-system', mode, path: resolvedPath };
+  if (mode === 'remote') {
+    const gitUrl = scalarString(raw.gitUrl);
+    if (gitUrl) entry.gitUrl = gitUrl;
+  }
+  return entry;
+}
+
+function sprintFromRaw(raw, projectRoot) {
+  if (!raw || typeof raw !== 'object') return { mode: 'same', path: '.' };
+  if (scalarString(raw.mode) === 'jira') {
+    // `raw.jira_url || ''` was the same uncoerced read as the confluence branch:
+    // an empty `jira_url:` scalar is `{}`, which is TRUTHY, so it survived the
+    // `||` and the next write emitted `jira_url: "[object Object]"`.
+    return {
+      mode: 'jira',
+      jiraUrl: scalarString(raw.jira_url) || '',
+      jiraProjectKey: scalarString(raw.jira_project_key) || '',
+    };
+  }
+  const mode = requireKnownMode(scalarString(raw.mode) || 'same', SPRINT_MODES, 'sprint_management');
+  const rawPath = scalarString(raw.path) || '.';
+  const resolvedPath = resolveStoredPath(rawPath, projectRoot);
+  const entry = { mode, path: resolvedPath };
+  if (mode === 'remote') {
+    const gitUrl = scalarString(raw.gitUrl);
+    if (gitUrl) entry.gitUrl = gitUrl;
+  }
+  return entry;
+}
+
+/**
+ * AC8 / NFR83 - the binding resolver. Given only a project root, returns the full
+ * committed topology from `_bmad-output/project-layout.yaml` alone, with NO
+ * reference to `_bmad/` or any other per-machine install state. This is the
+ * library function `ma-agents bind` and `ma-agents status` are meant to call (the
+ * commands themselves are Story 31.13); a globally-installed BMAD SKILL does not
+ * call this directly - per Story 31.6 AC5 skills keep reading the generated
+ * `_bmad/bmm/config.yaml`, and satisfy NFR83 indirectly by detecting a
+ * missing/stale binding and offering `ma-agents bind` (31.11 AC6 -> 31.13 AC3).
+ * See implementation-readiness-f26.md finding F-3 - the two ACs describe two
+ * different consumers, not a contradiction.
+ *
+ * AC5 (FR265 read half): a pre-F26 file (no `schema_version`, a single
+ * `knowledgebase:` record) resolves as BOTH stores pointing at that one location -
+ * no error, no rewrite. This function never writes.
+ *
+ * CONTRACT - a DISCRIMINATED result. Never returns null, never throws:
+ *
+ *     { ok: true,  topology: {...} }
+ *     { ok: false, reason: 'unbound' | 'unreadable' | 'invalid' | 'too-new', message: '...' }
+ *
+ *   - `unbound`    - no binding here to speak of: absent, or empty / comments-only.
+ *                    The ONLY reason under which a caller may write.
+ *   - `unreadable` - bytes exist but nothing trustworthy can be extracted: an I/O
+ *                    error, content js-yaml rejects (see the validity gate below),
+ *                    or a parse yielding no keys at all.
+ *   - `invalid`    - parses, declares a binding, but not one this build can
+ *                    honour: an unrecognised `backend:` or `mode:`, or keys with
+ *                    no recognisable store record.
+ *   - `too-new`    - a `schema_version` from a newer ma-agents. Split out from
+ *                    `invalid` so `ma-agents status` (31.13) can say "upgrade
+ *                    ma-agents" rather than "this file is corrupt"; the behaviour
+ *                    is identical - refuse to read, refuse to overwrite.
+ *
+ * Every `ok:false` reason other than `unbound` means a caller MUST NOT overwrite
+ * the file and should report `message` verbatim (P5-9.3 / NFR56 fail-loud).
+ * The discriminated shape (rather than the superseded null-or-throw pair) is what
+ * makes that unmissable: any caller reaching for `.topology` is forced past `.ok`,
+ * so 31.3, 31.4 and 31.13 cannot each forget a try/catch. Rationale for the change
+ * is in the commit message and the story record.
+ */
+const BINDING_UNBOUND = 'unbound';
+const BINDING_UNREADABLE = 'unreadable';
+const BINDING_INVALID = 'invalid';
+const BINDING_TOO_NEW = 'too-new';
+
+function resolveProjectTopology(projectRoot) {
+  const layoutPath = path.join(projectRoot, '_bmad-output', 'project-layout.yaml');
+  const fail = (reason, message) => ({ ok: false, reason, message });
+
+  let content;
+  try {
+    if (!fs.existsSync(layoutPath)) {
+      return fail(BINDING_UNBOUND,
+        `No _bmad-output/project-layout.yaml in ${projectRoot} - this project has no ` +
+        `committed knowledge binding yet.`);
+    }
+    content = fs.readFileSync(layoutPath, 'utf-8');
+  } catch (e) {
+    return fail(BINDING_UNREADABLE,
+      `Cannot read _bmad-output/project-layout.yaml: ${e.message}`);
+  }
+
+  const hasContent = content
+    .split(/\r?\n/)
+    .some((l) => l.trim() !== '' && !l.trim().startsWith('#'));
+  if (!hasContent) {
+    return fail(BINDING_UNBOUND,
+      `_bmad-output/project-layout.yaml is empty - this project has no committed ` +
+      `knowledge binding yet.`);
+  }
+
+  // N-2 - THE VALIDITY GATE. parseLayoutYaml is deliberately lenient (it skips
+  // any line without a colon, and is indentation-agnostic about tabs), so it
+  // happily "reads" files a real YAML parser rejects: a git merge conflict
+  // (`<<<<<<< HEAD` / `=======` / `>>>>>>> origin/main` all lack a colon and are
+  // silently dropped, leaving the last-writer side) or tab-indented content.
+  // Without this gate the non-destruction guard in writeProjectLayoutYaml was
+  // adjudicated by the lenient parser, so it returned ok:true for genuinely
+  // corrupt bytes and the overwrite proceeded - destroying the conflict markers
+  // and one side of the merge with no warning. project-layout.yaml is COMMITTED
+  // and carries a `generated:` date that changes on every install, so conflicts
+  // are ordinary, not exotic.
+  //
+  // js-yaml validates ONLY; parseLayoutYaml remains the reader (its escape
+  // handling and shape are what the rest of this module is built on). The throw
+  // is classified `unreadable` - bytes exist but nothing trustworthy can be
+  // extracted - and is caught here so this function stays total.
+  try {
+    yaml.load(content);
+  } catch (e) {
+    return fail(BINDING_UNREADABLE,
+      `_bmad-output/project-layout.yaml is not valid YAML: ${(e && e.message) || String(e)}\n` +
+      `  If this is a merge conflict, resolve it by hand — or delete the file and re-run the ` +
+      `installer to write a fresh binding.`);
+  }
+
+  let raw;
+  try {
+    raw = parseLayoutYaml(content);
+  } catch (e) {
+    return fail(BINDING_UNREADABLE,
+      `Cannot parse _bmad-output/project-layout.yaml: ${e.message}`);
+  }
+  if (!raw || typeof raw !== 'object' || Object.keys(raw).length === 0) {
+    return fail(BINDING_UNREADABLE,
+      `_bmad-output/project-layout.yaml has content but no readable fields. Fix it, or ` +
+      `delete it and re-run the installer to write a fresh binding.`);
+  }
+
+  // Schema gate. An absent or empty `schema_version:` means a pre-F26 file (AC5),
+  // which is schema 1. A version this build does not understand is INVALID and
+  // must not be read as v2 or overwritten: a newer ma-agents may have recorded
+  // records or fields that would be silently dropped on the next write.
+  const declaredVersion = scalarString(raw.schema_version);
+  let schemaVersion = 1;
+  if (declaredVersion !== null) {
+    if (!/^\d+$/.test(declaredVersion.trim())) {
+      return fail(BINDING_INVALID,
+        `_bmad-output/project-layout.yaml has a non-numeric schema_version ` +
+        `${JSON.stringify(declaredVersion)}. Refusing to guess which schema this file uses.`);
+    }
+    schemaVersion = parseInt(declaredVersion.trim(), 10);
+  }
+  if (schemaVersion > PROJECT_LAYOUT_SCHEMA_VERSION) {
+    return fail(BINDING_TOO_NEW,
+      `_bmad-output/project-layout.yaml declares schema_version ${schemaVersion}, but this ` +
+      `ma-agents understands up to ${PROJECT_LAYOUT_SCHEMA_VERSION}. It was written by a newer ` +
+      `version. Refusing to read or overwrite it - upgrade ma-agents instead.`);
+  }
+
+  try {
+    if (schemaVersion >= PROJECT_LAYOUT_SCHEMA_VERSION && raw.system_requirements_store) {
+      const systemStore = storeFromRaw(raw.system_requirements_store, projectRoot);
+      const softwareStore = storeFromRaw(raw.software_requirements_store, projectRoot);
+      if (!systemStore || !softwareStore) {
+        return fail(BINDING_INVALID,
+          `_bmad-output/project-layout.yaml declares schema_version ${schemaVersion} but is ` +
+          `missing a required store record (system_requirements_store / ` +
+          `software_requirements_store).`);
+      }
+      return {
+        ok: true,
+        topology: {
+          schemaVersion,
+          generated: scalarString(raw.generated),
+          systemRequirementsStore: systemStore,
+          softwareRequirementsStore: softwareStore,
+          sprintManagement: sprintFromRaw(raw.sprint_management, projectRoot),
+        },
+      };
+    }
+
+    // Legacy (FR122/Story 16.2 shape, or a schema_version < 2 file): a single
+    // `knowledgebase:` record read as both stores pointing at that location.
+    const legacyStore = storeFromRaw(raw.knowledgebase, projectRoot);
+    if (!legacyStore) {
+      return fail(BINDING_INVALID,
+        `_bmad-output/project-layout.yaml has content but declares no recognisable store ` +
+        `record (expected system_requirements_store for schema ` +
+        `${PROJECT_LAYOUT_SCHEMA_VERSION}, or knowledgebase for a pre-F26 file). Fix it, or ` +
+        `delete it and re-run the installer to write a fresh binding.`);
+    }
+    return {
+      ok: true,
+      topology: {
+        schemaVersion: 1,
+        generated: scalarString(raw.generated),
+        systemRequirementsStore: legacyStore,
+        softwareRequirementsStore: { ...legacyStore },
+        sprintManagement: sprintFromRaw(raw.sprint_management, projectRoot),
+      },
+    };
+  } catch (e) {
+    // storeFromRaw's closed-enum throw, and anything else semantic. Converted
+    // here so that this function's never-throws contract holds for every caller.
+    return fail(BINDING_INVALID, e.message);
+  }
+}
+
+// Enumerate exactly {mode, path, gitUrl} — see the NFR79 note at the top of
+// this section. `store` here is always a file-system-backend store.
+function serializeFileSystemStore(store, projectRoot) {
+  const mode = assertWritableMode((store && store.mode) || 'same', STORE_MODES, 'knowledge-store');
+  const rawPath = (store && store.path != null) ? store.path : '.';
+  const portable = toPortablePath(rawPath, projectRoot);
+  let out = `  backend: file-system\n`;
+  out += `  mode: ${mode}\n`;
+  out += `  path: ${yamlEscapeValue(portable.portable)}\n`;
+  if (portable.isAbsolute) {
+    out += `  # PORTABILITY: absolute path — other developers may need to reconfigure\n`;
+  }
+  if (mode === 'remote' && store.gitUrl) {
+    out += `  gitUrl: ${yamlEscapeValue(store.gitUrl)}\n`;
+  }
+  return out;
+}
+
+// Enumerate exactly {space_key, root_page: {title, id}} — nothing else is
+// ever read off `store`, so an accidental credential field on the in-memory
+// object (e.g. a `token`/`password` picked up upstream) cannot leak into the
+// committed file. This is what AC6's "no credential-shaped field can be
+// written" test proves, and what makes the file safe to commit (NFR79).
+function serializeConfluenceStore(store) {
+  const rootPage = (store && store.rootPage) || {};
+  // The line-break POLICY check lives here, not in yamlEscapeValue: this is the
+  // layer that knows it is writing project-layout.yaml and which field is at
+  // fault, so the message names both. Escaping already guarantees the emitted
+  // file is parseable whatever these values contain (see yamlEscapeValue); this
+  // guard exists because a multi-line Confluence space key or page title is
+  // meaningless identity, not because it is dangerous.
+  const spaceKey = assertSingleLineIdentity(store && store.spaceKey, 'space_key');
+  const title = assertSingleLineIdentity(rootPage.title, 'root_page.title');
+  const id = assertSingleLineIdentity(rootPage.id, 'root_page.id');
+  let out = `  backend: confluence\n`;
+  out += `  space_key: ${yamlEscapeValue(spaceKey)}\n`;
+  out += `  root_page:\n`;
+  out += `    title: ${title ? yamlEscapeValue(title) : 'null'}\n`;
+  out += `    id: ${id ? yamlEscapeValue(id) : 'null'}\n`;
+  return out;
+}
+
+// AC1 — the only two valid backends. Fail loud on anything else rather than
+// silently coercing a typo'd/unknown backend into file-system, which would
+// write a DIFFERENT backend than the caller asked for with no signal at all.
+function serializeStore(store, projectRoot) {
+  const backend = store && store.backend;
+  if (backend !== undefined && backend !== 'file-system' && backend !== 'confluence') {
+    throw new Error(`Invalid store backend "${backend}" — must be "file-system" or "confluence"`);
+  }
+  if (backend === 'confluence') return serializeConfluenceStore(store);
+  return serializeFileSystemStore(store, projectRoot);
+}
+
+function serializeSprintManagement(sprint, projectRoot) {
+  let out = `sprint_management:\n`;
+  if (sprint && sprint.mode === 'jira') {
+    out += `  mode: jira\n`;
+    out += `  jira_url: ${yamlEscapeValue(sprint.jiraUrl)}\n`;
+    out += `  jira_project_key: ${yamlEscapeValue(sprint.jiraProjectKey)}\n`;
+    return out;
+  }
+  const mode = assertWritableMode((sprint && sprint.mode) || 'same', STORE_MODES, 'sprint_management');
+  const rawPath = (sprint && sprint.path != null) ? sprint.path : '.';
+  const portable = toPortablePath(rawPath, projectRoot);
+  out += `  mode: ${mode}\n`;
+  out += `  path: ${yamlEscapeValue(portable.portable)}\n`;
+  if (portable.isAbsolute) {
+    out += `  # PORTABILITY: absolute path — other developers may need to reconfigure\n`;
+  }
+  if (mode === 'remote' && sprint && sprint.gitUrl) {
+    out += `  gitUrl: ${yamlEscapeValue(sprint.gitUrl)}\n`;
+  }
+  return out;
+}
+
+/**
+ * Writes the authoritative binding spine, `_bmad-output/project-layout.yaml`
+ * (P5-9.1). AC2/AC3 (Story 31.2): written UNCONDITIONALLY on every call — the
+ * pre-31.2 "both concerns are same-repo => skip, and unlink any stale file"
+ * branch is gone. An installer run must never delete this file once it
+ * exists; AC3's regression test pins that no code path here calls
+ * `fs.unlinkSync`.
+ *
+ * Accepts the installer's existing `{knowledgebase, sprintManagement}` shape
+ * (unchanged, since Story 31.5 — not 31.2 — splits the wizard into two
+ * independent store questions) and maps it onto the new three-record schema:
+ * both `system_requirements_store` and `software_requirements_store` are
+ * written from `layout.knowledgebase` (both stores -> the one answered
+ * location), so nothing regresses before 31.5 lands. A caller that already
+ * has two independently-resolved stores (a future 31.5/31.13 caller) may
+ * instead pass `systemRequirementsStore` / `softwareRequirementsStore`
+ * directly and they take precedence.
+ */
+function writeProjectLayoutYaml(layout) {
+  const projectRoot = process.cwd();
+  const layoutPath = path.join(projectRoot, '_bmad-output', 'project-layout.yaml');
+
+  // Guard the directory creation. Pre-31.2 this function ran only in
+  // multi-repo/Jira mode; AC2 makes it run on EVERY project install, which is
+  // what made an unwritable `_bmad-output/` reachable — and it runs in Step 3.6,
+  // AFTER the BMAD install has already completed, so an unhandled throw here
+  // would abort a substantially-finished install. Mirrors the existing
+  // non-fatal policy in writeRepoLayoutConfig(). Warn and return rather than
+  // half-writing: a truncated authoritative binding is worse than none, and the
+  // resolver treats an absent file as "unbound" (a recoverable state that
+  // `ma-agents bind` fixes) rather than as corruption.
+  try {
+    fs.mkdirSync(path.join(projectRoot, '_bmad-output'), { recursive: true });
+  } catch (e) {
+    console.log(
+      chalk.yellow(
+        `  Warning: could not create _bmad-output/ for project-layout.yaml: ${e.message}\n` +
+        `  The project is left UNBOUND — re-run the installer once _bmad-output/ is writable\n` +
+        `  (a future \`ma-agents bind\` will do this without a full re-install).`
+      )
+    );
+    return;
+  }
+
+  // R-2 - THE NON-DESTRUCTION GUARD. AC2 makes this function run on every
+  // install and every bind, so it is the single choke point through which every
+  // overwrite of the authoritative binding passes. Putting the guard here rather
+  // than at each call site is deliberate: 31.3, 31.4 and 31.13 add more callers,
+  // and a guard they have to remember is a guard that will be forgotten - which
+  // is precisely how the first fix round ended up destroying a `backend: notion`
+  // binding and replacing it with `file-system / path: "."`.
+  //
+  // Only `unbound` (absent or empty file) permits a write. Every other reason
+  // means there are bytes here that this build does not understand, and replacing
+  // them would be unrecoverable data loss. Refuse, fail loud, and leave the file
+  // exactly as it is (P5-9.3).
+  const existing = resolveProjectTopology(projectRoot);
+  if (!existing.ok && existing.reason !== BINDING_UNBOUND) {
+    console.log(
+      chalk.red(
+        `  Refusing to overwrite _bmad-output/project-layout.yaml - the existing binding is ` +
+        `${existing.reason}:\n` +
+        `    ${existing.message}\n` +
+        `  The file has been left UNCHANGED. To recover: fix it by hand, or delete ` +
+        `_bmad-output/project-layout.yaml and re-run the installer to write a fresh binding.`
+      )
+    );
+    return;
+  }
+
+  const fallbackStore = layout.knowledgebase || { mode: 'same', path: '.' };
+  const systemStore = layout.systemRequirementsStore || fallbackStore;
+  const softwareStore = layout.softwareRequirementsStore || fallbackStore;
+  const sprintManagement = layout.sprintManagement || { mode: 'same', path: '.' };
+
+  const date = new Date().toISOString().slice(0, 10);
+  let content = `# Generated by ma-agents — do not edit manually\n`;
+  content += `# The authoritative, committed record of where this project's knowledge\n`;
+  content += `# lives (P5-9.1). Read by the binding resolver (ma-agents bind / status)\n`;
+  content += `# and regenerated into _bmad/bmm/config.yaml on install and bind (31.3).\n`;
+  content += `schema_version: ${PROJECT_LAYOUT_SCHEMA_VERSION}\n`;
+  content += `generated: "${date}"\n`;
+  content += `system_requirements_store:\n${serializeStore(systemStore, projectRoot)}`;
+  content += `software_requirements_store:\n${serializeStore(softwareStore, projectRoot)}`;
+  content += serializeSprintManagement(sprintManagement, projectRoot);
+
+  // Same non-fatal policy for the write itself (EACCES / EROFS / ENOSPC).
+  //
+  // The serializers can still throw deliberately - the closed backend enum
+  // (serializeStore) and the confluence identity guard (assertSingleLineIdentity).
+  // Those are caller-visible data errors and are NOT swallowed here. The first
+  // round justified that by claiming they "fire BEFORE any bytes are written";
+  // that was true here but false for writeConfigField, and it also missed that an
+  // uncaught throw from this function reaches main().catch and prints a raw stack
+  // trace AFTER the BMAD install has completed. The throws are therefore kept, and
+  // the two INSTALL-TIME call sites catch them and degrade to the same
+  // warn-and-leave-UNBOUND outcome as an I/O failure. Path and gitUrl values can
+  // no longer throw at all: they are escaped, not rejected.
+  try {
+    fs.writeFileSync(layoutPath, content, 'utf-8');
+  } catch (e) {
+    console.log(
+      chalk.yellow(
+        `  Warning: could not write _bmad-output/project-layout.yaml: ${e.message}\n` +
+        `  The project is left UNBOUND — re-run the installer once the file is writable\n` +
+        `  (a future \`ma-agents bind\` will do this without a full re-install).`
+      )
+    );
+    return;
+  }
+  console.log(chalk.gray(`  Wrote _bmad-output/project-layout.yaml (system + software requirements stores, sprint management)`));
+}
+
+/**
+ * Install-time / reconfigure-wizard helper — pre-populates the wizard from
+ * whatever binding record already exists. Returns the legacy
+ * `{knowledgebase, sprintManagement}` shape every existing consumer
+ * (`collectRepoLayout`, `writeRepoLayoutConfig`, `showCurrentLayout`,
+ * `handleConfigLayout`) already expects, collapsing the two independently-
+ * answered stores onto the single value that shape can hold — the
+ * **software requirements store** is the collapse target, matching FR264/
+ * P5-9.2's choice of the software-requirements store as the legacy-field
+ * target. Until Story 31.5 ships two independent questions, both stores are
+ * always identical, so nothing is lost by collapsing.
+ *
+ * NOT the AC8 resolver — `resolveProjectTopology()` above is. This function
+ * additionally falls back to a bare `_bmad/bmm/config.yaml` (FR265's "has
+ * only the FR117 single knowledgebase_path" legacy path, for a project that
+ * predates project-layout.yaml's unconditional-write behaviour entirely).
+ * That fallback is deliberately scoped to this install-time helper: it is
+ * never called by `resolveProjectTopology()`, which per P5-9.1 depends on
+ * project-layout.yaml alone.
+ */
 function readExistingLayout() {
   const projectRoot = process.cwd();
-  // Try project-layout.yaml first (authoritative source written by Story 16.2)
-  const layoutPath = path.join(projectRoot, '_bmad-output', 'project-layout.yaml');
-  try {
-    if (fs.existsSync(layoutPath)) {
-      const content = fs.readFileSync(layoutPath, 'utf-8');
-      const layout = { knowledgebase: null, sprintManagement: null };
-
-      // Parse each concern section from the simple YAML
-      for (const [section, key] of [['knowledgebase', 'knowledgebase'], ['sprint_management', 'sprintManagement']]) {
-        const sectionMatch = content.match(new RegExp(`^${section}:\\s*$`, 'm'));
-        if (!sectionMatch) continue;
-
-        const afterSection = content.slice(sectionMatch.index + sectionMatch[0].length);
-        const modeMatch = afterSection.match(/^\s+mode:\s*(\S+)/m);
-        const pathMatch = afterSection.match(/^\s+path:\s*"?([^"\n]+)"?/m);
-        const gitUrlMatch = afterSection.match(/^\s+gitUrl:\s*"?([^"\n]+)"?/m);
-        const jiraUrlMatch = afterSection.match(/^\s+jira_url:\s*"?([^"\n]+)"?/m);
-        const jiraProjectKeyMatch = afterSection.match(/^\s+jira_project_key:\s*"?([^"\n]+)"?/m);
-
-        if (modeMatch) {
-          const mode = modeMatch[1];
-          if (mode === 'jira') {
-            const jiraUrl = jiraUrlMatch ? jiraUrlMatch[1].replace(/^"(.*)"$/, '$1') : '';
-            const jiraProjectKey = jiraProjectKeyMatch ? jiraProjectKeyMatch[1].replace(/^"(.*)"$/, '$1') : '';
-            layout[key] = { mode: 'jira', jiraUrl, jiraProjectKey };
-          } else if (pathMatch) {
-            const resolvedPath = resolveStoredPath(pathMatch[1], projectRoot);
-            const entry = { mode, path: resolvedPath };
-            if (mode === 'remote' && gitUrlMatch) {
-              entry.gitUrl = gitUrlMatch[1];
-            }
-            layout[key] = entry;
-          }
-        }
-      }
-
-      // Only return if we parsed at least one valid concern
-      if (layout.knowledgebase || layout.sprintManagement) {
-        // Fill in defaults for any missing section
-        if (!layout.knowledgebase) layout.knowledgebase = { mode: 'same', path: '.' };
-        if (!layout.sprintManagement) layout.sprintManagement = { mode: 'same', path: '.' };
-        return layout;
-      }
-    }
-  } catch (e) {
-    console.log(chalk.yellow(`  Warning: could not read project-layout.yaml: ${e.message}`));
+  const binding = resolveProjectTopology(projectRoot);
+  if (binding.ok) {
+    return {
+      knowledgebase: binding.topology.softwareRequirementsStore,
+      sprintManagement: binding.topology.sprintManagement,
+    };
+  }
+  // R-2: an `invalid` / `unreadable` binding is NOT "no binding". The previous
+  // version caught the semantic throw here and fell through to the structural
+  // path, which is how a bound-but-invalid project came to be reported as unbound.
+  // Report it and stop - do NOT substitute config.yaml values, because per P5-9.1
+  // topology comes from project-layout.yaml and nowhere else; quietly answering
+  // from config.yaml would be the same conflation one layer down. The wizard
+  // simply gets no pre-population, and writeProjectLayoutYaml refuses to
+  // overwrite, so nothing is lost.
+  if (binding.reason !== BINDING_UNBOUND) {
+    console.log(chalk.yellow(
+      `  Warning: the committed binding in _bmad-output/project-layout.yaml is ` +
+      `${binding.reason} and was NOT used:\n    ${binding.message}`
+    ));
+    return null;
   }
 
   // Fallback: check config.yaml for path fields
@@ -1615,7 +2220,23 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
   // Step 3.6: Write repo layout config (after BMAD install creates config.yaml)
   if (installScope === 'project') {
     writeRepoLayoutConfig(repoLayout);
-    writeProjectLayoutYaml(repoLayout);
+    // R-4: Step 3.6 runs AFTER the BMAD install has completed. An uncaught throw
+    // from here reaches main().catch, which prints the raw Error (stack trace,
+    // exit 1) on a substantially-finished install - the exact failure mode the
+    // directory/write guards inside writeProjectLayoutYaml exist to prevent.
+    // Legal-but-unusual path characters no longer throw at all now that they are
+    // escaped rather than rejected; this catches what remains (the closed backend
+    // enum, the confluence identity guard) and degrades to the same
+    // warn-and-leave-UNBOUND outcome.
+    try {
+      writeProjectLayoutYaml(repoLayout);
+    } catch (e) {
+      console.log(chalk.yellow(
+        `  Warning: could not write _bmad-output/project-layout.yaml: ${e.message}\n` +
+        `  The project is left UNBOUND - re-run the installer once this is corrected\n` +
+        `  (a future \`ma-agents bind\` will do this without a full re-install).`
+      ));
+    }
   }
 
   // Step 4: Confirm
@@ -1926,6 +2547,19 @@ async function handleUninstall(args) {
 // --- Config layout command ---
 
 function showCurrentLayout() {
+  // R-2: distinguish "unbound" from "bound but unreadable/invalid" BEFORE falling
+  // back to the single-repo default. Reporting a `backend: notion` project as
+  // `Single-repo layout (default)` is the conflation the resolver contract
+  // forbids, and it is what made the destructive overwrite look reasonable.
+  const binding = resolveProjectTopology(process.cwd());
+  if (!binding.ok && binding.reason !== BINDING_UNBOUND) {
+    console.log(chalk.red(`\n  Repository layout: binding is ${binding.reason}`));
+    console.log(chalk.red(`  ${binding.message}`));
+    console.log(chalk.gray('  This project IS bound - the binding just cannot be honoured. Nothing'));
+    console.log(chalk.gray('  will be overwritten until it is fixed.'));
+    return;
+  }
+
   const layout = readExistingLayout();
   if (!layout) {
     console.log(chalk.cyan('\n  Single-repo layout (default)'));
@@ -1965,7 +2599,14 @@ async function handleConfigLayout(args) {
 
   // Write updated config
   writeRepoLayoutConfig(newLayout);
-  writeProjectLayoutYaml(newLayout);
+  try {
+    writeProjectLayoutYaml(newLayout);
+  } catch (e) {
+    console.log(chalk.yellow(
+      `  Warning: could not write _bmad-output/project-layout.yaml: ${e.message}\n` +
+      `  The binding was left unchanged.`
+    ));
+  }
 
   // Update project-context.md
   const outputPath = path.join(process.cwd(), '_bmad-output', 'project-context.md');
@@ -2141,4 +2782,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, reconcileCustomMarketplaceOnUpdate, resolveBaseBmadOk, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue };
+module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, reconcileCustomMarketplaceOnUpdate, resolveBaseBmadOk, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue, yamlUnescapeDoubleQuoted, resolveProjectTopology, parseLayoutYaml, PROJECT_LAYOUT_SCHEMA_VERSION, BINDING_UNBOUND, BINDING_UNREADABLE, BINDING_INVALID, BINDING_TOO_NEW };

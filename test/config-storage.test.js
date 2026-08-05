@@ -83,7 +83,10 @@ test('double-quotes path values', () => {
 // ─── writeProjectLayoutYaml ─────────────────────────────────────────────────
 console.log('\nwriteProjectLayoutYaml');
 
-test('single-repo: does not create project-layout.yaml', () => {
+// Story 31.2 AC2: the pre-31.2 "both concerns same-repo => skip write" branch
+// is removed — project-layout.yaml is the authoritative binding record and is
+// now written UNCONDITIONALLY, even in single-repo mode.
+test('single-repo: DOES create project-layout.yaml unconditionally (AC2)', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-test-'));
   const origCwd = process.cwd();
   try {
@@ -93,28 +96,54 @@ test('single-repo: does not create project-layout.yaml', () => {
       knowledgebase: { mode: 'same', path: '.' },
       sprintManagement: { mode: 'same', path: '.' }
     });
-    assert.ok(!fs.existsSync(path.join(tmpDir, '_bmad-output', 'project-layout.yaml')),
-      'project-layout.yaml should NOT be created for single-repo');
+    const layoutPath = path.join(tmpDir, '_bmad-output', 'project-layout.yaml');
+    assert.ok(fs.existsSync(layoutPath),
+      'project-layout.yaml MUST be created even for single-repo (AC2 — unconditional write)');
+    const content = fs.readFileSync(layoutPath, 'utf-8');
+    assert.ok(content.includes('system_requirements_store:'), `Got: ${content}`);
+    assert.ok(content.includes('software_requirements_store:'), `Got: ${content}`);
+    assert.ok(content.includes('sprint_management:'), `Got: ${content}`);
   } finally {
     process.chdir(origCwd);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
 
-test('single-repo: deletes stale project-layout.yaml', () => {
+// Story 31.2 AC3 regression guard: writeProjectLayoutYaml() used to
+// `fs.unlinkSync` an existing project-layout.yaml when both concerns
+// resolved to same-repo. That delete is removed — an installer run must
+// NEVER delete this authoritative, committed file. Pinned two ways: (1) the
+// file survives a single-repo write, and (2) fs.unlinkSync is never invoked
+// by writeProjectLayoutYaml at all, on any input.
+test('single-repo: NEVER deletes an existing project-layout.yaml (AC3 regression guard)', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-test-'));
   const origCwd = process.cwd();
+  const origUnlinkSync = fs.unlinkSync;
+  let unlinkCalled = false;
   try {
     process.chdir(tmpDir);
     fs.mkdirSync('_bmad-output', { recursive: true });
     fs.writeFileSync(path.join(tmpDir, '_bmad-output', 'project-layout.yaml'), 'stale content');
+
+    fs.unlinkSync = (...args) => { unlinkCalled = true; return origUnlinkSync.apply(fs, args); };
+
+    // Multi-repo write, then a same-repo write (the exact case that used to
+    // delete): the file must persist and be overwritten with fresh content,
+    // never removed.
+    writeProjectLayoutYaml({
+      knowledgebase: { mode: 'local', path: path.join(path.dirname(tmpDir), 'kb-repo') },
+      sprintManagement: { mode: 'same', path: '.' }
+    });
     writeProjectLayoutYaml({
       knowledgebase: { mode: 'same', path: '.' },
       sprintManagement: { mode: 'same', path: '.' }
     });
-    assert.ok(!fs.existsSync(path.join(tmpDir, '_bmad-output', 'project-layout.yaml')),
-      'stale project-layout.yaml should be deleted');
+
+    const layoutPath = path.join(tmpDir, '_bmad-output', 'project-layout.yaml');
+    assert.ok(fs.existsSync(layoutPath), 'project-layout.yaml must still exist after a same-repo write');
+    assert.strictEqual(unlinkCalled, false, 'writeProjectLayoutYaml must never call fs.unlinkSync');
   } finally {
+    fs.unlinkSync = origUnlinkSync;
     process.chdir(origCwd);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -130,12 +159,17 @@ test('multi-repo: creates project-layout.yaml with correct structure', () => {
       sprintManagement: { mode: 'same', path: '.' }
     });
     const content = fs.readFileSync(path.join(tmpDir, '_bmad-output', 'project-layout.yaml'), 'utf-8');
-    assert.ok(content.includes('knowledgebase:'), 'should have knowledgebase section');
+    assert.ok(content.includes('schema_version: 2'), 'should have schema_version 2');
+    assert.ok(content.includes('system_requirements_store:'), 'should have system_requirements_store section');
+    assert.ok(content.includes('software_requirements_store:'), 'should have software_requirements_store section');
+    assert.ok(content.includes('backend: file-system'), 'should record the file-system backend');
     assert.ok(content.includes('mode: local'), 'should have mode: local');
     assert.ok(content.includes('"d:/Code/kb-repo"'), 'should normalize backslashes and quote');
     assert.ok(content.includes('sprint_management:'), 'should have sprint_management section');
     assert.ok(content.includes('mode: same'), 'should have mode: same for sprint');
     assert.ok(content.includes('generated:'), 'should have generated date');
+    // AC1: exactly three location records — no fourth store, no implementation_artifacts.
+    assert.ok(!content.includes('implementation_artifacts'), 'must not carry a fourth store');
   } finally {
     process.chdir(origCwd);
     fs.rmSync(tmpDir, { recursive: true, force: true });
