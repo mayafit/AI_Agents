@@ -87,7 +87,84 @@ Worktrees:
 | id | wave | status | worktree | branch | fix_rounds | note |
 |---|---|---|---|---|---|---|
 | 31.1 | 1 | **merged** | `.worktrees/epic-31-story-31.1` | `feature/epic-31-story-31.1` | 0 | **VERDICT: FAIL.** Reviewed (SUPPORTED, no blocking findings, 7/7 ACs met), 6 non-blocking items folded in, merged to `feature/epic-31` as `b637ab4`. |
-| 31.2 | 1 | **fixing** (round 1 of 2) | `.worktrees/epic-31-story-31.2` | `feature/epic-31-story-31.2` | 1 | binding spine. AC2 correction honoured. Independent review returned **CHANGES-REQUIRED** — 3 blocking read-path defects. **NOT merged.** Status reverted `done` → `review` (`2cdb2f3`). |
+| 31.2 | 1 | **merged** | `.worktrees/epic-31-story-31.2` | `feature/epic-31-story-31.2` | **3** | binding spine. **APPROVED** at `cd37255` after 3 fix rounds / 4 reviews; merged as `a375386`. AC2 correction honoured. |
+
+## WAVE 1 COMPLETE — final tally
+
+**merged: 2 (31.1, 31.2) · blocked: 0 · skipped: 0.** Both wave-1 gate stories closed.
+**HALTING HERE** per the decided gate-first run scope. Waves 2+ not planned and not started.
+
+Epic branch `feature/epic-31` head: `a375386`. **Nothing pushed. No PR opened. No npm publish.**
+
+### Story 31.2 — four-round review history
+
+| Round | Outcome | What it found |
+|---|---|---|
+| 1 | **CHANGES-REQUIRED** | 3 blocking, **all on the read path** (the write path had been hardened, the read path had not): **B-2** `yamlEscapeValue` escaped `\` and `"` but not newlines, and 31.2 newly routed free-text identity fields (`spaceKey`, `rootPage.title`) through it — PoC landed `api_token` and `password` into a **committed** file, falsifying AC6/NFR79; **B-1** the backend enum was enforced on write but not on read, so `backend: sharepoint` silently resolved the store to the project root (the same defect class the implementer had already hardened on the write side — one side of the round trip only); **B-3** the resolver threw a `TypeError` where its own docstring promised `null`, because the raw mappers sat outside the `try/catch` — would crash `ma-agents bind`/`status`, i.e. Story 31.13's entire surface. |
+| 2 | **CHANGES-REQUIRED** | 6 re-review findings. Corrected escaper + a discriminated binding result. |
+| 3 | **CHANGES-REQUIRED** | 2 findings — closed `mode` as a value channel, and gated the guard on a real parser rather than a regex. |
+| 4 | **APPROVE** | Round-3 PoCs reproduced at the parent and confirmed closed at HEAD. **14/14 mutations killed.** |
+
+**The two highest-consequence risks were cleared explicitly**, which is what made approval safe:
+
+- **No upgrade-path break.** All **12** legacy `knowledgebase` × `sprint` `mode` combinations a
+  published ma-agents (≤ 3.17.1) could emit resolve `ok:true` at HEAD. This is the risk that mattered
+  most: failing loud on an unknown `mode` must not turn a working project into a permanently-refused
+  one.
+- **No self-lockout.** **224** files emitted through `writeProjectLayoutYaml` across all modes, `jira`,
+  `confluence` and **41** adversarial values (U+2028/2029/0085, NBSP, BOM, astral, lone surrogates,
+  NUL, C0/C1, tabs, YAML sigils) → **0 js-yaml gate rejections, 0 round-trip failures.** Our own
+  escaped output never fails our own gate.
+
+Three further design points confirmed rather than assumed: the fourth `reason` value breaks nothing
+because all three consumers branch on `reason !== BINDING_UNBOUND` (**default-deny** — new reasons land
+in the refuse bucket automatically); the **js-yaml gate runs before the schema gate**, so corrupt bytes
+can never be mislabelled `too-new`; and the doc compression removed only superseded archaeology while
+the reason contract got *stronger* (now universally quantified over all non-`unbound` reasons). The
+three reworded `UNBOUND` warnings are **kept deliberately** — in this release the installer is the only
+thing that writes the binding, so "re-run the installer" is the only followable advice, and round 3
+added a positive test that the refuse-to-overwrite message does **not** say `ma-agents bind`.
+
+### Post-merge verification on the epic branch
+
+All seven suites run **directly** (never wrapped in `timeout` — `repo-layout` runs a full install and
+returns exit 143 if killed), all matching their expected counts exactly:
+
+| Suite | Expected | Got |
+|---|---|---|
+| `project-layout-binding-spine` | 69 | **69** ✅ |
+| `config-storage` | 16 | **16** ✅ |
+| `config-lost-on-update` | 13 | **13** ✅ |
+| `portable-paths` | 20 | **20** ✅ |
+| `config-layout` | 6 | **6** ✅ |
+| `reconfigure` | 12 | **12** ✅ |
+| `repo-layout` | 13 | **13** ✅ |
+
+All exit 0. **No regressions.** The merge conflict in `sprint-status.yaml` (both stories edited
+`last_updated`, and 31.2 branched before 31.1 landed so neither contained the other) was resolved by
+hand, preserving both entries in reverse-chronological order and re-validating that the YAML parses.
+The `.agents/` regeneration, `AGENTS.md`, `AGENTS.md.backup-*`, `.ma-agents.json` and a stray
+root-level `_bmad-output/project-layout.yaml` that the test run produced were all reverted or removed
+**before** committing — the merge commit contains exactly the 6 intended files.
+
+### Downstream split disposition
+
+- **Story 31.3 — UNBLOCKED** (`backlog` → `ready-for-dev`). Its dependency was the binding-resolver
+  contract, now mutation-proven and approved. Two carry-forwards noted on its key: the `--yes`
+  legacy-promotion tension is flagged for **31.3 AC2** specifically, and 31.2's AC2 reading
+  ("unconditional" = w.r.t. repo layout, not install scope) is settled and must not be re-litigated.
+- **Story 31.5 — REMAINS BLOCKED.** It does *not* unblock alongside 31.3. Three defects must be
+  dispositioned first, all now filed:
+
+| Filed as | What | Live today? |
+|---|---|---|
+| `bug-read-existing-layout-collapses-two-stores-onto-software-store.md` | `readExistingLayout` collapses two **distinct** stores onto the software store, so a `system_requirements_store` with its own `space_key` is silently lost — then stamped over **both** records by 31.2's unconditional write. Violates **P5-9.5**. | **No** — byte-identical at 31.2's parent and HEAD, so not a 31.2 regression. But **31.5 is the story that first creates two divergent stores**, so it destroys 31.5's own output on the next install. |
+| `bug-show-current-layout-prints-undefined-for-confluence-store.md` | `showCurrentLayout` prints `Mode: undefined / Path: undefined` for a **valid** `confluence` store. | Display-only. **Compounds with the above**: a user who sees `undefined` may "fix" it by re-running the wizard, which then overwrites the store for real. |
+| `bug-serialize-sprint-management-passes-store-modes-enum.md` | `bin/cli.js:1153` passes `STORE_MODES` where `SPRINT_MODES` belongs. | **Not a defect today** — dead-code-equivalent, since `sprint.mode === 'jira'` early-returns above it (the reviewer *proved* equivalence by swapping the enum with no test change). Latent: if that early return ever moves, sprint `jira` becomes unwritable. One inconsistency **is** already user-visible — the write-side error message omits `jira` from the legal set it prints while the read side accepts it. |
+
+Note the third is the **third instance in this epic of write-side and read-side validation disagreeing
+about a closed enum** (B-1 was the first, fixed in 31.2). Its report recommends defining each enum once
+and sharing it across both directions rather than fixing instances individually.
 
 ## RUN-LEVEL PROCESS DEFECT — the DoD gate is inverted (2 occurrences, systemic)
 
