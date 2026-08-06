@@ -1,6 +1,6 @@
 ---
 type: agent-prompt
-status: ready to use — not yet run
+status: IN USE — launched 2026-08-03 with scope A (gate-first)
 created: 2026-08-03
 subject: Prompt for running bmad-dev-epic against Epic 31 (F26)
 ---
@@ -153,7 +153,18 @@ baselined against `main`, what is staged for the two gates, and anything you sto
 
 ---
 
-## Decide this first — run scope
+## Run scope — DECIDED: **A, gate-first** (2026-08-03)
+
+Append this to the prompt when launching:
+
+> **Run scope: wave 1 ONLY.** Develop Stories 31.1 and 31.2, then **HALT and report** before
+> planning or starting any further wave. Do not proceed to waves 2+ even if the skill's
+> dependency graph says they are unblocked. Story 31.12's scope is undetermined until 31.1's
+> spike reports, so the reassessment is the point of stopping here.
+
+The original options are kept below for the record.
+
+## Options considered — run scope
 
 `bmad-dev-epic` runs unattended through dev and review across all stories in
 dependency-ordered waves. Epic 31 has **14 stories**, and Story 31.12's scope is
