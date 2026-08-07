@@ -84,7 +84,7 @@ function buildBmadArgs(installContext) {
   const args = [
     'node', `"${bmadPath}"`, 'install',
     '--directory', `"${installContext.projectRoot}"`,           // FR123: project path (quoted for spaces)
-    '--modules', installContext.selectedModules.join(','),      // default: every non-retired module from cache manifest; override via --bmad-modules
+    '--modules', installContext.selectedModules.join(','),      // FR123 (amended 2026-08-02): default bmm+tea+bmb+cis; gds/wds bundled but opt-in; override via --bmad-modules
     '--tools', installContext.selectedTools.join(','),          // FR123: e.g., "claude-code,cursor,opencode"
     '--user-name', `"${installContext.userName}"`,              // FR123: from ma-agents wizard
     '--communication-language', installContext.commLang,        // FR123: default "English"
@@ -149,3 +149,10 @@ A new `npm run build:bmad-cache` script:
 - Upgrading is a deliberate operation: update version pin, re-run `npm run build:bmad-cache`, test, release
 
 **Affects:** `bmad.js` (cache pre-population + parameterized invocation), `package.json` (dependency pinned to 6.2.0), `lib/bmad-cache/` (5 modules incl. wds), build script
+
+### Decision P5-9 (install-scope half) — see [project-knowledge-and-repository-layout.md](project-knowledge-and-repository-layout.md)
+
+F26's install-scope thread (FR248–FR253, NFR76–NFR78) is decided in P5-9 alongside the binding architecture it depends on, because the two cannot be settled independently: a global install is only workable if a project can carry its own knowledge bindings. The install-scope rules are **P5-9.8**, with **P5-9.1–P5-9.4** supplying the binding mechanism they rely on.
+
+Key consequence for this capability: the FR250 spike gates *how much* of global install ships, not *whether* the architecture holds. If bmad-method v6.10.0 cannot install user-level, ma-agents skills still install globally, BMAD stays project-scoped, and no part of P5-9.1–P5-9.7 changes.
+

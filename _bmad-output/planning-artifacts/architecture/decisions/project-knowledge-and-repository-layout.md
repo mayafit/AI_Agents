@@ -252,3 +252,137 @@ Single-repo mode omits this section entirely (NFR34 backward compatibility).
 In `--yes` mode, both concerns default to "current repository" — no repo layout prompts. Multi-repo is interactive-only configuration.
 
 **Affects:** `cli.js` (new wizard section), `_bmad/core/config.yaml` (new fields), `_bmad-output/project-layout.yaml` (new file), `lib/templates/project-context.template.md` (new section), BMAD workflows (path resolution from config — not ma-agents code changes)
+
+### Decision P5-9: Federated Knowledge Stores, Binding Authority & Global Install Scope (FR248–FR265, FR267, NFR76–NFR83) (2026-08-02)
+
+Covers PRD capability area F26. The install-scope half is cross-referenced from
+[bmad-integration-and-bundling.md](bmad-integration-and-bundling.md); the binding and store
+architecture is decided here. Rationale and rejected alternatives live in
+[addendum.md](../../addendum.md) and `.memlog.md`, not in this decision.
+
+**Context.** Knowledge locations are recorded today in `_bmad/bmm/config.yaml` (FR117), and
+`_bmad/` is gitignored at `.gitignore:20`. Locations are therefore per-machine: every developer
+answers the install questions independently and can silently diverge, and a global install — where
+no project is in scope at install time — writes them nowhere at all. F26 splits knowledge into two
+independently located stores and adds Confluence as a backend, which makes a per-machine record
+untenable.
+
+#### P5-9.1 — Binding authority
+
+`_bmad-output/project-layout.yaml` is the **single authoritative record** of where a project's
+knowledge lives, written unconditionally on every install and every bind — not only in multi-repo
+or Jira mode as FR122 / Story 16.2 originally scoped it (`bin/cli.js:605`).
+
+- **Binds:** every consumer that needs to know where a project's knowledge lives.
+- **Prevents:** two developers on one project resolving artifacts to different locations; a
+  globally-installed skill having no way to discover a project's topology.
+- **Rule:** knowledge topology is read from `project-layout.yaml` at the project root and nowhere
+  else. It is committed (`_bmad-output/` is deliberately tracked, FR58) and contains no
+  credentials (NFR79), so it is safe in version control.
+
+#### P5-9.2 — `config.yaml` is a generated artifact, one way only
+
+`_bmad/bmm/config.yaml` remains exactly what skills read, but is **generated from**
+`project-layout.yaml` rather than written directly from install answers (FR264).
+
+- **Prevents:** changing the config *location* for 39 existing skill references — 7 skills read
+  `{project-root}/_bmad/bmm/config.yaml` explicitly, 32 use `{output_folder}` derived from it.
+- **Rule (amended 2026-08-02):** the generated config carries the existing single-valued fields **plus**
+  `system_requirements_path` and `software_requirements_path`. Legacy `planning_artifacts` and
+  `knowledgebase_path` are retained and resolve to the **software requirements store**, so untouched
+  references keep working. Only the FR119 workflows that write store-specific artifacts read the new
+  fields. A single-valued path field cannot serve two stores in different locations, so the original
+  "all 39 unchanged" framing was over-claimed; the location is unchanged, the field set is extended.
+- **Rule:** generation flows committed → per-machine and never the reverse. `project-layout.yaml`
+  is never derived from `config.yaml`.
+
+#### P5-9.3 — Generation fires on install and bind only; staleness fails loud
+
+- **Rule:** `config.yaml` is regenerated only by explicit human action — install, or
+  `ma-agents bind`. Skills never regenerate it as a side effect of being read.
+- **Rule:** when a skill activates and `project-layout.yaml` is newer than the generated
+  `config.yaml`, the skill **fails loud**, naming the drift and instructing the user to run
+  `ma-agents bind`. It does not guess and does not proceed against stale paths.
+- **Prevents:** hidden writes from read paths; silent drift after a `git pull` that changes the
+  committed topology.
+- Consistent with the fail-loud posture NFR56 establishes for the module-registry reader.
+
+#### P5-9.4 — Hand-edited `config.yaml` is overwritten with notice; the per-developer override files survive
+
+- **Rule:** generation overwrites `config.yaml` wholesale and reports that it did so. The file
+  already declares itself installer-managed and regenerated on every install, so overwrite honours
+  its documented contract rather than changing it.
+- **Rule:** the per-developer override files are **never** touched by generation. Verified against a real
+  install, those are `_bmad/config.user.toml` and `_bmad/custom/config.user.toml` — **not**
+  `config.user.yaml`, which does not exist. This install keeps module configs in YAML
+  (`_bmad/bmm/config.yaml`, `core/`, `ma-skills/`) and root/user configs in TOML; Epic 27 Story 27.15
+  tracks that split. **[AMENDED 2026-08-02 — P5-9.4 originally named `config.user.yaml`, so the
+  protection and its test would have passed vacuously against a file that is never created.]**
+
+#### P5-9.5 — Store model
+
+Exactly **two** knowledge stores, each an independent `{backend, location}` pair (FR254, FR257):
+system requirements (brief, PRD) and software requirements (architecture, UX, epics). Sprint
+management remains a third, separate location (FR112), and implementation artifacts — story files —
+follow it rather than either store (FR267).
+
+- **Rule:** the two stores are independent. Choosing a backend for one places no constraint on the
+  other.
+- **Rule:** a project that configures neither store behaves exactly as a single-knowledgebase
+  project does today (NFR82 / NFR34). Legacy single-`knowledgebase_path` projects resolve as both
+  stores pointing at that one location (FR265); migration is offered, never performed unprompted.
+
+#### P5-9.6 — Confluence is MCP-conditional and fails loud; there is no mirror
+
+- **Rule:** a `confluence`-backed store reads and writes only through a Confluence MCP, detected
+  and routed per `mcp-detection-pattern-spec.md` (Story 17.22 / P2-11) — the same canonical pattern
+  the 13 sprint skills use for Jira. No second bespoke mechanism.
+- **Rule:** when the MCP is absent, skills **fail loud** (FR262). There is no local mirror, no
+  cache, and therefore no sync direction, trigger or conflict resolution to decide.
+- **Rationale for the absence:** a mirror was raised (FR266) on air-gap grounds, then retired once
+  the premise was examined. This product's air-gap requirement means *no internet* — no npm, git or
+  CDN — not *no network*. An intra-perimeter Confluence Server or Data Center is reachable on an
+  air-gapped network. A project configured for Confluence that cannot reach Confluence is
+  misconfigured, and is better served by stopping than by proceeding against possibly-stale
+  content. A project that must run with no network at all keeps both stores `file-system`-backed.
+- **Prevents:** the single largest subsystem in F26, and every failure mode two-way synchronisation
+  brings with it.
+- **Rule:** ma-agents stores no Confluence credentials on disk; authentication belongs entirely to
+  the MCP server (NFR79).
+
+#### P5-9.7 — Confluence page structure mirrors the shard tree
+
+- **Rule:** one Confluence page per markdown artifact, nested under the FR260 root page to match
+  the source folder structure. A sharded PRD becomes an index page with its capability shards as
+  child pages.
+- **Prevents:** a flat wall of sibling pages, and the loss of per-artifact page history and
+  comments that a single-page-per-store mapping would cause.
+- Where the root-page answer is blank, ma-agents creates one named for the project (FR260).
+
+#### P5-9.8 — Install scope, designed for both spike outcomes
+
+Install scope **already is** an interactive wizard question with project-level as the default
+(`bin/cli.js:1414-1437`) and is retained as-is; `--global` survives as the non-interactive
+equivalent (FR248 as amended 2026-08-02). What changes is the *consequence* of a global answer:
+BMAD is no longer silently dropped (FR249), no project-scoped work is performed (FR251), the
+chosen scope is recorded, and `ma-agents bind` supplies the per-project answers afterwards
+(FR252). **[AMENDED 2026-08-03 — this paragraph said the question "becomes" a wizard question,
+written before source verification showed it already ships. Narrowed to match amended FR248; none
+of the rules below change.]**
+
+- **Rule:** the bind step is the only thing that writes project-scoped state. This holds whether or
+  not BMAD itself can be installed globally, which is what makes the FR250 spike a gate on *scope*
+  rather than on *architecture*.
+- **If the spike passes:** BMAD modules and agents install globally alongside ma-agents skills,
+  lifting the current filter at `bin/cli.js:1440-1452`, and the project-only guard at `bin/cli.js:1455`.
+- **If the spike fails:** ma-agents skills install globally, BMAD stays project-scoped, and the
+  installer reports the three facts FR250 requires. **No part of P5-9.1–P5-9.7 changes** — the
+  binding architecture is what makes a globally-installed skill resolvable from the project root
+  alone (NFR83), and it is independent of where BMAD's own modules live.
+
+#### Deferred
+
+- Per-artifact Confluence page templates, and any enforced hierarchy beyond P5-9.7's tree mapping.
+- More than two stores, or a store spanning multiple Confluence spaces.
+- Any backend beyond `file-system` and `confluence`.
+- Automatic migration of legacy single-store projects (FR265 offers; it never performs).
