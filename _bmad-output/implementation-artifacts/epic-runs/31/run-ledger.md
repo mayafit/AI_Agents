@@ -129,6 +129,98 @@ step-02 §2.3's shared-file heuristic says sequence them.
 
 ## Wave 2 — in progress
 
+### 2A — shared closed-enum source: **MERGED** as `bb35cac`
+
+**Branch:** `feature/epic-31-prereq-shared-enums` · **Commits:** `5bcf8f1` → `7116093` → `e201b0c`
+**Verdict:** APPROVE-WITH-NITS after **two fix rounds / three reviews** (fix cap 2, fully spent).
+Implementer and reviewer were separate agents throughout; the merge was made on the reviewer's
+verdict, never on self-report.
+
+**What it does.** Each closed enum in the project-layout subsystem — `STORE_MODES`, `SPRINT_MODES`,
+`STORE_BACKENDS` — now has exactly one definition, consumed by the reader, the writer **and** the
+wizard prompt that produces the value. Both `backend` error messages are rendered from the enum
+rather than hand-written. The exported enums are inert copies and `MODE_PROMPT_TITLES` is frozen.
+The write half's two value renderers are both total via a new `describeValue`. New suite
+`test/project-layout-enum-single-source.test.js` (**25 tests**) pins the *property* rather than the
+instances, registered in the `npm test` chain.
+
+**Behavioural change surface: one error message.** The sprint-mode write error now enumerates
+`same, local, remote, jira` instead of omitting `jira`. Everything else was verified byte-identical
+rather than asserted — both backend messages diffed byte-for-byte against the parent blob, and **74
+string renderings** compared against `JSON.stringify` for the `assertWritableMode` change (0
+mismatches, covering lone surrogates, U+2028/2029, NUL, BOM, ZWJ, a 5,000-char string and
+`__proto__`).
+
+**The `1153` fix is load-bearing, not cosmetic — the report's own assessment was wrong.** It was
+filed as dead-code-equivalent because `sprint.mode === 'jira'` early-returns above the validation.
+Under the **compound** mutation (early return relocated **and** the fix reverted) sprint Jira becomes
+unwritable: `invalid sprint_management mode "jira" — must be one of same, local, remote`. That is the
+latent outage the report predicted, both agents reproduced it independently, and the suite now
+detects it. Closes `bug-serialize-sprint-management-passes-store-modes-enum.md`.
+
+**Findings: 8 raised, 8 closed. Two were blocking, and both were the same defect class.**
+
+| # | Round | Finding | Closed by |
+|---|---|---|---|
+| **B1** | 1 | A test named `…independent of the early return` **was not** — removing the early return failed it. That name is the bug report's **AC3 verbatim**, so an unmet AC was papered over by a test title. | `7116093` — split into two honestly-named tests; AC3 now genuinely met |
+| **B2** | 2 | The wizard harness added to fix N1 answered `{}` when its queue ran dry, reaching `process.exit(0)` mid-drain — so the summary and the failing exit code **never ran**. The suite exited **0** having reported nothing; a second path OOMed at exit **134**. | `e201b0c` — exhaustion throws by name; two independent summary guards |
+| N1 | 1 | Wizard call site untested — swapping it to a constant concern silently stopped offering Jira and **all 92 suites stayed green** | `7116093` |
+| N2 | 1 | Legal-set rendering unpinned | `7116093` |
+| N3 | 1 | Mutable enum exports (live `Set` references) | `7116093` + `e201b0c` |
+| N4 | 1 | `JSON.stringify` threw on the error path (BigInt, circular) | `7116093` |
+| N5 | 1 | Assertions failing **open** — `split('—')[1] \|\| ''` degraded to asserting nothing | `7116093` |
+| N6 | 1 | `&&node` separator in the test chain | `7116093` |
+| N7 | 2 | `assertWritableMode` retained the N4 hazard, demonstrably live (`{mode:1n}` → bare `TypeError`) | `e201b0c` |
+| N9 | 2 | Export-copy test covered 2 of 3 enums; live `STORE_MODES` survived | `e201b0c` |
+
+**Mutation tally (reviewer's, independent of the implementer's):** 41 runs over 25 distinct mutants.
+Four survivors found — MW1, MW2 (wizard call site), MB1 (separator), MF3 (live `STORE_MODES`
+export). **All four killed. Zero survivors remain.** B1 and B2 were found by analysis, not mutation.
+
+**Post-merge verification on `feature/epic-31`,** all eight suites run directly, never wrapped in
+`timeout`, all exit 0: enum-single-source **25** · binding-spine **69** · config-storage **16** ·
+config-lost-on-update **13** · portable-paths **20** · config-layout **6** · reconfigure **12** ·
+repo-layout **13**. The 521 test-regenerated paths (`.agents/`, `AGENTS.md`, `.ma-agents.json`,
+`project-context.md`, a root `project-layout.yaml`) were restored/removed before the merge commit,
+which contains exactly 3 files.
+
+**Adjudication made during the run (N7).** The implementer declined to apply `describeValue` to
+`assertWritableMode` on scope-discipline grounds. Overridden, because the hazard is *live* at that
+call site (`writeProjectLayoutYaml` is exported and `store.mode` arrives with no type guard) and the
+change is provably behaviour-preserving (`describeValue(s) === JSON.stringify(s)` for every string).
+**`requireKnownMode` was deliberately left alone** — its input passes through `scalarString`, so
+`JSON.stringify` is total there and changing it would be churn. **The distinction is the type guard,
+not the function's provenance**, and it is now recorded in the docblock at `bin/cli.js:826-835` so it
+is not relitigated in either direction.
+
+**Corrected citations** (the round-3 brief carried pre-commit line numbers — the same off-by-N
+propagation this effort has hit before): `describeValue(mode)` is at **`bin/cli.js:840`**; the
+read-side backend message at **`:934`**; the wizard concern loop at **`:1529`**; the new docblock at
+**`:826-835`**; `serializeSprintManagement`'s jira early return at **`:1224`**.
+
+**Carry-forward for Story 31.5 — six items, recorded because 31.5 is what this prerequisite protects:**
+
+1. **Hoist the `process.on('exit')` backstop** to the top of `test/project-layout-enum-single-source.test.js`
+   (filed as N11, **not** blocking). It is registered at `:862`, below the 22 synchronous tests, so a
+   `process.exit(0)` from the synchronous phase still exits 0 with no summary. Unreachable today —
+   the reviewer enumerated every `process.exit` in `bin/cli.js` and none is reachable from the
+   synchronous tests — but **31.5 is the story that can make it reachable.**
+2. **Bump `EXPECTED_TEST_COUNT`** (`test/…:861`) when adding tests. It is a `!==` check, so it fails
+   loud on a surplus as well as a shortfall; a forgotten bump is caught, not silent (N12).
+3. **Every new wizard question needs an answer in every `runWizard(...)` queue** — the stub now
+   throws by name instead of defaulting, and also asserts the queue was fully consumed.
+4. **Adding an enum member requires a `MODE_PROMPT_TITLES` entry** — enforced by a keys-equal-union test.
+5. **`serializeSprintManagement`'s jira early return is still position-dependent for the jira
+   *fields*.** Only the *mode* is now position-independent. Relocating it stops `jira_url` /
+   `jira_project_key` being emitted; the FIELDS test catches that, by design and by name.
+6. **Do not "fix" `requireKnownMode` to use `describeValue`** — see the adjudication above.
+
+**Process note.** The recurring defect shape in this epic is now named: **validation that degrades
+to permissive instead of failing loud.** Three instances so far — the enum read/write disagreements,
+N5's `|| ''` fallback, and B2's answer-on-exhaustion stub. The implementer named it itself: *"a test
+double's default behaviour is an assertion about what the system under test may do, and mine
+asserted nothing."* Worth carrying into every remaining story brief.
+
 ## Resolved configuration
 
 ```
