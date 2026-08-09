@@ -733,10 +733,31 @@ const STORE_BACKENDS = new Set(['file-system', 'confluence']);
 // a member added to the enum cannot be named by one direction and omitted by
 // the other. Renders `"file-system" or "confluence"`; the quoting matches
 // requireKnownMode's, so an offending value and the legal values read alike.
+// The exact rendering is pinned by the suite - "each member appears somewhere
+// in the message" is too weak to notice the separator changing.
 function legalBackendsForMessage() {
   const members = [...STORE_BACKENDS].map((b) => JSON.stringify(b));
   if (members.length < 2) return members.join('');
   return `${members.slice(0, -1).join(', ')} or ${members[members.length - 1]}`;
+}
+
+// TOTAL value renderer for error messages. `JSON.stringify` is not total: it
+// THROWS on a BigInt and on a circular object, and returns `undefined` (not a
+// string) for a function or a symbol. On an error path that means a bare
+// TypeError escaping in place of the intended message - naming neither the
+// offending field nor the legal set, which is the one thing the message exists
+// to say. Unreachable from today's callers (the wizard produces `{mode, path}`
+// and readExistingLayout returns validated topology or null), but an error path
+// is the worst possible place to hold a second error.
+function describeValue(v) {
+  try {
+    const s = JSON.stringify(v);
+    if (typeof s === 'string') return s;
+  } catch (e) { /* BigInt, circular reference, a throwing toJSON */ }
+  try {
+    return typeof v === 'symbol' ? v.toString() : String(v);
+  } catch (e) { /* a throwing toString / valueOf / Symbol.toPrimitive */ }
+  return `[unprintable ${typeof v}]`;
 }
 
 // N-1: `mode` is a CLOSED enum in both directions, exactly like `backend`.
@@ -763,12 +784,18 @@ const SPRINT_MODES = new Set(['same', 'local', 'remote', 'jira']);
 // so the offered order is the enum's order). A member with no title would be
 // unofferable, so the suite pins that these keys are exactly the union of the
 // two enums.
-const MODE_PROMPT_TITLES = {
+//
+// Frozen because it is exported: a consumer that assigned a title here would
+// silently change what the wizard offers for every subsequent run in the
+// process. The Sets above cannot be protected the same way - `Object.freeze`
+// does not stop `Set.prototype.add` - so `module.exports` hands out COPIES of
+// them instead of the live objects (see the export list at the bottom).
+const MODE_PROMPT_TITLES = Object.freeze({
   same: 'Current repository (default)',
   local: 'Local path',
   remote: 'Remote git repository',
   jira: 'Jira',
-};
+});
 
 function modeChoicesFor(concern) {
   const legal = concern === 'sprintManagement' ? SPRINT_MODES : STORE_MODES;
@@ -1185,7 +1212,7 @@ function serializeStore(store, projectRoot) {
   const backend = store && store.backend;
   if (backend !== undefined && !STORE_BACKENDS.has(backend)) {
     throw new Error(
-      `Invalid store backend ${JSON.stringify(backend)} — must be ${legalBackendsForMessage()}`
+      `Invalid store backend ${describeValue(backend)} — must be ${legalBackendsForMessage()}`
     );
   }
   if (backend === 'confluence') return serializeConfluenceStore(store);
@@ -2837,4 +2864,11 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, reconcileCustomMarketplaceOnUpdate, resolveBaseBmadOk, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue, yamlUnescapeDoubleQuoted, resolveProjectTopology, parseLayoutYaml, PROJECT_LAYOUT_SCHEMA_VERSION, BINDING_UNBOUND, BINDING_UNREADABLE, BINDING_INVALID, BINDING_TOO_NEW, STORE_MODES, SPRINT_MODES, STORE_BACKENDS, MODE_PROMPT_TITLES, modeChoicesFor };
+module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, reconcileCustomMarketplaceOnUpdate, resolveBaseBmadOk, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue, yamlUnescapeDoubleQuoted, resolveProjectTopology, parseLayoutYaml, PROJECT_LAYOUT_SCHEMA_VERSION, BINDING_UNBOUND, BINDING_UNREADABLE, BINDING_INVALID, BINDING_TOO_NEW,
+  // COPIES, not the live Sets. These are the single source of truth for what a
+  // store's `mode`/`backend` may be, consumed by the reader, the writer and the
+  // wizard alike; handing out the real objects would let any consumer `.add()`
+  // a member and silently widen all three at once. Copies are inert.
+  STORE_MODES: new Set(STORE_MODES), SPRINT_MODES: new Set(SPRINT_MODES),
+  STORE_BACKENDS: new Set(STORE_BACKENDS),
+  MODE_PROMPT_TITLES, modeChoicesFor, legalBackendsForMessage };
