@@ -2,9 +2,132 @@
 
 **Run started:** 2026-08-03
 **Skill:** `bmad-dev-epic` (orchestrator)
-**Run scope:** **WAVE 1 ONLY** (decided 2026-08-03, option A "gate-first"). Stories 31.1 and
+**Run scope (RUN 1, closed):** **WAVE 1 ONLY** (decided 2026-08-03, option A "gate-first"). Stories 31.1 and
 31.2 only. HALT and report after wave 1 — do not plan or start waves 2+ even if the dependency
 graph reports them unblocked. Story 31.12's scope is undetermined until 31.1's spike reports.
+
+---
+
+# RUN 2 — waves 2 → 6, epic to completion (started 2026-08-09)
+
+## Resolved configuration (RUN 2)
+
+```
+Epic:            31 — Global Installation & Federated Knowledge Stores (Phase 5)
+Stories (epic):  14   merged (run 1): 2 (31.1, 31.2)   in this run: 12 (31.3 … 31.14)
+Prerequisites:   2 non-story units, merged BEFORE 31.5 planning (see Wave 2)
+review_model:    claude-opus     exec_model: claude-sonnet     (tiers collapsed: no)
+strategy:        waves           max_parallel: 3    fix_cap: 2
+gates:           publish=on  pr=on   dist-tag=beta  bump=MINOR (31.14 AC8)
+                 RUN BOUNDARY: no npm publish, no PR, no branch push. HALT and report at each gate.
+test_gate:       node test/<file>.test.js run DIRECTLY (never wrapped in `timeout`)
+                 + `npm run build:plugin` for any lib/bmad-extension/skills/ change
+                 bare `npm test` NOT trusted (MIL-498 CRLF drift halts the chain on Windows)
+                 baseline every failure against d:\Code\AI_Agents @ 9b936ac before calling it a regression
+```
+
+### Environment facts corrected for RUN 2
+
+- **Trunk is now `main`.** Run 1's ledger says the epic trunk is
+  `feat/knowledge-stores-and-global-install`; that branch merged to `main` as PR #147 (`9b936ac`),
+  and `feature/epic-31` merged `main` back in at `01de99f`. The F26 planning artifacts and
+  Decision P5-9 are on `main`. Epic branch head at run start: **`9c0f41c`**
+  (= `01de99f` + the run-2 prompt doc). The prompt's stated `01de99f` is one commit behind; no
+  code differs.
+- Epic worktree: **`d:\Code\AI_Agents-epic-31`** (branch `feature/epic-31`). The run-1 worktrees
+  `AI_Agents-knowledge-stores` and `AI_Agents-fix-stage-leak` no longer exist — every path in the
+  run-1 record above that references them is stale.
+- `.worktrees/` is gitignored (`.gitignore:31`), so nested story worktrees are safe.
+- `_bmad/` absent from worktrees (gitignored, per-machine): config + resolver read from
+  `d:\Code\AI_Agents\_bmad\...`. `resolve_customization.py --key workflow` succeeded via plain
+  `python`; no team/user override TOML for `bmad-dev-epic`, defaults in effect.
+- Fresh worktrees need `New-Item -ItemType Junction node_modules -> d:\Code\AI_Agents\node_modules`.
+- CI is broken at the GitHub account level — red checks carry no signal. All verification local.
+
+### Green baseline carried into RUN 2 (`feature/epic-31`)
+
+`project-layout-binding-spine` 69 · `config-storage` 16 · `config-lost-on-update` 13 ·
+`portable-paths` 20 · `config-layout` 6 · `reconfigure` 12 · `repo-layout` 13.
+Known pre-existing failures on unmodified `main`: `bmad-output-policy` (README H2 ordering) and
+two `custom-marketplace-*` suites.
+
+## Wave plan (RUN 2)
+
+Dependency graph re-derived from `epics.md` § Epic 31 "Execution order" plus the two
+run-1 dispositions (31.3 unblocked; 31.5 gated on three filed defects). No cycles.
+
+```
+Wave 2  PREREQUISITES (not stories — merged before 31.5 planning starts)
+        2A  shared-enum refactor: define each closed enum ONCE, shared read+write+prompt.
+            Subsumes bug-serialize-sprint-management-passes-store-modes-enum.
+        2B  bug-read-existing-layout-collapses-two-stores-onto-software-store
+            + bug-show-current-layout-prints-undefined-for-confluence-store
+            (coupled — the display fix needs the richer topology the preserve-on-read fix returns)
+Wave 3  31.3 (←31.2, unblocked)  →  31.4 (←31.3)
+        31.11 (←31.1)            →  31.12 (←31.1, 31.11)          [threads A and D, parallel]
+Wave 4  31.5 (←31.2 + wave 2)    →  31.6 (←31.3, 31.5) ∥ 31.7 (←31.5)
+Wave 5  31.8 (←31.5)  →  31.9 (←31.8)  →  31.10 (←31.9)
+Wave 6  31.13 (←31.3, 31.5, 31.8)  →  31.14 (release gate ← 31.4, 31.6, 31.7, 31.10, 31.12, 31.13)
+```
+
+**Why 2A and 2B are sequential, not parallel:** both edit `bin/cli.js`, and 2A touches
+`storeFromRaw` / `serializeStore` / `serializeSprintManagement` while 2B touches
+`readExistingLayout` / `showCurrentLayout`. Same file, adjacent regions, one reviewer each —
+step-02 §2.3's shared-file heuristic says sequence them.
+
+### Findings from the RUN 2 intake pass
+
+1. **The `mode` enums are already single-sourced.** `STORE_MODES` / `SPRINT_MODES`
+   (`bin/cli.js:734-735`) are already shared between the read half (`requireKnownMode`) and the
+   write half (`assertWritableMode`) — that was 31.2's N-1 fix. The pattern defect that remains is
+   **`backend`**: its legal set is spelled as inline literals twice, independently — on read at
+   `bin/cli.js:852-860` (`storeFromRaw`) and on write at `bin/cli.js:1136-1143`
+   (`serializeStore`). That is the surface Story 31.5 doubles, so 2A's real content is a single
+   `STORE_BACKENDS` source consumed by both, plus the wrong-enum call at `bin/cli.js:1153`.
+2. **`sprint-status.yaml`'s Epic 31 comments carry superseded text that `epics.md` already
+   corrected.** `31-11`'s comment still says a project-level install must be "BYTE-IDENTICAL to
+   today's" (NFR76 was rebaselined to the post-31.2 tree — `epics.md:5526` carries the
+   correction); `31-3`'s and `31-13`'s comments still name `config.user.yaml`, which does not
+   exist (P5-9.4 was amended to `_bmad/config.user.toml` / `_bmad/custom/config.user.toml`);
+   `31-11`'s comment also still says the scope question needs "promoting to a first-class
+   question", which amended FR248 removed. **`epics.md` is authoritative and is already correct in
+   all three places.** Story briefs are cut from `epics.md`, not from the sprint-status comments.
+   Reported, not edited — correcting sprint-status prose is a planning-pass action, not an
+   implementation one.
+
+## Story states (RUN 2)
+
+| id | wave | status | worktree | branch | fix_rounds | note |
+|---|---|---|---|---|---|---|
+| 2A | 2 | pending | `.worktrees/epic-31-prereq-shared-enums` | `feature/epic-31-prereq-shared-enums` | 0 | shared closed-enum source |
+| 2B | 2 | pending | `.worktrees/epic-31-prereq-read-path` | `feature/epic-31-prereq-read-path` | 0 | preserve-on-read + backend-aware display |
+| 31.3 | 3 | pending | — | — | 0 | |
+| 31.4 | 3 | pending | — | — | 0 | |
+| 31.11 | 3 | pending | — | — | 0 | |
+| 31.12 | 3 | pending | — | — | 0 | FAIL branch — messaging + gating only |
+| 31.5 | 4 | pending | — | — | 0 | gated on wave 2 |
+| 31.6 | 4 | pending | — | — | 0 | |
+| 31.7 | 4 | pending | — | — | 0 | |
+| 31.8 | 5 | pending | — | — | 0 | |
+| 31.9 | 5 | pending | — | — | 0 | |
+| 31.10 | 5 | pending | — | — | 0 | |
+| 31.13 | 6 | pending | — | — | 0 | |
+| 31.14 | 6 | pending | — | — | 0 | release gate |
+
+## Process rules in force for RUN 2 (each one earned in wave 1)
+
+1. **Status field is orchestrator-owned.** The implementer may set `review`; only the orchestrator
+   sets `done`, and only after an independent review signs off. Both wave-1 stories self-reported
+   `done` before their gating review returned, and 31.2's review then found three blocking defects.
+2. **Never the same agent for implement and review.** The one wave-1 fix round written by the
+   coordinating agent closed its three defects half way and added a new crash.
+3. **Mutation-test every new test.** Revert the fix, confirm the suite goes red. Wave 1 shipped a
+   CRLF test that `trim()` laundered into a no-op.
+4. **Reproduce a defect against the parent commit before fixing it.** Handed-down PoCs may be
+   incomplete; two wave-1 fixtures did not reproduce until completed.
+5. **Report contradictions; never edit a requirement to make one go away.**
+
+## Wave 2 — in progress
 
 ## Resolved configuration
 
