@@ -719,6 +719,26 @@ function writeRepoLayoutConfig(layout) {
 // it into two independent questions.
 const PROJECT_LAYOUT_SCHEMA_VERSION = 2;
 
+// `backend` is a CLOSED enum in both directions, exactly like `mode`. Defined
+// ONCE here and consumed by both halves - `storeFromRaw` on read and
+// `serializeStore` on write - because the two spelled it out as independent
+// inline literals with independently hand-written error messages, and that is
+// the precise shape of the defect this epic has now found three times: write
+// side and read side disagreeing about a closed enum. Story 31.5 asks
+// `backend` per store, doubling the surface, so the set is single-sourced
+// before that lands rather than after.
+const STORE_BACKENDS = new Set(['file-system', 'confluence']);
+
+// Both backend messages are DERIVED from the set above, never hand-written, so
+// a member added to the enum cannot be named by one direction and omitted by
+// the other. Renders `"file-system" or "confluence"`; the quoting matches
+// requireKnownMode's, so an offending value and the legal values read alike.
+function legalBackendsForMessage() {
+  const members = [...STORE_BACKENDS].map((b) => JSON.stringify(b));
+  if (members.length < 2) return members.join('');
+  return `${members.slice(0, -1).join(', ')} or ${members[members.length - 1]}`;
+}
+
 // N-1: `mode` is a CLOSED enum in both directions, exactly like `backend`.
 // It was previously the one field raw-interpolated on write (`mode: ${mode}`)
 // and merely string-coerced on read, so a hand-edited `mode:` was a value
@@ -733,6 +753,27 @@ const PROJECT_LAYOUT_SCHEMA_VERSION = 2;
 // and sprint_management additionally offers jira.
 const STORE_MODES = new Set(['same', 'local', 'remote']);
 const SPRINT_MODES = new Set(['same', 'local', 'remote', 'jira']);
+
+// The wizard is the THIRD direction that touches these enums: it PRODUCES the
+// value the writer validates and the reader reads back. It used to spell the
+// members out a third time as a literal `modeChoices` array, so a prompt could
+// offer a mode the writer rejects, or an enum could gain a member the prompt
+// never offers. One title per member here; the per-concern choice list is the
+// relevant enum mapped through this table (Set iteration is insertion-ordered,
+// so the offered order is the enum's order). A member with no title would be
+// unofferable, so the suite pins that these keys are exactly the union of the
+// two enums.
+const MODE_PROMPT_TITLES = {
+  same: 'Current repository (default)',
+  local: 'Local path',
+  remote: 'Remote git repository',
+  jira: 'Jira',
+};
+
+function modeChoicesFor(concern) {
+  const legal = concern === 'sprintManagement' ? SPRINT_MODES : STORE_MODES;
+  return [...legal].map((value) => ({ title: MODE_PROMPT_TITLES[value], value }));
+}
 
 // Read half. Throws; resolveProjectTopology converts it to `invalid`. Failing
 // loud rather than coercing to 'same' mirrors the `backend` enum for the same
@@ -850,10 +891,10 @@ function storeFromRaw(raw, projectRoot) {
   // `path:` does. Only a non-empty STRING that is not one of the two legal
   // values is a genuine unknown backend.
   const backend = scalarString(raw.backend) || 'file-system';
-  if (backend !== 'file-system' && backend !== 'confluence') {
+  if (!STORE_BACKENDS.has(backend)) {
     throw new Error(
       `Unknown knowledge-store backend ${JSON.stringify(backend)} in ` +
-      `_bmad-output/project-layout.yaml. Expected "file-system" or "confluence". ` +
+      `_bmad-output/project-layout.yaml. Expected ${legalBackendsForMessage()}. ` +
       `Refusing to guess - an unrecognised backend would otherwise resolve this ` +
       `store to the project root.`
     );
@@ -1130,13 +1171,22 @@ function serializeConfluenceStore(store) {
   return out;
 }
 
-// AC1 — the only two valid backends. Fail loud on anything else rather than
-// silently coercing a typo'd/unknown backend into file-system, which would
-// write a DIFFERENT backend than the caller asked for with no signal at all.
+// AC1 — the legal backends, from the one STORE_BACKENDS definition the read
+// half enforces too. Fail loud on anything else rather than silently coercing a
+// typo'd/unknown backend into file-system, which would write a DIFFERENT backend
+// than the caller asked for with no signal at all.
+//
+// `backend === undefined` remains LEGAL and falls through to the file-system
+// serializer: callers still pass the legacy `{mode, path}` shape (the installer's
+// `layout.knowledgebase`, and writeProjectLayoutYaml's own `{mode:'same'}`
+// default), and an absent backend there means "never stated", exactly as it does
+// on the read half. Only a STATED backend outside the enum is an error.
 function serializeStore(store, projectRoot) {
   const backend = store && store.backend;
-  if (backend !== undefined && backend !== 'file-system' && backend !== 'confluence') {
-    throw new Error(`Invalid store backend "${backend}" — must be "file-system" or "confluence"`);
+  if (backend !== undefined && !STORE_BACKENDS.has(backend)) {
+    throw new Error(
+      `Invalid store backend ${JSON.stringify(backend)} — must be ${legalBackendsForMessage()}`
+    );
   }
   if (backend === 'confluence') return serializeConfluenceStore(store);
   return serializeFileSystemStore(store, projectRoot);
@@ -1150,7 +1200,15 @@ function serializeSprintManagement(sprint, projectRoot) {
     out += `  jira_project_key: ${yamlEscapeValue(sprint.jiraProjectKey)}\n`;
     return out;
   }
-  const mode = assertWritableMode((sprint && sprint.mode) || 'same', STORE_MODES, 'sprint_management');
+  // SPRINT_MODES, not STORE_MODES: sprint management's legal set includes
+  // `jira`. The two are interchangeable for the values that actually reach here
+  // (the `jira` early return above shadows the only member they differ on), but
+  // the enum decides what the ERROR MESSAGE enumerates - and with STORE_MODES an
+  // invalid sprint mode was told the legal values were `same, local, remote`,
+  // omitting the one mode the read half accepts and the Jira backend depends on.
+  // The equivalence was also load-bearing on that early return's position, so a
+  // later reorder would have made sprint `jira` unwritable.
+  const mode = assertWritableMode((sprint && sprint.mode) || 'same', SPRINT_MODES, 'sprint_management');
   const rawPath = (sprint && sprint.path != null) ? sprint.path : '.';
   const portable = toPortablePath(rawPath, projectRoot);
   out += `  mode: ${mode}\n`;
@@ -1432,12 +1490,9 @@ async function collectRepoLayout(flags, existingLayout = null) {
 
   for (const concern of ['knowledgebase', 'sprintManagement']) {
     const existingMode = existingLayout && existingLayout[concern] ? existingLayout[concern].mode : null;
-    const modeChoices = [
-      { title: 'Current repository (default)', value: 'same' },
-      { title: 'Local path', value: 'local' },
-      { title: 'Remote git repository', value: 'remote' },
-      ...(concern === 'sprintManagement' ? [{ title: 'Jira', value: 'jira' }] : []),
-    ];
+    // Derived from STORE_MODES / SPRINT_MODES via MODE_PROMPT_TITLES rather
+    // than re-listing the members here — see the table's note.
+    const modeChoices = modeChoicesFor(concern);
     // Pre-select existing mode if available
     const initialIndex = existingMode ? modeChoices.findIndex(c => c.value === existingMode) : 0;
 
@@ -2782,4 +2837,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, reconcileCustomMarketplaceOnUpdate, resolveBaseBmadOk, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue, yamlUnescapeDoubleQuoted, resolveProjectTopology, parseLayoutYaml, PROJECT_LAYOUT_SCHEMA_VERSION, BINDING_UNBOUND, BINDING_UNREADABLE, BINDING_INVALID, BINDING_TOO_NEW };
+module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, reconcileCustomMarketplaceOnUpdate, resolveBaseBmadOk, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue, yamlUnescapeDoubleQuoted, resolveProjectTopology, parseLayoutYaml, PROJECT_LAYOUT_SCHEMA_VERSION, BINDING_UNBOUND, BINDING_UNREADABLE, BINDING_INVALID, BINDING_TOO_NEW, STORE_MODES, SPRINT_MODES, STORE_BACKENDS, MODE_PROMPT_TITLES, modeChoicesFor };
