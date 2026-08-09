@@ -120,7 +120,27 @@ async function drainAsyncTests() {
 const promptsModulePath = require.resolve('prompts');
 require('prompts'); // populate the cache entry so .exports can be replaced
 const promptLog = [];
-let promptAnswer = () => ({});
+
+// The stub NEVER answers a question it was not given an answer for. Returning
+// `{}` instead is not a soft default, it is a suite-killer: cli.js reads the
+// missing field as undefined and reaches `if (!mode) process.exit(0)`, which
+// from inside an awaited test aborts the process mid-drain — the summary and
+// its process.exit(1) never run, and the whole file exits 0 having printed
+// nothing, taking any genuine failure from the 21 synchronous tests with it.
+// A retry-on-invalid prompt loop against the same soft default spins forever
+// and OOMs (exit 134) instead. Throwing turns both into an ordinary, named
+// test failure. Story 31.5 adds per-store questions to collectRepoLayout, so
+// this WILL be hit; repo-layout.test.js is --yes-only and will not catch it.
+function unexpectedPrompt(question) {
+  const name = (question && question.name) || '(unnamed)';
+  const message = (question && question.message) || '';
+  throw new Error(
+    `the wizard asked more questions than the test answered — unanswered prompt ` +
+    `${JSON.stringify(name)} (${JSON.stringify(message)}). Add an answer to the ` +
+    `runWizard() queue rather than letting the stub default it.`
+  );
+}
+let promptAnswer = unexpectedPrompt;
 require.cache[promptsModulePath].exports = async function stubPrompts(question) {
   promptLog.push(question);
   return promptAnswer(question);
@@ -628,7 +648,7 @@ test('the jira sprint FIELDS round-trip — this one DOES depend on the early re
 async function runWizard(answers, existingLayout = null) {
   promptLog.length = 0;
   const queue = [...answers];
-  promptAnswer = () => (queue.length ? queue.shift() : {});
+  promptAnswer = (question) => (queue.length ? queue.shift() : unexpectedPrompt(question));
   let layout;
   const origLog = console.log;
   console.log = () => {};
@@ -636,8 +656,11 @@ async function runWizard(answers, existingLayout = null) {
     layout = await collectRepoLayout({}, existingLayout);
   } finally {
     console.log = origLog;
-    promptAnswer = () => ({});
+    promptAnswer = unexpectedPrompt;
   }
+  assert.strictEqual(queue.length, 0,
+    `${queue.length} prepared answer(s) went unused — the wizard asked fewer questions than ` +
+    `expected, which is as much a change in behaviour as asking more`);
   const modeQuestions = promptLog.filter(q => q && q.name === 'mode');
   return { layout, modeQuestions };
 }
@@ -698,8 +721,11 @@ test('legalBackendsForMessage renders the enum exactly — separator included', 
 });
 
 test('the exported enums are COPIES — poisoning one cannot widen what cli.js accepts', () => {
+  // All THREE exported enums, not two: exporting a live STORE_MODES while the
+  // other two were copies survived the previous version of this test at 24/0.
   STORE_BACKENDS.add('notion');
   SPRINT_MODES.add('smartsheet');
+  STORE_MODES.add('sharepoint');
   try {
     const result = readFixture([
       'schema_version: 2',
@@ -716,9 +742,33 @@ test('the exported enums are COPIES — poisoning one cannot widen what cli.js a
       sprintManagement: { mode: 'smartsheet', path: '.' },
     });
     assert.ok(err, 'adding a member to the EXPORTED set must not teach the writer a new mode');
+
+    // STORE_MODES, the third enum — asserted on BOTH halves, since it is the
+    // one consumed by the reader, the writer and the wizard alike.
+    const storeWriteErr = writeError({
+      systemRequirementsStore: { backend: 'file-system', mode: 'sharepoint', path: '.' },
+      softwareRequirementsStore: { backend: 'file-system', mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' },
+    });
+    assert.ok(storeWriteErr,
+      'adding a member to the EXPORTED STORE_MODES must not teach the writer a new store mode');
+    const storeRead = readFixture([
+      'schema_version: 2',
+      'system_requirements_store:',
+      '  backend: file-system',
+      '  mode: sharepoint',
+      '  path: "."',
+      'software_requirements_store:',
+      ...OK_STORE,
+    ]);
+    assert.strictEqual(storeRead.ok, false,
+      'adding a member to the EXPORTED STORE_MODES must not teach the reader a new store mode');
+    assert.deepStrictEqual(modeChoicesFor('knowledgebase').map(c => c.value), ['same', 'local', 'remote'],
+      'nor may it widen what the wizard offers');
   } finally {
     STORE_BACKENDS.delete('notion');
     SPRINT_MODES.delete('smartsheet');
+    STORE_MODES.delete('sharepoint');
   }
 });
 
@@ -754,12 +804,97 @@ test('an unprintable backend still yields the real message, not a bare TypeError
   }
 });
 
+test('an unprintable MODE also yields the real message — both writers render values the same way', () => {
+  // The write half's other value renderer. `assertWritableMode` takes
+  // `store.mode` / `sprint.mode` straight off a caller-supplied object with no
+  // type guard, and `writeProjectLayoutYaml` is exported — so this is reachable,
+  // not theoretical. Its read-side twin `requireKnownMode` deliberately keeps
+  // plain JSON.stringify: everything reaching it has passed through
+  // `scalarString()` and is a string by construction.
+  const circular = { mode: 'x' };
+  circular.self = circular;
+  const cases = [['BigInt', 1n], ['a circular object', circular], ['a symbol', Symbol('nope')]];
+  for (const [label, value] of cases) {
+    const sprintErr = writeError({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: value, path: '.' },
+    });
+    assert.ok(sprintErr, `${label}: an illegal sprint mode must throw`);
+    assert.ok(/invalid sprint_management mode /.test(sprintErr.message),
+      `${label}: expected assertWritableMode's own message, got: ${sprintErr.name}: ${sprintErr.message}`);
+    assert.deepStrictEqual(writtenLegalModes(sprintErr.message), [...SPRINT_MODES],
+      `${label}: the message must still enumerate SPRINT_MODES, got: ${sprintErr.message}`);
+
+    const storeErr = writeError({
+      systemRequirementsStore: { backend: 'file-system', mode: value, path: '.' },
+      softwareRequirementsStore: { backend: 'file-system', mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' },
+    });
+    assert.ok(storeErr, `${label}: an illegal store mode must throw`);
+    assert.ok(/invalid knowledge-store mode /.test(storeErr.message),
+      `${label}: expected assertWritableMode's own message, got: ${storeErr.name}: ${storeErr.message}`);
+  }
+
+  // And the change is inert for every value that actually occurs: a string.
+  const stringErr = writeError({
+    knowledgebase: { mode: 'same', path: '.' },
+    sprintManagement: { mode: 'bogus', path: '.' },
+  });
+  assert.ok(stringErr.message.includes('"bogus"'),
+    `a string mode must still render JSON-quoted exactly as before, got: ${stringErr.message}`);
+});
+
 // ─── Summary ─────────────────────────────────────────────────────────────────
-drainAsyncTests().then(() => {
+//
+// Two independent guards, because a suite that can exit 0 without reporting is
+// worse than a suite with a gap in it: the gap loses one assertion, a skipped
+// summary loses all of them, including real failures already recorded by the
+// synchronous tests. An `&&`-chained runner keys on the exit code alone.
+//
+//   1. A hard total. Anything that stops tests running — an early `process.exit`
+//      inside an awaited call, a rejected drain, a `return` that skips a block —
+//      changes this number, and the count is checked before the exit code is.
+//   2. A process-level backstop, so the summary cannot be skipped by ANY
+//      mechanism rather than only the ones anticipated here. Setting
+//      `process.exitCode` from an 'exit' listener does override an explicit
+//      `process.exit(0)` (verified), which is precisely the case that bit.
+const EXPECTED_TEST_COUNT = 25;
+let summaryPrinted = false;
+
+process.on('exit', (code) => {
+  if (summaryPrinted) return;
+  console.error(
+    `\n  FATAL: this suite exited with code ${code} WITHOUT printing its summary, so its ` +
+    `${passed + failed} completed test(s) were never reported. Something aborted the process ` +
+    `mid-run — the usual cause is a cli.js code path calling process.exit() from inside an ` +
+    `awaited test. Forcing a non-zero exit so this cannot read as a pass.`
+  );
+  process.exitCode = code === 0 ? 1 : code;
+});
+
+function printSummary() {
+  const total = passed + failed;
   console.log(`\n${passed} passed, ${failed} failed`);
+  summaryPrinted = true;
+  if (total !== EXPECTED_TEST_COUNT) {
+    console.error(
+      `\n  FATAL: ${total} tests ran, but this file defines ${EXPECTED_TEST_COUNT}. Tests that ` +
+      `never ran cannot fail, so a shortfall is a silent green — treat it as a failure. If you ` +
+      `added or removed a test, update EXPECTED_TEST_COUNT deliberately.`
+    );
+    process.exitCode = 1;
+  }
   if (failed > 0) {
     console.error('\nFailures:');
     for (const { name, error } of errors) console.error(`  - ${name}: ${error}`);
-    process.exit(1);
+    process.exitCode = 1;
   }
+}
+
+drainAsyncTests().then(printSummary, (err) => {
+  // A rejection here means drainAsyncTests itself broke, not a test — its own
+  // try/catch already converts per-test throws into recorded failures.
+  console.error(`\n  FATAL: the async drain itself threw: ${(err && err.stack) || err}`);
+  summaryPrinted = true;
+  process.exitCode = 1;
 });

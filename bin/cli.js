@@ -822,11 +822,22 @@ function requireKnownMode(mode, legal, fieldName) {
 // the two install-time call sites already degrade such a throw to
 // warn-and-leave-UNBOUND. Returns the validated member, which by construction
 // contains no character needing YAML quoting.
+//
+// `describeValue` here, plain `JSON.stringify` in requireKnownMode above. The
+// difference is the TYPE GUARD on the input, not the age or provenance of the
+// function. requireKnownMode is only ever reached through `scalarString()`, so
+// its `mode` is a non-empty string by construction and JSON.stringify is total
+// on it. This function takes `store.mode` / `sprint.mode` straight off a
+// caller-supplied object with no guard at all, and `writeProjectLayoutYaml` is
+// exported - so `writeProjectLayoutYaml({sprintManagement: {mode: 1n}})` really
+// does reach here with a BigInt and really would throw a bare TypeError naming
+// neither the field nor the legal set. Behaviour is unchanged for every
+// reachable input: describeValue(s) === JSON.stringify(s) for every string.
 function assertWritableMode(mode, legal, fieldName) {
   if (legal.has(mode)) return mode;
   throw new Error(
     `Refusing to write _bmad-output/project-layout.yaml: invalid ${fieldName} mode ` +
-    `${JSON.stringify(mode)} — must be one of ${[...legal].join(', ')}`
+    `${describeValue(mode)} — must be one of ${[...legal].join(', ')}`
   );
 }
 
