@@ -716,7 +716,10 @@ function writeRepoLayoutConfig(layout) {
 // knowledgebase question, so both stores are pointed at that one answer
 // (mapped in `writeProjectLayoutYaml` below) — this is what keeps the
 // existing single-knowledgebase wizard working unmodified until 31.5 splits
-// it into two independent questions.
+// it into two independent questions. That mapping applies only while the two
+// committed stores AGREE; once they diverge, the single answer goes to the
+// software store (FR264) and the system store is preserved — see the
+// preservation block in `writeProjectLayoutYaml`.
 const PROJECT_LAYOUT_SCHEMA_VERSION = 2;
 
 // `backend` is a CLOSED enum in both directions, exactly like `mode`. Defined
@@ -729,6 +732,14 @@ const PROJECT_LAYOUT_SCHEMA_VERSION = 2;
 // before that lands rather than after.
 const STORE_BACKENDS = new Set(['file-system', 'confluence']);
 
+// The backend a store has when it never states one. Both the pre-F26 legacy
+// block (AC5) and the legacy `{mode, path}` wizard shape omit `backend:`
+// entirely, and "never stated" has always meant file-system on the read half,
+// the write half and now the display half. Named once for the same reason the
+// enum itself is: three spellings of the same default is how the read and write
+// halves come to disagree.
+const DEFAULT_STORE_BACKEND = 'file-system';
+
 // Both backend messages are DERIVED from the set above, never hand-written, so
 // a member added to the enum cannot be named by one direction and omitted by
 // the other. Renders `"file-system" or "confluence"`; the quoting matches
@@ -739,6 +750,162 @@ function legalBackendsForMessage() {
   const members = [...STORE_BACKENDS].map((b) => JSON.stringify(b));
   if (members.length < 2) return members.join('');
   return `${members.slice(0, -1).join(', ')} or ${members[members.length - 1]}`;
+}
+
+// ─── The per-backend IDENTITY VIEW, keyed by STORE_BACKENDS ─────────────────
+//
+// What IDENTIFIES a store is backend-specific. A `file-system` store is
+// {mode, path, gitUrl?}; a `confluence` store has NEITHER a mode nor a path —
+// its identity is a space key plus a `{title, id}` root page. Two consumers need
+// that per-backend field list, and both previously assumed the file-system shape
+// was total:
+//
+//   - showCurrentLayout, which printed `Mode: undefined / Path: undefined` for a
+//     completely valid confluence store — the display defect;
+//   - the DIVERGENCE test writeProjectLayoutYaml's preservation needs, to decide
+//     whether the two committed stores already point at different places — the
+//     read/write defect.
+//
+// One table, keyed by the enum members, exactly as MODE_PROMPT_TITLES is keyed by
+// the mode enums: a backend added to STORE_BACKENDS names its fields once here
+// and both the renderer and the comparator follow. A backend-aware renderer with
+// its own private list of backends would reinstate precisely the read/write
+// disagreement the shared-enum work removed.
+//
+// `storeIdentityFields` THROWS for a backend with no entry rather than degrading
+// to the file-system shape. A permissive fallback is exactly how a confluence
+// store came to render as `undefined`, and the suite pins that these keys are
+// the whole of STORE_BACKENDS, so the throw is unreachable by construction.
+//
+// Each field is `{label, value, omitWhenAbsent?}`: `label` is the human field
+// name, `value` the raw stored value with null/absent meaning "never
+// configured", and `omitWhenAbsent` marks a field that is simply not printed
+// when it has no value (today's `gitUrl`, shown only in remote mode).
+const STORE_BACKEND_VIEWS = Object.freeze({
+  'file-system': Object.freeze({
+    // Exactly today's three lines in today's order, and no `Backend:` line: a
+    // file-system store must render byte-identically to before (display AC2).
+    identity: (store) => [
+      { label: 'Mode', value: store.mode },
+      { label: 'Path', value: store.path },
+      { label: 'Git URL', value: store.gitUrl, omitWhenAbsent: true },
+    ],
+  }),
+  confluence: Object.freeze({
+    // `backend` comes in as the RESOLVED backend rather than being re-spelled
+    // here, so this table names each backend exactly once — as a key.
+    identity: (store, backend) => [
+      { label: 'Backend', value: backend },
+      { label: 'Space key', value: store.spaceKey },
+      { label: 'Root page title', value: (store.rootPage && store.rootPage.title) },
+      { label: 'Root page id', value: (store.rootPage && store.rootPage.id) },
+    ],
+  }),
+});
+
+// An absent/empty `backend` is "never stated" — file-system — matching
+// storeFromRaw on the read half and serializeStore on the write half.
+function backendOfStore(store) {
+  const declared = (store && typeof store.backend === 'string' && store.backend !== '')
+    ? store.backend : null;
+  return declared || DEFAULT_STORE_BACKEND;
+}
+
+function storeIdentityFields(store) {
+  const backend = backendOfStore(store);
+  const view = STORE_BACKEND_VIEWS[backend];
+  if (!view) {
+    throw new Error(
+      `No identity view for knowledge-store backend ${describeValue(backend)} — ` +
+      `STORE_BACKEND_VIEWS must name every member of STORE_BACKENDS ` +
+      `(${legalBackendsForMessage()}). Refusing to guess which fields identify ` +
+      `this store, because guessing the file-system shape is what rendered a ` +
+      `confluence store as "undefined".`
+    );
+  }
+  return view.identity(store || {}, backend);
+}
+
+// sprint_management is the third location record and carries NO backend (P5-9.5)
+// — its shape is discriminated by `mode: jira`, which likewise has no `path`.
+// Kept alongside the store views because the renderer walks all three records
+// and `Path: undefined` for a Jira sprint backend is the same defect in the same
+// function.
+function sprintIdentityFields(sprint) {
+  const s = sprint || {};
+  if (s.mode === 'jira') {
+    return [
+      { label: 'Mode', value: s.mode },
+      { label: 'Jira URL', value: s.jiraUrl },
+      { label: 'Jira project key', value: s.jiraProjectKey },
+    ];
+  }
+  return [
+    { label: 'Mode', value: s.mode },
+    { label: 'Path', value: s.path },
+    { label: 'Git URL', value: s.gitUrl, omitWhenAbsent: true },
+  ];
+}
+
+// An absent field and an empty one are the same "never configured" value on both
+// sides of a comparison — which is exactly what scalarString() already
+// normalised on read.
+function identityValueKey(v) {
+  return (v == null || v === '') ? null : String(v);
+}
+
+/**
+ * Do the two knowledge stores point at DIFFERENT places? Derived from the same
+ * table the renderer uses, so a future backend can never be compared on
+ * file-system fields it does not have.
+ *
+ * This is the predicate the whole read/write fix turns on: while the two stores
+ * agree, collapsing them onto the single legacy `knowledgebase` value is exact
+ * and mapping one answered location back onto both is correct (FR264/NFR82).
+ * Once they disagree, that mapping destroys one of them.
+ */
+function storesDiverge(a, b) {
+  if (backendOfStore(a) !== backendOfStore(b)) return true;
+  const fa = storeIdentityFields(a);
+  const fb = storeIdentityFields(b);
+  // Same backend ⇒ same field list by construction; compared anyway so a table
+  // entry that ever became input-dependent cannot make two stores compare equal
+  // on a subset of their identity.
+  if (fa.length !== fb.length) return true;
+  for (let i = 0; i < fa.length; i++) {
+    if (fa[i].label !== fb[i].label) return true;
+    if (identityValueKey(fa[i].value) !== identityValueKey(fb[i].value)) return true;
+  }
+  return false;
+}
+
+// The words a genuinely absent optional field renders as. Never a JavaScript
+// primitive: `undefined` in this output reads as file corruption, and a user who
+// concludes that re-runs the wizard.
+const IDENTITY_NOT_CONFIGURED = 'not configured';
+
+/**
+ * TOTAL display coercion for one identity value. Cannot throw and cannot emit
+ * the literal `undefined`: null/absent/empty render as words, and anything else
+ * goes through describeValue (itself total).
+ *
+ * A store whose `path` is genuinely the seven-character string "undefined" does
+ * render as `undefined` — that is the true value of the field, not this defect.
+ */
+function renderIdentityValue(v) {
+  if (typeof v === 'string') return v === '' ? IDENTITY_NOT_CONFIGURED : v;
+  if (v == null) return IDENTITY_NOT_CONFIGURED;
+  return describeValue(v);
+}
+
+// One-line rendering of a store's identity, for a warning message rather than
+// the multi-line display block. Same table, so it can never describe a store by
+// fields that store does not have.
+function summarizeStoreIdentity(store) {
+  return storeIdentityFields(store)
+    .filter((f) => !(f.omitWhenAbsent && (f.value == null || f.value === '')))
+    .map((f) => `${f.label}: ${renderIdentityValue(f.value)}`)
+    .join(', ');
 }
 
 // TOTAL value renderer for error messages. `JSON.stringify` is not total: it
@@ -928,7 +1095,7 @@ function storeFromRaw(raw, projectRoot) {
   // coercion, and the exact opposite of what the identical malformation on
   // `path:` does. Only a non-empty STRING that is not one of the two legal
   // values is a genuine unknown backend.
-  const backend = scalarString(raw.backend) || 'file-system';
+  const backend = scalarString(raw.backend) || DEFAULT_STORE_BACKEND;
   if (!STORE_BACKENDS.has(backend)) {
     throw new Error(
       `Unknown knowledge-store backend ${JSON.stringify(backend)} in ` +
@@ -1330,10 +1497,78 @@ function writeProjectLayoutYaml(layout) {
     return;
   }
 
-  const fallbackStore = layout.knowledgebase || { mode: 'same', path: '.' };
-  const systemStore = layout.systemRequirementsStore || fallbackStore;
-  const softwareStore = layout.softwareRequirementsStore || fallbackStore;
-  const sprintManagement = layout.sprintManagement || { mode: 'same', path: '.' };
+  // ── PRESERVATION. A record the caller did not supply is carried over from the
+  // existing file rather than being stamped with a default or with another
+  // record's value.
+  //
+  // This sits HERE, at the same choke point as the non-destruction guard above
+  // and off the SAME read of the existing file, for the reason that guard is
+  // here: 31.3, 31.4, 31.5 and 31.13 add more callers, and a preservation step
+  // each of them has to remember is one that will be forgotten. It composes with
+  // the guard rather than bypassing it — the guard has already returned for every
+  // reason except `unbound`, so by this line `existing` is either an ok topology
+  // (something to preserve) or an absent/empty file (nothing to lose). There is
+  // no third case in which preservation could silently do nothing.
+  //
+  // Order of precedence per record:
+  //   1. an explicit per-store argument (`systemRequirementsStore` /
+  //      `softwareRequirementsStore`) — the door Story 31.2 built, and what
+  //      Story 31.5's two-question wizard will pass;
+  //   2. the legacy single `layout.knowledgebase` answer, subject to the
+  //      divergence rule below;
+  //   3. the corresponding record already in the file;
+  //   4. the single-repo default.
+  const DEFAULT_RECORD = { mode: 'same', path: '.' };
+  const existingTopology = existing.ok ? existing.topology : null;
+  const existingSystem = existingTopology ? existingTopology.systemRequirementsStore : null;
+  const existingSoftware = existingTopology ? existingTopology.softwareRequirementsStore : null;
+  const existingStoresDiverge =
+    !!(existingSystem && existingSoftware && storesDiverge(existingSystem, existingSoftware));
+  const legacyStore = layout.knowledgebase || null;
+
+  // FR264: the legacy single-valued field resolves to the SOFTWARE requirements
+  // store. Unconditionally — divergent or not, one answered location is that
+  // store's new location.
+  const softwareStore =
+    layout.softwareRequirementsStore || legacyStore || existingSoftware || DEFAULT_RECORD;
+
+  // The system store is where the two defects met. While the committed stores
+  // AGREE (every project that can exist before Story 31.5), the one answered
+  // location maps onto BOTH — today's behaviour, which NFR82 and the existing
+  // suites pin, and which is correct because there was only ever one question.
+  // Once they DIVERGE, that same mapping is what silently destroyed a Confluence
+  // space key, so the answered location goes to the software store only and the
+  // system store is preserved verbatim.
+  let systemStore;
+  if (layout.systemRequirementsStore) {
+    systemStore = layout.systemRequirementsStore;
+  } else if (legacyStore && !existingStoresDiverge) {
+    systemStore = legacyStore;
+  } else if (existingSystem) {
+    systemStore = existingSystem;
+  } else {
+    systemStore = legacyStore || DEFAULT_RECORD;
+  }
+
+  const sprintManagement =
+    layout.sprintManagement
+    || (existingTopology ? existingTopology.sprintManagement : null)
+    || DEFAULT_RECORD;
+
+  // Non-destructive AND non-blocking, but never silent: the user asked one
+  // question and two stores exist, so say which one was left alone and how to
+  // change it. Refusing the write instead would be defensible but would break
+  // `ma-agents config layout` on exactly the projects Story 31.5 creates.
+  if (existingStoresDiverge && legacyStore && !layout.systemRequirementsStore) {
+    console.log(chalk.yellow(
+      `  Note: this project's two knowledge stores point at DIFFERENT locations, and only\n` +
+      `  one location was supplied. Per FR264 it was applied to the SOFTWARE requirements\n` +
+      `  store. The SYSTEM requirements store was left UNCHANGED:\n` +
+      `    ${summarizeStoreIdentity(existingSystem)}\n` +
+      `  To change it, edit the system_requirements_store record in\n` +
+      `  _bmad-output/project-layout.yaml.`
+    ));
+  }
 
   const date = new Date().toISOString().slice(0, 10);
   let content = `# Generated by ma-agents — do not edit manually\n`;
@@ -1382,8 +1617,24 @@ function writeProjectLayoutYaml(layout) {
  * answered stores onto the single value that shape can hold — the
  * **software requirements store** is the collapse target, matching FR264/
  * P5-9.2's choice of the software-requirements store as the legacy-field
- * target. Until Story 31.5 ships two independent questions, both stores are
- * always identical, so nothing is lost by collapsing.
+ * target — and ADDITIONALLY returns the full three-record `topology`, so the
+ * collapse is a VIEW rather than a loss.
+ *
+ * STRATEGY (the read defect's AC4): preserve-on-read, option (a), not
+ * refuse-to-collapse (b). Rationale:
+ *   - The four legacy consumers are on the install and reconfigure paths. Failing
+ *     the collapse would make `ma-agents install` and `ma-agents config layout`
+ *     refuse to run on any project with two divergent stores — i.e. on exactly
+ *     the projects Story 31.5 exists to create — which is a worse outcome than
+ *     the display imprecision it would be protecting against.
+ *   - Nothing here needs to fail loud, because nothing is lost: the collapsed
+ *     value is still exactly the software store (FR264), the full topology rides
+ *     alongside it, and the destructive half of the defect is fixed at the WRITE
+ *     choke point, where preservation cannot be forgotten by a future caller.
+ *   - The one case that genuinely needs a decision — divergent stores plus a
+ *     caller supplying only the single legacy value — is decided in
+ *     writeProjectLayoutYaml: apply it to the software store, preserve the system
+ *     store verbatim, and tell the user. Non-destructive, non-blocking, informative.
  *
  * NOT the AC8 resolver — `resolveProjectTopology()` above is. This function
  * additionally falls back to a bare `_bmad/bmm/config.yaml` (FR265's "has
@@ -1400,6 +1651,14 @@ function readExistingLayout() {
     return {
       knowledgebase: binding.topology.softwareRequirementsStore,
       sprintManagement: binding.topology.sprintManagement,
+      // ADDITIVE, non-lossy: the full three-record topology alongside the
+      // collapsed legacy view. Every existing consumer reads only the two legacy
+      // keys and is unaffected; showCurrentLayout uses this to render a divergent
+      // pair instead of silently showing one of them. `null` when the topology
+      // came from the config.yaml fallback below, so a consumer can tell
+      // "no topology" from "topology with divergent stores" — an absent key would
+      // read as the latter by accident.
+      topology: binding.topology,
     };
   }
   // R-2: an `invalid` / `unreadable` binding is NOT "no binding". The previous
@@ -1438,6 +1697,10 @@ function readExistingLayout() {
           sprintManagement: spPath && spPath !== '.'
             ? { mode: 'local', path: spPath }
             : { mode: 'same', path: '.' },
+          // No project-layout.yaml exists on this path, so there is no committed
+          // three-record topology to report. Stated explicitly rather than left
+          // absent — see the note on the ok branch above.
+          topology: null,
         };
       }
     }
@@ -2662,16 +2925,43 @@ function showCurrentLayout() {
   }
 
   console.log(chalk.bold.cyan('\n  Current Repository Layout:\n'));
-  for (const [label, key] of [['Knowledgebase', 'knowledgebase'], ['Sprint Management', 'sprintManagement']]) {
-    const concern = layout[key];
-    console.log(chalk.white(`  ${label}:`));
-    console.log(chalk.gray(`    Mode:    ${concern.mode}`));
-    console.log(chalk.gray(`    Path:    ${concern.path}`));
-    if (concern.gitUrl) {
-      console.log(chalk.gray(`    Git URL: ${concern.gitUrl}`));
-    }
+
+  const topology = layout.topology || null;
+  const system = topology ? topology.systemRequirementsStore : null;
+  const software = topology ? topology.softwareRequirementsStore : null;
+
+  if (system && software && storesDiverge(system, software)) {
+    // The two committed stores point at different locations — the FR257 case.
+    // Render BOTH, each named after the record it came from and each through its
+    // own backend's field list, so the user can see at a glance which store has
+    // which backend. Collapsing them onto one `Knowledgebase:` block hid a
+    // confluence system store completely, and it is the block the user reads
+    // immediately before answering the reconfigure wizard.
+    printIdentityBlock('System requirements store', storeIdentityFields(system));
+    printIdentityBlock('Software requirements store', storeIdentityFields(software));
+  } else {
+    // Non-divergent — which is every project that can exist before Story 31.5,
+    // and the config.yaml-fallback case where there is no topology at all.
+    // Exactly today's single block under today's label (display AC2).
+    printIdentityBlock('Knowledgebase', storeIdentityFields(layout.knowledgebase));
   }
+  printIdentityBlock('Sprint Management', sprintIdentityFields(layout.sprintManagement));
   console.log('');
+}
+
+/**
+ * Prints one `Label:` heading and its identity fields. The `padEnd(8) + ' '`
+ * reproduces today's alignment byte-for-byte — `Mode:` and `Path:` followed by
+ * four spaces, `Git URL:` by one — so a file-system store's output is unchanged
+ * (display AC2). Values go through renderIdentityValue, which cannot emit the
+ * literal `undefined` (display AC3/AC4).
+ */
+function printIdentityBlock(label, fields) {
+  console.log(chalk.white(`  ${label}:`));
+  for (const field of fields) {
+    if (field.omitWhenAbsent && (field.value == null || field.value === '')) continue;
+    console.log(chalk.gray(`    ${(field.label + ':').padEnd(8)} ${renderIdentityValue(field.value)}`));
+  }
 }
 
 async function handleConfigLayout(args) {
@@ -2882,4 +3172,13 @@ module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, recon
   // a member and silently widen all three at once. Copies are inert.
   STORE_MODES: new Set(STORE_MODES), SPRINT_MODES: new Set(SPRINT_MODES),
   STORE_BACKENDS: new Set(STORE_BACKENDS),
-  MODE_PROMPT_TITLES, modeChoicesFor, legalBackendsForMessage };
+  MODE_PROMPT_TITLES, modeChoicesFor, legalBackendsForMessage,
+  // The per-backend identity view and everything derived from it. Exported so the
+  // suite can pin that STORE_BACKEND_VIEWS names exactly STORE_BACKENDS — a
+  // backend with no view would otherwise be discovered by a user, at the moment
+  // the renderer throws. The table itself is frozen (entries included), so
+  // handing out the real object cannot let a consumer redefine what identifies a
+  // store.
+  STORE_BACKEND_VIEWS, DEFAULT_STORE_BACKEND, backendOfStore, storeIdentityFields,
+  sprintIdentityFields, storesDiverge, renderIdentityValue, summarizeStoreIdentity,
+  IDENTITY_NOT_CONFIGURED };
