@@ -221,6 +221,148 @@ N5's `|| ''` fallback, and B2's answer-on-exhaustion stub. The implementer named
 double's default behaviour is an assertion about what the system under test may do, and mine
 asserted nothing."* Worth carrying into every remaining story brief.
 
+### 2B — two-store round trip + backend-aware display: **NOT MERGED, CHANGES-REQUIRED**
+
+**Branch:** `feature/epic-31-prereq-read-path` · **Worktree:** `.worktrees/epic-31-prereq-read-path`
+**HEAD:** `140190d` (one commit off `bb35cac`) · **Working tree clean; nothing uncommitted.**
+**Status:** implemented, reviewed once → **CHANGES-REQUIRED**. Fix round 1 was dispatched and the
+implementer agent was **stopped before producing any work** (session ended). Zero commits, zero
+uncommitted changes — nothing was lost, and **no fix-round budget has been consumed**. Fix rounds
+used: **0 of 2**.
+
+**What `140190d` does.** `readExistingLayout()` is now non-lossy (returns the collapsed legacy view
+*plus* the full three-record `topology`); `writeProjectLayoutYaml()` preserves any record the caller
+did not supply, off the *same* `resolveProjectTopology` call the non-destruction guard already makes;
+`showCurrentLayout()` renders from the topology, backend-aware, via a new frozen `STORE_BACKEND_VIEWS`
+keyed by `STORE_BACKENDS` exactly as `MODE_PROMPT_TITLES` is keyed by the mode enums. New suite
+`test/project-layout-two-store-round-trip.test.js`, **38 tests**, with a both-directions
+`EXPECTED_TEST_COUNT` guard. AC4 strategy chosen: **preserve-on-read (option a)**, recorded in
+`readExistingLayout`'s docblock — adjudicated SOUND by review.
+
+**It also found and fixed an extra instance the bug reports do not mention:** `sprint_management`
+with `mode: jira` printed `Path: undefined` — same renderer, same defect, a shape the sealed schema
+accepts. And in the FR257 ordering the old renderer printed `Mode: same / Path: .` and **never showed
+the Confluence system store at all** — silently invisible rather than `undefined`.
+
+#### B-1 (BLOCKING, open) — `ma-agents install` still destroys a committed Confluence store
+
+Preservation engages only for a record the caller **did not supply**, and on the install path the
+caller always supplies one: **`bin/cli.js:2372`** is `const existingLayout = isUpdate ? readExistingLayout() : null;`.
+`isUpdate` is true **only** for the interactive "Update (add/remove skills)" choice — **false for
+every `--yes` run and false on a fresh clone**. So `existingLayout` is `null`, `collectRepoLayout`
+falls to the bare default at `bin/cli.js:1783-1786`, and that default reaches the choke point
+**indistinguishable from a real answer**.
+
+Reproduced with the real CLI (`node bin/cli.js install --yes`, exit 0):
+
+- **Divergent Confluence pair** (system `SYS`, software `SWE`) → software store emerges as
+  `backend: file-system / mode: same / path: "."`. Space key and root page **gone**. The divergence
+  notice fires but names only the *system* store — it never says a Confluence space key was deleted.
+- **Non-divergent Confluence pair** (both `ENG` — the ordinary post-31.8 project) → **both** stores
+  destroyed, and `grep -c "UNCHANGED|DIFFERENT|space_key|confluence"` over the **entire install log
+  = 0**. Completely silent. Exactly the FR263 harm the bug report's Blast Radius section describes.
+
+**This leaves the read bug's AC1 textually unmet** ("survives an **install** and a `ma-agents config
+layout` run byte-identically except for `generated`"). The headline test drives
+`handleConfigLayout(['--yes'])` only, and the FR257 fixture is the one case where install is
+*accidentally* harmless because its software store already is `{file-system, same, "."}`.
+
+**Not a regression** — at `bb35cac` all five fixtures lost **both** stores, so `140190d` is a strict
+improvement. But it does not clear the precondition it exists to clear.
+
+It also falsifies the commit's own design argument: preservation was placed at the write choke point
+because *"a preservation step each caller has to remember is one that will be forgotten"* — and an
+**existing** caller already forgets, at `:2372`.
+
+#### Directed fix (decided; supersedes the reviewer's narrower option)
+
+**Make `bin/cli.js:2372` unconditional — `readExistingLayout()` always.** The reviewer's alternative
+(preserve only records whose existing backend is `confluence`) was **rejected as incomplete**: two
+`file-system` stores in different locations is FR258's *normal* case, so a Confluence-only rule would
+still collapse `system: local /a` + `software: local /b` on every `install --yes`. Unconditional read
+composes with what is already built — `collectRepoLayout` with a non-null `existingLayout` and no env
+vars returns it verbatim (`bin/cli.js:1779-1781`), so the legacy value *is* the existing software
+store — and it matches `handleConfigLayout`, which already reads unconditionally at `:2980`.
+
+Four consequences to work through:
+
+1. **Virgin project must stay byte-identical** — `readExistingLayout()` returns `null` there. Prove it.
+2. **The FR265 `config.yaml`-only fallback becomes reachable on a fresh install**, where today it is
+   not. A `--yes` reinstall on a project with a legacy `knowledgebase_path` but no
+   `project-layout.yaml` today writes `same/.`; after the change it writes the config.yaml-derived
+   path. That is believed **FR265/NFR82-correct** (NFR82 requires no change to resolved artifact
+   paths), but it is a real behaviour change and `test/config-lost-on-update.test.js` is the suite
+   about this defect class. **Verify all 13 tests, decide deliberately, record it.** If any pins
+   today's reset-to-default as *desired*, stop and report the contradiction.
+3. **`writeRepoLayoutConfig` (`bin/cli.js:660`) and `generateRepoLayoutSection`
+   (`lib/installer.js:795-802`) now receive a `confluence` store on the install path** — filed by
+   review as N-5. Both read `.mode`/`.path`, which a Confluence store lacks; neither crashes and
+   neither emits `undefined` today (both silently produce `.`), but the change makes it reachable
+   from `install`. Must not crash, must not write a misleading value. **What `knowledgebase_path`
+   means for a Confluence-backed software store is a genuine Story 31.3/31.6 question — do not invent
+   an answer.** Make it safe and explicit, pin it, and file the open question.
+4. **Add the missing install-path tests.** `test/config-lost-on-update.test.js:251/:274/:317` only
+   ever call `collectRepoLayout({yes:true}, existing)` with an explicitly-passed layout; nothing
+   asserts the *install path* passes one, in either direction. Cover `install --yes` over: a divergent
+   pair, a non-divergent Confluence pair, a legacy single-store project, and a virgin project.
+
+#### Open non-blocking findings on 2B
+
+- **N-1** `bin/cli.js:892` says "**seven**-character string `"undefined"`" — it is **nine**. (The
+  review brief propagated a third wrong count; this has already drifted twice.)
+- **N-2** The claim *"all 38 tests killed by at least one of 23 mutations"* is doubtful for
+  `test/…:687` (AC3 "no `undefined` in either store position"): it survives restoring the display
+  defect **and** reverting `renderIdentityValue`'s coercion *individually*, dying only under the
+  conjunction. The property is genuinely disjunctive, so this is a precision problem, not a hole
+  (backend-awareness is pinned by `:747` and `:810`). **Restate the claim accurately and record the
+  mutation list** — it appears nowhere, which is why the claim was unverifiable.
+- **N-6 (latent, this epic's recurring shape)** `bin/cli.js:1808` has `if (!mode) process.exit(0)`
+  in `collectRepoLayout`'s interactive branch. Unreachable from the current 38 `--yes` tests, but a
+  future test driving the interactive wizard with a cancelled prompt would exit **0** before
+  `drainAsyncTests().then(...)`, skipping both the summary and the `EXPECTED_TEST_COUNT` guard —
+  precisely what 2A shipped and had to fix. **Hoist `summaryPrinted` and the `process.on('exit')`
+  backstop above the tests.** Consequence 4's install-path tests may make this reachable now.
+- **N-4** `bin/cli.js:2963` `padEnd(8)` reproduces the legacy file-system column byte-for-byte, so a
+  Confluence block renders unaligned beside an aligned file-system one. No AC requires alignment.
+- **N-5** see consequence 3 — file it for 31.3/31.6.
+
+#### 2B — verified correct by review; do not re-derive
+
+- All four `bb35cac` reproductions confirmed with the reviewer's own fixtures, including the extra
+  "silently invisible store" case.
+- **Preservation × non-destruction guard structurally sound.** `resolveProjectTopology` called once
+  (`:1486`); the guard returns at `:1497` **before** any preservation code, so bypass is impossible.
+  **23 malformed fixtures** — every non-`unbound` reason refused the write and left the file
+  byte-identical.
+- **NFR81 not violated.** 6 consecutive writes → 1 distinct output, convergent, no oscillation.
+  First-vs-second install differs only when the existing file is already divergent, which cannot
+  happen before 31.5. NFR81's wording concerns platform and CRLF/LF, not prior-file independence.
+- **Display path total.** 23 malformations × 3 entry points → **0 crashes**. `storeIdentityFields`'s
+  deliberate throw is unreachable and fenced by the keys≡`STORE_BACKENDS` test. No Story-31.2 B-3
+  analogue.
+- **Legacy path intact, independently re-derived.** All **12** combinations `ok:true`, byte-identical
+  after reading, `storesDiverge` false for each. Pre-F26 file fine. FR265 fallback still unreachable
+  from `resolveProjectTopology` (P5-9.1 upheld).
+- **No over-reach.** Interactive reconfigure on a non-divergent pair sends the one answer to **both**
+  records; on a divergent pair it preserves the system store and prints the notice.
+- **Wave 2A invariants held.** `STORE_BACKEND_VIEWS` frozen including entries; keys exactly
+  `STORE_BACKENDS`; exported enum a real copy; `identity()` returns a fresh array per call; no
+  private backend list. `serializeConfluenceStore`'s field enumeration held — a fixture carrying
+  `api_token: "sk-LEAK"` round-tripped with the token **dropped**.
+- **Nine suite counts confirmed:** two-store-round-trip **38** · enum-single-source 25 ·
+  binding-spine 69 · config-storage 16 · config-lost-on-update 13 · portable-paths 20 ·
+  config-layout 6 · reconfigure 12 · repo-layout 13. The `EXPECTED_TEST_COUNT` guard fires in both
+  directions; this suite does **not** have 2A's silent-green defect.
+- **Both disclosures adjudicated SOUND:** one commit rather than two (the dependency is *mutually*
+  circular — display AC5 needs the read fix's `topology`, and the divergence notice needs the display
+  fix's identity table, so either split ships a half-fix); and the AC3 `"undefined"` limitation is
+  **forced**, not merely tolerated, because quoting values would satisfy AC3 but is excluded by
+  display AC2's byte-for-byte pin.
+
+**Corrected citations for 2B** (the review brief carried three off-by-N): `DEFAULT_STORE_BACKEND`'s
+substitution site is **`bin/cli.js:1098`**; the new exports are **`:3176-3184`**; the non-destruction
+guard starts at **`:1486`** (`:1498` is its closing brace).
+
 ## Resolved configuration
 
 ```
