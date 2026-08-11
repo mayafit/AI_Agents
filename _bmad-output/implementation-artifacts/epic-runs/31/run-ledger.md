@@ -95,15 +95,79 @@ step-02 §2.3's shared-file heuristic says sequence them.
    Reported, not edited — correcting sprint-status prose is a planning-pass action, not an
    implementation one.
 
+### Findings from the RUN 2 continuation intake (2026-08-11)
+
+Session resumed after the 2B fix round was dispatched and stopped before producing work (0 of 2 fix
+rounds consumed). Full F26 requirement set re-read: FR248–FR253 / NFR76–NFR78 from
+`prd/capabilities/bmad-integration-and-bundling.md`, FR254–FR265 / FR267 / NFR79–NFR83 from
+`prd/capabilities/project-knowledge-and-repository-layout.md`, Decision P5-9.1–P5-9.8 plus the
+appended FR250 spike verdict, and all 14 story definitions from `epics.md:5247-5629`.
+
+**Parsing note honoured.** P5-9's headings were extracted with a fence-toggling `awk` filter
+(`/^```/{f=!f; next} !f && /^#{2,4} /`), which yields exactly the 8 sub-decisions plus `## Decisions`,
+`### Decision P2-7/P2-10/P5-9` and `#### Deferred` — no `## AI Agent Mandatory Rules` /
+`## Technology Stack` / `### Repository Layout` template text leaks in. A naive `grep '^## '` does
+mislead here, exactly as warned.
+
+3. **C-6 IS STILL OPEN — a live contradiction between P5-9.3 and the story ACs it governs.** The
+   readiness review filed "C-6 BEFORE 31.3 — amend P5-9.3", and the amendment was never made.
+   P5-9.3's second rule still reads *"when a skill activates and `project-layout.yaml` is **newer
+   than** the generated `config.yaml`, the skill fails loud"* — an **mtime** comparison. Story 31.3
+   AC7 requires a **content-based generation stamp** ("so Story 31.4 can detect drift without
+   depending on filesystem mtimes"), and Story 31.4 AC6 requires the comparison be "content-based,
+   not mtime-based … mtime ordering is not guaranteed after a `git pull` or fresh clone" (OQ-2).
+   **The stories are right and P5-9.3's wording is the drifted copy** — mtime genuinely does not
+   survive a fresh clone, which is the exact scenario NFR83 and the whole binding thesis exist for.
+   **Disposition:** implement per `epics.md` (authoritative — content stamp), do **not** edit P5-9 to
+   resolve an implementation problem, and report the wording drift for a planning pass. Note the
+   sprint-status comment is more precise than `epics.md` on one point: **OQ-2 settles before 31.3,
+   not before 31.4**, because 31.3 is the story that *writes* the stamp. 31.3's brief carries this.
+
+4. **OQ-5 is a genuine product decision that gates 31.6, and no FR settles it.** Which store owns
+   **research reports** (domain / market / technical research)? FR255 scopes the system store to
+   brief + PRD; FR256 scopes the software store to architecture + UX + epics. Research is in
+   neither list, yet FR119 names research among the workflows that resolve output through the
+   knowledgebase path. The readiness review raised it as "C-10 BEFORE 31.6 — raise OQ-5 to the PM",
+   noting 31.6 AC4 currently forces the story to settle it and that it decides whether research
+   becomes stakeholder-visible in a Confluence space. **Escalated to the human at wave-3 time rather
+   than at wave 4, so it cannot block.** Working assumption if unanswered: **software requirements
+   store**, because FR264's legacy fields already resolve there, so no existing project's research
+   paths move (NFR82). To be filed as an explicit open question, never buried in an AC.
+
+5. **Two further open questions are already owned and need no action yet.** OQ-1 (where the
+   bound-projects record FR253 needs actually lives — no FR or decision names one) belongs to 31.13;
+   OQ-3 (whether the 31.4 staleness guard goes in all 39 config-referencing skills or only the 7
+   explicit `config.yaml` readers) belongs to 31.4 and is an evidence question the story resolves
+   against the resolution chain, not a human decision.
+
+6. **Install-flow ordering interaction to hand to 31.11.** Repo layout is collected at
+   `bin/cli.js:2372-2373` — **before** the Installation Scope question at `:2376`. Story 31.11 AC3
+   requires that a global install "does not prompt for knowledge-store locations", so 31.11 must
+   move or gate that ordering, and it must compose with 2B's now-unconditional `readExistingLayout()`
+   at `:2372`. `readExistingLayout()` itself is a pure read and does not violate FR251; the
+   FR251-relevant surface is `collectRepoLayout`'s interactive prompting, not the read.
+
+7. **`sprint-status.yaml` state confirmed at intake:** `31-1` done, `31-2` done (approved `cd37255`,
+   merged `a375386`), `31-3` **ready-for-dev**, `31-11` still marked "blocked on 31.1" though 31.1 is
+   done — so 31.11 is unblockable and its status line is stale. All others `backlog`. `epic-31`
+   itself is `backlog`. No story is in `review` or `in-progress`, so nothing was left half-claimed by
+   the stopped agent.
+
+8. **Observation, out of scope, not a defect to fix here.** FR105 (capability **F4**, BMAD Extension
+   Architecture) still names `config.user.yaml` as a file the module setup skill writes. P5-9.4
+   established against a live install that no `config.user.yaml` exists in this convention. FR105 is
+   not an F26 requirement and no Epic 31 story touches it — recorded so the next planning pass sees
+   that the `config.user.yaml` drift extends one requirement beyond the three already corrected.
+
 ## Story states (RUN 2)
 
 | id | wave | status | worktree | branch | fix_rounds | note |
 |---|---|---|---|---|---|---|
-| 2A | 2 | pending | `.worktrees/epic-31-prereq-shared-enums` | `feature/epic-31-prereq-shared-enums` | 0 | shared closed-enum source |
-| 2B | 2 | pending | `.worktrees/epic-31-prereq-read-path` | `feature/epic-31-prereq-read-path` | 0 | preserve-on-read + backend-aware display |
-| 31.3 | 3 | pending | — | — | 0 | |
-| 31.4 | 3 | pending | — | — | 0 | |
-| 31.11 | 3 | pending | — | — | 0 | |
+| 2A | 2 | **merged** | *(worktree removed)* | `feature/epic-31-prereq-shared-enums` | 2 | shared closed-enum source — merged `bb35cac`, APPROVE-WITH-NITS |
+| 2B | 2 | **fixing** | `.worktrees/epic-31-prereq-read-path` | `feature/epic-31-prereq-read-path` | **1 of 2 in flight** | preserve-on-read + backend-aware display. `140190d` reviewed → CHANGES-REQUIRED (B-1). Fix round 1 re-dispatched 2026-08-11 after the first attempt was stopped before producing work. |
+| 31.3 | 3 | pending | — | — | 0 | ready-for-dev. Carries C-6/OQ-2 (content stamp, not mtime) + the `--yes` legacy-promotion tension at AC2. **Blocked on 2B by file overlap**, not by dependency. |
+| 31.4 | 3 | pending | — | — | 0 | OQ-3 (39 vs 7 skills) is an evidence question the story resolves |
+| 31.11 | 3 | pending | — | — | 0 | sprint-status still says "blocked on 31.1"; 31.1 is done, so it is unblockable. Carries the `:2372` vs `:2376` ordering interaction. |
 | 31.12 | 3 | pending | — | — | 0 | FAIL branch — messaging + gating only |
 | 31.5 | 4 | pending | — | — | 0 | gated on wave 2 |
 | 31.6 | 4 | pending | — | — | 0 | |
@@ -229,6 +293,18 @@ asserted nothing."* Worth carrying into every remaining story brief.
 implementer agent was **stopped before producing any work** (session ended). Zero commits, zero
 uncommitted changes — nothing was lost, and **no fix-round budget has been consumed**. Fix rounds
 used: **0 of 2**.
+
+**Update 2026-08-11 — fix round 1 re-dispatched.** B-1 was first re-verified against source rather
+than taken from the prior review: `bin/cli.js:2372` is confirmed `const existingLayout = isUpdate ?
+readExistingLayout() : null`, and `bin/cli.js:1779-1786` confirms the mechanism end to end — a
+non-null `existingLayout` with no env vars returns **verbatim**, a null one falls through to the bare
+`{knowledgebase:{same,"."}, sprintManagement:{same,"."}}` default that reaches the write choke point
+indistinguishable from a real answer. Consequence 3 was likewise confirmed concrete rather than
+theoretical: `writeRepoLayoutConfig` calls `toPortablePath(layout.knowledgebase.path, projectRoot)`
+at `bin/cli.js:660`, and a `confluence` store carries no `.path`. The implementer was briefed with
+the **decided** fix (unconditional read), all four consequences, N-1/N-2/N-4/N-6, a mandatory
+mutation list, and an explicit prohibition on inventing `knowledgebase_path` semantics for a
+Confluence-backed software store. Implementer and reviewer are separate agents, per process rule 2.
 
 **What `140190d` does.** `readExistingLayout()` is now non-lossy (returns the collapsed legacy view
 *plus* the full three-record `topology`); `writeProjectLayoutYaml()` preserves any record the caller
