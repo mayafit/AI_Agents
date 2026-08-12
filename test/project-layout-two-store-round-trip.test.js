@@ -31,12 +31,42 @@ const assert = require('assert');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { spawnSync } = require('child_process');
 
-const EXPECTED_TEST_COUNT = 38;
+const EXPECTED_TEST_COUNT = 46;
 
 let passed = 0;
 let failed = 0;
 const errors = [];
+
+// N-6 — THE BACKSTOP, HOISTED ABOVE THE TESTS ON PURPOSE.
+//
+// It used to sit in the summary block at the BOTTOM of this file, which meant it
+// was only armed after every synchronous test had already run. That is exactly
+// backwards: the thing it protects against is the process dying BEFORE the
+// summary. `collectRepoLayout`'s interactive branch still contains a bare
+// `if (!mode) process.exit(0);`, so a future test driving the wizard with a
+// cancelled prompt would exit 0 in the middle of `drainAsyncTests()`, skipping
+// BOTH the summary AND the EXPECTED_TEST_COUNT guard — the defect wave 2A
+// shipped and had to fix. The install-path tests added below spawn the real CLI,
+// which is the closest this suite has come to reaching that branch, so it is
+// treated as live rather than theoretical. Registering the listener here arms it
+// from the first line of the first test onwards.
+//
+// Setting `process.exitCode` from an 'exit' listener DOES override an explicit
+// `process.exit(0)` — verified in wave 2A, and the reason this works at all.
+let summaryPrinted = false;
+
+process.on('exit', (code) => {
+  if (summaryPrinted) return;
+  console.error(
+    `\n  FATAL: this suite exited with code ${code} WITHOUT printing its summary, so its ` +
+    `${passed + failed} completed test(s) were never reported. Something aborted the process ` +
+    `mid-run — the usual cause is a cli.js code path calling process.exit() from inside an ` +
+    `awaited test. Forcing a non-zero exit so this cannot read as a pass.`
+  );
+  process.exitCode = code === 0 ? 1 : code;
+});
 
 function test(name, fn) {
   try {
@@ -70,14 +100,18 @@ async function drainAsyncTests() {
 let writeProjectLayoutYaml, readExistingLayout, resolveProjectTopology, showCurrentLayout,
   handleConfigLayout, storesDiverge, storeIdentityFields, sprintIdentityFields,
   renderIdentityValue, summarizeStoreIdentity, STORE_BACKEND_VIEWS, STORE_BACKENDS,
-  DEFAULT_STORE_BACKEND, IDENTITY_NOT_CONFIGURED, backendOfStore, BINDING_UNBOUND;
+  DEFAULT_STORE_BACKEND, IDENTITY_NOT_CONFIGURED, backendOfStore, BINDING_UNBOUND,
+  writeRepoLayoutConfig;
+let generateRepoLayoutSection;
 try {
   ({
     writeProjectLayoutYaml, readExistingLayout, resolveProjectTopology, showCurrentLayout,
     handleConfigLayout, storesDiverge, storeIdentityFields, sprintIdentityFields,
     renderIdentityValue, summarizeStoreIdentity, STORE_BACKEND_VIEWS, STORE_BACKENDS,
     DEFAULT_STORE_BACKEND, IDENTITY_NOT_CONFIGURED, backendOfStore, BINDING_UNBOUND,
+    writeRepoLayoutConfig,
   } = require('../bin/cli.js'));
+  ({ generateRepoLayoutSection } = require('../lib/installer.js'));
 } catch (e) {
   console.error('\n  FATAL: Cannot load exports from cli.js');
   console.error(' ', e.message);
@@ -925,9 +959,283 @@ test('sprintIdentityFields discriminates jira from a path-backed sprint record',
   assert.deepStrictEqual(fsSprint.map((f) => f.label), ['Mode', 'Path', 'Git URL']);
 });
 
+// ─── B-1 — THE INSTALL PATH ITSELF ──────────────────────────────────────────
+//
+// Everything above drives `handleConfigLayout` or calls `writeProjectLayoutYaml`
+// with a layout the TEST supplies. Nothing asserted that `install` passes one at
+// all — and it did not: `bin/cli.js` read the committed binding only when
+// `isUpdate` was true, i.e. only for the interactive "Update (add/remove skills)"
+// menu choice, never for `--yes` and never on a fresh clone. So `ma-agents
+// install --yes` over a committed Confluence binding replaced the software store
+// with `file-system / same / "."`, and over a NON-divergent Confluence pair
+// destroyed both stores with nothing printed at all.
+//
+// These four tests spawn the REAL CLI. That is deliberate and it is why they are
+// slow (~50s each): the defect lived in one line of the install command's own
+// body, so nothing short of running the install command can see it. In-process
+// calls to `collectRepoLayout(flags, existing)` cannot — that is precisely the
+// shape of the coverage that already existed and still missed this.
+console.log('\nB-1 — the install path reads the committed binding (real `ma-agents install --yes`)');
+
+const CLI_PATH = path.join(__dirname, '..', 'bin', 'cli.js');
+const LAYOUT_ENV_KEYS = [
+  'MA_KNOWLEDGEBASE_PATH', 'MA_SPRINT_PATH', 'MA_KNOWLEDGEBASE_GIT_URL', 'MA_SPRINT_GIT_URL',
+];
+
+// Runs `node bin/cli.js install --yes` in `cwd` with the layout env vars cleared,
+// so what reaches collectRepoLayout is the committed binding and nothing else.
+//
+// A timeout is a FAILURE here, not a skip. `spawnSync`'s own `timeout` option is
+// used rather than a shell `timeout`, which would report SIGTERM/143 and read as
+// a crash. A skip-on-timeout would make this assert nothing on exactly the runs
+// where the install misbehaves.
+function installYes(cwd) {
+  const env = { ...process.env };
+  for (const k of LAYOUT_ENV_KEYS) delete env[k];
+  const res = spawnSync(process.execPath, [CLI_PATH, 'install', '--yes'], {
+    cwd, env, encoding: 'utf-8', input: '', stdio: ['pipe', 'pipe', 'pipe'], timeout: 900000,
+  });
+  const out = `${res.stdout || ''}\n${res.stderr || ''}`;
+  assert.notStrictEqual(res.status, null,
+    `\`install --yes\` did not exit within the timeout (signal ${res.signal}).\n${out.slice(-2000)}`);
+  assert.strictEqual(res.status, 0, `\`install --yes\` exited ${res.status}.\n${out.slice(-2000)}`);
+  return out;
+}
+
+testAsync('(a) `install --yes` preserves a DIVERGENT confluence pair byte-identically', async () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const before = seedDivergent(
+      tmpDir,
+      CONF_STORE('SYS', 'System Requirements', '1001'),
+      CONF_STORE('SWE', 'Software Requirements', '2002')
+    );
+    installYes(tmpDir);
+    const after = readLayoutFile(tmpDir);
+    assert.strictEqual(withoutGeneratedLine(after), withoutGeneratedLine(before),
+      `\`install --yes\` changed the committed binding.\nBEFORE:\n${before}\nAFTER:\n${after}`);
+    const doc = parseWithOracle(after, 'install divergent');
+    if (doc) {
+      assert.strictEqual(doc.system_requirements_store.space_key, 'SYS');
+      assert.strictEqual(doc.software_requirements_store.space_key, 'SWE',
+        'the SOFTWARE store is the one the bare default used to overwrite');
+      assert.strictEqual(doc.software_requirements_store.backend, 'confluence');
+    }
+  } finally {
+    cleanup();
+  }
+});
+
+testAsync('(b) `install --yes` preserves a NON-divergent confluence pair byte-identically', async () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    // The silent case: the stores AGREE, so the divergence notice never fires and
+    // grepping the whole install log for `confluence` / `space_key` returned
+    // nothing — both stores were destroyed without a word.
+    const before = seedDivergent(
+      tmpDir, CONF_STORE('ENG', 'Requirements', '3003'), CONF_STORE('ENG', 'Requirements', '3003'));
+    installYes(tmpDir);
+    const after = readLayoutFile(tmpDir);
+    assert.strictEqual(withoutGeneratedLine(after), withoutGeneratedLine(before),
+      `\`install --yes\` destroyed a non-divergent confluence pair.\nBEFORE:\n${before}\nAFTER:\n${after}`);
+    const doc = parseWithOracle(after, 'install non-divergent');
+    if (doc) {
+      assert.strictEqual(doc.system_requirements_store.space_key, 'ENG');
+      assert.strictEqual(doc.software_requirements_store.space_key, 'ENG');
+      assert.strictEqual(doc.system_requirements_store.backend, 'confluence');
+      assert.strictEqual(doc.software_requirements_store.backend, 'confluence');
+    }
+  } finally {
+    cleanup();
+  }
+});
+
+testAsync('(c) `install --yes` keeps a LEGACY single-store project on its config.yaml path', async () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    // FR265: a project with only the FR117 single `knowledgebase_path` and NO
+    // project-layout.yaml is read as BOTH stores pointing at that one location.
+    // Before B-1 this fallback was unreachable from `install`, so a `--yes`
+    // reinstall reset the project to `same / "."` — moving where planning
+    // artifacts resolve, which is the NFR82 breakage, not the NFR82 compliance.
+    fs.mkdirSync(path.join(tmpDir, '_bmad', 'bmm'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '_bmad', 'bmm', 'config.yaml'),
+      'project_name: legacy\nknowledgebase_path: "../legacy-kb"\nsprint_management_path: "."\n',
+      'utf-8'
+    );
+    installYes(tmpDir);
+    const after = readLayoutFile(tmpDir);
+    const doc = parseWithOracle(after, 'install legacy single store');
+    if (doc) {
+      assert.strictEqual(doc.system_requirements_store.path, '../legacy-kb',
+        `the legacy knowledgebase_path was reset instead of carried:\n${after}`);
+      assert.strictEqual(doc.software_requirements_store.path, '../legacy-kb',
+        `FR265 maps the one legacy location onto BOTH stores:\n${after}`);
+      assert.strictEqual(doc.sprint_management.path, '.');
+    }
+    assert.ok(!/software_requirements_store:\n\s+backend: file-system\n\s+mode: same/.test(after),
+      `the software store fell back to the bare single-repo default:\n${after}`);
+    // NFR82: config.yaml keeps resolving artifacts where the project already
+    // resolved them, rather than being reset to the local default.
+    const cfg = fs.readFileSync(path.join(tmpDir, '_bmad', 'bmm', 'config.yaml'), 'utf-8');
+    assert.ok(/knowledgebase_path:\s*"\.\.\/legacy-kb"/.test(cfg),
+      `config.yaml's knowledgebase_path was reset:\n${cfg}`);
+  } finally {
+    cleanup();
+  }
+});
+
+testAsync('(d) `install --yes` on a VIRGIN project still writes exactly the single-repo default', async () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    // The other direction of the same change: reading unconditionally must not
+    // invent a binding where there is none. readExistingLayout() returns null in
+    // an empty directory, so collectRepoLayout still takes its default branch.
+    assert.strictEqual(readExistingLayout(), null,
+      'a virgin project must have NO existing layout — otherwise the default branch is unreachable');
+    installYes(tmpDir);
+    const after = readLayoutFile(tmpDir);
+    const doc = parseWithOracle(after, 'install virgin');
+    if (doc) {
+      for (const key of ['system_requirements_store', 'software_requirements_store']) {
+        assert.strictEqual(doc[key].backend, 'file-system', `${key} backend:\n${after}`);
+        assert.strictEqual(doc[key].mode, 'same', `${key} mode:\n${after}`);
+        assert.strictEqual(doc[key].path, '.', `${key} path:\n${after}`);
+      }
+      assert.strictEqual(doc.sprint_management.mode, 'same');
+      assert.strictEqual(doc.sprint_management.path, '.');
+    }
+    assert.ok(!/confluence|space_key/.test(after), `a virgin project must not gain store fields:\n${after}`);
+  } finally {
+    cleanup();
+  }
+});
+
+// ─── B-1 consequence 3 — the two consumers that now see a confluence store ───
+//
+// `writeRepoLayoutConfig` and `generateRepoLayoutSection` both read `.mode` /
+// `.path`, which a confluence store has neither of. Before B-1 they never saw
+// one on the install path (the store had already been collapsed to `{same, "."}`
+// upstream). Neither crashed and neither emitted the literal `undefined` — both
+// silently produced `.`, which is worse than a crash for the project-context
+// section, because "- **Knowledgebase:** ." is a MISLEADING statement handed to
+// every downstream agent.
+//
+// What `knowledgebase_path` SHOULD mean for a confluence-backed store is NOT
+// decided here — it is filed as
+// `_bmad-output/implementation-artifacts/
+//  bug-knowledgebase-path-has-no-defined-meaning-for-a-confluence-store.md`
+// (Story 31.3 / 31.6). These tests pin the SAFE, EXPLICIT behaviour that stands
+// until that question is answered, so it cannot drift silently.
+console.log('\nB-1 consequence 3 — writeRepoLayoutConfig / generateRepoLayoutSection with a confluence store');
+
+test('writeRepoLayoutConfig on a confluence store: no crash, no `undefined`, path unchanged, said out loud', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const out = capture(() => writeRepoLayoutConfig({
+      knowledgebase: CONF_STORE('ENG', 'Requirements', '3003'),
+      sprintManagement: { mode: 'same', path: '.' },
+    }));
+    const cfg = fs.readFileSync(path.join(tmpDir, '_bmad', 'bmm', 'config.yaml'), 'utf-8');
+    assert.ok(!/undefined/.test(cfg), `config.yaml must never contain the literal "undefined":\n${cfg}`);
+    // NFR82: the VALUE is deliberately unchanged. knowledgebase_path is what
+    // planning_artifacts is derived from and what the Knowledge Atlas config scan
+    // reads, so moving it would move resolved artifact paths.
+    assert.ok(/^knowledgebase_path: "\."$/m.test(cfg), `knowledgebase_path must stay ".":\n${cfg}`);
+    assert.ok(/^planning_artifacts: "\{project-root\}\/_bmad-output\/planning-artifacts"$/m.test(cfg),
+      `planning_artifacts must resolve exactly where it does today:\n${cfg}`);
+    // Explicit, not accidental: the "." is a stand-in, and the user is told so.
+    assert.ok(/confluence/.test(out), `the confluence backend must be named out loud:\n${out}`);
+    assert.ok(/knowledgebase_path/.test(out), `the note must name the field it is talking about:\n${out}`);
+    assert.ok(/project-layout\.yaml/.test(out),
+      `the note must point at where the authoritative identity actually lives:\n${out}`);
+  } finally {
+    cleanup();
+  }
+});
+
+test('writeRepoLayoutConfig on a file-system store is byte-for-byte unchanged and says nothing new', () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const out = capture(() => writeRepoLayoutConfig({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' },
+    }));
+    const cfg = fs.readFileSync(path.join(tmpDir, '_bmad', 'bmm', 'config.yaml'), 'utf-8');
+    assert.strictEqual(cfg, [
+      '',
+      'knowledgebase_path: "."',
+      'sprint_backend: "file-system"',
+      'sprint_management_path: "."',
+      'planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"',
+      'implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"',
+      '',
+    ].join('\n'), `the file-system config output changed:\n${JSON.stringify(cfg)}`);
+    assert.ok(!/confluence|has no filesystem path/.test(out),
+      `the non-file-system note must not fire for a file-system store:\n${out}`);
+  } finally {
+    cleanup();
+  }
+});
+
+test('generateRepoLayoutSection names a confluence backend instead of rendering a bare "."', () => {
+  const section = generateRepoLayoutSection({
+    knowledgebase: CONF_STORE('ENG', 'Requirements', '3003'),
+    sprintManagement: { mode: 'same', path: '.' },
+  });
+  assert.ok(section.includes('confluence'), `must name the backend: ${JSON.stringify(section)}`);
+  assert.ok(!/undefined/.test(section), `must never emit the literal "undefined": ${JSON.stringify(section)}`);
+  assert.ok(!section.includes('- **Knowledgebase:** .\n') && !/\*\*Knowledgebase:\*\* \.$/m.test(section),
+    `a confluence store must not be described as the directory ".": ${JSON.stringify(section)}`);
+  assert.ok(!section.includes('use the knowledgebase path'),
+    `must not instruct agents to use a path this store does not have: ${JSON.stringify(section)}`);
+  assert.ok(section.includes('project-layout.yaml'),
+    `must point at where the authoritative identity lives: ${JSON.stringify(section)}`);
+});
+
+test('generateRepoLayoutSection is byte-for-byte unchanged for file-system layouts', () => {
+  // Regression pin for the ternary the confluence branch was threaded through.
+  // `test/generate-project-context.test.js` covers these shapes too; repeated
+  // here because the branch that could break them was added in THIS change.
+  assert.strictEqual(generateRepoLayoutSection({
+    knowledgebase: { mode: 'same', path: '.' },
+    sprintManagement: { mode: 'same', path: '.' },
+  }), '', 'single-repo must still return the empty string');
+  assert.strictEqual(generateRepoLayoutSection({
+    knowledgebase: { mode: 'local', path: 'd:\\ext\\kb' },
+    sprintManagement: { mode: 'same', path: '.' },
+  }), [
+    '<!-- ma-agents:repo-layout-start -->',
+    '### Repository Layout',
+    '- **Knowledgebase:** d:/ext/kb',
+    '- **Sprint Management:** current repository (default)',
+    '- When creating or reading planning artifacts, use the knowledgebase path',
+    '<!-- ma-agents:repo-layout-end -->',
+  ].join('\n'));
+  // An explicit `backend: file-system` must behave exactly like an absent one.
+  assert.strictEqual(
+    generateRepoLayoutSection({
+      knowledgebase: { backend: 'file-system', mode: 'local', path: '/ext/kb' },
+      sprintManagement: { mode: 'same', path: '.' },
+    }),
+    generateRepoLayoutSection({
+      knowledgebase: { mode: 'local', path: '/ext/kb' },
+      sprintManagement: { mode: 'same', path: '.' },
+    }),
+    'stating the default backend must not change the rendering');
+});
+
 // ─── Summary ────────────────────────────────────────────────────────────────
-drainAsyncTests().then(() => {
+//
+// Two independent guards. The hard total below catches anything that stops tests
+// running; the process-level backstop registered at the TOP of this file catches
+// anything that stops the summary running. `process.exitCode` is set rather than
+// `process.exit()` so the backstop's own listener still gets to run.
+function printSummary() {
+  const total = passed + failed;
   console.log(`\n${passed} passed, ${failed} failed`);
+  summaryPrinted = true;
   if (!yamlOracle) {
     console.log('  NOTE: js-yaml did not resolve — oracle assertions degraded.');
   }
@@ -937,11 +1245,18 @@ drainAsyncTests().then(() => {
   }
   // Fail loud in BOTH directions. A suite that stops running tests must not
   // report success — this epic has already produced one that did.
-  const total = passed + failed;
   if (total !== EXPECTED_TEST_COUNT) {
     console.error(`\n  FATAL: ran ${total} tests, expected exactly ${EXPECTED_TEST_COUNT}. ` +
       `If you added or removed a test, update EXPECTED_TEST_COUNT.`);
-    process.exit(1);
+    process.exitCode = 1;
   }
-  if (failed > 0) process.exit(1);
+  if (failed > 0) process.exitCode = 1;
+}
+
+drainAsyncTests().then(printSummary, (err) => {
+  // A rejection here means drainAsyncTests itself broke, not a test — its own
+  // try/catch already converts per-test throws into recorded failures.
+  console.error(`\n  FATAL: the async drain itself threw: ${(err && err.stack) || err}`);
+  summaryPrinted = true;
+  process.exitCode = 1;
 });

@@ -657,6 +657,40 @@ function writeRepoLayoutConfig(layout) {
     }
     let content = fs.readFileSync(configPath, 'utf-8');
     const projectRoot = process.cwd();
+
+    // B-1 consequence 3. Making the install path read the committed binding means
+    // `layout.knowledgebase` can now be a NON-file-system store (today:
+    // `confluence`), which has no `.mode` and no `.path`. Before B-1 that store
+    // had already been collapsed to `{same, "."}` upstream, so this function only
+    // ever saw file-system shapes on the install path.
+    //
+    // `toPortablePath(undefined)` already returns `'.'`, so nothing crashes and
+    // the literal `undefined` is never written — but writing `.` for a Confluence
+    // store SILENTLY says "the knowledgebase is this repo", which is exactly the
+    // permissive-default shape B-1 itself is. So it is made explicit here rather
+    // than left to fall out of a falsy check.
+    //
+    // The VALUE is deliberately unchanged (`.`): `knowledgebase_path` is what
+    // `planning_artifacts` is derived from below and what the Knowledge Atlas
+    // config scan reads (lib/knowledge-atlas/src/scan/config.ts), so changing it
+    // would move resolved artifact paths and violate NFR82.
+    //
+    // What `knowledgebase_path` SHOULD mean for a Confluence-backed store is a
+    // genuine open question and NOT decided here — see
+    // `_bmad-output/implementation-artifacts/
+    //  bug-knowledgebase-path-has-no-defined-meaning-for-a-confluence-store.md`
+    // (Story 31.3 / 31.6). Pinned by `test/project-layout-two-store-round-trip.test.js`
+    // so it cannot drift silently.
+    const kbBackend = backendOfStore(layout.knowledgebase);
+    if (kbBackend !== DEFAULT_STORE_BACKEND) {
+      console.log(chalk.yellow(
+        `  Note: the knowledge store is ${kbBackend}-backed, which has no filesystem path.\n` +
+        `  config.yaml's knowledgebase_path is left at "." (the local artifacts default) so\n` +
+        `  planning artifacts keep resolving where they do today. The authoritative\n` +
+        `  ${kbBackend} identity lives in _bmad-output/project-layout.yaml and is unchanged.`
+      ));
+    }
+
     const kbPortable = toPortablePath(layout.knowledgebase.path, projectRoot);
     const kbPath = kbPortable.portable;
     content = writeConfigField(content, 'knowledgebase_path', kbPath);
@@ -889,7 +923,7 @@ const IDENTITY_NOT_CONFIGURED = 'not configured';
  * the literal `undefined`: null/absent/empty render as words, and anything else
  * goes through describeValue (itself total).
  *
- * A store whose `path` is genuinely the seven-character string "undefined" does
+ * A store whose `path` is genuinely the nine-character string "undefined" does
  * render as `undefined` — that is the true value of the field, not this defect.
  */
 function renderIdentityValue(v) {
@@ -2368,8 +2402,45 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
   // manifest via ensureManifest when absent.
   setProfile(projectRootForProfile, resolvedProfile);
 
-  // Step 2.5: Repository layout (preserve existing config on update)
-  const existingLayout = isUpdate ? readExistingLayout() : null;
+  // Step 2.5: Repository layout — read the committed binding UNCONDITIONALLY.
+  //
+  // B-1. This was `isUpdate ? readExistingLayout() : null`. `isUpdate` is true
+  // ONLY for the interactive "Update (add/remove skills)" menu choice — it is
+  // false for EVERY `--yes` run and false on a fresh clone. So on the two paths
+  // that matter most (CI and a colleague cloning a bound repo) `existingLayout`
+  // was `null`, collectRepoLayout fell through to its bare single-repo default
+  // `{knowledgebase:{same,.}, sprintManagement:{same,.}}`, and that default
+  // reached writeProjectLayoutYaml INDISTINGUISHABLE FROM A REAL ANSWER. Result:
+  // `ma-agents install --yes` over a committed Confluence binding silently
+  // replaced the software requirements store with `file-system / same / "."` —
+  // space key and root page gone — and over a NON-divergent Confluence pair it
+  // destroyed both stores without printing a single word about it. A default
+  // that degrades to permissive instead of failing loud; the same shape this
+  // epic has now produced five times.
+  //
+  // Reading unconditionally is the whole fix, because everything downstream is
+  // already built for it: collectRepoLayout with a non-null existingLayout and
+  // no env vars returns it VERBATIM (see the `if (existingLayout) return
+  // existingLayout;` branch), and writeProjectLayoutYaml's preservation step
+  // then carries every record the caller did not supply. It also makes the
+  // install path agree with `handleConfigLayout`, which has always read
+  // unconditionally.
+  //
+  // Restricting preservation to `confluence`-backed stores was considered and
+  // REJECTED: two `file-system` stores in different locations is FR258's normal
+  // case, so a Confluence-only rule would still collapse `system: local /a` +
+  // `software: local /b` on every `install --yes`.
+  //
+  // Consequence deliberately accepted: on a project with a legacy
+  // `knowledgebase_path` in `_bmad/bmm/config.yaml` but NO
+  // `_bmad-output/project-layout.yaml`, readExistingLayout's FR265 config.yaml
+  // fallback is now reachable from `install` (it previously was not). A `--yes`
+  // reinstall there used to reset the layout to `same/.`; it now keeps the path
+  // config.yaml already records. That is the DEFECT `test/config-lost-on-
+  // update.test.js` exists to prevent — none of its 13 tests pins the reset as
+  // desired — and it satisfies NFR82 because the resolved artifact paths are the
+  // ones config.yaml already resolves to.
+  const existingLayout = readExistingLayout();
   const repoLayout = await collectRepoLayout({ yes: yesFlag }, existingLayout);
 
   // Step 3: Scope (Skip if update, yesFlag, CLI --global flag, or path already set)
