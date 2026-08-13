@@ -164,12 +164,12 @@ mislead here, exactly as warned.
 | id | wave | status | worktree | branch | fix_rounds | note |
 |---|---|---|---|---|---|---|
 | 2A | 2 | **merged** | *(worktree removed)* | `feature/epic-31-prereq-shared-enums` | 2 | shared closed-enum source — merged `bb35cac`, APPROVE-WITH-NITS |
-| 2B | 2 | **fixing** | `.worktrees/epic-31-prereq-read-path` | `feature/epic-31-prereq-read-path` | **1 of 2 in flight** | preserve-on-read + backend-aware display. `140190d` reviewed → CHANGES-REQUIRED (B-1). Fix round 1 re-dispatched 2026-08-11 after the first attempt was stopped before producing work. |
-| 31.3 | 3 | pending | — | — | 0 | ready-for-dev. Carries C-6/OQ-2 (content stamp, not mtime) + the `--yes` legacy-promotion tension at AC2. **Blocked on 2B by file overlap**, not by dependency. |
+| 2B | 2 | **merged** | *(worktree retired)* | `feature/epic-31-prereq-read-path` | 1 | preserve-on-read + backend-aware display. `140190d` → CHANGES-REQUIRED (B-1) → `4ec4b1a` → APPROVE-WITH-NITS → merged **`3f21b1a`**. Closes 31.5's last two gating defects. |
+| 31.3 | 3 | **ready** | — | — | 0 | ready-for-dev, now unblocked (2B merged). Carries C-6/OQ-2 (content stamp, not mtime), the `--yes` legacy-promotion tension at AC2, and 2B nits 1 and 4. |
 | 31.4 | 3 | pending | — | — | 0 | OQ-3 (39 vs 7 skills) is an evidence question the story resolves |
 | 31.11 | 3 | pending | — | — | 0 | sprint-status still says "blocked on 31.1"; 31.1 is done, so it is unblockable. Carries the `:2372` vs `:2376` ordering interaction. |
 | 31.12 | 3 | pending | — | — | 0 | FAIL branch — messaging + gating only |
-| 31.5 | 4 | pending | — | — | 0 | gated on wave 2 |
+| 31.5 | 4 | **unblocked** | — | — | 0 | **All three gating defects now CLOSED** (enum bug by 2A `bb35cac`; read-collapse + display bugs by 2B `3f21b1a`). Carries 2A's six carry-forwards and 2B nits 2 and 3. |
 | 31.6 | 4 | pending | — | — | 0 | |
 | 31.7 | 4 | pending | — | — | 0 | |
 | 31.8 | 5 | pending | — | — | 0 | |
@@ -285,7 +285,113 @@ N5's `|| ''` fallback, and B2's answer-on-exhaustion stub. The implementer named
 double's default behaviour is an assertion about what the system under test may do, and mine
 asserted nothing."* Worth carrying into every remaining story brief.
 
-### 2B — two-store round trip + backend-aware display: **NOT MERGED, CHANGES-REQUIRED**
+### 2B — FINAL OUTCOME: **MERGED** as `3f21b1a` (2026-08-12)
+
+**Fix round 1 committed `4ec4b1a`; reviewed independently → APPROVE-WITH-NITS; merged on the
+reviewer's verdict.** Fix rounds used: **1 of 2.** Implementer and reviewer were separate agents.
+Closes both `bug-read-existing-layout-collapses-two-stores-onto-software-store.md` and
+`bug-show-current-layout-prints-undefined-for-confluence-store.md` — **Story 31.5's last two
+preconditions.** With 2A (`bb35cac`) already merged, **all three of 31.5's gating defects are now
+closed and 31.5 is unblocked.**
+
+**B-1 reproduced by the reviewer with its own fixtures at `140190d`, by live install, and confirmed
+closed at `4ec4b1a`:** divergent pair (`SYS`/`SWE`) → software store became `file-system/same/"."`,
+space key and root page destroyed, and the divergence notice named only the *surviving* system
+store; non-divergent pair (`ENG`/`ENG`) → **both** stores destroyed with **nothing in the entire
+install log**. At `4ec4b1a` both cases are byte-identical except `generated`, exit 0.
+
+**Consequence 2 CONFIRMED, not merely asserted.** All 13 `config-lost-on-update` tests were read;
+**none** pins a `--yes` install resetting to `same/.` as *desired*. Two point the other way (`:176`
+pins the config.yaml fallback returning `/ext/kb`; `:285` pins the bare default only for a literal
+`null` `existingLayout`, i.e. `collectRepoLayout`'s default branch, not the install path's decision
+of *when* to read). No contradiction to report.
+
+**Independent mutation evidence — N-2 now DISCHARGED.** 13 mutants in isolated worktrees,
+**12 killed, 1 survivor by design** (forcing `yamlOracle` null). Both hazard mutants are among the
+killed. **N-2's specific point verified and restated correctly:** the AC3 test (`test:721`) survives
+reverting `renderIdentityValue`'s coercion **and** survives the file-system-view mutation
+*individually*, dying only under the conjunction — a genuinely **disjunctive** property, not a
+coverage hole, since backend-awareness is separately pinned by 8 other tests. Not run (budget):
+M9, M10, M11, M14, M16, and the MA∧MB conjunction.
+
+**Nine suites green at expected counts, all exit 0:** two-store-round-trip **46** ·
+enum-single-source 25 · binding-spine 69 · config-storage 16 · config-lost-on-update 13 ·
+portable-paths 20 · config-layout 6 · reconfigure 12 · repo-layout 13.
+
+#### PROCESS INCIDENT — two live mutants were nearly merged
+
+The implementing agent was killed **twice** by a 600s stream watchdog while blocked on a mutation
+run, and **each time left a live mutant in the working tree**:
+
+1. `topology: binding.topology` → `topology: null` in `readExistingLayout()`'s ok-branch — guts the
+   non-lossy read that is 2B's entire purpose. Killed by 3 tests (legacy file still yields a
+   topology; pre-F26 file crashed with `Cannot read properties of null (reading 'schemaVersion')`;
+   two-store output must label the system store). Verified 43 passed / 3 failed, exit 1.
+2. `collectRepoLayout({yes}, existingLayout)` → `collectRepoLayout({yes}, null)` — **restores B-1 in
+   full while the unconditional read on the line above still reads as a correct fix.** This is the
+   dangerous one: any review checking only "was the read made unconditional?" sees a clean fix.
+
+Both were caught and reverted by the orchestrator before the commit, all three changed files were
+audited line by line, and the reviewer then independently re-audited all 555/13 diff lines with
+`numstat` accounting and found **no further mutant**. It also proved the fix **live** rather than
+present — `repoLayout` is `const` with exactly four references and no reassignment, so mutant 2's
+shape cannot hide.
+
+**Root cause and standing rule.** `test/project-layout-two-store-round-trip.test.js` now drives real
+`ma-agents install --yes` runs, so one execution exceeds the watchdog. **Every remaining brief must
+require long suites to be run redirected to a log file in the background, never blocked on in the
+foreground, and mutation matrices to be run in small reported batches.** A foreground run also
+produced a misleading exit **143** once — the `timeout`/SIGTERM trap, hit by the orchestrator itself.
+**Every commit from here gets a line-by-line diff audit, not just a green test run.**
+
+#### Seven non-blocking findings carried forward from 2B's review
+
+1. **→ 31.3. `lib/installer.js:818` hardcodes `'file-system'`** as a second, independent definition
+   of the default backend, while `bin/cli.js:775` owns `DEFAULT_STORE_BACKEND` and `:767` owns
+   `STORE_BACKENDS`. The comment justifies it (installer.js must not require cli.js, and there is no
+   shared `lib/` enum module today) but **nothing pins the two in agreement** — every test asserts
+   against cli.js's copy. This is the same read/write enum disagreement the epic already fixed once,
+   and the new bug doc's own AC3 warns against it. **Shared-module candidate when 31.3 lands.**
+2. **→ 31.5. Install-path test gap for a divergent *file-system* pair.** The commit rejects the
+   confluence-only alternative precisely because `system: local /a` + `software: local /b` is
+   FR258's normal case, yet none of the four new install tests covers it. It *is* pinned in-process
+   (`test:334`), so the guarantee holds — but the install path, where B-1 lived, is not what pins it.
+3. **→ 31.5. `parseWithOracle` degradation.** `js-yaml` is a declared *production* dependency, so
+   `yamlOracle === null` needs a broken install. If it fired, install test (d) would lose all its
+   positive assertions and keep only a negative match plus a `schema_version` check — it would pass
+   on a wrong virgin layout. Reported as a printed NOTE and still exit 0: visible, not loud. The
+   epic's own recurring shape, in the test harness.
+4. **→ 31.3. Residual, pre-existing, narrowed by this fix.** With an `invalid` binding,
+   `writeProjectLayoutYaml` correctly refuses, but `writeRepoLayoutConfig` still runs with the bare
+   default and writes `knowledgebase_path: "."` into the derived `config.yaml`, and the warning never
+   mentions config.yaml. **The authoritative file is protected; the derived one is not.** Not
+   introduced here — `4ec4b1a` shrinks it from "all installs" to "invalid bindings only". Squarely
+   31.3's surface.
+5. **Record correction.** `4ec4b1a`'s message claims **N-4** (`padEnd(8)` alignment) was folded in.
+   It was **already present at `140190d`** (`bin/cli.js:3034`) and appears nowhere in the
+   `140190d..4ec4b1a` diff. The code is correct; the attribution was wrong. **N-1**
+   (`bin/cli.js:926`, "nine-character") and **N-6** (backstop hoisted, empirically proven by mutant
+   M12 printing `FATAL … WITHOUT printing its summary` and forcing exit 1) are correctly folded in.
+6. **Cosmetic.** The Confluence note (`cli.js:686-691`) prints before `fs.writeFileSync` inside the
+   same `try`, so a failed write leaves the user told about a file that was not updated.
+7. **Consequence-3 judgement upheld.** Leaving `knowledgebase_path` at `"."` preserves NFR82 (it is
+   what `planning_artifacts` and the Knowledge Atlas scan derive from), the behaviour is explicit at
+   both sites rather than falling out of a falsy check, **no meaning is invented**, and the real
+   question is filed with a genuine option set. Pinning is effective: M4/M5/M6 kill the
+   `writeRepoLayoutConfig` half, M7/M8 the renderer half, with M7 reproducing the pre-fix misleading
+   `- **Knowledgebase:** .` verbatim.
+
+**New open question filed, deliberately unanswered:**
+`bug-knowledgebase-path-has-no-defined-meaning-for-a-confluence-store.md` — what
+`knowledgebase_path` means for a Confluence-backed store. Four options laid out against NFR82; notes
+that once both stores can be Confluence-backed *and diverge* (FR257/FR258) one scalar field cannot
+describe them anyway. Surfaces a consumer the epic had not tracked:
+`lib/knowledge-atlas/src/scan/config.ts`. **Owned by Story 31.3 / 31.6.** No `build:atlas` rebuild is
+implicated — the file is only referenced, not modified.
+
+---
+
+### 2B — history: the round-1 review that produced B-1 (superseded by the outcome above)
 
 **Branch:** `feature/epic-31-prereq-read-path` · **Worktree:** `.worktrees/epic-31-prereq-read-path`
 **HEAD:** `140190d` (one commit off `bb35cac`) · **Working tree clean; nothing uncommitted.**
