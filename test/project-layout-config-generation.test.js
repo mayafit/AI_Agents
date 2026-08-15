@@ -36,7 +36,7 @@ const os = require('os');
 
 // Bumped deliberately as sections are added. A `!==` check, so a SURPLUS fails
 // just as loudly as a shortfall.
-const EXPECTED_TEST_COUNT = 30;
+const EXPECTED_TEST_COUNT = 31;
 
 let passed = 0;
 let failed = 0;
@@ -576,15 +576,6 @@ test('AC3: generation is called from install and reconfigure only — both insid
   // FR251 / Story 31.11: a GLOBAL install must perform no project-scoped work,
   // and generating a project's config.yaml is project-scoped. An ungated call
   // site would violate that silently, so the count and the gating are pinned.
-  const callSites = CLI_SOURCE.split('\n')
-    .map((line, i) => ({ line, n: i + 1 }))
-    .filter(({ line }) => /^\s*(await\s+)?generateBmmConfig\s*\(/.test(line));
-  assert.strictEqual(callSites.length, 2,
-    `generateBmmConfig must be called from exactly two production sites (install + reconfigure), ` +
-    `found ${callSites.length}: ${JSON.stringify(callSites)}`);
-
-  // The install call site must sit inside `if (installScope === 'project') {`.
-  //
   // Found by BRACE BALANCE, not by `indexOf` on the gate text: `bin/cli.js`
   // contains FOUR `installScope === 'project'` gates, so `indexOf` picks the
   // first one — several hundred lines above the call — and the test then
@@ -607,6 +598,68 @@ test('AC3: generation is called from install and reconfigure only — both insid
     }
     return -1;
   }
+
+  // F4 — COUNT EVERY CALL FORM, NOT JUST STATEMENT-INITIAL ONES. This filter used
+  // to be `/^\s*(await\s+)?generateBmmConfig\s*\(/`, which sees only a call that
+  // BEGINS a statement. A third production site written as `return
+  // generateBmmConfig(…)`, `const ok = generateBmmConfig(…)` or `if
+  // (generateBmmConfig(…))` was invisible to it, so the count stayed at 2 and the
+  // FR251 gating analysis below never looked at the new site at all. No such
+  // caller exists today; this closes the guard gap, not a live defect.
+  const CALL = /\bgenerateBmmConfig\s*\(/;
+  const DEFINITION = /function\s+generateBmmConfig\s*\(/;
+
+  // The detector itself is pinned, because the whole finding was that the OLD
+  // detector silently matched nothing for these shapes.
+  for (const form of [
+    '    generateBmmConfig({ projectRoot: x });',
+    '    await generateBmmConfig({ projectRoot: x });',
+    '  return generateBmmConfig({ projectRoot: x });',
+    '  const ok = generateBmmConfig({ projectRoot: x });',
+    '  if (generateBmmConfig({ projectRoot: x })) {',
+    '  wrote = wrote || generateBmmConfig({ projectRoot: x });',
+    '  report(generateBmmConfig({ projectRoot: x }));',
+  ]) {
+    assert.ok(CALL.test(form),
+      `the call detector must see every call form, missed: ${JSON.stringify(form)}`);
+  }
+  assert.ok(lines.some((l) => DEFINITION.test(l)),
+    'the definition must be findable — otherwise a rename makes every count below zero and green');
+
+  const allCalls = lines
+    .map((line, i) => ({ line: line.trim(), n: i + 1 }))
+    .filter(({ line }) => CALL.test(line) && !DEFINITION.test(line));
+
+  // ACCOUNT FOR THE EXPORTED WRAPPER. `writeRepoLayoutConfig` calls the generator
+  // too; a production caller routed through the wrapper would otherwise evade
+  // this guard entirely. Identified by its enclosing function, so it is
+  // subtracted deliberately rather than by matching its text.
+  const wrapperInternalCalls = allCalls.filter(({ n }) => {
+    const opener = enclosingBlockOpenerLine(n);
+    return opener > 0 && /function\s+writeRepoLayoutConfig\s*\(/.test(lines[opener - 1]);
+  });
+  assert.strictEqual(wrapperInternalCalls.length, 1,
+    `writeRepoLayoutConfig must contain exactly one call to the generator, found ` +
+    `${wrapperInternalCalls.length}: ${JSON.stringify(wrapperInternalCalls)}`);
+
+  // …and the wrapper itself must have NO production callers. If one is ever
+  // added it is a third generation site and must be brought into the gating
+  // analysis below rather than hiding behind the wrapper.
+  const WRAPPER_CALL = /\bwriteRepoLayoutConfig\s*\(/;
+  const WRAPPER_DEFINITION = /function\s+writeRepoLayoutConfig\s*\(/;
+  const wrapperCallers = lines
+    .map((line, i) => ({ line: line.trim(), n: i + 1 }))
+    .filter(({ line }) => WRAPPER_CALL.test(line) && !WRAPPER_DEFINITION.test(line));
+  assert.strictEqual(wrapperCallers.length, 0,
+    `writeRepoLayoutConfig has no production callers in bin/cli.js (it exists for the ` +
+    `existing suites and for Story 31.13). A caller routed through it generates a project's ` +
+    `config.yaml without appearing in the call-site count, so FR251 gating would never be ` +
+    `checked for it. Found ${wrapperCallers.length}: ${JSON.stringify(wrapperCallers)}`);
+
+  const callSites = allCalls.filter((c) => !wrapperInternalCalls.some((w) => w.n === c.n));
+  assert.strictEqual(callSites.length, 2,
+    `generateBmmConfig must be called from exactly two production sites (install + reconfigure), ` +
+    `found ${callSites.length}: ${JSON.stringify(callSites)}`);
 
   const gated = callSites
     .map((site) => ({ site, opener: enclosingBlockOpenerLine(site.n) }))
@@ -783,6 +836,95 @@ test('AC6: regenerating over an already-generated config is a no-op on the bytes
   } finally {
     cleanup();
   }
+});
+
+test('AC6/F6: the same binding over two DIFFERENT pre-existing configs yields identical generated values', () => {
+  // THE GAP. Both determinism tests above start from a NON-EXISTENT config.yaml,
+  // so the "same starting file" qualifier the determinism claim actually rests on
+  // — generation OVERWRITES each generated field, never merges with or prefers
+  // what was there — was never exercised. AC4 is what makes this true, and it is
+  // the property Story 31.4 depends on: if a stale value could survive
+  // regeneration, two machines with the same binding would disagree and the
+  // stamp would certify a config that does not match it.
+  //
+  // The claim is about VALUES, not bytes: the file also carries upstream-owned
+  // keys ma-agents never generates (`output_folder`, `user_name`, …) which
+  // legitimately differ per project and are deliberately left alone.
+  const GENERATED_FIELDS = [
+    'knowledgebase_path',
+    'system_requirements_path',
+    'software_requirements_path',
+    'sprint_backend',
+    'sprint_management_path',
+    'planning_artifacts',
+    'implementation_artifacts',
+    cli.PROJECT_LAYOUT_STAMP_FIELD,
+  ];
+
+  // Two genuinely different starting files: different stale values for every
+  // generated field, different key order, and different foreign keys.
+  const startA = [
+    '# machine A',
+    'user_name: "alice"',
+    'output_folder: "{project-root}/_bmad-output"',
+    'knowledgebase_path: "/stale/a"',
+    'planning_artifacts: "/stale/a/planning"',
+    'sprint_backend: "jira"',
+    `${cli.PROJECT_LAYOUT_STAMP_FIELD}: "sha256:${'0'.repeat(64)}"`,
+    '',
+  ].join('\n');
+  const startB = [
+    'implementation_artifacts: "/stale/b/impl"',
+    'sprint_management_path: "/stale/b/sprints"',
+    'system_requirements_path: "/stale/b/system"',
+    'knowledgebase_path: "/stale/b"',
+    'user_skill_level: "expert"',
+    'communication_language: "fr"',
+    '',
+  ].join('\n');
+  assert.notStrictEqual(startA, startB, 'the two starting files must genuinely differ');
+
+  const results = [];
+  for (const start of [startA, startB]) {
+    const { tmpDir, cleanup } = withTmpDir();
+    try {
+      writeLayout(tmpDir, twoStoreLayout('/ext/system', '/ext/software', '/ext/sprints'));
+      writeConfig(tmpDir, start);
+      capture(() => cli.generateBmmConfig({ projectRoot: tmpDir }));
+      results.push({ parsed: parsedConfig(tmpDir), bytes: readConfig(tmpDir) });
+    } finally {
+      cleanup();
+    }
+  }
+  const [a, b] = results;
+
+  for (const field of GENERATED_FIELDS) {
+    assert.ok(a.parsed[field] !== undefined,
+      `${field} must be present after generation, or this test asserts nothing about it`);
+    assert.strictEqual(a.parsed[field], b.parsed[field],
+      `${field} must not depend on what the file said before: ` +
+      `${JSON.stringify(a.parsed[field])} vs ${JSON.stringify(b.parsed[field])}. A generated ` +
+      `field that survives regeneration makes two machines with the same binding disagree.`);
+    // …and none of them kept the stale value it started with.
+    assert.ok(!String(a.parsed[field]).includes('/stale/'),
+      `${field} kept machine A's stale value ${JSON.stringify(a.parsed[field])}`);
+    assert.ok(!String(b.parsed[field]).includes('/stale/'),
+      `${field} kept machine B's stale value ${JSON.stringify(b.parsed[field])}`);
+  }
+  assert.strictEqual(a.parsed.sprint_backend, 'file-system',
+    'the stale `sprint_backend: jira` in machine A must have been overwritten, not preferred');
+
+  // The foreign keys prove the two files really were different files, and that
+  // "wholesale" is scoped to the generated fields — truncating would destroy
+  // `output_folder`, which 32 of the 39 config references derive from.
+  assert.strictEqual(a.parsed.user_name, 'alice');
+  assert.strictEqual(a.parsed.output_folder, '{project-root}/_bmad-output');
+  assert.strictEqual(b.parsed.user_skill_level, 'expert');
+  assert.strictEqual(b.parsed.communication_language, 'fr');
+  assert.strictEqual(b.parsed.user_name, undefined, 'generation must not invent foreign keys');
+  assert.notStrictEqual(a.bytes, b.bytes,
+    'the claim is identical VALUES, not identical bytes — the preserved foreign keys differ, ' +
+    'and this assertion keeps the test honest about which of the two it proves');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
