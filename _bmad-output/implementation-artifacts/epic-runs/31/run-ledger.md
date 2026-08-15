@@ -134,6 +134,29 @@ mislead here, exactly as warned.
    store**, because FR264's legacy fields already resolve there, so no existing project's research
    paths move (NFR82). To be filed as an explicit open question, never buried in an AC.
 
+### OQ-5 — DECIDED BY THE HUMAN, 2026-08-12: research reports belong to the SOFTWARE requirements store
+
+Escalated at wave-3 time (rather than at wave 4, so it could not block) and **answered by the user**:
+**research reports — domain, market and technical — resolve to the software requirements store.**
+
+Rationale carried with the decision: FR264's legacy single-valued fields already resolve to the
+software store, so **no existing project's research paths move** and NFR82 is preserved with no
+exemption to argue. Research stays in git next to the code by default. The accepted trade-off is
+that research is **not** stakeholder-visible when the system store is the Confluence-backed one —
+that is a deliberate choice, not an oversight.
+
+Rejected alternatives, recorded so they are not re-litigated: the **system store** (semantically
+defensible — research is "what/why" input to requirements — but it changes the resolved path for
+legacy projects and would need an explicit NFR82 exemption); and a **split by research type**
+(domain/market → system, technical → software), which is the most semantically accurate but adds a
+third routing rule to FR119 and would make the three bmad research skills route differently from
+each other — more surface for exactly the read/write disagreements this epic keeps producing.
+
+**Consequence for Story 31.6:** its AC4 no longer has to settle this. The decision is an input.
+31.6 must still record it in the artifact-to-store routing table and pin it with a test. **This is a
+product decision made by the user, not an implementation inference — do not let a story quietly
+re-derive or reverse it.**
+
 5. **Two further open questions are already owned and need no action yet.** OQ-1 (where the
    bound-projects record FR253 needs actually lives — no FR or decision names one) belongs to 31.13;
    OQ-3 (whether the 31.4 staleness guard goes in all 39 config-referencing skills or only the 7
