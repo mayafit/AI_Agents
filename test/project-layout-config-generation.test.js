@@ -1124,11 +1124,26 @@ test('AC8/carry-forward 1: a --yes reinstall on a legacy config.yaml keeps the l
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n2B nit 4 — an invalid binding must not produce a derived config from the bare default');
 
-test('nit 4: an invalid binding leaves config.yaml UNCHANGED and the refusal names config.yaml', () => {
-  const { tmpDir, cleanup } = withTmpDir();
-  try {
-    // An unrecognised backend — `invalid`, per storeFromRaw's closed enum.
-    writeLayout(tmpDir, [
+// F2 — the refusal must be pinned for EVERY non-`unbound` reason, not just for
+// `invalid`. With only the `backend: notion` (i.e. BINDING_INVALID) fixture,
+// both of these mutations of the refusal condition survived the whole affected
+// suite set:
+//
+//     if (!binding.ok && binding.reason === BINDING_INVALID)
+//     if (!binding.ok && binding.reason !== BINDING_UNBOUND && binding.reason !== BINDING_TOO_NEW)
+//
+// Under either, an `unreadable` (merge-conflict) or `too-new` binding falls
+// through and config.yaml is regenerated from the caller's fallback — exactly the
+// pre-fix behaviour nit 4 was filed against — and the "no committed binding"
+// message becomes a false statement about a file that is sitting right there.
+//
+// Each fixture is asserted to genuinely produce its reason before it is used, so
+// a fixture that stopped reproducing its reason cannot make the loop vacuous.
+const REFUSAL_FIXTURES = [
+  {
+    reason: cli.BINDING_INVALID,
+    what: 'an unrecognised backend, per storeFromRaw\'s closed enum',
+    layout: [
       'schema_version: 2',
       'system_requirements_store:',
       '  backend: notion',
@@ -1140,32 +1155,108 @@ test('nit 4: an invalid binding leaves config.yaml UNCHANGED and the refusal nam
       '  mode: same',
       '  path: "."',
       '',
-    ].join('\n'));
-    const binding = cli.resolveProjectTopology(tmpDir);
-    assert.strictEqual(binding.ok, false);
-    assert.strictEqual(binding.reason, cli.BINDING_INVALID, 'fixture must actually be invalid');
+    ].join('\n'),
+  },
+  {
+    reason: cli.BINDING_UNREADABLE,
+    what: 'an unresolved git merge conflict — ordinary for a COMMITTED file that ' +
+      'carries a `generated:` date',
+    layout: [
+      'schema_version: 2',
+      '<<<<<<< HEAD',
+      'system_requirements_store:',
+      '  backend: file-system',
+      '  mode: local',
+      '  path: "/ours"',
+      '=======',
+      'system_requirements_store:',
+      '  backend: file-system',
+      '  mode: local',
+      '  path: "/theirs"',
+      '>>>>>>> origin/main',
+      '',
+    ].join('\n'),
+  },
+  {
+    reason: cli.BINDING_TOO_NEW,
+    what: 'a binding written by a newer ma-agents',
+    layout: [
+      'schema_version: 99',
+      'system_requirements_store:',
+      '  backend: file-system',
+      '  mode: local',
+      '  path: "/ext/system"',
+      'software_requirements_store:',
+      '  backend: file-system',
+      '  mode: local',
+      '  path: "/ext/software"',
+      'sprint_management:',
+      '  mode: same',
+      '  path: "."',
+      '',
+    ].join('\n'),
+  },
+];
 
-    const existingConfig = '# hand-written\nknowledgebase_path: "/user/put/this/here"\n';
-    writeConfig(tmpDir, existingConfig);
+test('nit 4/F2: EVERY non-unbound reason leaves config.yaml UNCHANGED, and the refusal names it', () => {
+  // Coverage is derived from the exported constants, not from this list's own
+  // length: if a future reason is added to the resolver, this goes red until a
+  // fixture for it is added here rather than silently covering one fewer state.
+  const allReasons = [cli.BINDING_UNBOUND, cli.BINDING_UNREADABLE, cli.BINDING_INVALID, cli.BINDING_TOO_NEW];
+  const mustRefuse = allReasons.filter((r) => r !== cli.BINDING_UNBOUND).sort();
+  assert.deepStrictEqual(REFUSAL_FIXTURES.map((f) => f.reason).sort(), mustRefuse,
+    'every non-unbound binding reason must have a fixture here — the refusal is on the ' +
+    'reason NOT being `unbound`, so testing one reason leaves the others unpinned');
 
-    const out = capture(() => cli.generateBmmConfig({
-      projectRoot: tmpDir,
-      // A fallback IS supplied — the pre-fix behaviour was to fall through to it
-      // (or to the bare default) and write anyway. It must be refused.
-      fallbackLayout: { knowledgebase: { mode: 'same', path: '.' }, sprintManagement: { mode: 'same', path: '.' } },
-    }));
+  for (const fixture of REFUSAL_FIXTURES) {
+    const { tmpDir, cleanup } = withTmpDir();
+    try {
+      writeLayout(tmpDir, fixture.layout);
+      const binding = cli.resolveProjectTopology(tmpDir);
+      assert.strictEqual(binding.ok, false, `${fixture.reason}: fixture must not resolve`);
+      assert.strictEqual(binding.reason, fixture.reason,
+        `fixture for ${fixture.reason} (${fixture.what}) must actually produce that reason, ` +
+        `got ${binding.reason} — otherwise this iteration asserts nothing`);
 
-    assert.strictEqual(readConfig(tmpDir), existingConfig,
-      'config.yaml must be left byte-identical when the binding cannot be trusted');
-    assert.ok(!readConfig(tmpDir).includes('knowledgebase_path: "."'),
-      'the bare default must NOT have been written into the derived file');
-    assert.ok(/config\.yaml/.test(out),
-      `the refusal must NAME config.yaml — the old warning never did:\n${out}`);
-    assert.ok(/project-layout\.yaml/.test(out),
-      `the refusal must name the authoritative file it could not read:\n${out}`);
-    assert.ok(/invalid/.test(out), `the refusal must state the reason:\n${out}`);
-  } finally {
-    cleanup();
+      const existingConfig = '# hand-written\nknowledgebase_path: "/user/put/this/here"\n';
+      writeConfig(tmpDir, existingConfig);
+
+      let wrote;
+      const out = capture(() => {
+        wrote = cli.generateBmmConfig({
+          projectRoot: tmpDir,
+          // A fallback IS supplied — the pre-fix behaviour was to fall through to
+          // it (or to the bare default) and write anyway. It must be refused.
+          fallbackLayout: {
+            knowledgebase: { mode: 'same', path: '.' },
+            sprintManagement: { mode: 'same', path: '.' },
+          },
+        });
+      });
+
+      assert.strictEqual(wrote, false, `${fixture.reason}: generation must report that it wrote nothing`);
+      assert.strictEqual(readConfig(tmpDir), existingConfig,
+        `${fixture.reason}: config.yaml must be left byte-identical when the binding cannot be trusted`);
+      assert.ok(!readConfig(tmpDir).includes('knowledgebase_path: "."'),
+        `${fixture.reason}: the bare default must NOT have been written into the derived file`);
+      assert.ok(/config\.yaml/.test(out),
+        `${fixture.reason}: the refusal must NAME config.yaml — the old warning never did:\n${out}`);
+      assert.ok(/project-layout\.yaml/.test(out),
+        `${fixture.reason}: the refusal must name the authoritative file it could not read:\n${out}`);
+      assert.ok(out.includes(fixture.reason),
+        `${fixture.reason}: the refusal must state THIS reason:\n${out}`);
+      // The "no committed binding" skip message belongs to the unbound branch. If
+      // the refusal condition ever narrowed so this fixture fell through to it,
+      // the user would be told there is no binding while one sits on disk.
+      assert.ok(!/no committed binding/.test(out),
+        `${fixture.reason}: a binding IS present — the unbound message would be a false ` +
+        `statement:\n${out}`);
+      // Belt: the file must never be created from the fallback either.
+      assert.ok(!readConfig(tmpDir).includes(cli.PROJECT_LAYOUT_STAMP_FIELD),
+        `${fixture.reason}: a refused binding must not leave a stamp behind`);
+    } finally {
+      cleanup();
+    }
   }
 });
 
