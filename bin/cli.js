@@ -2398,11 +2398,73 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
   console.log(chalk.cyan(`Using profile: ${resolvedProfile} (from ${profileSource})`));
 
-  // Persist BEFORE any agent install step (AC #9). setProfile bootstraps the
-  // manifest via ensureManifest when absent.
-  setProfile(projectRootForProfile, resolvedProfile);
+  // Resolution of the profile stays here, unchanged, after agent selection. Its
+  // PERSISTENCE moved down to Step 3.2, below the scope question — see the note
+  // there (FR251 / Story 31.11 AC3).
 
-  // Step 2.5: Repository layout — read the committed binding UNCONDITIONALLY.
+  // Step 3: Scope (Skip if update, yesFlag, CLI --global flag, or path already set)
+  if (!isUpdate && !installPath && !yesFlag && !cliScope) {
+    const { pathChoice } = await prompts({
+      type: 'select',
+      name: 'pathChoice',
+      message: 'Installation scope:',
+      choices: [
+        { title: 'Project level (current directory)', value: 'project' },
+        { title: 'Global (user-level settings)', value: 'global' },
+        { title: 'Custom path...', value: 'custom' }
+      ]
+    });
+
+    if (pathChoice === 'global') {
+      installScope = 'global';
+    } else if (pathChoice === 'custom') {
+      const { customDir } = await prompts({
+        type: 'text',
+        name: 'customDir',
+        message: 'Enter installation directory:',
+        initial: './skills'
+      });
+      installPath = customDir || '';
+    }
+  }
+
+  // Step 3.2: Persist the profile resolved at Step 2.4 (Story 21.1 AC #9 —
+  // "before any agent install step", which this still is: Step 5 is the install
+  // and Step 3.5's BMAD integration, the only other profile reader, is below).
+  //
+  // FR251 / Story 31.11 AC3 — the persist target is `process.cwd()`, i.e. THE
+  // PROJECT ROOT. A global install has no project in scope, so writing
+  // `.ma-agents.json` there was project-scoped work done on behalf of an install
+  // that will never read it back: every consumer of the persisted profile
+  // (`updateAgentInstructions` / `stampExtraInstructionTemplates` in
+  // lib/installer.js, and lib/bmad.js) sits behind a `scope === 'project'` gate,
+  // so under global scope the file was written, never read, and left behind in a
+  // directory the user only happened to be standing in. It is now written under
+  // the same predicate as every other project-scoped step.
+  if (installScope === 'project') {
+    setProfile(projectRootForProfile, resolvedProfile);
+  }
+
+  // Step 3.3: Repository layout — read the committed binding UNCONDITIONALLY.
+  //
+  // FR251 / Story 31.11 AC3 — ORDERING. This was Step 2.5, ABOVE the scope
+  // question, so `collectRepoLayout` asked "Where is your knowledgebase
+  // managed?" and "Where is your sprint management managed?" before anything
+  // knew whether a project was in scope at all. A global install therefore
+  // prompted for knowledge-store locations it then threw away — and with
+  // MA_KNOWLEDGEBASE_GIT_URL set it went further and CLONED a repository
+  // (`ciCloneIfNeeded`), i.e. reached the network, on an install that has no
+  // project (NFR77).
+  //
+  // The collection now runs BELOW the scope question, under the SAME predicate
+  // as all three of its consumers (`installScope === 'project'` at Step 3.6,
+  // at the `.agents/skills` reconcile, and at the Step 6 project-context
+  // update). One predicate, four sites: a global install collects nothing,
+  // prompts nothing, clones nothing, and writes nothing under any project root.
+  //
+  // What did NOT move: the scope QUESTION itself (AC1) — its guard, its three
+  // choices and its wording are byte-identical to before this story, and `git
+  // diff` shows them as context, not as a change. THIS block moved down past it.
   //
   // B-1. This was `isUpdate ? readExistingLayout() : null`. `isUpdate` is true
   // ONLY for the interactive "Update (add/remove skills)" menu choice — it is
@@ -2440,33 +2502,19 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
   // update.test.js` exists to prevent — none of its 13 tests pins the reset as
   // desired — and it satisfies NFR82 because the resolved artifact paths are the
   // ones config.yaml already resolves to.
+  //
+  // NOTE the split below. `readExistingLayout()` stays UNCONDITIONAL — that is
+  // B-1's fix above and it is deliberately not weakened by anything in Story
+  // 31.11. It is a pure read: it writes nothing, prompts nothing, and therefore
+  // cannot violate FR251 whatever the scope. The FR251 surface is
+  // `collectRepoLayout`, which PROMPTS ("Where is your knowledgebase managed?" /
+  // "Where is your sprint management managed?") and, with MA_KNOWLEDGEBASE_GIT_URL
+  // set, CLONES (`ciCloneIfNeeded`) — knowledge-store prompting and network
+  // access on an install that has no project. Only that call is gated.
   const existingLayout = readExistingLayout();
-  const repoLayout = await collectRepoLayout({ yes: yesFlag }, existingLayout);
-
-  // Step 3: Scope (Skip if update, yesFlag, CLI --global flag, or path already set)
-  if (!isUpdate && !installPath && !yesFlag && !cliScope) {
-    const { pathChoice } = await prompts({
-      type: 'select',
-      name: 'pathChoice',
-      message: 'Installation scope:',
-      choices: [
-        { title: 'Project level (current directory)', value: 'project' },
-        { title: 'Global (user-level settings)', value: 'global' },
-        { title: 'Custom path...', value: 'custom' }
-      ]
-    });
-
-    if (pathChoice === 'global') {
-      installScope = 'global';
-    } else if (pathChoice === 'custom') {
-      const { customDir } = await prompts({
-        type: 'text',
-        name: 'customDir',
-        message: 'Enter installation directory:',
-        initial: './skills'
-      });
-      installPath = customDir || '';
-    }
+  let repoLayout = null;
+  if (installScope === 'project') {
+    repoLayout = await collectRepoLayout({ yes: yesFlag }, existingLayout);
   }
 
   // Step 3.4: Filter out BMAD agents for global scope (they require project-level install)
@@ -2744,10 +2792,20 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
   // Story 30.4 (FR245/FR246) — idempotent one-time Demerzel deprecation
   // notice. No-op after the first time it has ever printed for this project.
-  try {
-    showDemerzelDeprecationNoticeOnce(process.cwd());
-  } catch (err) {
-    console.log(chalk.yellow(`\n Deprecation notice skipped: ${err.message}`));
+  //
+  // FR251 / Story 31.11 AC3 — "for this project" is the operative phrase: the
+  // shown-once flag is persisted into the PROJECT ROOT `.ma-agents.json`
+  // (`lib/profile.js#markNoticeShown`). A global install has no project, so it
+  // must not stamp a per-project flag into whatever directory the user happened
+  // to run from. Deliberately accepted: a user who ONLY ever installs globally
+  // does not see this notice until they install into a project, at which point
+  // it prints — once — against the project it actually concerns.
+  if (installScope === 'project') {
+    try {
+      showDemerzelDeprecationNoticeOnce(process.cwd());
+    } catch (err) {
+      console.log(chalk.yellow(`\n Deprecation notice skipped: ${err.message}`));
+    }
   }
 
   // Install requested skills
@@ -2899,7 +2957,14 @@ async function handleInstall(args) {
   }
 
   console.log(chalk.cyan(`Using profile: ${resolvedProfile} (from ${profileSource})`));
-  setProfile(projectRootForProfile, resolvedProfile);
+  // FR251 / Story 31.11 AC3 — same gate as the wizard's Step 3.2. `scope` here
+  // comes straight from `parseFlags` (`--global` → 'global'), so it is already
+  // known at this point and no reordering is needed on this path. A direct
+  // `ma-agents install <skill> <agent> --global` must not stamp
+  // `.ma-agents.json` into whatever directory it was run from either.
+  if (scope === 'project') {
+    setProfile(projectRootForProfile, resolvedProfile);
+  }
 
   // Full args → direct install (Task 3.5)
   const targetAgents = agentFlag ? [agentFlag] : agentIds;
@@ -2917,10 +2982,15 @@ async function handleInstall(args) {
 
   // Story 30.4 (FR245/FR246) — idempotent one-time Demerzel deprecation
   // notice. No-op after the first time it has ever printed for this project.
-  try {
-    showDemerzelDeprecationNoticeOnce(process.cwd());
-  } catch (err) {
-    console.log(chalk.yellow(`\n Deprecation notice skipped: ${err.message}`));
+  // FR251 / Story 31.11 AC3 — project-scoped, for the reason given at the
+  // wizard's copy of this block: the shown-once flag lands in the project-root
+  // `.ma-agents.json`.
+  if (scope === 'project') {
+    try {
+      showDemerzelDeprecationNoticeOnce(process.cwd());
+    } catch (err) {
+      console.log(chalk.yellow(`\n Deprecation notice skipped: ${err.message}`));
+    }
   }
 
   try {
