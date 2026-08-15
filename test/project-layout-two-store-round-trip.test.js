@@ -1155,7 +1155,19 @@ test('writeRepoLayoutConfig on a confluence store: no crash, no `undefined`, pat
   }
 });
 
-test('writeRepoLayoutConfig on a file-system store is byte-for-byte unchanged and says nothing new', () => {
+test('writeRepoLayoutConfig on a file-system store emits exactly the generated field set and says nothing new', () => {
+  // UPDATED BY STORY 31.3, deliberately and visibly. `config.yaml` is now
+  // GENERATED from `project-layout.yaml`, and per AC1 it grows two per-store
+  // fields — `system_requirements_path` and `software_requirements_path` — beside
+  // the retained single-valued legacy fields, because one `planning_artifacts`
+  // cannot serve two stores in different places. The RESOLVED VALUES are
+  // unchanged, which is the NFR82 claim this assertion still guards; the field
+  // SET is not, and could not be.
+  //
+  // No `project_layout_stamp` here: this tmp dir has no committed binding, so
+  // there is no binding state to stamp and the generator writes none (AC7 — an
+  // invented stamp would be a claim about a file that does not exist). The
+  // stamped, bound case is pinned in test/project-layout-config-generation.test.js.
   const { tmpDir, cleanup } = withTmpDir();
   try {
     const out = capture(() => writeRepoLayoutConfig({
@@ -1166,6 +1178,8 @@ test('writeRepoLayoutConfig on a file-system store is byte-for-byte unchanged an
     assert.strictEqual(cfg, [
       '',
       'knowledgebase_path: "."',
+      'system_requirements_path: "."',
+      'software_requirements_path: "."',
       'sprint_backend: "file-system"',
       'sprint_management_path: "."',
       'planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"',
@@ -1174,6 +1188,8 @@ test('writeRepoLayoutConfig on a file-system store is byte-for-byte unchanged an
     ].join('\n'), `the file-system config output changed:\n${JSON.stringify(cfg)}`);
     assert.ok(!/confluence|has no filesystem path/.test(out),
       `the non-file-system note must not fire for a file-system store:\n${out}`);
+    assert.ok(!/project_layout_stamp/.test(cfg),
+      `an unbound project must not be given a stamp:\n${cfg}`);
   } finally {
     cleanup();
   }

@@ -45,6 +45,12 @@ const { getBmadPlatformCode } = require('../lib/agents');
 const { enumerateCustomSource, NFR71_WARNING, CustomMarketplaceError, reconcileCustomMarketplaceSelection, registryTrustLabel } = require('../lib/custom-marketplace');
 const { setLogSink, diag, diagError } = require('../lib/diag');
 const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
+// 2B nit 1 — the knowledge-store `backend` enum and its default now live in a
+// dependency-free leaf module under lib/, so `lib/installer.js` (which must NOT
+// require this file — the dependency runs the other way) consumes the SAME
+// definition instead of open-coding a second one. See lib/store-backends.js.
+const { STORE_BACKEND_LIST, DEFAULT_STORE_BACKEND } = require('../lib/store-backends');
+const crypto = require('crypto');
 
 const PKG = require('../package.json');
 const NAME = PKG.name;
@@ -647,55 +653,459 @@ function canonicalArtifactPath(suffix) {
   return `{project-root}/_bmad-output/${suffix}`;
 }
 
-function writeRepoLayoutConfig(layout) {
-  const configPath = path.join(process.cwd(), '_bmad', 'bmm', 'config.yaml');
+// ═══════════════════════════════════════════════════════════════════════════
+// THE GENERATION STAMP (Story 31.3 AC7; consumed by Story 31.4 AC6)
+//
+// AC7 asks for a stamp "identifying the `project-layout.yaml` state
+// `config.yaml` was generated from, so Story 31.4 can detect drift WITHOUT
+// depending on filesystem mtimes".
+//
+// ── WHY NOT MTIME ─────────────────────────────────────────────────────────
+// Decision P5-9.3's second rule still reads "when a skill activates and
+// `project-layout.yaml` is NEWER THAN the generated `config.yaml`, the skill
+// fails loud" — an mtime comparison. That wording is SUPERSEDED and was never
+// amended (the implementation-readiness review filed it as "C-6 BEFORE 31.3 —
+// amend P5-9.3"). It is not implementable as written: `git checkout`, `git
+// pull` and a fresh clone all set working-tree mtimes to checkout time in no
+// guaranteed order, so a pull that moves a store can leave the committed file
+// OLDER than the generated one (missed drift — the exact failure the guard
+// exists to prevent) and an ordinary rebuild can leave it NEWER with nothing
+// changed (false alarm on every skill activation). This is open question OQ-2,
+// and it settles HERE, with the story that writes the stamp — not with 31.4,
+// which only consumes it.
+//
+// ── THE FORMAT (STABLE CONTRACT FOR STORY 31.4) ───────────────────────────
+//
+//     project_layout_stamp: "sha256:<64 lowercase hex chars>"
+//
+// one flat scalar in `_bmad/bmm/config.yaml`, written by `writeConfigField`
+// like every other generated field, so it round-trips through the same escaper
+// and needs no new parser on either side.
+//
+// The hashed input is the CANONICAL RE-SERIALIZATION of the three location
+// records — `system_requirements_store`, `software_requirements_store`,
+// `sprint_management`, in that fixed order — produced by the SAME
+// `serializeStore` / `serializeSprintManagement` functions that write
+// `project-layout.yaml` itself. Deliberately NOT a hash of the file's raw
+// bytes. What is therefore EXCLUDED from the stamp, and why:
+//
+//   - the `generated:` date, which changes on every install with nothing having
+//     moved;
+//   - comments and the header banner;
+//   - key order and whitespace;
+//   - LINE ENDINGS. This repo is developed on Windows and CI'd on Linux; a
+//     raw-byte hash would report drift on every cross-platform checkout with
+//     `core.autocrlf` in play, and a guard that cries wolf on a clean clone is
+//     a guard people learn to ignore;
+//   - `schema_version`. A Story 31.7 migration that rewrites a legacy file into
+//     schema v2 WITHOUT moving anything must not read as drift — a legacy
+//     binding and its migrated equivalent normalise to the same three records
+//     and therefore to the same stamp. That is the AC8/NFR82 posture (nothing
+//     moved ⇒ nothing to re-bind) expressed in the stamp itself.
+//
+// What is INCLUDED is exactly what can move an artifact: each store's backend,
+// mode, portable path, git URL, Confluence space key and root-page identity,
+// and the sprint-management record (including the Jira URL / project key).
+//
+// ── HOW STORY 31.4 USES IT ────────────────────────────────────────────────
+//   1. `resolveProjectTopology(projectRoot)` — the committed binding NOW.
+//   2. `computeProjectLayoutStamp(topology, projectRoot)` — what the stamp
+//      WOULD be for that binding.
+//   3. `readProjectLayoutStamp(configContent)` — what `config.yaml` records.
+//   4. Not equal ⇒ drift. Both functions are exported for exactly this.
+//      Comparison is on the opaque string; 31.4 must not parse it.
+//
+//      `readProjectLayoutStamp` returns a DISCRIMINATED result — never a bare
+//      string, never a bare `null` — because "there is no stamp" and "there is a
+//      stamp and it cannot be used" are DIFFERENT FACTS, and only one of them is
+//      benign:
+//
+//          { ok: true,  value: 'sha256:<64 lowercase hex>' }
+//          { ok: false, reason: 'absent',    message }
+//          { ok: false, reason: 'malformed', message, raw }
+//
+//        - `absent`    — the file carries no `project_layout_stamp:` line at
+//                        all. THAT, and only that, is the PRE-F26 config that
+//                        31.4 AC5 degrades to today's behaviour for. Not drift.
+//        - `malformed` — the line IS present but its value is not a stamp this
+//                        build wrote: truncated, re-cased, a different algorithm,
+//                        damaged by a merge, commented out, or indented into some
+//                        other block. This is NOT a pre-F26 config and MUST NOT
+//                        be treated as one. The file claims to have been
+//                        generated and the claim is unreadable, so 31.4 must
+//                        report `message` verbatim and refuse to certify the
+//                        binding — the same posture it takes for drift.
+//
+//      An earlier draft of this contract said a null read means "pre-F26, NOT
+//      drift", and the reader returned that same null for both states. That made
+//      `valid binding + mangled stamp` — ordinary merge damage, a hand-edit, a
+//      truncated write — classify as pre-F26, so 31.4 would decline to block and
+//      a skill would run against paths nothing had verified. Validation
+//      degrading to permissive is the defect class F26 exists to remove; it is
+//      not allowed to live in the contract 31.4 is built from.
+//
+//   5. ORDER: THE RESOLVER FIRST, THE STAMP SECOND. 31.4 keys on
+//      `resolveProjectTopology` and consults the stamp only afterwards.
+//      That ordering is what makes the `unbound + fallback` branch of
+//      `generateBmmConfig` below correct rather than a silent-permissive hole:
+//      that branch generates a config from the caller's answered layout and
+//      deliberately writes NO stamp, because there is no `project-layout.yaml`
+//      to stamp. A stamp invented there would be a false claim about a binding
+//      that does not exist, and would later collide with the real binding the
+//      next install writes. Because 31.4 asks the resolver first, it learns
+//      `unbound` from the file system BEFORE the stamp is read, so an `absent`
+//      stamp is never the fact it reasons from — it is only ever a corroboration
+//      of something the resolver already established.
+//   6. To NAME the drift ("which store moved, from where to where", 31.4 AC1),
+//      31.4 compares the per-store path fields already in `config.yaml`
+//      (`system_requirements_path` / `software_requirements_path` /
+//      `sprint_management_path`) against the freshly resolved topology. The
+//      stamp answers "did anything move?"; those fields answer "what".
+//
+// The `sha256:` prefix is part of the value, not decoration: it makes the hash
+// function explicit in the file, so a future change of algorithm is a visible
+// format change rather than a silent mismatch that reads as permanent drift.
+// ═══════════════════════════════════════════════════════════════════════════
+const PROJECT_LAYOUT_STAMP_FIELD = 'project_layout_stamp';
+const PROJECT_LAYOUT_STAMP_PREFIX = 'sha256:';
+
+/**
+ * The exact bytes the stamp hashes. Split out from the hashing so a test can
+ * assert WHAT is covered rather than only that two hashes differ — a hash test
+ * that only ever compares digests cannot tell "the field is covered" from "the
+ * field changed something else".
+ */
+function canonicalBindingBytes(topology, projectRoot) {
+  return (
+    `system_requirements_store:\n${serializeStore(topology.systemRequirementsStore, projectRoot)}` +
+    `software_requirements_store:\n${serializeStore(topology.softwareRequirementsStore, projectRoot)}` +
+    serializeSprintManagement(topology.sprintManagement, projectRoot)
+  );
+}
+
+function computeProjectLayoutStamp(topology, projectRoot) {
+  const canonical = canonicalBindingBytes(topology, projectRoot);
+  return PROJECT_LAYOUT_STAMP_PREFIX +
+    crypto.createHash('sha256').update(canonical, 'utf8').digest('hex');
+}
+
+/**
+ * Reads the stamp back out of `config.yaml` content.
+ *
+ * CONTRACT — a DISCRIMINATED result, in the same shape and for the same reason as
+ * `resolveProjectTopology`'s. Never returns null, never throws:
+ *
+ *     { ok: true,  value: 'sha256:<64 lowercase hex>' }
+ *     { ok: false, reason: 'absent',    message: '...' }
+ *     { ok: false, reason: 'malformed', message: '...', raw: '<what was there>' }
+ *
+ * The two failure reasons are NOT interchangeable and the split is the whole
+ * point of the function's shape. `absent` is a pre-F26 config: nothing ever wrote
+ * a stamp here, 31.4 AC5 degrades to today's behaviour, and that is benign.
+ * `malformed` is a config that CLAIMS to have been generated and whose claim
+ * cannot be read — merge damage, a hand-edit, a truncated write. The previous
+ * signature returned the same `null` for both, which meant a valid binding
+ * carrying a mangled stamp was indistinguishable from a project that predates the
+ * feature, and a consumer following the documented contract would decline to
+ * block. A guard that degrades to permissive on damaged input is not a guard.
+ *
+ * The discriminated shape (rather than the superseded null-or-string pair) is
+ * what makes that unmissable: any caller reaching for `.value` is forced past
+ * `.ok`, so it cannot silently inherit the old conflation.
+ *
+ * MATCHING IS DELIBERATELY THE WRITER'S OWN MATCHING. `writeConfigField` locates
+ * a field with `^<field>:.*$` under the `m` flag and replaces the FIRST match
+ * only, so the reader anchors the key to column 0 and takes the first occurrence
+ * too. Reader and writer therefore always speak about the same line: a
+ * `# project_layout_stamp: …` in a comment, or an indented `project_layout_stamp:`
+ * nested inside some other mapping, is not the field either of them means, and is
+ * not accepted as one. (A duplicate top-level key cannot arise from the writer,
+ * and if one were hand-added the whole file would already fail js-yaml's
+ * duplicate-key check — a far louder failure than this reader's.)
+ *
+ * The VALUE is validated rather than accepted as free text, and anything that is
+ * not exactly this build's output is `malformed` rather than quietly dropped: a
+ * truncated digest of any length, uppercase hex, another algorithm's prefix, an
+ * unbalanced quote, or trailing content after the digest.
+ */
+const STAMP_ABSENT = 'absent';
+const STAMP_MALFORMED = 'malformed';
+
+function readProjectLayoutStamp(configContent) {
+  const content = String(configContent == null ? '' : configContent);
+
+  // Step 1 — is the field there AT ALL? Column-anchored, first occurrence, `m`
+  // flag: exactly what writeConfigField would rewrite.
+  const keyLine = content.match(/^project_layout_stamp:(.*)$/m);
+  if (!keyLine) {
+    return {
+      ok: false,
+      reason: STAMP_ABSENT,
+      message:
+        `_bmad/bmm/config.yaml carries no ${PROJECT_LAYOUT_STAMP_FIELD}: field. This is a ` +
+        `config generated before F26 introduced the stamp, not evidence that anything moved.`,
+    };
+  }
+
+  // `.` does not match `\n` but DOES match `\r`, so a CRLF file would otherwise
+  // leave a carriage return glued to the digest and read as malformed.
+  const rawValue = keyLine[1].replace(/\r$/, '').trim();
+
+  // Step 2 — is the value one this build wrote? Quotes must BALANCE; stripping a
+  // leading `"` without requiring the trailing one would accept a value the YAML
+  // parser reads differently, which is the reader/parser disagreement the suite's
+  // js-yaml oracle exists to prevent.
+  let unquoted = rawValue;
+  if (/^"[^]*"$/.test(unquoted) || /^'[^]*'$/.test(unquoted)) {
+    unquoted = unquoted.slice(1, -1);
+  }
+
+  if (!/^sha256:[0-9a-f]{64}$/.test(unquoted)) {
+    return {
+      ok: false,
+      reason: STAMP_MALFORMED,
+      raw: rawValue,
+      message:
+        `_bmad/bmm/config.yaml has a ${PROJECT_LAYOUT_STAMP_FIELD}: field whose value is not a ` +
+        `stamp this ma-agents wrote (expected "sha256:" followed by 64 lowercase hex ` +
+        `characters), got ${JSON.stringify(rawValue)}. The file claims to have been generated ` +
+        `from a committed binding and that claim cannot be read — treat it as unverified, NOT ` +
+        `as a config that predates the stamp. Re-run the installer (or \`ma-agents bind\`) to ` +
+        `regenerate config.yaml from _bmad-output/project-layout.yaml.`,
+    };
+  }
+
+  return { ok: true, value: unquoted };
+}
+
+/**
+ * The legacy `{knowledgebase, sprintManagement}` wizard shape viewed as a
+ * topology: both stores point at the one answered location. Exactly the mapping
+ * `writeProjectLayoutYaml` applies when the committed stores agree, kept in one
+ * place so the generated config and the committed binding cannot disagree about
+ * what a single answer means.
+ */
+function topologyFromLegacyLayout(layout) {
+  const kb = (layout && layout.knowledgebase) || { mode: 'same', path: '.' };
+  return {
+    systemRequirementsStore: kb,
+    softwareRequirementsStore: kb,
+    sprintManagement: (layout && layout.sprintManagement) || { mode: 'same', path: '.' },
+  };
+}
+
+// A store's value for a `*_path` field in config.yaml. `toPortablePath(undefined)`
+// already returns `'.'`, so a confluence store (which has no `.path` at all)
+// resolves to the local-artifacts default without a special case — see the long
+// note in generateBmmConfig about why that value is deliberately unchanged.
+function storeConfigPath(store, projectRoot) {
+  return toPortablePath(store && store.path, projectRoot).portable;
+}
+
+/**
+ * Story 31.3 — GENERATE `_bmad/bmm/config.yaml` FROM `_bmad-output/project-layout.yaml`.
+ *
+ * AC1. The file does not move and no skill learns a new location: all 39
+ * existing references keep reading `_bmad/bmm/config.yaml`, and every field they
+ * read today (`knowledgebase_path`, `sprint_management_path`,
+ * `planning_artifacts`, `implementation_artifacts`) is still there with the same
+ * derivation. It GROWS two per-store fields, `system_requirements_path` and
+ * `software_requirements_path`, because a single-valued `planning_artifacts`
+ * cannot serve two stores in different places. The retained single-valued fields
+ * resolve to the SOFTWARE requirements store (FR264 as amended 2026-08-02), so
+ * untouched references keep working unchanged.
+ *
+ * AC2. ONE WAY ONLY: committed -> per-machine. This function READS
+ * `project-layout.yaml` and WRITES `config.yaml`. There is no inverse anywhere.
+ * (The FR265 fallback in `readExistingLayout` is NOT an inverse: it pre-populates
+ * a WIZARD from a pre-F26 config so the user can be asked, and writes nothing.)
+ *
+ * AC3. Fires on install and `ma-agents bind` only. Both production call sites are
+ * write paths — Step 3.6 of `install` (inside the `installScope === 'project'`
+ * gate; FR251 forbids a global install doing project-scoped work) and
+ * `handleConfigLayout`. No read path calls it.
+ *
+ * AC4. Overwrites wholesale and says so, naming the file. "Wholesale" is scoped
+ * to the GENERATED fields: the file is upstream BMAD's module config and also
+ * carries fields ma-agents does not own (`user_name`, `output_folder`, ...).
+ * Truncating it would destroy those and break every skill, so generation
+ * overwrites each generated field unconditionally — never merging with, or
+ * preferring, whatever was there — and leaves foreign keys alone. This is what
+ * the story's own technical note directs by naming `writeConfigField()` as the
+ * helper to reuse.
+ *
+ * AC5. `_bmad/config.user.toml` and `_bmad/custom/config.user.toml` are never
+ * touched: this function opens exactly one path. (Module configs here are YAML,
+ * root and user configs are TOML — `config.user.yaml` does not exist.)
+ *
+ * AC7. Writes the generation stamp documented above.
+ *
+ * 2B NIT 4 — A DERIVED FILE IS NEVER BUILT FROM A BINDING THE SYSTEM REFUSED TO
+ * TRUST. `writeProjectLayoutYaml` already refuses to overwrite an `invalid` /
+ * `unreadable` / `too-new` binding, but the derived `config.yaml` used to be
+ * written anyway, from the bare default, and the warning never mentioned
+ * `config.yaml` at all. A generated file derived from a binding we would not read
+ * is exactly the permissive degradation P5-9.1 exists to prevent, so this
+ * function refuses too, names `config.yaml` in the message, and leaves the
+ * existing file untouched.
+ *
+ * @param {object}  opts
+ * @param {string}  opts.projectRoot
+ * @param {object=} opts.fallbackLayout Legacy `{knowledgebase, sprintManagement}`
+ *   used ONLY when the project has no committed binding at all (`unbound`).
+ *   Never used to override a binding that exists — that would make the generator
+ *   two-sourced and reintroduce the disagreement this story removes.
+ * @returns {boolean} whether config.yaml was written.
+ */
+function generateBmmConfig(opts) {
+  const options = opts || {};
+  const projectRoot = options.projectRoot || process.cwd();
+  const configPath = path.join(projectRoot, '_bmad', 'bmm', 'config.yaml');
+  const fallbackLayout = options.fallbackLayout || null;
+
+  // ── SOURCE SELECTION. The committed binding is authoritative; the caller's
+  // layout is a fallback for an unbound project only.
+  const binding = resolveProjectTopology(projectRoot);
+
+  if (!binding.ok && binding.reason !== BINDING_UNBOUND) {
+    // 2B nit 4. Fail loud and name BOTH files — the derived one especially,
+    // because that is the file the user's skills will actually read.
+    console.log(chalk.red(
+      `  Refusing to regenerate _bmad/bmm/config.yaml — the committed binding in\n` +
+      `  _bmad-output/project-layout.yaml is ${binding.reason}:\n` +
+      `    ${binding.message}\n` +
+      `  _bmad/bmm/config.yaml has been left UNCHANGED rather than generated from a default,\n` +
+      `  because a derived config built from a binding this build refuses to read would\n` +
+      `  silently point your skills at the wrong place. Fix the binding (or delete it and\n` +
+      `  re-run the installer), then re-run to regenerate config.yaml.`
+    ));
+    return false;
+  }
+
+  let topology;
+  // Whether this generation has a committed binding state to stamp. The stamp
+  // itself is COMPUTED INSIDE the try below (R-4), not here — see the note there.
+  let stampable;
+  if (binding.ok) {
+    topology = binding.topology;
+    stampable = true;
+  } else if (fallbackLayout) {
+    // Unbound: no committed binding to generate from. This is reachable when
+    // `writeProjectLayoutYaml` could not write (unwritable `_bmad-output/`), and
+    // in the direct-call path the existing suites exercise. Generate today's
+    // fields from the answered layout so the install still produces a usable
+    // config — but write NO stamp, because there is no binding state to stamp,
+    // and a stamp invented here would be a claim about a file that does not
+    // exist — one that would collide with the real binding the next install
+    // writes.
+    //
+    // This is NOT the silent-permissive shape it can look like. Per the contract
+    // above (step 5), Story 31.4 keys on `resolveProjectTopology` FIRST and the
+    // stamp SECOND: it learns `unbound` from the absent `project-layout.yaml`
+    // before it ever reads the stamp, so the resulting `absent` stamp only
+    // corroborates a fact already established — it is never the fact 31.4
+    // reasons from. Writing a stamp here would be the permissive move, not the
+    // strict one.
+    topology = topologyFromLegacyLayout(fallbackLayout);
+    stampable = false;
+  } else {
+    console.log(chalk.yellow(
+      `  Skipping _bmad/bmm/config.yaml generation: this project has no committed binding in\n` +
+      `  _bmad-output/project-layout.yaml and no layout was supplied to generate from.\n` +
+      `  Run the installer (or a future \`ma-agents bind\`) to write the binding first.`
+    ));
+    return false;
+  }
+
   try {
+    // R-4 — INSIDE the try on purpose. `computeProjectLayoutStamp` re-runs the
+    // `project-layout.yaml` serializers, and those THROW rather than return on a
+    // value they refuse to write (`serializeStore`'s backend-enum check,
+    // `assertWritableMode`, `assertSingleLineIdentity`). Install Step 3.6 already
+    // wraps `writeProjectLayoutYaml` in a try/catch for exactly this hazard but
+    // does NOT wrap `generateBmmConfig`, so a throw escaping from here would reach
+    // `main().catch` and print a stack trace over a substantially-finished
+    // install. Every malformed identity found so far is normalised by
+    // `parseLayoutYaml`/`storeFromRaw` before a serializer sees it, so no
+    // reachable input is claimed — this closes an asymmetry rather than a proven
+    // defect, and costs one line to close.
+    const stamp = stampable ? computeProjectLayoutStamp(topology, projectRoot) : null;
+
     if (!fs.existsSync(configPath)) {
       // Create an empty file so writeConfigField can append to it
-      fs.mkdirSync(path.join(process.cwd(), '_bmad', 'bmm'), { recursive: true });
+      fs.mkdirSync(path.join(projectRoot, '_bmad', 'bmm'), { recursive: true });
       fs.writeFileSync(configPath, '', 'utf-8');
     }
     let content = fs.readFileSync(configPath, 'utf-8');
-    const projectRoot = process.cwd();
 
-    // B-1 consequence 3. Making the install path read the committed binding means
-    // `layout.knowledgebase` can now be a NON-file-system store (today:
-    // `confluence`), which has no `.mode` and no `.path`. Before B-1 that store
-    // had already been collapsed to `{same, "."}` upstream, so this function only
-    // ever saw file-system shapes on the install path.
+    const systemStore = topology.systemRequirementsStore;
+    const softwareStore = topology.softwareRequirementsStore;
+    const sprint = topology.sprintManagement || { mode: 'same', path: '.' };
+
+    // ── The non-file-system note (B-1 consequence 3), now per store.
     //
     // `toPortablePath(undefined)` already returns `'.'`, so nothing crashes and
     // the literal `undefined` is never written — but writing `.` for a Confluence
     // store SILENTLY says "the knowledgebase is this repo", which is exactly the
-    // permissive-default shape B-1 itself is. So it is made explicit here rather
-    // than left to fall out of a falsy check.
+    // permissive-default shape B-1 itself was. So it is said out loud rather than
+    // left to fall out of a falsy check.
     //
     // The VALUE is deliberately unchanged (`.`): `knowledgebase_path` is what
     // `planning_artifacts` is derived from below and what the Knowledge Atlas
     // config scan reads (lib/knowledge-atlas/src/scan/config.ts), so changing it
     // would move resolved artifact paths and violate NFR82.
     //
-    // What `knowledgebase_path` SHOULD mean for a Confluence-backed store is a
-    // genuine open question and NOT decided here — see
+    // What `knowledgebase_path` SHOULD mean for a Confluence-backed store remains
+    // a genuine open question and is NOT decided here — see
     // `_bmad-output/implementation-artifacts/
-    //  bug-knowledgebase-path-has-no-defined-meaning-for-a-confluence-store.md`
-    // (Story 31.3 / 31.6). Pinned by `test/project-layout-two-store-round-trip.test.js`
-    // so it cannot drift silently.
-    const kbBackend = backendOfStore(layout.knowledgebase);
-    if (kbBackend !== DEFAULT_STORE_BACKEND) {
+    //  bug-knowledgebase-path-has-no-defined-meaning-for-a-confluence-store.md`.
+    // This story adds the per-store fields the question's own analysis says are
+    // the precondition for answering it (one scalar cannot describe two stores),
+    // but choosing what a Confluence store's path MEANS belongs to Story 31.6,
+    // which owns the Confluence read path. Pinned by
+    // `test/project-layout-two-store-round-trip.test.js` and by this story's
+    // suite so it cannot drift silently.
+    const softwareBackend = backendOfStore(softwareStore);
+    const systemBackend = backendOfStore(systemStore);
+    let notes = [];
+    if (softwareBackend !== DEFAULT_STORE_BACKEND) {
+      notes.push({ backend: softwareBackend, fields: ['knowledgebase_path', 'software_requirements_path'] });
+    }
+    if (systemBackend !== DEFAULT_STORE_BACKEND) {
+      notes.push({ backend: systemBackend, fields: ['system_requirements_path'] });
+    }
+    // While the two stores are the same store (every project that can exist
+    // before Story 31.5), one note covering all three fields — not the same
+    // sentence twice.
+    if (notes.length === 2 && !storesDiverge(systemStore, softwareStore)) {
+      notes = [{
+        backend: softwareBackend,
+        fields: ['knowledgebase_path', 'software_requirements_path', 'system_requirements_path'],
+      }];
+    }
+    for (const note of notes) {
       console.log(chalk.yellow(
-        `  Note: the knowledge store is ${kbBackend}-backed, which has no filesystem path.\n` +
-        `  config.yaml's knowledgebase_path is left at "." (the local artifacts default) so\n` +
-        `  planning artifacts keep resolving where they do today. The authoritative\n` +
-        `  ${kbBackend} identity lives in _bmad-output/project-layout.yaml and is unchanged.`
+        `  Note: the knowledge store is ${note.backend}-backed, which has no filesystem path.\n` +
+        `  config.yaml's ${note.fields.join(', ')} ${note.fields.length > 1 ? 'are' : 'is'} left at "." ` +
+        `(the local artifacts default)\n` +
+        `  so planning artifacts keep resolving where they do today. The authoritative\n` +
+        `  ${note.backend} identity lives in _bmad-output/project-layout.yaml and is unchanged.`
       ));
     }
 
-    const kbPortable = toPortablePath(layout.knowledgebase.path, projectRoot);
-    const kbPath = kbPortable.portable;
+    // ── The legacy single-valued field. FR264 as amended 2026-08-02: it resolves
+    // to the SOFTWARE requirements store. Unconditionally, divergent or not.
+    const kbPath = storeConfigPath(softwareStore, projectRoot);
     content = writeConfigField(content, 'knowledgebase_path', kbPath);
 
-    const spMode = layout.sprintManagement.mode;
+    // ── The two NEW per-store fields (AC1). Written next to the legacy field
+    // they generalise, so a human reading config.yaml sees the relationship.
+    // `software_requirements_path` is by construction the same value as
+    // `knowledgebase_path`; it is written anyway rather than aliased, because a
+    // reader of the new field must not have to know the legacy one exists.
+    content = writeConfigField(content, 'system_requirements_path', storeConfigPath(systemStore, projectRoot));
+    content = writeConfigField(content, 'software_requirements_path', kbPath);
+
     // 3.12.3: when the user provides a non-`.` path for knowledgebase /
     // sprint management, treat that path as the literal artifacts directory
     // — no nested `_bmad-output/<…>-artifacts/` subtree. The wizard prompt
@@ -703,33 +1113,64 @@ function writeRepoLayoutConfig(layout) {
     // artifacts folder, not a parent. Only `.` (current repo) gets the
     // canonical `_bmad-output/...` layout because in single-repo mode
     // there's no other folder semantics to honor.
-    if (spMode === 'jira') {
+    const planningArtifacts = kbPath === '.' ? canonicalArtifactPath('planning-artifacts') : kbPath;
+    let summary;
+    if (sprint.mode === 'jira') {
       // Jira backend: write sprint_backend + Jira config; no sprint_management_path
       content = writeConfigField(content, 'sprint_backend', 'jira');
-      content = writeConfigField(content, 'jira_url', layout.sprintManagement.jiraUrl);
-      content = writeConfigField(content, 'jira_project_key', layout.sprintManagement.jiraProjectKey);
-      const planningArtifacts = kbPath === '.' ? canonicalArtifactPath('planning-artifacts') : kbPath;
-      const implArtifacts = canonicalArtifactPath('implementation-artifacts');
+      content = writeConfigField(content, 'jira_url', sprint.jiraUrl);
+      content = writeConfigField(content, 'jira_project_key', sprint.jiraProjectKey);
       content = writeConfigField(content, 'planning_artifacts', planningArtifacts);
-      content = writeConfigField(content, 'implementation_artifacts', implArtifacts);
-      fs.writeFileSync(configPath, content, 'utf-8');
-      console.log(chalk.gray(`  Config: knowledgebase_path="${kbPath}", sprint_backend=jira, jira_url="${layout.sprintManagement.jiraUrl}", jira_project_key="${layout.sprintManagement.jiraProjectKey}"`));
+      content = writeConfigField(content, 'implementation_artifacts', canonicalArtifactPath('implementation-artifacts'));
+      summary = `  Config: knowledgebase_path="${kbPath}", sprint_backend=jira, jira_url="${sprint.jiraUrl}", jira_project_key="${sprint.jiraProjectKey}"`;
     } else {
       // File-system backend
-      const spPortable = toPortablePath(layout.sprintManagement.path, projectRoot);
-      const spPath = spPortable.portable;
+      const spPath = storeConfigPath(sprint, projectRoot);
       content = writeConfigField(content, 'sprint_backend', 'file-system');
       content = writeConfigField(content, 'sprint_management_path', spPath);
-      const planningArtifacts = kbPath === '.' ? canonicalArtifactPath('planning-artifacts') : kbPath;
-      const implArtifacts = spPath === '.' ? canonicalArtifactPath('implementation-artifacts') : spPath;
       content = writeConfigField(content, 'planning_artifacts', planningArtifacts);
-      content = writeConfigField(content, 'implementation_artifacts', implArtifacts);
-      fs.writeFileSync(configPath, content, 'utf-8');
-      console.log(chalk.gray(`  Config: knowledgebase_path="${kbPath}", sprint_backend=file-system, sprint_management_path="${spPath}"`));
+      content = writeConfigField(content, 'implementation_artifacts',
+        spPath === '.' ? canonicalArtifactPath('implementation-artifacts') : spPath);
+      summary = `  Config: knowledgebase_path="${kbPath}", sprint_backend=file-system, sprint_management_path="${spPath}"`;
     }
+
+    // AC7 — LAST, so it sits at the end of the generated block and reads as what
+    // it is: a statement about everything above it.
+    if (stamp) content = writeConfigField(content, PROJECT_LAYOUT_STAMP_FIELD, stamp);
+
+    fs.writeFileSync(configPath, content, 'utf-8');
+
+    // AC4 — the overwrite notice. Names the file it overwrote, every time.
+    //
+    // The unbound branch deliberately does NOT name `project-layout.yaml`: there
+    // is no such file in that case, so naming it would be a false statement about
+    // where these values came from. (It also keeps
+    // `project-layout-binding-spine.test.js`'s "a config.yaml write must never
+    // name project-layout.yaml" scenario honest.)
+    console.log(chalk.gray(stamp
+      ? `  Regenerated _bmad/bmm/config.yaml from _bmad-output/project-layout.yaml — its generated fields were OVERWRITTEN.`
+      : `  Wrote _bmad/bmm/config.yaml — its generated fields were OVERWRITTEN.`));
+    console.log(chalk.gray(summary));
+    return true;
   } catch (e) {
     console.log(chalk.red(`  Cannot write config.yaml: ${e.message}`));
+    return false;
   }
+}
+
+/**
+ * The legacy-shape entry point, retained deliberately.
+ *
+ * Every caller that has a `{knowledgebase, sprintManagement}` layout in hand —
+ * `handleConfigLayout`, Step 3.6 of the installer, and the existing suites — goes
+ * through here. It is a THIN adapter, not a second writer: there is exactly one
+ * function that writes config.yaml, and the committed binding still wins whenever
+ * one exists, so calling this on a bound project generates from the binding and
+ * ignores the argument. That precedence is the whole point of AC1 — a caller
+ * cannot route around the authoritative source by passing a layout.
+ */
+function writeRepoLayoutConfig(layout) {
+  return generateBmmConfig({ projectRoot: process.cwd(), fallbackLayout: layout });
 }
 
 // ─── project-layout.yaml — schema v2: the two-store binding spine (Story 31.2) ──
@@ -757,22 +1198,30 @@ function writeRepoLayoutConfig(layout) {
 const PROJECT_LAYOUT_SCHEMA_VERSION = 2;
 
 // `backend` is a CLOSED enum in both directions, exactly like `mode`. Defined
-// ONCE here and consumed by both halves - `storeFromRaw` on read and
-// `serializeStore` on write - because the two spelled it out as independent
-// inline literals with independently hand-written error messages, and that is
-// the precise shape of the defect this epic has now found three times: write
-// side and read side disagreeing about a closed enum. Story 31.5 asks
-// `backend` per store, doubling the surface, so the set is single-sourced
-// before that lands rather than after.
-const STORE_BACKENDS = new Set(['file-system', 'confluence']);
+// ONCE - now in `lib/store-backends.js`, not here - and consumed by both halves
+// (`storeFromRaw` on read, `serializeStore` on write) because the two spelled it
+// out as independent inline literals with independently hand-written error
+// messages, and that is the precise shape of the defect this epic has now found
+// three times: write side and read side disagreeing about a closed enum. Story
+// 31.5 asks `backend` per store, doubling the surface, so the set is
+// single-sourced before that lands rather than after.
+//
+// Story 31.3 / 2B nit 1 — MOVED OUT of this file. The definition used to live
+// here, which left `lib/installer.js` (which must not require bin/cli.js) with a
+// SECOND, unpinned spelling of the same default. Both now read the leaf module.
+// The Set is rebuilt from the shared list rather than exported from it because
+// membership tests are on hot read/write paths and Set lookup is what the rest of
+// this file is written against.
+const STORE_BACKENDS = new Set(STORE_BACKEND_LIST);
 
 // The backend a store has when it never states one. Both the pre-F26 legacy
 // block (AC5) and the legacy `{mode, path}` wizard shape omit `backend:`
 // entirely, and "never stated" has always meant file-system on the read half,
-// the write half and now the display half. Named once for the same reason the
-// enum itself is: three spellings of the same default is how the read and write
-// halves come to disagree.
-const DEFAULT_STORE_BACKEND = 'file-system';
+// the write half, the display half and `generateRepoLayoutSection`'s
+// project-context half. `DEFAULT_STORE_BACKEND` is imported from
+// `lib/store-backends.js` at the top of this file — deliberately NOT re-declared
+// here, so `const DEFAULT_STORE_BACKEND = '...'` appears nowhere in this file and
+// a fourth definition cannot be reintroduced by a copy/paste.
 
 // Both backend messages are DERIVED from the set above, never hand-written, so
 // a member added to the enum cannot be named by one direction and omitted by
@@ -2692,9 +3141,26 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     }
   }
 
-  // Step 3.6: Write repo layout config (after BMAD install creates config.yaml)
+  // Step 3.6: Write the committed binding, then GENERATE the per-machine config
+  // from it (after BMAD install creates config.yaml).
+  //
+  // FR251 / Story 31.11: BOTH writes stay inside this one `installScope ===
+  // 'project'` gate. They are project-scoped work, and a global install must
+  // perform none of it. Do not add a second, ungated call site.
   if (installScope === 'project') {
-    writeRepoLayoutConfig(repoLayout);
+    // Story 31.3 AC1/AC2 — ORDER IS LOAD-BEARING, and it is the reverse of what
+    // it was. `config.yaml` is now GENERATED FROM `project-layout.yaml`, so the
+    // authoritative file must exist and be current before the derived one is
+    // produced. Generating first would have derived this install's config from
+    // the PREVIOUS install's binding — off by one run, and invisible.
+    //
+    // The order also carries the divergence case: when the two committed stores
+    // point at different places and the wizard supplied only the single legacy
+    // answer, `writeProjectLayoutYaml` applies it to the software store and
+    // PRESERVES the system store (FR264). Generating afterwards means
+    // `config.yaml` reflects the preserved system store rather than the
+    // collapsed answer.
+    //
     // R-4: Step 3.6 runs AFTER the BMAD install has completed. An uncaught throw
     // from here reaches main().catch, which prints the raw Error (stack trace,
     // exit 1) on a substantially-finished install - the exact failure mode the
@@ -2712,6 +3178,11 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
         `  (a future \`ma-agents bind\` will do this without a full re-install).`
       ));
     }
+    // `fallbackLayout` covers only the case where the binding could not be
+    // written at all (the warning above fired), so the install still leaves a
+    // usable config. When the binding exists it wins outright — see
+    // generateBmmConfig.
+    generateBmmConfig({ projectRoot: process.cwd(), fallbackLayout: repoLayout });
   }
 
   // Step 4: Confirm
@@ -3121,8 +3592,10 @@ async function handleConfigLayout(args) {
   const existingLayout = readExistingLayout();
   const newLayout = await collectRepoLayout({ yes: yesFlag }, existingLayout);
 
-  // Write updated config
-  writeRepoLayoutConfig(newLayout);
+  // Write the committed binding FIRST, then regenerate the derived config from
+  // it — same order, and for the same reason, as Step 3.6 of the installer
+  // (Story 31.3 AC1/AC2: config.yaml is generated from project-layout.yaml, so
+  // the authoritative file must be current before the derived one is produced).
   try {
     writeProjectLayoutYaml(newLayout);
   } catch (e) {
@@ -3131,6 +3604,7 @@ async function handleConfigLayout(args) {
       `  The binding was left unchanged.`
     ));
   }
+  generateBmmConfig({ projectRoot: process.cwd(), fallbackLayout: newLayout });
 
   // Update project-context.md
   const outputPath = path.join(process.cwd(), '_bmad-output', 'project-context.md');
@@ -3307,6 +3781,17 @@ if (require.main === module) {
 }
 
 module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, reconcileCustomMarketplaceOnUpdate, resolveBaseBmadOk, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue, yamlUnescapeDoubleQuoted, resolveProjectTopology, parseLayoutYaml, PROJECT_LAYOUT_SCHEMA_VERSION, BINDING_UNBOUND, BINDING_UNREADABLE, BINDING_INVALID, BINDING_TOO_NEW,
+  // Story 31.3 — the config.yaml generator and its stamp. `generateBmmConfig` is
+  // the entry point Story 31.13's `ma-agents bind` calls; `computeProjectLayoutStamp`
+  // and `readProjectLayoutStamp` are the PAIR Story 31.4's drift guard consumes, so
+  // that 31.4 depends on two functions rather than on a hash format it re-implements.
+  // `canonicalBindingBytes` is exported so a test can assert WHAT the stamp covers,
+  // not merely that two digests differ. `STAMP_ABSENT` / `STAMP_MALFORMED` are
+  // exported for the same reason `BINDING_*` are: 31.4 must branch on the reason
+  // by NAME, so the two failure states can never be collapsed back into one.
+  generateBmmConfig, computeProjectLayoutStamp, readProjectLayoutStamp, canonicalBindingBytes,
+  STAMP_ABSENT, STAMP_MALFORMED,
+  topologyFromLegacyLayout, PROJECT_LAYOUT_STAMP_FIELD, PROJECT_LAYOUT_STAMP_PREFIX,
   // COPIES, not the live Sets. These are the single source of truth for what a
   // store's `mode`/`backend` may be, consumed by the reader, the writer and the
   // wizard alike; handing out the real objects would let any consumer `.add()`

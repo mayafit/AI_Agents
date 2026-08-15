@@ -111,11 +111,56 @@ Story 31.3 does about regenerating `config.yaml` from a two-store `project-layou
 5. The conservative behaviour pinned by the B-1 tests is either kept deliberately or replaced
    deliberately; it is not left to drift.
 
+## Disposition after Story 31.3 (2026-08-15) — PARTIALLY answered; the core question goes to 31.6
+
+Story 31.3 was asked to answer this question *if its AC1 design settled it*, and to say so plainly if
+it did not. It settles **one** of the five acceptance criteria above and deliberately leaves the
+central one open. Stated precisely, so that 31.6 inherits a smaller question rather than a vaguer one:
+
+**AC4 — ANSWERED.** "The two-store case is addressed, not deferred again: one scalar field cannot
+describe two stores." 31.3's AC1 adds `system_requirements_path` and `software_requirements_path` to
+the generated `config.yaml`, beside the retained single-valued fields. A consumer that needs to know
+where a *particular* store lives no longer has to read a scalar that cannot answer. The retained
+`knowledgebase_path` resolves to the **software requirements store** (FR264 as amended 2026-08-02), so
+its meaning is now at least unambiguous as to *which store* it describes — which it was not before.
+
+**AC2 and AC5 — HELD DELIBERATELY.** Resolved artifact paths are unchanged for every project that
+never configures a Confluence store (NFR82), and the conservative `"."` behaviour is now pinned by
+*two* suites rather than one — `test/project-layout-two-store-round-trip.test.js` and
+`test/project-layout-config-generation.test.js` (its AC1 Confluence test). The installer's note was
+extended to name the two new fields as well as the legacy one, so the "this value is a stand-in"
+statement covers everything the generator writes, and agreeing stores produce one note rather than
+the same sentence twice.
+
+**AC1 and AC3 — NOT ANSWERED. They belong to Story 31.6.** Reasons, in order of weight:
+
+1. **31.6 owns the Confluence read path; 31.3 does not.** Deciding what a path *means* for a backend
+   whose read path does not yet exist is inventing a meaning — precisely what this file was filed to
+   prevent. Choosing between option 1 (rename/document the field as "where artifacts land on disk")
+   and option 4 (a `knowledgebase_backend` discriminator) turns on what the Confluence reader
+   actually needs, which is 31.6's information and not 31.3's.
+2. **Option 3 is off the table and should be struck when this file is next edited.** FR266 is
+   RETIRED: there is no local mirror, cache, sync or conflict resolution for Confluence stores
+   (P5-9.6). A cache/mirror directory is therefore not an available answer.
+3. **AC3 requires updating `lib/knowledge-atlas/src/scan/config.ts` in lockstep**, and AC1 requires a
+   PRD/architecture amendment. 31.3 changed neither: the Atlas scan reads `knowledgebase_path`, whose
+   value and derivation this story leaves byte-identical, so no lockstep change was owed — and
+   amending the PRD to resolve an implementation problem is outside this story's remit.
+
+**What 31.6 inherits.** A narrower question: given that per-store path fields now exist and that there
+is no mirror, does a Confluence-backed store's `*_path` field mean "the local directory artifacts land
+in" (option 1 — today's de-facto behaviour, needing documentation and possibly a rename), or does
+`config.yaml` grow a per-store `*_backend` discriminator so consumers stop inferring a backend from a
+path (option 4)? Options 2 and 3 are not live: option 2 risks NFR82, option 3 is retired with FR266.
+
 ## PRD Amendment Needed
 
 **Possibly.** FR117 defines the single `knowledgebase_path`; F26/FR257–FR265 introduce two stores and
 a non-filesystem backend without saying what happens to FR117's field. That gap is the question. No
 amendment is proposed here — deciding requirements is not this fix's job.
+
+**Still outstanding after Story 31.3.** 31.3 added the per-store fields but did not define what a path
+means for a non-filesystem backend, so the FR117 gap is unchanged. See the disposition above.
 
 ## Provenance
 
