@@ -41,7 +41,8 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const EXPECTED_TEST_COUNT = 16;
+// 16 from Story 31.11, +6 from Story 31.12 (AC5 x3, AC6 x2, AC7/NFR83 x1).
+const EXPECTED_TEST_COUNT = 22;
 
 const CLI_PATH = path.join(__dirname, '..', 'bin', 'cli.js');
 // Newline-normalised: the working tree is CRLF on Windows and LF on CI, and a
@@ -50,6 +51,13 @@ const CLI_PATH = path.join(__dirname, '..', 'bin', 'cli.js');
 const CLI_SOURCE = fs.readFileSync(CLI_PATH, 'utf-8').replace(/\r\n/g, '\n');
 const { parseFlags } = require('../bin/cli.js');
 const { GLOBAL_BIND_OFFER_HEADER } = require('../lib/installer.js');
+// Story 31.12 (FR250). Bound to the SHIPPED strings, not to copies of them: a
+// copy in the test would let the shipped text drift while the test stayed green.
+const {
+  GLOBAL_BMAD_SCOPE_NOTICE_FACT_1: FACT_1,
+  GLOBAL_BMAD_SCOPE_NOTICE_FACT_2: FACT_2,
+  GLOBAL_BMAD_SCOPE_NOTICE_FACT_3: FACT_3,
+} = require('../bin/cli.js');
 
 let passed = 0;
 let failed = 0;
@@ -330,6 +338,113 @@ test('the chosen scope is RECORDED so a later `ma-agents bind` knows it was glob
   }
 });
 
+// ─── Story 31.12 AC5 / AC6 — the FR250 degradation-path notice ──────────────
+//
+// CAREFUL: "AC5" elsewhere in this file means Story 31.11's AC5. Everything in
+// this section is STORY 31.12's AC5/AC6 and is labelled as such.
+//
+// Story 31.1's spike returned FAIL, so 31.12 is a messaging change: the BMAD
+// filter stays (BMAD genuinely cannot install globally) and only the text
+// changes. These assertions run against `globalRun.output` — the stdout of a
+// REAL `install --yes --global` — not merely against a constant, because the
+// defect this epic keeps producing is text that exists somewhere nothing reads.
+// Under `--yes` the wizard preselects every IDE *and* BMAD agent (bin/cli.js:
+// `selectedAgentIds = [...ideAgents.map(a => a.id), ...bmadAgents.map(a => a.id)]`),
+// so the `bmadAgentIds.length > 0` branch is genuinely entered by this run.
+
+console.log('\nStory 31.12 AC5/AC6 — the FR250 notice in a real global install');
+
+test('31.12 AC5 — the notice actually REACHES the user (anti-vacuity gate)', () => {
+  // If the branch is never entered, every content assertion below would be
+  // asserting about a string that was never printed. Prove it printed first.
+  assert.ok(globalRun.output.includes('BMAD-METHOD is installed per project'),
+    `the global install never emitted the FR250 notice at all, so nothing below is measuring ` +
+    `the shipped output. Either the --yes preselection stopped including BMAD agents or the ` +
+    `branch was removed.\n${globalRun.output.slice(-3000)}`);
+});
+
+test('31.12 AC5 — all three FR250 facts appear in the global install output', () => {
+  const facts = {
+    '(i) BMAD remains project-scoped': FACT_1,
+    '(ii) the command that installs BMAD into a project': FACT_2,
+    '(iii) the knowledge-store configuration is unaffected': FACT_3,
+  };
+  for (const [label, text] of Object.entries(facts)) {
+    assert.ok(typeof text === 'string' && text.trim().length > 0,
+      `FR250 fact ${label} is not exported from bin/cli.js as a non-empty string`);
+    // Line by line: the constants are multi-line and the console adds indent.
+    for (const line of text.split('\n')) {
+      assert.ok(globalRun.output.includes(line.trim()),
+        `FR250 fact ${label} is not in the global install output. Missing line:\n  ${line.trim()}`);
+    }
+  }
+});
+
+test('31.12 AC5 — fact (ii) names the command WITHOUT promising an install', () => {
+  // `cd <project> && ma-agents install` reaches the BMAD install only when BOTH
+  // an IDE-category agent is selected (bin/cli.js: `bmadToolsFilter` is built
+  // from `category === 'ide'` and gated by `if (bmadTools.length > 0)`) AND the
+  // user accepts the confirm `BMAD-METHOD not detected. Would you like to
+  // install it?`. Declining leaves BMAD uninstalled. So the text must name the
+  // command and the IDE-agent condition, and must not assert an outcome.
+  assert.ok(/`ma-agents install`/.test(FACT_2),
+    `fact (ii) does not name the command at all:\n${FACT_2}`);
+  assert.ok(/IDE\s+agent selected/.test(FACT_2.replace(/\s+/g, ' ')),
+    `fact (ii) omits the IDE-agent condition, so it implies any invocation installs BMAD:\n${FACT_2}`);
+  assert.ok(/\boffers\b/.test(FACT_2),
+    `fact (ii) must say the installer OFFERS — the "BMAD-METHOD not detected" confirm can be ` +
+    `declined, so a promise that it installs would be false:\n${FACT_2}`);
+  // Guard the source-level premise this wording depends on. If either condition
+  // disappears from bin/cli.js the wording is silently wrong; fail loud instead.
+  assert.ok(CLI_SOURCE.includes('if (bmadTools.length > 0) {'),
+    'the IDE-agent condition fact (ii) is worded around is gone from bin/cli.js');
+  assert.ok(CLI_SOURCE.includes("message: 'BMAD-METHOD not detected. Would you like to install it?',"),
+    'the confirm prompt fact (ii) is worded around is gone from bin/cli.js');
+});
+
+test('31.12 AC6 — the notice is not framed as a warning or an error', () => {
+  // AC6 is a real acceptance criterion, not a style note: a global install with
+  // project-scoped BMAD is a SUPPORTED configuration. The superseded text said
+  // "Warning:", "skipped" and "Run again without --global" — it told the user to
+  // undo a working mode. A facts-only test would let all of that survive
+  // alongside the three facts, so the framing is pinned separately, and against
+  // the real output as well as the constants.
+  const notice = [FACT_1, FACT_2, FACT_3].join('\n');
+  for (const banned of ['warning', 'error', 'skipped', 'run again without', 'unsupported']) {
+    assert.ok(!notice.toLowerCase().includes(banned),
+      `the FR250 notice contains "${banned}", which frames a supported configuration as a ` +
+      `fault. AC6: not a warning and not an error.\n${notice}`);
+  }
+  // The superseded sentences must be gone from the shipped binary's output too,
+  // not merely absent from the new constants while still printed alongside them.
+  for (const gone of [
+    'BMAD agents require project-level installation',
+    'Run again without --global',
+  ]) {
+    assert.ok(!globalRun.output.includes(gone),
+      `the superseded FR250 text "${gone}" is still printed by a global install`);
+  }
+});
+
+test('31.12 AC6 — the notice is not rendered through the warning colour', () => {
+  // `chalk.yellow` is this codebase's warning colour (see the neighbouring
+  // "Warning: Agent '...' is not supported for BMAD customizations" call) and
+  // `chalk.red` its error colour. Pinned at SOURCE level because colour is
+  // invisible to a captured, non-TTY stdout — the behavioural assertions above
+  // genuinely cannot see it, so this is not a redundant duplicate of them.
+  const start = CLI_SOURCE.indexOf("  if (installScope === 'global') {");
+  const end = CLI_SOURCE.indexOf('  // Step 3.5: BMAD-METHOD Integration');
+  assert.ok(start !== -1 && end !== -1 && end > start,
+    'could not locate the global BMAD-agent filter block in bin/cli.js — this test is not ' +
+    'measuring what it claims to measure');
+  const block = CLI_SOURCE.slice(start, end);
+  assert.ok(block.includes('bmadAgentIds') && block.includes('GLOBAL_BMAD_SCOPE_NOTICE_FACT_1'),
+    `the located block is not the FR250 notice block:\n${block}`);
+  assert.ok(!/chalk\.yellow|chalk\.red/.test(block),
+    `the FR250 notice is still printed through chalk.yellow/chalk.red. AC6 forbids warning ` +
+    `framing, and colour is part of that framing.\n${block}`);
+});
+
 // ─── The control: a PROJECT-scope install through the same harness ─────────
 //
 // This is what stops the six assertions above from being vacuous. Same harness,
@@ -377,6 +492,109 @@ test('NFR76 — the project-scope MANIFEST.yaml gains no global-install header',
       `${f} no longer opens with the pre-31.11 header bytes — NFR76 requires the project path ` +
       `to be byte-identical to the post-31.2 baseline`);
   }
+});
+
+// ─── Story 31.12 AC7 / NFR83 — resolution from the project root ALONE ───────
+//
+// NFR83: a globally-installed skill must resolve a bound project's topology from
+// the project root alone, with no per-machine install state. `resolveProjectTopology`
+// is the binding resolver.
+//
+// Three things make this non-vacuous, because "a function returned something" is
+// not evidence:
+//
+//   1. The binding under test is a REAL `_bmad-output/project-layout.yaml`
+//      produced by the control project install above — not a fixture written by
+//      this test to a shape the resolver happens to like.
+//   2. It is resolved from a PRISTINE directory containing that one file and
+//      nothing else: no `_bmad/`, no `.ma-agents.json`, no `.agents/`, no
+//      MANIFEST — and in a child process whose HOME/USERPROFILE point at an
+//      empty directory, so no per-machine install state is reachable even in
+//      principle. That is the actual NFR83 claim.
+//   3. A CONTROL resolves an empty sibling directory through the identical
+//      child process and must come back `ok:false, reason:'unbound'`. Without
+//      it, a resolver that returned `ok:true` for anything at all would pass.
+//      This epic's signature defect is validation that degrades to permissive,
+//      so the negative case is the half that carries the weight.
+
+console.log('\nStory 31.12 AC7 / NFR83 — topology resolves from the project root alone');
+
+test('31.12 AC7 / NFR83 — a bound project resolves with no install state, and an unbound one does not', () => {
+  const sourceLayout = path.join(projectBox.projectRoot, '_bmad-output', 'project-layout.yaml');
+  assert.ok(fs.existsSync(sourceLayout),
+    'the control project install produced no project-layout.yaml, so there is no real binding ' +
+    'to resolve and this test would be asserting about a fixture of its own making');
+  const layoutBytes = fs.readFileSync(sourceLayout, 'utf-8');
+  assert.ok(/\S/.test(layoutBytes.replace(/^\s*#.*$/gm, '')),
+    'the committed binding is empty or comment-only — resolving it would prove nothing');
+
+  const box = makeSandbox('nfr83');
+  const boundRoot = path.join(box.root, 'bound');
+  const unboundRoot = path.join(box.root, 'unbound');
+  const emptyHome = path.join(box.root, 'empty-home');
+  fs.mkdirSync(path.join(boundRoot, '_bmad-output'), { recursive: true });
+  fs.mkdirSync(unboundRoot, { recursive: true });
+  fs.mkdirSync(emptyHome, { recursive: true });
+  fs.writeFileSync(path.join(boundRoot, '_bmad-output', 'project-layout.yaml'), layoutBytes);
+
+  // The pristine root carries the binding and NOTHING else.
+  assert.deepStrictEqual(
+    walk(boundRoot).map(f => path.relative(boundRoot, f).replace(/\\/g, '/')).sort(),
+    ['_bmad-output', '_bmad-output/project-layout.yaml'],
+    'the NFR83 sandbox is not pristine — resolution could be leaning on some other artifact'
+  );
+  for (const rel of ['_bmad', '.ma-agents.json', '.agents', 'AGENTS.md', 'MANIFEST.yaml']) {
+    assert.ok(!fs.existsSync(path.join(boundRoot, rel)),
+      `the NFR83 sandbox contains ${rel}; NFR83 is about resolving WITHOUT it`);
+  }
+
+  // Resolve out-of-process with HOME/USERPROFILE redirected at an empty dir, so
+  // this machine's real global install cannot contribute anything.
+  const probe = path.join(box.root, 'probe.js');
+  fs.writeFileSync(probe, [
+    "const { resolveProjectTopology } = require(process.argv[2]);",
+    "process.stdout.write(JSON.stringify(resolveProjectTopology(process.argv[3])));",
+  ].join('\n'));
+
+  const resolveIn = (root) => {
+    const env = { ...process.env };
+    for (const k of LAYOUT_ENV_KEYS) delete env[k];
+    env.HOME = emptyHome;
+    env.USERPROFILE = emptyHome;
+    const res = spawnSync(process.execPath, [probe, CLI_PATH, root], {
+      cwd: root, env, encoding: 'utf-8', timeout: 120000,
+    });
+    assert.strictEqual(res.status, 0,
+      `the NFR83 probe exited ${res.status} for ${root} — resolveProjectTopology must never ` +
+      `throw.\n${res.stdout}\n${res.stderr}`);
+    return JSON.parse(res.stdout);
+  };
+
+  const bound = resolveIn(boundRoot);
+  assert.strictEqual(bound.ok, true,
+    `a committed binding did not resolve from the project root alone: ` +
+    `${JSON.stringify(bound)}\nlayout was:\n${layoutBytes}`);
+  assert.ok(bound.topology && typeof bound.topology === 'object', 'resolved without a topology');
+  assert.ok(Number.isInteger(bound.topology.schemaVersion) && bound.topology.schemaVersion >= 1,
+    `resolved topology has no usable schemaVersion: ${JSON.stringify(bound.topology)}`);
+  // The stores are the payload NFR83 exists for; an `ok:true` carrying nothing
+  // usable would satisfy the flag and fail the requirement.
+  for (const key of ['systemRequirementsStore', 'softwareRequirementsStore']) {
+    const store = bound.topology[key];
+    assert.ok(store && typeof store === 'object' && Object.keys(store).length > 0,
+      `resolved topology carries no ${key}, so nothing was actually resolved: ` +
+      JSON.stringify(bound.topology));
+  }
+
+  // THE CONTROL. Same probe, same empty HOME, no committed binding.
+  const unbound = resolveIn(unboundRoot);
+  assert.strictEqual(unbound.ok, false,
+    `an EMPTY directory resolved successfully (${JSON.stringify(unbound)}). The resolver is ` +
+    `permissive, so the positive case above proves nothing.`);
+  assert.strictEqual(unbound.reason, 'unbound',
+    `an unbound project reported reason ${JSON.stringify(unbound.reason)}, expected 'unbound'`);
+  assert.ok(typeof unbound.message === 'string' && unbound.message.length > 0,
+    'the unbound result carries no message for a caller to report');
 });
 
 // ─── AC5 / NFR77 — the global path reaches the network for nothing ─────────
