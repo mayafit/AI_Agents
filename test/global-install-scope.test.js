@@ -41,7 +41,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const EXPECTED_TEST_COUNT = 12;
+const EXPECTED_TEST_COUNT = 16;
 
 const CLI_PATH = path.join(__dirname, '..', 'bin', 'cli.js');
 // Newline-normalised: the working tree is CRLF on Windows and LF on CI, and a
@@ -377,6 +377,56 @@ test('NFR76 — the project-scope MANIFEST.yaml gains no global-install header',
       `${f} no longer opens with the pre-31.11 header bytes — NFR76 requires the project path ` +
       `to be byte-identical to the post-31.2 baseline`);
   }
+});
+
+// ─── AC5 / NFR77 — the global path reaches the network for nothing ─────────
+//
+// This is the ONE behaviour that makes the `installScope === 'project'` gate on
+// `collectRepoLayout` load-bearing under `--yes`, and it is the only NFR77
+// evidence this suite can produce without an actual egress block.
+//
+// `collectRepoLayout({yes:true})` with MA_KNOWLEDGEBASE_GIT_URL set calls
+// `ciCloneIfNeeded`, which shells out to `git clone` and, on failure, throws a
+// fail-loud error that aborts the install. So on an UNGATED build, a global
+// install with these env vars set either clones (network access at install
+// time, violating NFR77) or dies trying. With the gate, the collection never
+// runs: the install completes, nothing is cloned, and the project root stays
+// empty. The URL below is deliberately unroutable so that a regression cannot
+// pass by silently succeeding.
+
+console.log('\nAC5 / NFR77 — a global install does not clone, even with MA_*_GIT_URL set');
+
+const cloneBox = makeSandbox('clone');
+const cloneDest = path.join(cloneBox.root, 'would-be-clone');
+const cloneRun = (() => {
+  const env = { ...process.env };
+  env.HOME = cloneBox.homeRoot;
+  env.USERPROFILE = cloneBox.homeRoot;
+  env.MA_KNOWLEDGEBASE_PATH = cloneDest;
+  env.MA_KNOWLEDGEBASE_GIT_URL = 'https://ma-agents-31-11.invalid/no-such-repo.git';
+  const res = spawnSync(process.execPath, [CLI_PATH, 'install', '--yes', '--global'], {
+    cwd: cloneBox.projectRoot, env, encoding: 'utf-8', input: '',
+    stdio: ['pipe', 'pipe', 'pipe'], timeout: 900000,
+  });
+  return { status: res.status, signal: res.signal, output: `${res.stdout || ''}\n${res.stderr || ''}` };
+})();
+
+test('NFR77 — MA_KNOWLEDGEBASE_GIT_URL is not acted on by a global install', () => {
+  assert.notStrictEqual(cloneRun.status, null,
+    `the install did not exit within the timeout (signal ${cloneRun.signal})`);
+  assert.strictEqual(cloneRun.status, 0,
+    `the global install failed with the layout env vars set. An UNGATED build reaches ` +
+    `ciCloneIfNeeded here and aborts on the unroutable URL — which is precisely the ` +
+    `install-time network access NFR77 forbids.\n${cloneRun.output.slice(-3000)}`);
+  assert.ok(!fs.existsSync(cloneDest),
+    `a global install created the clone destination ${cloneDest}`);
+  assert.ok(!/Cloning/.test(cloneRun.output),
+    `the global install announced a clone:\n${cloneRun.output.slice(-2000)}`);
+  assert.deepStrictEqual(walk(cloneBox.projectRoot), [],
+    'the global install wrote into the project root even with layout env vars set');
+  // Anti-vacuity: prove this run installed, so "did not clone" is not "did nothing".
+  assert.ok(walk(cloneBox.homeRoot).filter(f => path.basename(f) === 'SKILL.md').length >= 20,
+    'this run did not actually install anything, so it proves nothing about cloning');
 });
 
 // ─── cleanup + summary ──────────────────────────────────────────────────────
