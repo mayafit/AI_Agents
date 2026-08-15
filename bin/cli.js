@@ -45,6 +45,12 @@ const { getBmadPlatformCode } = require('../lib/agents');
 const { enumerateCustomSource, NFR71_WARNING, CustomMarketplaceError, reconcileCustomMarketplaceSelection, registryTrustLabel } = require('../lib/custom-marketplace');
 const { setLogSink, diag, diagError } = require('../lib/diag');
 const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
+// 2B nit 1 — the knowledge-store `backend` enum and its default now live in a
+// dependency-free leaf module under lib/, so `lib/installer.js` (which must NOT
+// require this file — the dependency runs the other way) consumes the SAME
+// definition instead of open-coding a second one. See lib/store-backends.js.
+const { STORE_BACKEND_LIST, DEFAULT_STORE_BACKEND } = require('../lib/store-backends');
+const crypto = require('crypto');
 
 const PKG = require('../package.json');
 const NAME = PKG.name;
@@ -757,22 +763,30 @@ function writeRepoLayoutConfig(layout) {
 const PROJECT_LAYOUT_SCHEMA_VERSION = 2;
 
 // `backend` is a CLOSED enum in both directions, exactly like `mode`. Defined
-// ONCE here and consumed by both halves - `storeFromRaw` on read and
-// `serializeStore` on write - because the two spelled it out as independent
-// inline literals with independently hand-written error messages, and that is
-// the precise shape of the defect this epic has now found three times: write
-// side and read side disagreeing about a closed enum. Story 31.5 asks
-// `backend` per store, doubling the surface, so the set is single-sourced
-// before that lands rather than after.
-const STORE_BACKENDS = new Set(['file-system', 'confluence']);
+// ONCE - now in `lib/store-backends.js`, not here - and consumed by both halves
+// (`storeFromRaw` on read, `serializeStore` on write) because the two spelled it
+// out as independent inline literals with independently hand-written error
+// messages, and that is the precise shape of the defect this epic has now found
+// three times: write side and read side disagreeing about a closed enum. Story
+// 31.5 asks `backend` per store, doubling the surface, so the set is
+// single-sourced before that lands rather than after.
+//
+// Story 31.3 / 2B nit 1 — MOVED OUT of this file. The definition used to live
+// here, which left `lib/installer.js` (which must not require bin/cli.js) with a
+// SECOND, unpinned spelling of the same default. Both now read the leaf module.
+// The Set is rebuilt from the shared list rather than exported from it because
+// membership tests are on hot read/write paths and Set lookup is what the rest of
+// this file is written against.
+const STORE_BACKENDS = new Set(STORE_BACKEND_LIST);
 
 // The backend a store has when it never states one. Both the pre-F26 legacy
 // block (AC5) and the legacy `{mode, path}` wizard shape omit `backend:`
 // entirely, and "never stated" has always meant file-system on the read half,
-// the write half and now the display half. Named once for the same reason the
-// enum itself is: three spellings of the same default is how the read and write
-// halves come to disagree.
-const DEFAULT_STORE_BACKEND = 'file-system';
+// the write half, the display half and `generateRepoLayoutSection`'s
+// project-context half. `DEFAULT_STORE_BACKEND` is imported from
+// `lib/store-backends.js` at the top of this file — deliberately NOT re-declared
+// here, so `const DEFAULT_STORE_BACKEND = '...'` appears nowhere in this file and
+// a fourth definition cannot be reintroduced by a copy/paste.
 
 // Both backend messages are DERIVED from the set above, never hand-written, so
 // a member added to the enum cannot be named by one direction and omitted by
