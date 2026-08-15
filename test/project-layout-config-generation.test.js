@@ -36,7 +36,7 @@ const os = require('os');
 
 // Bumped deliberately as sections are added. A `!==` check, so a SURPLUS fails
 // just as loudly as a shortfall.
-const EXPECTED_TEST_COUNT = 31;
+const EXPECTED_TEST_COUNT = 32;
 
 let passed = 0;
 let failed = 0;
@@ -1161,6 +1161,40 @@ test('F1/AC7: the CONTRACT bin/cli.js hands Story 31.4 no longer says a null rea
   // …and the reader must not be able to hand back a bare string again.
   assert.ok(!/return m \? m\[1\] : null/.test(RAW_CLI),
     'the superseded null-or-string reader body must not return');
+});
+
+test('F5/R-4: the stamp is computed INSIDE the generator\'s try, so a serializer throw cannot escape', () => {
+  // `computeProjectLayoutStamp` re-runs the `project-layout.yaml` serializers, and
+  // those THROW rather than return on a value they refuse to write
+  // (`serializeStore`'s backend-enum check, `assertWritableMode`,
+  // `assertSingleLineIdentity`). Install Step 3.6 wraps `writeProjectLayoutYaml`
+  // in a try/catch for exactly this hazard but does NOT wrap `generateBmmConfig`,
+  // so a throw escaping the generator reaches `main().catch` and prints a stack
+  // trace over a substantially-finished install.
+  //
+  // ASSERTED STRUCTURALLY, ON PURPOSE, AND SAID PLAINLY: no reachable input that
+  // makes a serializer throw from here has been found — the throwing path needs
+  // `binding.ok`, and everything reaching that has already been normalised by
+  // `parseLayoutYaml`/`storeFromRaw`; the caller-supplied `fallbackLayout` branch
+  // computes no stamp at all. So this pins the ASYMMETRY being closed rather than
+  // a behaviour that can be provoked, and it is the only thing that notices the
+  // computation being hoisted back out.
+  const start = CLI_SOURCE.indexOf('function generateBmmConfig(');
+  const end = CLI_SOURCE.indexOf('function writeRepoLayoutConfig(');
+  assert.ok(start !== -1 && end > start, 'the generator must be locatable');
+  const body = CLI_SOURCE.slice(start, end);
+
+  const tryAt = body.indexOf('try {');
+  const stampAt = body.indexOf('computeProjectLayoutStamp(');
+  assert.ok(tryAt !== -1, 'the generator must still have a try/catch');
+  assert.ok(stampAt !== -1, 'the generator must still compute the stamp');
+  assert.ok(stampAt > tryAt,
+    'computeProjectLayoutStamp must be called INSIDE the try — it sat before it, where its ' +
+    'serializers could throw past the generator and out of an otherwise finished install');
+  // And it must be the FIRST thing in the try, before any file is created: a
+  // throw must leave config.yaml exactly as it was, not half-written.
+  assert.ok(stampAt < body.indexOf('fs.writeFileSync(configPath'),
+    'the stamp must be computed before anything is written, so a throw leaves no partial file');
 });
 
 test('AC7: the hashed input is the canonical binding, and it covers all three location records', () => {
