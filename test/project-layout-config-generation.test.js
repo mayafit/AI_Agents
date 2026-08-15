@@ -36,7 +36,7 @@ const os = require('os');
 
 // Bumped deliberately as sections are added. A `!==` check, so a SURPLUS fails
 // just as loudly as a shortfall.
-const EXPECTED_TEST_COUNT = 26;
+const EXPECTED_TEST_COUNT = 30;
 
 let passed = 0;
 let failed = 0;
@@ -807,7 +807,9 @@ test('AC7: the stamp is written, has the documented shape, and reads back throug
     // The exported reader must agree with the real YAML parser. Story 31.4 uses
     // the reader; if the two disagreed, 31.4 would compare against something the
     // file does not actually say.
-    assert.strictEqual(cli.readProjectLayoutStamp(readConfig(tmpDir)), stamp,
+    const read = cli.readProjectLayoutStamp(readConfig(tmpDir));
+    assert.strictEqual(read.ok, true, 'a freshly generated config must read as a usable stamp');
+    assert.strictEqual(read.value, stamp,
       'readProjectLayoutStamp must return exactly what a real parser sees');
 
     // And the recompute-and-compare loop 31.4 performs must close.
@@ -871,25 +873,152 @@ test('AC7/OQ-2: the stamp ignores the `generated:` date, comments and line endin
   }
 });
 
-test('AC7: readProjectLayoutStamp returns null for a pre-F26 config and for a mangled stamp', () => {
-  // 31.4 AC5 turns on this distinction: "no stamp" is a config that predates F26
-  // and must degrade to today's behaviour, NOT be reported as drift. A reader
-  // that returned a truthy value for a truncated stamp would make 31.4 report
-  // permanent, unexplainable drift.
-  assert.strictEqual(cli.readProjectLayoutStamp('knowledgebase_path: "."\n'), null,
-    'a config with no stamp must read as null');
-  assert.strictEqual(cli.readProjectLayoutStamp(''), null, 'empty content must read as null');
-  assert.strictEqual(cli.readProjectLayoutStamp(null), null, 'null content must not throw');
-  assert.strictEqual(cli.readProjectLayoutStamp('project_layout_stamp: "sha256:abc"\n'), null,
-    'a truncated stamp is not a usable stamp');
-  assert.strictEqual(cli.readProjectLayoutStamp('project_layout_stamp: "md5:' + '0'.repeat(64) + '"\n'), null,
-    'a stamp from another algorithm must not be read as a sha256 one');
-  assert.strictEqual(cli.readProjectLayoutStamp('project_layout_stamp: "sha256:' + 'A'.repeat(64) + '"\n'), null,
-    'the hex must be lowercase — the writer emits lowercase, so uppercase is not ours');
-  const good = 'sha256:' + 'a1'.repeat(32);
-  assert.strictEqual(cli.readProjectLayoutStamp(`project_layout_stamp: "${good}"\n`), good);
-  assert.strictEqual(cli.readProjectLayoutStamp(`project_layout_stamp: ${good}\n`), good,
-    'an unquoted stamp must read too — a hand-edited file is still a file');
+// ───────────────────────────────────────────────────────────────────────────
+// F1 — THE READER'S THREE STATES ARE THREE, NOT TWO.
+//
+// The superseded reader returned the same `null` for "there is no stamp" and
+// "there is a stamp and it cannot be used", and the contract block in bin/cli.js
+// told Story 31.4 to read that null as "PRE-F26, not drift". The dangerous state
+// is `valid binding + mangled stamp` — merge damage, a hand-edit, a truncated
+// write — which under that contract classifies as pre-F26, so 31.4 declines to
+// block and a skill runs against paths nothing verified. THE TEST THAT USED TO
+// LIVE HERE PINNED THAT CONFLATION IN PLACE (it asserted `null` for both), so it
+// moves with the contract rather than being deleted: every case it covered is
+// still covered below, now asserted against the state it actually is.
+// ───────────────────────────────────────────────────────────────────────────
+const GOOD_STAMP = 'sha256:' + 'a1'.repeat(32);
+
+test('F1/AC7: a config with no stamp field reads as ABSENT — the only pre-F26 case', () => {
+  for (const [label, content] of [
+    ['a pre-F26 config', 'knowledgebase_path: "."\n'],
+    ['empty content', ''],
+    ['null content (must not throw)', null],
+    ['undefined content (must not throw)', undefined],
+  ]) {
+    const r = cli.readProjectLayoutStamp(content);
+    assert.strictEqual(r.ok, false, `${label}: must not read as a usable stamp`);
+    assert.strictEqual(r.reason, cli.STAMP_ABSENT, `${label}: must be reported as absent`);
+    assert.ok(typeof r.message === 'string' && r.message.length > 0,
+      `${label}: an absent stamp must still carry an explanation`);
+    assert.strictEqual(r.value, undefined, `${label}: there is no value to hand out`);
+  }
+});
+
+test('F1/AC7: a stamp that is PRESENT but unusable reads as MALFORMED, never as absent', () => {
+  // Each of these is a file that CLAIMS to have been generated. Reporting any of
+  // them as `absent` hands Story 31.4 the pre-F26 verdict and turns the drift
+  // guard permissive on exactly the damaged input it exists to catch.
+  const mangled = [
+    ['a truncated digest', 'project_layout_stamp: "sha256:abc"\n'],
+    ['another algorithm', 'project_layout_stamp: "md5:' + '0'.repeat(64) + '"\n'],
+    ['uppercase hex', 'project_layout_stamp: "sha256:' + 'A'.repeat(64) + '"\n'],
+    ['an empty value', 'project_layout_stamp: ""\n'],
+    ['no value at all', 'project_layout_stamp:\n'],
+    ['a value that is not a stamp', 'project_layout_stamp: yes\n'],
+    ['merge damage', 'project_layout_stamp: <<<<<<< HEAD\n'],
+    ['an unbalanced quote', `project_layout_stamp: "${GOOD_STAMP}\n`],
+    ['trailing content after the digest', `project_layout_stamp: ${GOOD_STAMP} # checked by hand\n`],
+  ];
+  for (const [label, content] of mangled) {
+    const r = cli.readProjectLayoutStamp(content);
+    assert.strictEqual(r.ok, false, `${label}: must not read as a usable stamp`);
+    assert.strictEqual(r.reason, cli.STAMP_MALFORMED,
+      `${label}: must be reported as MALFORMED, not as ${r.reason} — a config that carries a ` +
+      `stamp field is not a config that predates the stamp`);
+    assert.ok(typeof r.message === 'string' && /config\.yaml/.test(r.message),
+      `${label}: the refusal must name the file it read: ${r.message}`);
+    assert.ok(typeof r.raw === 'string',
+      `${label}: the unusable text must be reported so a human can see what is there`);
+    assert.strictEqual(r.value, undefined, `${label}: there is no value to hand out`);
+  }
+
+  // The two failure states must be TELLABLE APART by a consumer. If these ever
+  // collapse to one constant, every assertion above passes while the conflation
+  // is back.
+  assert.notStrictEqual(cli.STAMP_ABSENT, cli.STAMP_MALFORMED,
+    'absent and malformed must be distinct reasons, or 31.4 cannot branch on them');
+});
+
+test('F1/AC7: a well-formed stamp reads as ok, quoted or unquoted', () => {
+  for (const [label, content] of [
+    ['quoted', `project_layout_stamp: "${GOOD_STAMP}"\n`],
+    ['unquoted — a hand-edited file is still a file', `project_layout_stamp: ${GOOD_STAMP}\n`],
+    ['single-quoted', `project_layout_stamp: '${GOOD_STAMP}'\n`],
+    ['CRLF', `knowledgebase_path: "."\r\nproject_layout_stamp: "${GOOD_STAMP}"\r\n`],
+    ['no trailing newline', `project_layout_stamp: "${GOOD_STAMP}"`],
+  ]) {
+    const r = cli.readProjectLayoutStamp(content);
+    assert.strictEqual(r.ok, true, `${label}: must read as a usable stamp, got ${JSON.stringify(r)}`);
+    assert.strictEqual(r.value, GOOD_STAMP, `${label}: the value must be the bare stamp`);
+    // The oracle: a real parser must see the same value the reader claims.
+    assert.strictEqual(yamlOracle.load(content)[cli.PROJECT_LAYOUT_STAMP_FIELD], r.value,
+      `${label}: the reader and js-yaml must agree about what the file says`);
+  }
+});
+
+test('F3/AC7: the digest length and the line anchoring ARE the validation boundary', () => {
+  // ── LENGTH. The suite previously tested a 3-character truncation only, which
+  // leaves `{64}` -> `{32,64}` (a truncated-but-long digest) alive. Bracket it.
+  for (const n of [32, 48, 63, 65, 128]) {
+    const r = cli.readProjectLayoutStamp(`project_layout_stamp: "sha256:${'a'.repeat(n)}"\n`);
+    assert.strictEqual(r.ok, false, `a ${n}-character digest must not be accepted`);
+    assert.strictEqual(r.reason, cli.STAMP_MALFORMED, `a ${n}-character digest is malformed`);
+  }
+  assert.strictEqual(cli.readProjectLayoutStamp(
+    `project_layout_stamp: "sha256:${'a'.repeat(64)}"\n`).ok, true,
+    'exactly 64 must still be accepted, or the boundary test above is vacuous');
+
+  // ── LINE ANCHORING. The field is what `writeConfigField` would rewrite: a
+  // top-level key at column 0. A stamp inside a comment, or nested under another
+  // mapping, is NOT that field — and the oracle agrees, which is the point: the
+  // reader must not see a stamp a real YAML parser cannot see at the top level.
+  for (const [label, content] of [
+    ['commented out', `# project_layout_stamp: "${GOOD_STAMP}"\nknowledgebase_path: "."\n`],
+    ['nested under another key', `some_other_block:\n  project_layout_stamp: "${GOOD_STAMP}"\n`],
+    ['indented beneath a real generated field',
+      `knowledgebase_path:\n  project_layout_stamp: "${GOOD_STAMP}"\n`],
+  ]) {
+    const parsed = yamlOracle.load(content);
+    assert.strictEqual(parsed && parsed[cli.PROJECT_LAYOUT_STAMP_FIELD], undefined,
+      `${label}: fixture must genuinely have no TOP-LEVEL stamp, or this asserts nothing`);
+    const r = cli.readProjectLayoutStamp(content);
+    assert.strictEqual(r.ok, false,
+      `${label}: an embedded occurrence must never be read as the stamp — js-yaml does not ` +
+      `see one there either, and a reader that disagrees with the parser is the bug`);
+    assert.strictEqual(r.reason, cli.STAMP_ABSENT,
+      `${label}: the top-level field is genuinely not present, so this is absent, not malformed`);
+  }
+
+  // Anchoring also at the END: content after the digest on the same line is not
+  // this build's output, so it is malformed rather than trimmed and accepted.
+  assert.strictEqual(
+    cli.readProjectLayoutStamp(`project_layout_stamp: ${GOOD_STAMP}trailing\n`).reason,
+    cli.STAMP_MALFORMED, 'a digest with a suffix glued to it must not be accepted');
+  assert.strictEqual(
+    cli.readProjectLayoutStamp(`project_layout_stamp: prefix${GOOD_STAMP}\n`).reason,
+    cli.STAMP_MALFORMED, 'a digest with a prefix glued to it must not be accepted');
+});
+
+test('F1/AC7: the CONTRACT bin/cli.js hands Story 31.4 no longer says a null read means pre-F26', () => {
+  // The blocking finding was as much about the written contract as about the
+  // code: 31.4 implemented against the old wording would classify a mangled
+  // stamp as pre-F26 and decline to block. Source-level, because the contract IS
+  // the comment block — there is no other artifact 31.4 reads.
+  const RAW_CLI = fs.readFileSync(path.join(__dirname, '..', 'bin', 'cli.js'), 'utf-8');
+  const start = RAW_CLI.indexOf('HOW STORY 31.4 USES IT');
+  assert.ok(start !== -1, 'the 31.4 contract block must be locatable');
+  const contract = RAW_CLI.slice(start, RAW_CLI.indexOf('const PROJECT_LAYOUT_STAMP_FIELD'));
+  assert.ok(contract.length > 0, 'the contract block must be non-empty');
+
+  assert.ok(!/returns `null` for a config with no stamp/.test(contract),
+    'the superseded "returns null for a config with no stamp" wording must be gone');
+  for (const required of ['absent', 'malformed', 'RESOLVER FIRST']) {
+    assert.ok(contract.includes(required),
+      `the contract must state ${JSON.stringify(required)} so 31.4 cannot re-derive the conflation`);
+  }
+  // …and the reader must not be able to hand back a bare string again.
+  assert.ok(!/return m \? m\[1\] : null/.test(RAW_CLI),
+    'the superseded null-or-string reader body must not return');
 });
 
 test('AC7: the hashed input is the canonical binding, and it covers all three location records', () => {
@@ -972,7 +1101,9 @@ test('AC8/carry-forward 1: a --yes reinstall on a legacy config.yaml keeps the l
     // The binding now exists and agrees, so the stamp is present and current.
     const binding = cli.resolveProjectTopology(tmpDir);
     assert.ok(binding.ok);
-    assert.strictEqual(cli.readProjectLayoutStamp(readConfig(tmpDir)),
+    const stampRead = cli.readProjectLayoutStamp(readConfig(tmpDir));
+    assert.strictEqual(stampRead.ok, true, 'the generated config must carry a usable stamp');
+    assert.strictEqual(stampRead.value,
       cli.computeProjectLayoutStamp(binding.topology, tmpDir),
       'after install the generated config must be in sync with the binding it came from');
   } finally {

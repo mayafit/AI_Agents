@@ -713,10 +713,50 @@ function canonicalArtifactPath(suffix) {
 //      WOULD be for that binding.
 //   3. `readProjectLayoutStamp(configContent)` — what `config.yaml` records.
 //   4. Not equal ⇒ drift. Both functions are exported for exactly this.
-//      `readProjectLayoutStamp` returns `null` for a config with no stamp,
-//      which is a PRE-F26 config, not drift (31.4 AC5's degrade-to-today case).
 //      Comparison is on the opaque string; 31.4 must not parse it.
-//   5. To NAME the drift ("which store moved, from where to where", 31.4 AC1),
+//
+//      `readProjectLayoutStamp` returns a DISCRIMINATED result — never a bare
+//      string, never a bare `null` — because "there is no stamp" and "there is a
+//      stamp and it cannot be used" are DIFFERENT FACTS, and only one of them is
+//      benign:
+//
+//          { ok: true,  value: 'sha256:<64 lowercase hex>' }
+//          { ok: false, reason: 'absent',    message }
+//          { ok: false, reason: 'malformed', message, raw }
+//
+//        - `absent`    — the file carries no `project_layout_stamp:` line at
+//                        all. THAT, and only that, is the PRE-F26 config that
+//                        31.4 AC5 degrades to today's behaviour for. Not drift.
+//        - `malformed` — the line IS present but its value is not a stamp this
+//                        build wrote: truncated, re-cased, a different algorithm,
+//                        damaged by a merge, commented out, or indented into some
+//                        other block. This is NOT a pre-F26 config and MUST NOT
+//                        be treated as one. The file claims to have been
+//                        generated and the claim is unreadable, so 31.4 must
+//                        report `message` verbatim and refuse to certify the
+//                        binding — the same posture it takes for drift.
+//
+//      An earlier draft of this contract said a null read means "pre-F26, NOT
+//      drift", and the reader returned that same null for both states. That made
+//      `valid binding + mangled stamp` — ordinary merge damage, a hand-edit, a
+//      truncated write — classify as pre-F26, so 31.4 would decline to block and
+//      a skill would run against paths nothing had verified. Validation
+//      degrading to permissive is the defect class F26 exists to remove; it is
+//      not allowed to live in the contract 31.4 is built from.
+//
+//   5. ORDER: THE RESOLVER FIRST, THE STAMP SECOND. 31.4 keys on
+//      `resolveProjectTopology` and consults the stamp only afterwards.
+//      That ordering is what makes the `unbound + fallback` branch of
+//      `generateBmmConfig` below correct rather than a silent-permissive hole:
+//      that branch generates a config from the caller's answered layout and
+//      deliberately writes NO stamp, because there is no `project-layout.yaml`
+//      to stamp. A stamp invented there would be a false claim about a binding
+//      that does not exist, and would later collide with the real binding the
+//      next install writes. Because 31.4 asks the resolver first, it learns
+//      `unbound` from the file system BEFORE the stamp is read, so an `absent`
+//      stamp is never the fact it reasons from — it is only ever a corroboration
+//      of something the resolver already established.
+//   6. To NAME the drift ("which store moved, from where to where", 31.4 AC1),
 //      31.4 compares the per-store path fields already in `config.yaml`
 //      (`system_requirements_path` / `software_requirements_path` /
 //      `sprint_management_path`) against the freshly resolved topology. The
@@ -750,19 +790,92 @@ function computeProjectLayoutStamp(topology, projectRoot) {
 }
 
 /**
- * Reads the stamp back out of `config.yaml` content. Returns the opaque stamp
- * string, or `null` when the file carries no stamp — which means a config that
- * predates F26, NOT drift. Story 31.4 AC5 turns on that distinction.
+ * Reads the stamp back out of `config.yaml` content.
  *
- * The value shape is validated rather than accepted as free text: a truncated or
- * hand-mangled stamp must read as "no usable stamp" and be reported, not be
- * compared as a string that will never match and so report permanent drift with
- * no explanation.
+ * CONTRACT — a DISCRIMINATED result, in the same shape and for the same reason as
+ * `resolveProjectTopology`'s. Never returns null, never throws:
+ *
+ *     { ok: true,  value: 'sha256:<64 lowercase hex>' }
+ *     { ok: false, reason: 'absent',    message: '...' }
+ *     { ok: false, reason: 'malformed', message: '...', raw: '<what was there>' }
+ *
+ * The two failure reasons are NOT interchangeable and the split is the whole
+ * point of the function's shape. `absent` is a pre-F26 config: nothing ever wrote
+ * a stamp here, 31.4 AC5 degrades to today's behaviour, and that is benign.
+ * `malformed` is a config that CLAIMS to have been generated and whose claim
+ * cannot be read — merge damage, a hand-edit, a truncated write. The previous
+ * signature returned the same `null` for both, which meant a valid binding
+ * carrying a mangled stamp was indistinguishable from a project that predates the
+ * feature, and a consumer following the documented contract would decline to
+ * block. A guard that degrades to permissive on damaged input is not a guard.
+ *
+ * The discriminated shape (rather than the superseded null-or-string pair) is
+ * what makes that unmissable: any caller reaching for `.value` is forced past
+ * `.ok`, so it cannot silently inherit the old conflation.
+ *
+ * MATCHING IS DELIBERATELY THE WRITER'S OWN MATCHING. `writeConfigField` locates
+ * a field with `^<field>:.*$` under the `m` flag and replaces the FIRST match
+ * only, so the reader anchors the key to column 0 and takes the first occurrence
+ * too. Reader and writer therefore always speak about the same line: a
+ * `# project_layout_stamp: …` in a comment, or an indented `project_layout_stamp:`
+ * nested inside some other mapping, is not the field either of them means, and is
+ * not accepted as one. (A duplicate top-level key cannot arise from the writer,
+ * and if one were hand-added the whole file would already fail js-yaml's
+ * duplicate-key check — a far louder failure than this reader's.)
+ *
+ * The VALUE is validated rather than accepted as free text, and anything that is
+ * not exactly this build's output is `malformed` rather than quietly dropped: a
+ * truncated digest of any length, uppercase hex, another algorithm's prefix, an
+ * unbalanced quote, or trailing content after the digest.
  */
+const STAMP_ABSENT = 'absent';
+const STAMP_MALFORMED = 'malformed';
+
 function readProjectLayoutStamp(configContent) {
-  const m = String(configContent == null ? '' : configContent)
-    .match(/^project_layout_stamp:[ \t]*"?(sha256:[0-9a-f]{64})"?[ \t]*$/m);
-  return m ? m[1] : null;
+  const content = String(configContent == null ? '' : configContent);
+
+  // Step 1 — is the field there AT ALL? Column-anchored, first occurrence, `m`
+  // flag: exactly what writeConfigField would rewrite.
+  const keyLine = content.match(/^project_layout_stamp:(.*)$/m);
+  if (!keyLine) {
+    return {
+      ok: false,
+      reason: STAMP_ABSENT,
+      message:
+        `_bmad/bmm/config.yaml carries no ${PROJECT_LAYOUT_STAMP_FIELD}: field. This is a ` +
+        `config generated before F26 introduced the stamp, not evidence that anything moved.`,
+    };
+  }
+
+  // `.` does not match `\n` but DOES match `\r`, so a CRLF file would otherwise
+  // leave a carriage return glued to the digest and read as malformed.
+  const rawValue = keyLine[1].replace(/\r$/, '').trim();
+
+  // Step 2 — is the value one this build wrote? Quotes must BALANCE; stripping a
+  // leading `"` without requiring the trailing one would accept a value the YAML
+  // parser reads differently, which is the reader/parser disagreement the suite's
+  // js-yaml oracle exists to prevent.
+  let unquoted = rawValue;
+  if (/^"[^]*"$/.test(unquoted) || /^'[^]*'$/.test(unquoted)) {
+    unquoted = unquoted.slice(1, -1);
+  }
+
+  if (!/^sha256:[0-9a-f]{64}$/.test(unquoted)) {
+    return {
+      ok: false,
+      reason: STAMP_MALFORMED,
+      raw: rawValue,
+      message:
+        `_bmad/bmm/config.yaml has a ${PROJECT_LAYOUT_STAMP_FIELD}: field whose value is not a ` +
+        `stamp this ma-agents wrote (expected "sha256:" followed by 64 lowercase hex ` +
+        `characters), got ${JSON.stringify(rawValue)}. The file claims to have been generated ` +
+        `from a committed binding and that claim cannot be read — treat it as unverified, NOT ` +
+        `as a config that predates the stamp. Re-run the installer (or \`ma-agents bind\`) to ` +
+        `regenerate config.yaml from _bmad-output/project-layout.yaml.`,
+    };
+  }
+
+  return { ok: true, value: unquoted };
 }
 
 /**
@@ -870,10 +983,12 @@ function generateBmmConfig(opts) {
   }
 
   let topology;
-  let stamp;
+  // Whether this generation has a committed binding state to stamp. The stamp
+  // itself is COMPUTED INSIDE the try below (R-4), not here — see the note there.
+  let stampable;
   if (binding.ok) {
     topology = binding.topology;
-    stamp = computeProjectLayoutStamp(topology, projectRoot);
+    stampable = true;
   } else if (fallbackLayout) {
     // Unbound: no committed binding to generate from. This is reachable when
     // `writeProjectLayoutYaml` could not write (unwritable `_bmad-output/`), and
@@ -881,9 +996,18 @@ function generateBmmConfig(opts) {
     // fields from the answered layout so the install still produces a usable
     // config — but write NO stamp, because there is no binding state to stamp,
     // and a stamp invented here would be a claim about a file that does not
-    // exist. Story 31.4 reads an absent stamp as "pre-F26, do not block".
+    // exist — one that would collide with the real binding the next install
+    // writes.
+    //
+    // This is NOT the silent-permissive shape it can look like. Per the contract
+    // above (step 5), Story 31.4 keys on `resolveProjectTopology` FIRST and the
+    // stamp SECOND: it learns `unbound` from the absent `project-layout.yaml`
+    // before it ever reads the stamp, so the resulting `absent` stamp only
+    // corroborates a fact already established — it is never the fact 31.4
+    // reasons from. Writing a stamp here would be the permissive move, not the
+    // strict one.
     topology = topologyFromLegacyLayout(fallbackLayout);
-    stamp = null;
+    stampable = false;
   } else {
     console.log(chalk.yellow(
       `  Skipping _bmad/bmm/config.yaml generation: this project has no committed binding in\n` +
@@ -894,6 +1018,19 @@ function generateBmmConfig(opts) {
   }
 
   try {
+    // R-4 — INSIDE the try on purpose. `computeProjectLayoutStamp` re-runs the
+    // `project-layout.yaml` serializers, and those THROW rather than return on a
+    // value they refuse to write (`serializeStore`'s backend-enum check,
+    // `assertWritableMode`, `assertSingleLineIdentity`). Install Step 3.6 already
+    // wraps `writeProjectLayoutYaml` in a try/catch for exactly this hazard but
+    // does NOT wrap `generateBmmConfig`, so a throw escaping from here would reach
+    // `main().catch` and print a stack trace over a substantially-finished
+    // install. Every malformed identity found so far is normalised by
+    // `parseLayoutYaml`/`storeFromRaw` before a serializer sees it, so no
+    // reachable input is claimed — this closes an asymmetry rather than a proven
+    // defect, and costs one line to close.
+    const stamp = stampable ? computeProjectLayoutStamp(topology, projectRoot) : null;
+
     if (!fs.existsSync(configPath)) {
       // Create an empty file so writeConfigField can append to it
       fs.mkdirSync(path.join(projectRoot, '_bmad', 'bmm'), { recursive: true });
@@ -3579,8 +3716,11 @@ module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, recon
   // and `readProjectLayoutStamp` are the PAIR Story 31.4's drift guard consumes, so
   // that 31.4 depends on two functions rather than on a hash format it re-implements.
   // `canonicalBindingBytes` is exported so a test can assert WHAT the stamp covers,
-  // not merely that two digests differ.
+  // not merely that two digests differ. `STAMP_ABSENT` / `STAMP_MALFORMED` are
+  // exported for the same reason `BINDING_*` are: 31.4 must branch on the reason
+  // by NAME, so the two failure states can never be collapsed back into one.
   generateBmmConfig, computeProjectLayoutStamp, readProjectLayoutStamp, canonicalBindingBytes,
+  STAMP_ABSENT, STAMP_MALFORMED,
   topologyFromLegacyLayout, PROJECT_LAYOUT_STAMP_FIELD, PROJECT_LAYOUT_STAMP_PREFIX,
   // COPIES, not the live Sets. These are the single source of truth for what a
   // store's `mode`/`backend` may be, consumed by the reader, the writer and the
