@@ -2398,25 +2398,11 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
 
   console.log(chalk.cyan(`Using profile: ${resolvedProfile} (from ${profileSource})`));
 
-  // Persistence of the resolved profile is DEFERRED to Step 3.2, below the scope
-  // question — see the note there. It still lands BEFORE any agent install step
-  // (Story 21.1 AC #9) and before the BMAD install at Step 3.5, which is what
-  // that AC actually requires; only the ordering relative to the scope question
-  // changed. Resolution itself stays here, after agent selection.
+  // Resolution of the profile stays here, unchanged, after agent selection. Its
+  // PERSISTENCE moved down to Step 3.2, below the scope question — see the note
+  // there (FR251 / Story 31.11 AC3).
 
-  // Step 3: Scope — the question whose answer decides whether ANY project-scoped
-  // work happens at all. Retained verbatim (Story 31.11 AC1 / FR248 as amended
-  // 2026-08-02): the same three choices, the same wording, and the same position
-  // in the flow — after platform and agent selection, not before it.
-  //
-  // (Skip if update, yesFlag, CLI --global flag, or path already set.)
-  //
-  // Reachability, recorded because it is easy to misread: `handleInstall` always
-  // passes a truthy `cliScope` (`parseFlags` returns `'project'` when `--global`
-  // is absent), so this prompt is reached only from the bare `ma-agents` menu →
-  // "Install skills" → `installWizard()` with no arguments. Pre-existing
-  // behaviour, deliberately unchanged here; `--global` remains the
-  // non-interactive equivalent for `--yes` and CI runs (AC2).
+  // Step 3: Scope (Skip if update, yesFlag, CLI --global flag, or path already set)
   if (!isUpdate && !installPath && !yesFlag && !cliScope) {
     const { pathChoice } = await prompts({
       type: 'select',
@@ -2476,12 +2462,9 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
   // update). One predicate, four sites: a global install collects nothing,
   // prompts nothing, clones nothing, and writes nothing under any project root.
   //
-  // What did NOT move: the scope QUESTION itself (AC1). This collection moved
-  // down past it. And `readExistingLayout()` remains unconditional with respect
-  // to `isUpdate`/`yesFlag` — that is B-1's fix, below, and it is intact. It is
-  // a pure read and does not itself violate FR251; it moves with the collection
-  // it feeds only because under global scope there is no project whose binding
-  // could be read.
+  // What did NOT move: the scope QUESTION itself (AC1) — its guard, its three
+  // choices and its wording are byte-identical to before this story, and `git
+  // diff` shows them as context, not as a change. THIS block moved down past it.
   //
   // B-1. This was `isUpdate ? readExistingLayout() : null`. `isUpdate` is true
   // ONLY for the interactive "Update (add/remove skills)" menu choice — it is
@@ -2519,9 +2502,18 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
   // update.test.js` exists to prevent — none of its 13 tests pins the reset as
   // desired — and it satisfies NFR82 because the resolved artifact paths are the
   // ones config.yaml already resolves to.
+  //
+  // NOTE the split below. `readExistingLayout()` stays UNCONDITIONAL — that is
+  // B-1's fix above and it is deliberately not weakened by anything in Story
+  // 31.11. It is a pure read: it writes nothing, prompts nothing, and therefore
+  // cannot violate FR251 whatever the scope. The FR251 surface is
+  // `collectRepoLayout`, which PROMPTS ("Where is your knowledgebase managed?" /
+  // "Where is your sprint management managed?") and, with MA_KNOWLEDGEBASE_GIT_URL
+  // set, CLONES (`ciCloneIfNeeded`) — knowledge-store prompting and network
+  // access on an install that has no project. Only that call is gated.
+  const existingLayout = readExistingLayout();
   let repoLayout = null;
   if (installScope === 'project') {
-    const existingLayout = readExistingLayout();
     repoLayout = await collectRepoLayout({ yes: yesFlag }, existingLayout);
   }
 
