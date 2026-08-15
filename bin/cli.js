@@ -2957,7 +2957,14 @@ async function handleInstall(args) {
   }
 
   console.log(chalk.cyan(`Using profile: ${resolvedProfile} (from ${profileSource})`));
-  setProfile(projectRootForProfile, resolvedProfile);
+  // FR251 / Story 31.11 AC3 — same gate as the wizard's Step 3.2. `scope` here
+  // comes straight from `parseFlags` (`--global` → 'global'), so it is already
+  // known at this point and no reordering is needed on this path. A direct
+  // `ma-agents install <skill> <agent> --global` must not stamp
+  // `.ma-agents.json` into whatever directory it was run from either.
+  if (scope === 'project') {
+    setProfile(projectRootForProfile, resolvedProfile);
+  }
 
   // Full args → direct install (Task 3.5)
   const targetAgents = agentFlag ? [agentFlag] : agentIds;
@@ -2975,10 +2982,15 @@ async function handleInstall(args) {
 
   // Story 30.4 (FR245/FR246) — idempotent one-time Demerzel deprecation
   // notice. No-op after the first time it has ever printed for this project.
-  try {
-    showDemerzelDeprecationNoticeOnce(process.cwd());
-  } catch (err) {
-    console.log(chalk.yellow(`\n Deprecation notice skipped: ${err.message}`));
+  // FR251 / Story 31.11 AC3 — project-scoped, for the reason given at the
+  // wizard's copy of this block: the shown-once flag lands in the project-root
+  // `.ma-agents.json`.
+  if (scope === 'project') {
+    try {
+      showDemerzelDeprecationNoticeOnce(process.cwd());
+    } catch (err) {
+      console.log(chalk.yellow(`\n Deprecation notice skipped: ${err.message}`));
+    }
   }
 
   try {
