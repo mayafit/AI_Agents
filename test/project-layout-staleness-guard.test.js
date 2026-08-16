@@ -55,7 +55,7 @@ const os = require('os');
 const crypto = require('crypto');
 
 // A `!==` check — a SURPLUS fails as loudly as a shortfall.
-const EXPECTED_TEST_COUNT = 43;
+const EXPECTED_TEST_COUNT = 45;
 
 let passed = 0;
 let failed = 0;
@@ -402,6 +402,77 @@ test('[behaviour] AC1 the drifted config is NOT guessed past — every path fiel
       `sprint_management_path must be named, got ${JSON.stringify(r.moved.map((m) => m.field))}`);
     assert.ok(r.moved.some((m) => m.field === 'implementation_artifacts'),
       'the derived implementation_artifacts must be compared too — it is where stories land');
+  });
+});
+
+test('[behaviour] a DIVERGENT project (knowledge and sprint at different paths) proceeds', () => {
+  withTmpDir((tmpDir) => {
+    // Every fixture above puts both concerns at `.`, which makes several
+    // generated fields accidentally equal — so a generator that wrote the WRONG
+    // store into `sprint_management_path` would look correct. This is the
+    // multi-repo shape, where they differ, and the guard must still say "matched"
+    // on a config it just generated. A false HALT here is the cry-wolf failure.
+    const kb = path.join(tmpDir, 'kb-here');
+    const sp = path.join(tmpDir, 'sprints-there');
+    fs.mkdirSync(kb, { recursive: true });
+    fs.mkdirSync(sp, { recursive: true });
+    boundProject(tmpDir, {
+      knowledgebase: { mode: 'local', path: kb },
+      sprintManagement: { mode: 'local', path: sp },
+    });
+
+    const cfg = fs.readFileSync(path.join(tmpDir, CONFIG_REL), 'utf-8');
+    assert.strictEqual(readConfigField(cfg, 'knowledgebase_path'), 'kb-here',
+      'precondition: the knowledge store and the sprint store are at DIFFERENT paths');
+    assert.strictEqual(readConfigField(cfg, 'sprint_management_path'), 'sprints-there',
+      'precondition: sprint_management_path comes from the SPRINT record, not the knowledge one');
+
+    const r = runGuard(tmpDir);
+    assert.strictEqual(r.verdict, V.PROCEED_MATCHED,
+      `a freshly generated divergent config must not read as drift (got ${r.verdict}: ` +
+      `${JSON.stringify((r.moved || []).map((m) => m.field))})`);
+  });
+});
+
+test('[behaviour] a DIVERGENT store pair: moving only the SYSTEM store is named as that store', () => {
+  withTmpDir((tmpDir) => {
+    // FR264: the legacy single-valued `knowledgebase_path` resolves to the
+    // SOFTWARE store. With the two stores at different paths, a generator that
+    // sourced it from the SYSTEM store instead would be invisible to every
+    // fixture where they agree.
+    const sys = path.join(tmpDir, 'system-store');
+    const soft = path.join(tmpDir, 'software-store');
+    fs.mkdirSync(sys, { recursive: true });
+    fs.mkdirSync(soft, { recursive: true });
+    boundProject(tmpDir, {
+      systemRequirementsStore: { mode: 'local', path: sys },
+      softwareRequirementsStore: { mode: 'local', path: soft },
+      knowledgebase: { mode: 'local', path: soft },
+      sprintManagement: { mode: 'same', path: '.' },
+    });
+    const cfg = fs.readFileSync(path.join(tmpDir, CONFIG_REL), 'utf-8');
+    assert.strictEqual(readConfigField(cfg, 'knowledgebase_path'), 'software-store',
+      'precondition: FR264 — the legacy field follows the SOFTWARE store');
+    assert.strictEqual(readConfigField(cfg, 'system_requirements_path'), 'system-store',
+      'precondition: the per-store fields genuinely differ');
+    assert.strictEqual(runGuard(tmpDir).verdict, V.PROCEED_MATCHED,
+      'precondition: the freshly generated divergent config is matched');
+
+    const moved = path.join(tmpDir, 'system-store-moved');
+    fs.mkdirSync(moved, { recursive: true });
+    rebind(tmpDir, {
+      systemRequirementsStore: { mode: 'local', path: moved },
+      softwareRequirementsStore: { mode: 'local', path: soft },
+      sprintManagement: { mode: 'same', path: '.' },
+    });
+
+    const r = runGuard(tmpDir);
+    assert.strictEqual(r.verdict, V.HALT_DRIFT, `expected drift, got ${r.verdict}`);
+    assert.deepStrictEqual(r.moved.map((m) => m.field), ['system_requirements_path'],
+      'AC1: only the store that actually moved may be named — naming the others too would ' +
+      'make the message useless, and naming none would make it unactionable');
+    assert.strictEqual(r.moved[0].from, 'system-store');
+    assert.strictEqual(r.moved[0].to, 'system-store-moved');
   });
 });
 
