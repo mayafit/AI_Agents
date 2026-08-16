@@ -21,15 +21,15 @@ Work through the steps below IN ORDER and stop at the first branch that matches.
 ### Step P1 — Read `_bmad-output/project-layout.yaml`
 
 - **Missing, or present but blank / comments-only** → go to **Step P2**.
-- **Present but unusable** — not valid YAML, unresolved merge-conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`), no readable fields, or a `schema_version:` greater than `2` → **HALT** and report:
+- **Present but not cleanly readable** — it is not valid YAML, it carries unresolved merge-conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`), it yields no readable fields, its `schema_version:` is greater than `2`, its `schema_version:` is present but is not a number, it names a `backend:` or a `mode:` this build does not recognise, or any store record in it cannot be read → **HALT** and report:
 
   > **ma-agents — stopping: the committed knowledge binding cannot be read.**
   > `_bmad-output/project-layout.yaml` exists but this build cannot use it: {say exactly what is wrong}.
   > Every knowledge-store path in `_bmad/bmm/config.yaml` is derived from that file, so nothing this skill would resolve can be trusted. Fix the binding by hand — if this is a merge conflict, resolve it; the file is committed, so conflicts are ordinary — then run `ma-agents bind` to regenerate `_bmad/bmm/config.yaml` from it.
   > Nothing has been read or written on your behalf. Stopping rather than guessing.
 
-  Do not fall back to defaults and do not treat this as "no binding". A binding that cannot be read is a different fact from a project that has none.
-- **Present and readable** → go to **Step P3**.
+  That list of faults is illustrative, not exhaustive. **Default-deny:** the only two ways out of this step without halting are "absent, or blank / comments-only" (→ Step P2) and "resolves cleanly" (→ Step P3). Anything else takes this HALT, including a fault not named above. Do not fall back to defaults and do not treat this as "no binding". A binding that cannot be read is a different fact from a project that has none.
+- **Present and resolves cleanly** → go to **Step P3**.
 
 ### Step P2 — There is no committed binding
 
@@ -41,7 +41,7 @@ No `_bmad-output/project-layout.yaml`. That is the pre-F26 shape and by itself i
   > Neither `_bmad-output/project-layout.yaml` nor `_bmad/bmm/config.yaml` exists, so nothing states where this project's knowledge stores live. Run `npx ma-agents install` to configure the project, or `ma-agents bind` if ma-agents is already installed and only the binding is missing.
   > Nothing has been read or written on your behalf. Stopping rather than guessing.
 
-- **`config.yaml` exists and contains any of `project_layout_stamp:`, `system_requirements_path:` or `software_requirements_path:`** → **HALT** and report:
+- **`config.yaml` exists and carries, at column 0, any of `project_layout_stamp:`, `system_requirements_path:` or `software_requirements_path:`** (a commented-out or indented one does not count — it is not the field) → **HALT** and report:
 
   > **ma-agents — stopping: the committed knowledge binding is missing.**
   > `_bmad/bmm/config.yaml` carries {name the fields you found}, which only an F26 generation writes — so this project HAS been bound — but `_bmad-output/project-layout.yaml` is not here. The binding was deleted, is untracked or ignored, or has not been pulled. This is not a pre-F26 project, so proceeding would mean trusting generated paths against a binding that no longer exists.
@@ -50,7 +50,7 @@ No `_bmad-output/project-layout.yaml`. That is the pre-F26 shape and by itself i
 
   Those three fields are the discriminator and they are reliable: a genuine pre-F26 `config.yaml` carries none of them. Do not skip this check. An absent stamp on its own is never evidence that a project predates the stamp.
 
-- **`config.yaml` exists and carries none of those three fields** → this is genuinely a pre-F26 project. **PROCEED** with the rest of this skill exactly as it behaved before F26, and say nothing at all about the binding — no warning, no prompt, no offer to bind. Nothing has moved, so there is nothing to re-bind.
+- **`config.yaml` exists and carries none of those three fields at column 0** → this is genuinely a pre-F26 project. **PROCEED** with the rest of this skill exactly as it behaved before F26, and say nothing at all about the binding — no warning, no prompt, no offer to bind. Nothing has moved, so there is nothing to re-bind. The existence of `config.yaml` is NOT on its own a reason to take this branch: all three fields must be absent.
 
 ### Step P3 — The binding is readable: check what `config.yaml` was generated from
 
@@ -82,14 +82,16 @@ Derive, from `_bmad-output/project-layout.yaml`, what each generated field in `c
 
 A schema-2 binding holds three records: `system_requirements_store:`, `software_requirements_store:` and `sprint_management:`. A legacy schema-1 binding holds a single `knowledgebase:` record, which stands for BOTH requirement stores.
 
-| Derived from the binding | Field it generates in `config.yaml` |
-| --- | --- |
-| `software_requirements_store` → its `path:` (or `.` when its `backend:` is not `file-system`) | `software_requirements_path:` and `knowledgebase_path:` |
-| `system_requirements_store` → its `path:` (or `.` when its `backend:` is not `file-system`) | `system_requirements_path:` |
-| `sprint_management` with `mode: jira` | `sprint_backend: jira`, `jira_url:`, `jira_project_key:` — and no `sprint_management_path:` |
-| `sprint_management` with any other mode → its `path:` | `sprint_backend: file-system` and `sprint_management_path:` |
-| software store path is `.` | `planning_artifacts: {project-root}/_bmad-output/planning-artifacts` — otherwise `planning_artifacts:` equals that path |
-| sprint path is `.` | `implementation_artifacts: {project-root}/_bmad-output/implementation-artifacts` — otherwise `implementation_artifacts:` equals that path |
+The table below IS the whole comparison: every field named in its right-hand column is compared, and no field outside that column is. Read each field only from a line at column 0, and compare VALUES rather than bytes — the generator quotes its scalars (`sprint_backend: "jira"`, `knowledgebase_path: "."`), so strip one balanced pair of surrounding quotes from each side first.
+
+| When | Binding record it is derived from | Field(s) it generates in `config.yaml` |
+| --- | --- | --- |
+| always | `software_requirements_store` → its `path:` (or `.` when its `backend:` is not `file-system`); the artifacts field is that same path, except that a path of `.` gives `{project-root}/_bmad-output/planning-artifacts` | `software_requirements_path:`, `knowledgebase_path:`, `planning_artifacts:` |
+| always | `system_requirements_store` → its `path:` (or `.` when its `backend:` is not `file-system`) | `system_requirements_path:` |
+| `sprint_management` has `mode: jira` | `sprint_management` → its `jira_url:` and `jira_project_key:`; the backend field is the literal `jira`; the artifacts field is always `{project-root}/_bmad-output/implementation-artifacts`, because a Jira sprint store has no path | `sprint_backend:`, `jira_url:`, `jira_project_key:`, `implementation_artifacts:` |
+| `sprint_management` has any other mode | `sprint_management` → its `path:`; the backend field is the literal `file-system`; the artifacts field is that same path, except that a path of `.` gives `{project-root}/_bmad-output/implementation-artifacts` | `sprint_backend:`, `sprint_management_path:`, `implementation_artifacts:` |
+
+**When the binding says `mode: jira`, `sprint_management_path:` is not compared at all.** The generator writes no `sprint_management_path:` in that mode — and it never DELETES a field, it only updates or appends one. So a project that was bound to the file system and later re-bound to Jira still carries its old `sprint_management_path:` line in a freshly generated `config.yaml`. That leftover line is not drift, and comparing it would halt every Jira project that was ever file-system-bound.
 
 **Any disagreement is drift** → **HALT** and report, naming every store that moved and both of its paths:
 
