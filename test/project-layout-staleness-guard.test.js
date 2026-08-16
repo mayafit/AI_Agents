@@ -55,7 +55,7 @@ const os = require('os');
 const crypto = require('crypto');
 
 // A `!==` check — a SURPLUS fails as loudly as a shortfall.
-const EXPECTED_TEST_COUNT = 45;
+const EXPECTED_TEST_COUNT = 61;
 
 let passed = 0;
 let failed = 0;
@@ -159,39 +159,90 @@ function expectedStorePath(store, projectRoot) {
   return cli.toPortablePath(raw, projectRoot).portable;
 }
 
+// The two derived artifact roots `generateBmmConfig` writes when a store sits at
+// `.` (bin/cli.js `canonicalArtifactPath`). Named, so the shipped table and this
+// transcription cannot drift apart on a typo.
+const CANON_PLANNING = '{project-root}/_bmad-output/planning-artifacts';
+const CANON_IMPL = '{project-root}/_bmad-output/implementation-artifacts';
+
+// The `When` cell of each shipped table row, as a token. These three are the ONLY
+// conditions the shipped table may state; `parseDerivationTable` throws on
+// anything else, so a hand-edited condition cannot be silently ignored here.
+const WHEN_ALWAYS = 'always';
+const WHEN_JIRA = 'jira';
+const WHEN_OTHER = 'other';
+
 /**
- * Step P4's derivation table, executed. Returns one entry per store whose
- * generated field disagrees with the committed binding — which is what AC1's
- * "names the drift (which store moved, from where to where)" is made of.
+ * Step P4's derivation table, EXECUTED — one row per generated field, carrying
+ * the binding record it is derived from and the value that field should hold.
+ *
+ * Deliberately shaped as a table rather than a run of `if`s, because Section 4
+ * now asserts a row-by-row correspondence between it and the table in the
+ * SHIPPED text. Before that correspondence existed, all four substantive rows
+ * could be deleted from all 41 shipped copies with this suite still fully green
+ * — the review finding this fix round exists to close. `when` is carried per row
+ * so the correspondence is checked PER SPRINT MODE rather than over a union,
+ * which would hide a row silently moving from one mode to the other.
  */
-function namedMoves(topology, configContent, projectRoot) {
-  const moved = [];
-  const check = (label, field, expected) => {
-    const actual = readConfigField(configContent, field);
-    if (actual !== expected) moved.push({ store: label, field, from: actual, to: expected });
-  };
+function derivedFields(topology, projectRoot) {
+  const rows = [];
+  const derive = (when, source, field, expected) =>
+    rows.push({ when, source, field, expected });
 
   const software = expectedStorePath(topology.softwareRequirementsStore, projectRoot);
   const system = expectedStorePath(topology.systemRequirementsStore, projectRoot);
-  check('software requirements store', 'software_requirements_path', software);
-  check('software requirements store (legacy field)', 'knowledgebase_path', software);
-  check('system requirements store', 'system_requirements_path', system);
+  derive(WHEN_ALWAYS, 'software_requirements_store', 'software_requirements_path', software);
+  derive(WHEN_ALWAYS, 'software_requirements_store', 'knowledgebase_path', software);
+  derive(WHEN_ALWAYS, 'software_requirements_store', 'planning_artifacts',
+    software === '.' ? CANON_PLANNING : software);
+  derive(WHEN_ALWAYS, 'system_requirements_store', 'system_requirements_path', system);
 
   const sprint = topology.sprintManagement || { mode: 'same', path: '.' };
   if (sprint.mode === 'jira') {
-    check('sprint management', 'sprint_backend', 'jira');
-    check('sprint management', 'jira_url', sprint.jiraUrl);
-    check('sprint management', 'jira_project_key', sprint.jiraProjectKey);
+    derive(WHEN_JIRA, 'sprint_management', 'sprint_backend', 'jira');
+    derive(WHEN_JIRA, 'sprint_management', 'jira_url', sprint.jiraUrl);
+    derive(WHEN_JIRA, 'sprint_management', 'jira_project_key', sprint.jiraProjectKey);
+    // F1. In jira mode `implementation_artifacts` is a CONSTANT — a Jira sprint
+    // store has no path — and `sprint_management_path` is NOT derived at all.
+    // `writeConfigField` (bin/cli.js:630) only ever updates-or-appends; it never
+    // deletes. So a project bound to the file system and later re-bound to Jira
+    // keeps its old `sprint_management_path:` line in a config the generator has
+    // JUST written. Comparing that survivor would HALT every such project on a
+    // freshly generated file. It is not derived here, so it is not compared.
+    derive(WHEN_JIRA, 'sprint_management', 'implementation_artifacts', CANON_IMPL);
   } else {
     const sp = expectedStorePath(sprint, projectRoot);
-    check('sprint management', 'sprint_backend', 'file-system');
-    check('sprint management', 'sprint_management_path', sp);
-    check('implementation artifacts', 'implementation_artifacts',
-      sp === '.' ? '{project-root}/_bmad-output/implementation-artifacts' : sp);
+    derive(WHEN_OTHER, 'sprint_management', 'sprint_backend', 'file-system');
+    derive(WHEN_OTHER, 'sprint_management', 'sprint_management_path', sp);
+    derive(WHEN_OTHER, 'sprint_management', 'implementation_artifacts',
+      sp === '.' ? CANON_IMPL : sp);
   }
-  check('planning artifacts', 'planning_artifacts',
-    software === '.' ? '{project-root}/_bmad-output/planning-artifacts' : software);
+  return rows;
+}
 
+// Human labels for the drift message, per binding record. Kept beside
+// `derivedFields` so a record added there without a label is a visible hole.
+const STORE_LABELS = Object.freeze({
+  software_requirements_store: 'software requirements store',
+  system_requirements_store: 'system requirements store',
+  sprint_management: 'sprint management',
+});
+
+/**
+ * The rows of `derivedFields` that disagree with what `config.yaml` carries —
+ * which is what AC1's "names the drift (which store moved, from where to where)"
+ * is made of.
+ */
+function namedMoves(topology, configContent, projectRoot) {
+  const moved = [];
+  for (const row of derivedFields(topology, projectRoot)) {
+    const actual = readConfigField(configContent, row.field);
+    if (actual !== row.expected) {
+      moved.push({
+        store: STORE_LABELS[row.source], field: row.field, from: actual, to: row.expected,
+      });
+    }
+  }
   return moved;
 }
 
@@ -347,6 +398,29 @@ function snapshot(root) {
 
 const SAME = { knowledgebase: { mode: 'same', path: '.' }, sprintManagement: { mode: 'same', path: '.' } };
 
+// F1 — the jira shape. `SPRINT_MODES` (bin/cli.js:1426) has admitted `jira`
+// since before this story, the installer prompts for both coordinates
+// (bin/cli.js:472/488), and `generateBmmConfig` has a live jira branch — so this
+// is reachable today, not a future mode. The suite shipped with ZERO jira
+// fixtures, which is how the false clause in the P4 jira row survived review.
+const JIRA_URL = 'https://jira.example.com';
+const JIRA_KEY = 'PROJ';
+function jiraLayout(over) {
+  return Object.assign({
+    knowledgebase: { mode: 'same', path: '.' },
+    sprintManagement: { mode: 'jira', jiraUrl: JIRA_URL, jiraProjectKey: JIRA_KEY },
+  }, over || {});
+}
+
+/** Regenerate `config.yaml` from whatever binding is committed — `ma-agents bind`. */
+function regenerate(tmpDir) {
+  quiet(() => cli.generateBmmConfig({ projectRoot: tmpDir }));
+}
+
+function readConfig(tmpDir) {
+  return fs.readFileSync(path.join(tmpDir, CONFIG_REL), 'utf-8');
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // SECTION 1 — [behaviour] the decision procedure, against real fixtures
 // ═════════════════════════════════════════════════════════════════════════════
@@ -380,6 +454,17 @@ test('[behaviour] AC1 drifted state: a moved store halts and is named from → t
       `${JSON.stringify(r.moved.map((m) => m.field))}`);
     assert.strictEqual(software.from, '.', 'the OLD path must be reported (from)');
     assert.strictEqual(software.to, 'elsewhere', 'the NEW path must be reported (to)');
+    // M27 — the symmetric partner of the `implementation_artifacts` assertion in
+    // the sprint-move test below. `planning_artifacts` is where planning
+    // documents land; without this, dropping it from the derivation table left
+    // every fixture green.
+    const planning = r.moved.find((m) => m.field === 'planning_artifacts');
+    assert.ok(planning, `the derived planning_artifacts must be compared too — it is where ` +
+      `planning documents land; got ${JSON.stringify(r.moved.map((m) => m.field))}`);
+    assert.strictEqual(planning.from, CANON_PLANNING,
+      'a store at `.` generates the canonical planning-artifacts root');
+    assert.strictEqual(planning.to, 'elsewhere',
+      'a store with a real path generates that path verbatim (3.12.3)');
     assert.ok(/ma-agents bind/.test(r.message),
       `the halt must name the recovery command (AC1), got:\n${r.message}`);
     assert.ok(/no longer matches/.test(r.message), 'the halt must name the drift, not just stop');
@@ -476,6 +561,90 @@ test('[behaviour] a DIVERGENT store pair: moving only the SYSTEM store is named 
   });
 });
 
+// ─── F1 — the jira sprint backend. Reachable today, and untested until now. ───
+
+test('[behaviour] F1 a file-system → jira re-bind: the surviving `sprint_management_path` is NOT drift', () => {
+  withTmpDir((tmpDir) => {
+    // The shipped P4 jira row used to claim a jira generation leaves "no
+    // `sprint_management_path:`". It does not: `writeConfigField` updates or
+    // appends and NEVER deletes, so the field written by the earlier
+    // file-system binding survives verbatim. Combined with "Any disagreement is
+    // drift → HALT", that clause made the guard HALT on a config `ma-agents
+    // bind` had just written — a false halt, on the cry-wolf side of the fence.
+    const sp = path.join(tmpDir, 'sprints-there');
+    fs.mkdirSync(sp, { recursive: true });
+    boundProject(tmpDir, {
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'local', path: sp },
+    });
+    assert.strictEqual(readConfigField(readConfig(tmpDir), 'sprint_management_path'), 'sprints-there',
+      'precondition: the file-system binding wrote a real sprint_management_path');
+
+    // Re-bind to Jira and regenerate, exactly as `ma-agents bind` would.
+    rebind(tmpDir, jiraLayout());
+    regenerate(tmpDir);
+    const cfg = readConfig(tmpDir);
+
+    assert.strictEqual(readConfigField(cfg, 'sprint_backend'), 'jira',
+      'precondition: the config really was regenerated under the jira branch');
+    assert.strictEqual(readConfigField(cfg, 'sprint_management_path'), 'sprints-there',
+      'THE PREMISE, proven on disk: the generator did not remove the stale field. If this ' +
+      'ever becomes null, generateBmmConfig learned to delete and the P4 jira row may say so.');
+    assert.strictEqual(readConfigField(cfg, 'implementation_artifacts'), CANON_IMPL,
+      'precondition: a jira generation always writes the canonical implementation_artifacts');
+
+    const r = runGuard(tmpDir);
+    assert.strictEqual(r.verdict, V.PROCEED_MATCHED,
+      `a FRESHLY generated jira config must not read as drift (got ${r.verdict}: ` +
+      `${JSON.stringify((r.moved || []).map((m) => m.field))}). This is the false HALT.`);
+  });
+});
+
+test('[behaviour] F1 a jira project whose Jira coordinates moved IS drift, and is named', () => {
+  withTmpDir((tmpDir) => {
+    boundProject(tmpDir, jiraLayout());
+    assert.strictEqual(runGuard(tmpDir).verdict, V.PROCEED_MATCHED,
+      'precondition: a freshly generated jira config is matched');
+
+    rebind(tmpDir, jiraLayout({
+      sprintManagement: { mode: 'jira', jiraUrl: 'https://jira.elsewhere.com', jiraProjectKey: JIRA_KEY },
+    }));
+    const r = runGuard(tmpDir);
+    assert.strictEqual(r.verdict, V.HALT_DRIFT,
+      `a Jira instance that moved is drift like any other store move (got ${r.verdict})`);
+    assert.deepStrictEqual(r.moved.map((m) => m.field), ['jira_url'],
+      `only the coordinate that moved may be named, got ` +
+      `${JSON.stringify(r.moved.map((m) => m.field))}`);
+    assert.strictEqual(r.moved[0].from, JIRA_URL);
+    assert.strictEqual(r.moved[0].to, 'https://jira.elsewhere.com');
+  });
+});
+
+test('[behaviour] F1 a jira binding against a file-system-generated config halts on the right fields', () => {
+  withTmpDir((tmpDir) => {
+    // The `git pull` that switches the team to Jira. The config is NOT
+    // regenerated, so it still describes the file-system backend.
+    const sp = path.join(tmpDir, 'sprints-there');
+    fs.mkdirSync(sp, { recursive: true });
+    boundProject(tmpDir, {
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'local', path: sp },
+    });
+    rebind(tmpDir, jiraLayout());
+
+    const r = runGuard(tmpDir);
+    assert.strictEqual(r.verdict, V.HALT_DRIFT, `expected drift, got ${r.verdict}`);
+    assert.deepStrictEqual(r.moved.map((m) => m.field).sort(),
+      ['implementation_artifacts', 'jira_project_key', 'jira_url', 'sprint_backend'],
+      'the four fields a jira generation would derive differently must all be named');
+    assert.ok(!r.moved.some((m) => m.field === 'sprint_management_path'),
+      'F1: `sprint_management_path` is not derived in jira mode, so a stale one is not ' +
+      'reportable drift — naming it would send the user chasing a field bind cannot fix');
+    assert.strictEqual(r.moved.find((m) => m.field === 'jira_url').from, null,
+      'a field the old generation never wrote reports `from: null`, not a fabricated path');
+  });
+});
+
 test('[behaviour] AC5 missing project-layout.yaml on a genuine pre-F26 config: no halt', () => {
   withTmpDir((tmpDir) => {
     // A pre-F26 config: today's fields, none of the three F26 markers.
@@ -552,6 +721,111 @@ test('[behaviour] AC7 missing config.yaml AND missing binding: still actionable,
       `an unconfigured project is pointed at install, got:\n${r.message}`);
     assert.notStrictEqual(r.verdict, V.PROCEED_PRE_F26,
       'no binding AND no config is not a pre-F26 project — it is an unconfigured one');
+  });
+});
+
+test('[behaviour] F4 P3 stamp-absent: a READABLE binding with an unstamped config halts', () => {
+  withTmpDir((tmpDir) => {
+    // The one branch of the procedure that had no fixture at all: binding
+    // present AND config present AND no stamp. The AC5 test below deletes the
+    // binding first, so it lands in P2 and never exercises this return — which
+    // is why turning it into PROCEED survived mutation. This is the P3 shape:
+    // the binding is right there, and the config carries no evidence it was
+    // generated from it.
+    boundProject(tmpDir, SAME);
+    const cfgPath = path.join(tmpDir, CONFIG_REL);
+    fs.writeFileSync(cfgPath,
+      fs.readFileSync(cfgPath, 'utf-8').replace(/^project_layout_stamp:.*$\n?/m, ''), 'utf-8');
+    assert.ok(fs.existsSync(path.join(tmpDir, LAYOUT_REL)),
+      'precondition: unlike the AC5 case, the binding is still committed');
+    assert.strictEqual(cli.readProjectLayoutStamp(fs.readFileSync(cfgPath, 'utf-8')).reason,
+      cli.STAMP_ABSENT, 'precondition: the stamp really is absent');
+
+    const r = runGuard(tmpDir);
+    assert.strictEqual(r.verdict, V.HALT_STAMP_ABSENT,
+      `a config that cannot say which binding it came from must HALT, not proceed on the ` +
+      `strength of the field table agreeing (got ${r.verdict})`);
+    assert.notStrictEqual(r.verdict, V.PROCEED_MATCHED,
+      'the field table agreeing is NOT evidence of provenance — the stamp covers backend, ' +
+      'space_key and gitUrl, none of which the table can see');
+    assert.strictEqual(r.silent, false, 'a HALT is never silent');
+  });
+});
+
+test('[behaviour] M23 a hand-edited legacy `knowledgebase_path` is drift on its own', () => {
+  withTmpDir((tmpDir) => {
+    // `knowledgebase_path` and `software_requirements_path` are generated from
+    // the same store and are therefore always EQUAL in a generated file — which
+    // made dropping the legacy field from the derivation table invisible to every
+    // fixture. They can still diverge in a file a human edited or a merge
+    // mangled, and the legacy field is the one 32 existing consumers read.
+    boundProject(tmpDir, SAME);
+    const cfgPath = path.join(tmpDir, CONFIG_REL);
+    fs.writeFileSync(cfgPath, fs.readFileSync(cfgPath, 'utf-8')
+      .replace(/^knowledgebase_path:.*$/m, 'knowledgebase_path: "where-it-used-to-be"'), 'utf-8');
+    assert.strictEqual(readConfigField(readConfig(tmpDir), 'software_requirements_path'), '.',
+      'precondition: ONLY the legacy field was disturbed');
+
+    const r = runGuard(tmpDir);
+    assert.strictEqual(r.verdict, V.HALT_DRIFT,
+      `the legacy field is generated, so a disagreement in it is drift (got ${r.verdict})`);
+    assert.deepStrictEqual(r.moved.map((m) => m.field), ['knowledgebase_path'],
+      `only knowledgebase_path disagrees, got ${JSON.stringify(r.moved.map((m) => m.field))}`);
+    assert.strictEqual(r.moved[0].from, 'where-it-used-to-be');
+    assert.strictEqual(r.moved[0].to, '.');
+  });
+});
+
+test('[behaviour] M17 the stamp reader enforces the lowercase-hex rule the shipped block asserts', () => {
+  // The block tells the agent that a stamp which is "uppercased" is NOT one
+  // ma-agents wrote. That rule belongs to Story 31.3's reader and 31.4 must not
+  // change it — but nothing pinned it from the consumer side, so loosening the
+  // reader to accept uppercase hex left this suite green while the shipped text
+  // went on asserting the opposite. Pinned here, in the direction 31.4 needs.
+  const digest = crypto.createHash('sha256').update('anything').digest('hex');
+  const good = cli.readProjectLayoutStamp(`project_layout_stamp: sha256:${digest}\n`);
+  assert.strictEqual(good.ok, true, `precondition: lowercase hex is accepted, got ${good.reason}`);
+
+  const upper = cli.readProjectLayoutStamp(`project_layout_stamp: sha256:${digest.toUpperCase()}\n`);
+  assert.strictEqual(upper.ok, false,
+    'the block promises the agent that an uppercased stamp HALTs; if the reader accepts it, ' +
+    'the shipped text is making a claim the code no longer honours');
+  assert.strictEqual(upper.reason, cli.STAMP_MALFORMED,
+    `uppercase hex is malformed, not absent — got ${upper.reason}`);
+
+  const block = fs.readFileSync(
+    path.join(PROJECT_ROOT, 'skills', 'close-sprint', 'SKILL.md'), 'utf-8').replace(/\r\n/g, '\n');
+  assert.ok(/64 lowercase hexadecimal characters/.test(block),
+    'the shipped block must state the rule this test just pinned, or the two halves of the ' +
+    'claim can drift apart again');
+});
+
+test('[behaviour] M32 a non-file-system store resolves with NO path, so the table\'s `.` rule is exact', () => {
+  withTmpDir((tmpDir) => {
+    // `expectedStorePath` returns `.` for a store whose backend is not
+    // `file-system` BEFORE it looks at `store.path`. Deleting that branch
+    // survived mutation, and the reason is worth recording rather than papering
+    // over: the resolver never produces a non-file-system store carrying a path
+    // at all (`storeFromRaw`'s confluence branch returns backend/spaceKey/
+    // rootPage and nothing else), so the two orders are equivalent BY
+    // CONSTRUCTION. This test pins the construction. If a future backend ever
+    // resolves with both a `backend` and a `path`, this fails and the
+    // equivalence stops holding — which is exactly when someone needs to know.
+    quiet(() => cli.writeProjectLayoutYaml({
+      systemRequirementsStore: {
+        backend: 'confluence', spaceKey: 'ENG', rootPage: { title: 'Home', id: '42' },
+      },
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' },
+    }));
+    const t = cli.resolveProjectTopology(tmpDir);
+    assert.strictEqual(t.ok, true, `precondition: the confluence binding resolves`);
+    const store = t.topology.systemRequirementsStore;
+    assert.strictEqual(store.backend, 'confluence', 'precondition: the backend survived the round trip');
+    assert.strictEqual(store.path, undefined,
+      `a non-file-system store must resolve with no path at all, got ${JSON.stringify(store.path)}`);
+    assert.strictEqual(expectedStorePath(store, tmpDir), '.',
+      'and it therefore derives the local-artifacts default either way');
   });
 });
 
@@ -890,7 +1164,7 @@ test('[text] AC3 the guard precedes the FIRST instruction in each skill', () => 
     // block's internal "Read `_bmad-output/project-layout.yaml`" is not mistaken
     // for the skill's first instruction.
     const block = extractBlock(body);
-    const stripped = body.slice(0, guardAt) + ' '.repeat(block.length) + body.slice(guardAt + block.length);
+    const stripped = body.slice(0, guardAt) + ' '.repeat(block.length) + body.slice(guardAt + block.length);
     for (const m of ACTION_MARKERS) {
       const at = stripped.indexOf(m);
       if (at === -1) continue;
@@ -1033,6 +1307,330 @@ test('[text] the block keys on the binding FIRST and the stamp SECOND', () => {
     'the block must say the order matters, or a reader will reorder it');
 });
 
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 4b — [text] F2: THE SHIPPED P4 TABLE IS BOUND TO THE BEHAVIOUR
+//
+// The review finding this section exists to close: every substantive row of the
+// P4 derivation table could be deleted from all 41 shipped copies and this suite
+// stayed green, 45/45, exit 0. `derivedFields` is an independent hand
+// transcription, so gutting the text did not perturb it, and Section 4's
+// correspondence tests bound only verdict NAMES and HALT COUNTS — never table
+// semantics. That is the mechanism that let the false jira row (F1) ship.
+//
+// Three independent bindings are asserted below, because any one alone is
+// escapable:
+//   1. FIELD SETS, per sprint mode — the shipped table names exactly the fields
+//      the procedure compares. Deleting a row shrinks one side; adding one grows
+//      it. Checked per mode so a row cannot hide by moving between modes.
+//   2. ROW SEMANTICS, against the REAL generator — for each row, a binding that
+//      differs only in that row's record must change only fields that row names.
+//      This is what pins WHICH store maps to WHICH field; a field moved from one
+//      row to another passes (1) and fails here.
+//   3. GENERATOR COVERAGE — every field `generateBmmConfig` actually writes
+//      appears somewhere in the shipped table (asserted in Section 5's OQ-3
+//      test, which already reads the generator's field list).
+// ═════════════════════════════════════════════════════════════════════════════
+console.log('\n=== 4b. [text] F2 — the shipped P4 table ↔ the behaviour ===\n');
+
+const TABLE_HEADER =
+  '| When | Binding record it is derived from | Field(s) it generates in `config.yaml` |';
+
+/**
+ * Parse the P4 derivation table out of the SHIPPED block. Throws — never
+ * silently returns nothing — because a parser that yields an empty table on a
+ * reworded heading would turn every assertion below into a vacuous pass, which
+ * is the exact failure mode this section exists to remove.
+ */
+function parseDerivationTable(block) {
+  const lines = block.split('\n');
+  const at = lines.indexOf(TABLE_HEADER);
+  if (at === -1) {
+    throw new Error(
+      'the shipped block no longer contains the P4 derivation table header this suite binds ' +
+      'to. If the table was reformatted, update TABLE_HEADER deliberately — do NOT let this ' +
+      'parse to nothing.');
+  }
+  if (!/^\|\s*-+\s*\|/.test(lines[at + 1] || '')) {
+    throw new Error(`expected a markdown separator row under the table header, got ` +
+      `${JSON.stringify(lines[at + 1])}`);
+  }
+  const rows = [];
+  for (let i = at + 2; i < lines.length; i++) {
+    if (!/^\|/.test(lines[i])) break;
+    const cells = lines[i].split('|').slice(1, -1).map((c) => c.trim());
+    if (cells.length !== 3) {
+      throw new Error(`table row ${rows.length + 1} has ${cells.length} cells, expected 3: ` +
+        JSON.stringify(lines[i]));
+    }
+    const [whenCell, sourceCell, fieldCell] = cells;
+    let when;
+    if (/^always$/i.test(whenCell)) when = WHEN_ALWAYS;
+    else if (/`mode: jira`/.test(whenCell)) when = WHEN_JIRA;
+    else if (/any other mode/.test(whenCell)) when = WHEN_OTHER;
+    else throw new Error(`unrecognised When cell ${JSON.stringify(whenCell)} — this suite can ` +
+      `only bind to the three declared conditions`);
+    const source = (sourceCell.match(/`([a-z_]+_store|sprint_management)`/) || [])[1];
+    if (!source) {
+      throw new Error(`table row ${rows.length + 1} names no binding record in its middle ` +
+        `cell: ${JSON.stringify(sourceCell)}`);
+    }
+    const fields = [...fieldCell.matchAll(/`([a-z_]+):`/g)].map((m) => m[1]);
+    if (fields.length === 0) {
+      throw new Error(`table row ${rows.length + 1} names no config field: ` +
+        JSON.stringify(fieldCell));
+    }
+    rows.push({ when, source, fields });
+  }
+  if (rows.length === 0) throw new Error('the P4 derivation table has no rows at all');
+  return rows;
+}
+
+function tableFieldsFor(rows, sprintMode) {
+  const want = sprintMode === 'jira' ? WHEN_JIRA : WHEN_OTHER;
+  const out = new Set();
+  for (const r of rows) {
+    if (r.when === WHEN_ALWAYS || r.when === want) for (const f of r.fields) out.add(f);
+  }
+  return [...out].sort();
+}
+
+function codeFieldsFor(sprintMode, projectRoot) {
+  const topology = {
+    systemRequirementsStore: { backend: 'file-system', mode: 'same', path: '.' },
+    softwareRequirementsStore: { backend: 'file-system', mode: 'same', path: '.' },
+    sprintManagement: sprintMode === 'jira'
+      ? { mode: 'jira', jiraUrl: JIRA_URL, jiraProjectKey: JIRA_KEY }
+      : { mode: 'same', path: '.' },
+  };
+  return [...new Set(derivedFields(topology, projectRoot).map((r) => r.field))].sort();
+}
+
+for (const mode of ['file-system', 'jira']) {
+  test(`[text] F2 the shipped P4 table names EXACTLY the fields compared in ${mode} mode`, () => {
+    const rows = parseDerivationTable(extractBlock(readGuarded(GUARDED[0])));
+    assert.deepStrictEqual(tableFieldsFor(rows, mode), codeFieldsFor(mode, PROJECT_ROOT),
+      `the shipped table and the executed derivation must be the SAME table in ${mode} mode. ` +
+      `Deleting a row from the 41 shipped copies has to turn this red — before this test, it ` +
+      `did not.`);
+  });
+}
+
+test('[text] F2 every shipped row is one this suite knows how to exercise', () => {
+  const rows = parseDerivationTable(extractBlock(readGuarded(GUARDED[0])));
+  assert.deepStrictEqual(
+    rows.map((r) => `${r.when}/${r.source}`).sort(),
+    ['always/software_requirements_store', 'always/system_requirements_store',
+      'jira/sprint_management', 'other/sprint_management'].sort(),
+    'a row added to, removed from, or re-sourced in the shipped table must be reflected in ' +
+    'ROW_SEMANTICS_CASES below — otherwise the semantics test silently stops covering it');
+});
+
+// For each shipped row: a pair of bindings differing ONLY in that row's binding
+// record, run through the REAL generator. Whatever the generator changes between
+// the two configs must be named by that row and by no other.
+const ROW_SEMANTICS_CASES = [
+  {
+    row: 'always/software_requirements_store',
+    base: (t) => ({
+      systemRequirementsStore: { mode: 'same', path: '.' },
+      softwareRequirementsStore: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' },
+    }),
+    next: (t) => ({
+      systemRequirementsStore: { mode: 'same', path: '.' },
+      softwareRequirementsStore: { mode: 'local', path: path.join(t, 'soft-moved') },
+      sprintManagement: { mode: 'same', path: '.' },
+    }),
+  },
+  {
+    row: 'always/system_requirements_store',
+    base: (t) => ({
+      systemRequirementsStore: { mode: 'same', path: '.' },
+      softwareRequirementsStore: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' },
+    }),
+    next: (t) => ({
+      systemRequirementsStore: { mode: 'local', path: path.join(t, 'sys-moved') },
+      softwareRequirementsStore: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' },
+    }),
+  },
+  {
+    row: 'other/sprint_management',
+    base: (t) => ({ knowledgebase: { mode: 'same', path: '.' }, sprintManagement: { mode: 'same', path: '.' } }),
+    next: (t) => ({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'local', path: path.join(t, 'sprints-moved') },
+    }),
+  },
+  {
+    // The file-system → jira transition. It exercises `sprint_backend`, both Jira
+    // coordinates AND `implementation_artifacts` in one move, and is also the
+    // shape that produces the surviving `sprint_management_path` of F1 — which
+    // must NOT show up as a change, because the generator does not rewrite it.
+    row: 'jira/sprint_management',
+    base: (t) => ({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'local', path: path.join(t, 'sprints-moved') },
+    }),
+    next: () => jiraLayout(),
+  },
+];
+
+test('[text] F2 each shipped row derives EXACTLY its own fields, measured on the real generator', () => {
+  const rows = parseDerivationTable(extractBlock(readGuarded(GUARDED[0])));
+  const allFields = [...new Set(rows.reduce((a, r) => a.concat(r.fields), []))];
+  let exercised = 0;
+
+  for (const kase of ROW_SEMANTICS_CASES) {
+    const row = rows.find((r) => `${r.when}/${r.source}` === kase.row);
+    assert.ok(row, `no shipped row matches ${kase.row}`);
+    withTmpDir((tmpDir) => {
+      for (const dir of ['soft-moved', 'sys-moved', 'sprints-moved']) {
+        fs.mkdirSync(path.join(tmpDir, dir), { recursive: true });
+      }
+      boundProject(tmpDir, kase.base(tmpDir));
+      const before = allFields.map((f) => readConfigField(readConfig(tmpDir), f));
+      rebind(tmpDir, kase.next(tmpDir));
+      regenerate(tmpDir);
+      const after = allFields.map((f) => readConfigField(readConfig(tmpDir), f));
+
+      const changed = allFields.filter((f, i) => before[i] !== after[i]).sort();
+      assert.ok(changed.length > 0,
+        `${kase.row}: the fixture changed this row's binding record but the generator wrote ` +
+        `no different field — the case has gone stale and proves nothing`);
+      const strays = changed.filter((f) => !row.fields.includes(f));
+      assert.deepStrictEqual(strays, [],
+        `${kase.row}: changing ONLY this row's binding record changed ${JSON.stringify(strays)}, ` +
+        `which the shipped row does not name. The table would be telling an agent to look for ` +
+        `drift in the wrong place — this is the "which store maps to which field" semantics, ` +
+        `and it is what a row-count test cannot see.`);
+      exercised += changed.length;
+    });
+  }
+  assert.ok(exercised >= 8,
+    `this test must actually observe generated fields changing; it saw ${exercised}`);
+});
+
+// ─── F3 — AC5's discriminator, pinned in the SHIPPED TEXT ────────────────────
+
+function blockStep(block, step) {
+  const start = block.indexOf(`### Step ${step} `);
+  assert.notStrictEqual(start, -1, `the shipped block has no Step ${step}`);
+  const rest = block.slice(start);
+  const end = rest.indexOf('\n### ', 1);
+  return end === -1 ? rest : rest.slice(0, end);
+}
+
+test('[text] F3/AC5 the shipped P2 discriminator names EXACTLY the three F26 marker fields', () => {
+  const p2 = blockStep(extractBlock(readGuarded(GUARDED[0])), 'P2');
+  // Every config field named in a P2 branch CONDITION (the bolded lead of a
+  // bullet). Narrowing the discriminator to `project_layout_stamp:` alone —
+  // reintroducing 31.3's review nit — shrinks this set and turns it red.
+  const conditions = p2.split('\n').filter((l) => /^- \*\*/.test(l));
+  assert.ok(conditions.length >= 3, `expected three P2 branches, found ${conditions.length}`);
+  const named = new Set();
+  for (const line of conditions) {
+    for (const m of line.matchAll(/`([a-z_]+):`/g)) named.add(m[1]);
+  }
+  assert.deepStrictEqual([...named].sort(), [...F26_MARKER_FIELDS].sort(),
+    'AC5 leans on all three fields: a config that lost only its stamp is still betrayed by ' +
+    'the two per-store fields. The shipped text must name the same three the procedure does.');
+});
+
+test('[text] F3/AC5 the shipped permissive branch is conditioned on ALL THREE being absent', () => {
+  const p2 = blockStep(extractBlock(readGuarded(GUARDED[0])), 'P2');
+  const bullet = p2.split('\n').find((l) => l.includes('this is genuinely a pre-F26 project'));
+  assert.ok(bullet, 'the shipped block must still carry the one permissive branch');
+  const condition = bullet.slice(0, bullet.indexOf('→'));
+  assert.ok(condition.length > 0, 'the permissive branch must state a condition before its verdict');
+  assert.ok(/none of those three fields/.test(condition),
+    `AC5's ONLY permissive branch must require that all three markers are absent. Widening it ` +
+    `to "\`config.yaml\` exists" waves through any stampless config — the precise regression ` +
+    `31.3's review nit was raised about. Condition read: ${JSON.stringify(condition.trim())}`);
+  assert.ok(/at column 0/.test(condition),
+    'and the absence must be an absence of FIELDS, not of substrings — a commented-out or ' +
+    'indented marker is not the field');
+  assert.ok(/The existence of `config.yaml` is NOT on its own a reason to take this branch/
+    .test(p2),
+    'the shipped text must rule out the widened reading explicitly, not merely fail to state it');
+});
+
+// ─── F5 — the mtime POLICY, not one sentence ────────────────────────────────
+
+test('[text] F5/AC6 no sentence in the block instructs the agent to use timestamps', () => {
+  const block = extractBlock(readGuarded(GUARDED[0]));
+  // Deleting the mtime prohibition is already caught. This catches the opposite
+  // and worse edit: ADDING a directly contradictory mtime instruction while the
+  // prohibition still stands. Every sentence that mentions time-ordering must be
+  // ruling it OUT.
+  const TIME_WORDS = /(modification times?|\bmtime\b|timestamps?|newer than|older than)/i;
+  const NEGATED = /\b(never|not|no|nothing|cannot|misses|instead of)\b/i;
+  const sentences = block
+    .split('\n')
+    .filter((l) => !/^\s*(```|node -e)/.test(l))
+    .reduce((acc, line) => acc.concat(line.split(/(?<=[.:])\s+(?=[A-Z*`(])/)), [])
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const mentions = sentences.filter((s) => TIME_WORDS.test(s));
+  assert.ok(mentions.length >= 2,
+    `AC6 must be stated more than once — in the prologue and in Step P4 — so removing one ` +
+    `sentence cannot remove the policy; found ${mentions.length}`);
+  const affirmative = mentions.filter((s) => !NEGATED.test(s));
+  assert.deepStrictEqual(affirmative, [],
+    `these shipped sentences mention time-ordering WITHOUT ruling it out, so an agent reading ` +
+    `the block could take a timestamp comparison as instructed: ${JSON.stringify(affirmative)}`);
+  assert.ok(/This is a content comparison of the two files/.test(block),
+    'and Step P4 must still say positively what the comparison IS');
+});
+
+// ─── F6 — three text/code divergences ───────────────────────────────────────
+
+test('[text] F6 P1 default-denies: its fault list is illustrative, not the whole rule', () => {
+  const p1 = blockStep(extractBlock(readGuarded(GUARDED[0])), 'P1');
+  // `runGuard` refuses every resolver reason that is not UNBOUND (default-deny),
+  // so the CODE is stricter than the enumerated list the text used to ship. An
+  // agent reading that list literally would route a non-numeric `schema_version`
+  // or a malformed store record to "present and readable → P3".
+  assert.ok(/illustrative, not exhaustive/.test(p1),
+    'P1 must say its fault list is not the rule, or a fault outside the list reads as readable');
+  assert.ok(/\*\*Default-deny:\*\*/.test(p1),
+    'P1 must name the policy the procedure implements, in the shipped text');
+  assert.ok(/is not a number/.test(p1),
+    'a non-numeric `schema_version:` is BINDING_INVALID in bin/cli.js and must not read as fine');
+  assert.ok(/does not recognise/.test(p1),
+    'an unrecognised `backend:`/`mode:` is BINDING_INVALID too');
+  assert.ok(/Anything else takes this HALT/.test(p1),
+    'and the closing rule must be the default-deny one, stated as a rule');
+  // Bound to the code side: three refuse-reasons exist beyond UNBOUND today, and
+  // the text is written so a FOURTH needs no edit. That is the property under test.
+  const refuseReasons = Object.keys(cli).filter((k) => /^BINDING_/.test(k) && k !== 'BINDING_UNBOUND');
+  assert.ok(refuseReasons.length >= 3,
+    `expected the resolver's refuse reasons to be exported; found ${refuseReasons.length}`);
+});
+
+test('[text] F6 the block reads fields at column 0 and compares values, not bytes', () => {
+  const block = extractBlock(readGuarded(GUARDED[0]));
+  const p4 = blockStep(block, 'P4');
+  assert.ok(/Read each field only from a line at column 0/.test(p4),
+    'P4 must qualify its reads the way P3 qualifies the stamp — `readConfigField` uses ' +
+    '`^field:` under the `m` flag, and a substring match would find a commented-out field');
+  assert.ok(/strip one balanced pair of surrounding quotes/.test(p4),
+    'the generator quotes its scalars, so a byte comparison of the raw line would report ' +
+    'drift on every field of a freshly generated config');
+  // And the quoted form the table shows must be the form the generator writes.
+  assert.ok(/`sprint_backend: "jira"`/.test(p4),
+    'the shipped example must show the QUOTED form; `sprint_backend: jira` is not what the ' +
+    'generator emits, and a literal-minded agent would compare against the wrong string');
+  withTmpDir((tmpDir) => {
+    boundProject(tmpDir, jiraLayout());
+    const line = readConfig(tmpDir).split(/\r?\n/).find((l) => /^sprint_backend:/.test(l));
+    assert.strictEqual(line, 'sprint_backend: "jira"',
+      `the generator's actual output must match the form the block shows, got ${JSON.stringify(line)}`);
+  });
+});
+
 test('[text] the block treats `malformed` and `absent` as different facts', () => {
   const block = extractBlock(readGuarded(GUARDED[0]));
   assert.ok(/it is NOT a config that predates the stamp/.test(block),
@@ -1120,6 +1718,20 @@ test('[text] OQ-3 `output_folder` is not covered by the stamp, so it cannot drif
     assert.ok(BINDING_DERIVED_FIELDS.includes(f) || f === 'project_layout_stamp',
       `generateBmmConfig writes ${f}, which this suite's BINDING_DERIVED_FIELDS list does not ` +
       `know about — the OQ-3 scope rule has gone stale`);
+  }
+  // F2, third binding: the generator's OWN field list, against the SHIPPED
+  // table. This closes the loop from the direction the other two do not — it
+  // needs no fixture and no transcription, so a row deleted from the 41 copies
+  // fails here even if `derivedFields` were mutated to match.
+  const tableFields = new Set(
+    parseDerivationTable(extractBlock(readGuarded(GUARDED[0])))
+      .reduce((a, r) => a.concat(r.fields), []));
+  for (const f of writes) {
+    if (f === 'project_layout_stamp') continue;
+    assert.ok(tableFields.has(f),
+      `generateBmmConfig writes ${f} from the committed binding, but the shipped P4 table does ` +
+      `not name it — an agent following the block would never compare it, so that field can ` +
+      `go stale in silence`);
   }
 });
 
