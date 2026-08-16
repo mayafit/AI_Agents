@@ -84,8 +84,8 @@ A schema-2 binding holds three records: `system_requirements_store:`, `software_
 | `system_requirements_store` → its `path:` (or `.` when its `backend:` is not `file-system`) | `system_requirements_path:` |
 | `sprint_management` with `mode: jira` | `sprint_backend: jira`, `jira_url:`, `jira_project_key:` — and no `sprint_management_path:` |
 | `sprint_management` with any other mode → its `path:` | `sprint_backend: file-system` and `sprint_management_path:` |
-| software store path is `.` | `planning_artifacts: _bmad-output/planning-artifacts` — otherwise `planning_artifacts:` equals that path |
-| sprint path is `.` | `implementation_artifacts: _bmad-output/implementation-artifacts` — otherwise `implementation_artifacts:` equals that path |
+| software store path is `.` | `planning_artifacts: {project-root}/_bmad-output/planning-artifacts` — otherwise `planning_artifacts:` equals that path |
+| sprint path is `.` | `implementation_artifacts: {project-root}/_bmad-output/implementation-artifacts` — otherwise `implementation_artifacts:` equals that path |
 
 **Any disagreement is drift** → **HALT** and report, naming every store that moved and both of its paths:
 
