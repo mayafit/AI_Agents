@@ -6,42 +6,6 @@
 
 ---
 
-## INITIALIZATION
-
-### Configuration Loading
-
-Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
-
-- `project_name`, `user_name`
-- `communication_language`, `document_output_language`
-- `implementation_artifacts`
-- `planning_artifacts`
-- `date` as system-generated current ISO-8601 datetime
-- YOU MUST ALWAYS SPEAK OUTPUT in your Agent communication style with the config `{communication_language}`
-
-### Paths
-
-- `tracking_system` = `file-system`
-- `project_key` = `NOKEY`
-- `story_location` = `{implementation_artifacts}`
-- `epics_location` = `{planning_artifacts}`
-- `epics_pattern` = `*epic*.md`
-- `status_file` = `{implementation_artifacts}/sprint-status.yaml`
-- `done_folder` = `{implementation_artifacts}/done/`
-
-### Input Files
-
-| Input | Path | Load Strategy |
-|-------|------|---------------|
-| Epics | `{planning_artifacts}/*epic*.md` (whole) or `{planning_artifacts}/epics/index.md` + parts (sharded) | FULL_LOAD |
-| Bugs | `{implementation_artifacts}/bug-*.md` | FULL_LOAD |
-
-### Context
-
-- `project_context` = `**/project-context.md` (load if exists)
-
----
-
 ## Knowledge Store Binding Preflight
 
 **Gateway check — run this before anything else in this skill.** Before any read, any write, any user prompt, and before any other routing or configuration step below. No other step of this skill executes until this preflight returns PROCEED.
@@ -149,6 +113,43 @@ node -e "const c=require('ma-agents/bin/cli.js'),f=require('fs'),p=process.cwd()
 ### Step P5 — PROCEED
 
 The generated config matches the committed binding. Say NOTHING about the binding, the stamp or this preflight — a matched project gets no message — and continue with the rest of this skill.
+
+
+## INITIALIZATION
+
+### Configuration Loading
+
+Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
+
+- `project_name`, `user_name`
+- `communication_language`, `document_output_language`
+- `implementation_artifacts`
+- `planning_artifacts`
+- `date` as system-generated current ISO-8601 datetime
+- YOU MUST ALWAYS SPEAK OUTPUT in your Agent communication style with the config `{communication_language}`
+
+### Paths
+
+- `tracking_system` = `file-system`
+- `project_key` = `NOKEY`
+- `story_location` = `{implementation_artifacts}`
+- `epics_location` = `{planning_artifacts}`
+- `epics_pattern` = `*epic*.md`
+- `status_file` = `{implementation_artifacts}/sprint-status.yaml`
+- `done_folder` = `{implementation_artifacts}/done/`
+
+### Input Files
+
+| Input | Path | Load Strategy |
+|-------|------|---------------|
+| Epics | `{planning_artifacts}/*epic*.md` (whole) or `{planning_artifacts}/epics/index.md` + parts (sharded) | FULL_LOAD |
+| Bugs | `{implementation_artifacts}/bug-*.md` | FULL_LOAD |
+
+### Context
+
+- `project_context` = `**/project-context.md` (load if exists)
+
+---
 
 ## Backend Routing
 

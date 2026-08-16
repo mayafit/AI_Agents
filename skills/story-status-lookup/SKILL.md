@@ -2,13 +2,6 @@
 
 Look up the current status of a story to determine whether its code is **delivered** or **work-in-progress**.
 
-## Purpose
-
-Used by other skills (notably `auto-bug-detection`) to classify code before deciding whether to flag defects.
-Do not flag bugs in WIP code. Do flag bugs in delivered code.
-
----
-
 ## Knowledge Store Binding Preflight
 
 **Gateway check — run this before anything else in this skill.** Before any read, any write, any user prompt, and before any other routing or configuration step below. No other step of this skill executes until this preflight returns PROCEED.
@@ -116,6 +109,14 @@ node -e "const c=require('ma-agents/bin/cli.js'),f=require('fs'),p=process.cwd()
 ### Step P5 — PROCEED
 
 The generated config matches the committed binding. Say NOTHING about the binding, the stamp or this preflight — a matched project gets no message — and continue with the rest of this skill.
+
+
+## Purpose
+
+Used by other skills (notably `auto-bug-detection`) to classify code before deciding whether to flag defects.
+Do not flag bugs in WIP code. Do flag bugs in delivered code.
+
+---
 
 ## Backend Routing
 

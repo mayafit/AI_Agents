@@ -2,15 +2,6 @@
 
 Generate or refresh the `backlog` section of `sprint-status.yaml` from epics and bug story files, while preserving existing sprint assignments and priorities.
 
-## Purpose
-
-This skill reads `epics.md` and `bug-*.md` files and writes the `backlog` and `epics` sections of `sprint-status.yaml`. The `sprints` section is preserved unchanged. This implements the single-source-of-truth model: all unassigned stories and bugs live in the `backlog` section of the unified file rather than a separate `backlog.yaml`.
-
-**Output target:** `_bmad-output/implementation-artifacts/sprint-status.yaml` (`backlog` and `epics` sections only)
-**Never writes:** A standalone `backlog.yaml` file.
-
----
-
 ## Knowledge Store Binding Preflight
 
 **Gateway check — run this before anything else in this skill.** Before any read, any write, any user prompt, and before any other routing or configuration step below. No other step of this skill executes until this preflight returns PROCEED.
@@ -118,6 +109,16 @@ node -e "const c=require('ma-agents/bin/cli.js'),f=require('fs'),p=process.cwd()
 ### Step P5 — PROCEED
 
 The generated config matches the committed binding. Say NOTHING about the binding, the stamp or this preflight — a matched project gets no message — and continue with the rest of this skill.
+
+
+## Purpose
+
+This skill reads `epics.md` and `bug-*.md` files and writes the `backlog` and `epics` sections of `sprint-status.yaml`. The `sprints` section is preserved unchanged. This implements the single-source-of-truth model: all unassigned stories and bugs live in the `backlog` section of the unified file rather than a separate `backlog.yaml`.
+
+**Output target:** `_bmad-output/implementation-artifacts/sprint-status.yaml` (`backlog` and `epics` sections only)
+**Never writes:** A standalone `backlog.yaml` file.
+
+---
 
 ## Backend Routing
 

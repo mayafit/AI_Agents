@@ -2,12 +2,6 @@
 
 Archive done and cancelled items from `sprint-status.yaml` — remove them from the active file and move their story/bug `.md` files to the `done/` subfolder.
 
-## Purpose
-
-Keeps the active sprint view lean by archiving completed and cancelled work. Preserves story artifacts in `done/` for historical reference. Updates epic statuses when all stories for an epic have been archived.
-
----
-
 ## Knowledge Store Binding Preflight
 
 **Gateway check — run this before anything else in this skill.** Before any read, any write, any user prompt, and before any other routing or configuration step below. No other step of this skill executes until this preflight returns PROCEED.
@@ -115,6 +109,13 @@ node -e "const c=require('ma-agents/bin/cli.js'),f=require('fs'),p=process.cwd()
 ### Step P5 — PROCEED
 
 The generated config matches the committed binding. Say NOTHING about the binding, the stamp or this preflight — a matched project gets no message — and continue with the rest of this skill.
+
+
+## Purpose
+
+Keeps the active sprint view lean by archiving completed and cancelled work. Preserves story artifacts in `done/` for historical reference. Updates epic statuses when all stories for an epic have been archived.
+
+---
 
 ## Backend Routing
 

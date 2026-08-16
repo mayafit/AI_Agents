@@ -11,22 +11,6 @@ description: 'Bootstrap or update the unified sprint-status.yaml from epics. Cre
 
 ---
 
-## INITIALIZATION
-
-### Path Resolution
-
-Resolve project root as the directory containing `_bmad-output/`. Then set:
-
-- `implementation_artifacts` = `_bmad-output/implementation-artifacts`
-- `planning_artifacts` = `_bmad-output/planning-artifacts`
-- `status_file` = `_bmad-output/implementation-artifacts/sprint-status.yaml`
-- `done_folder` = `_bmad-output/implementation-artifacts/done/`
-- `story_location` = `_bmad-output/implementation-artifacts`
-
-Attempt to read project name from `_bmad/bmm/config.yaml` (field `project_name`). If the file does not exist or `project_name` is absent, derive project name from the root directory name or use `"Unknown Project"`.
-
----
-
 ## Knowledge Store Binding Preflight
 
 **Gateway check — run this before anything else in this skill.** Before any read, any write, any user prompt, and before any other routing or configuration step below. No other step of this skill executes until this preflight returns PROCEED.
@@ -134,6 +118,23 @@ node -e "const c=require('ma-agents/bin/cli.js'),f=require('fs'),p=process.cwd()
 ### Step P5 — PROCEED
 
 The generated config matches the committed binding. Say NOTHING about the binding, the stamp or this preflight — a matched project gets no message — and continue with the rest of this skill.
+
+
+## INITIALIZATION
+
+### Path Resolution
+
+Resolve project root as the directory containing `_bmad-output/`. Then set:
+
+- `implementation_artifacts` = `_bmad-output/implementation-artifacts`
+- `planning_artifacts` = `_bmad-output/planning-artifacts`
+- `status_file` = `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `done_folder` = `_bmad-output/implementation-artifacts/done/`
+- `story_location` = `_bmad-output/implementation-artifacts`
+
+Attempt to read project name from `_bmad/bmm/config.yaml` (field `project_name`). If the file does not exist or `project_name` is absent, derive project name from the root directory name or use `"Unknown Project"`.
+
+---
 
 ## Backend Routing
 
