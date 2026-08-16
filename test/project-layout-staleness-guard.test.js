@@ -820,12 +820,13 @@ test('[behaviour] M32 a non-file-system store resolves with NO path, which is wh
   withTmpDir((tmpDir) => {
     // The construction `expectedStorePath` now rests on, pinned. `storeConfigPath`
     // (bin/cli.js:901) has no backend check: it portable-ises `store.path` and
-    // nothing else. That is only equivalent to the table's "or `.` when its
-    // `backend:` is not `file-system`" because the resolver never produces a
-    // non-file-system store carrying a path at all. If a future backend ever
-    // resolves with BOTH a `backend` and a `path`, this test fails — which is
-    // exactly when someone needs to know, because at that moment the shipped
-    // table and the generator would start disagreeing.
+    // nothing else. The shipped table therefore states the FACT — "a store whose
+    // `backend:` is not `file-system` has no `path:` at all, and so generates
+    // `.`" — rather than a backend RULE the generator does not implement. That
+    // phrasing is only true because the resolver never produces a
+    // non-file-system store carrying a path. If a future backend ever resolves
+    // with BOTH, this test fails — which is exactly when someone needs to know,
+    // because at that moment the shipped table would start overstating.
     quiet(() => cli.writeProjectLayoutYaml({
       systemRequirementsStore: {
         backend: 'confluence', spaceKey: 'ENG', rootPage: { title: 'Home', id: '42' },
