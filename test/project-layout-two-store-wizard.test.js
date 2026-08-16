@@ -436,6 +436,44 @@ test('AC1 — two store questions replace FR111\'s one, and FR112\'s sprint ques
   assert.strictEqual(messages[messages.length - 1], 'Where is your sprint management managed?');
 });
 
+test('AC1 — FR112\'s sprint question still reaches the Jira flow, and Jira is offered to NEITHER store', async () => {
+  // "Unchanged" has to include the branch that is easiest to lose when a loop is
+  // rewritten. Nothing else in the repo drives sprint `jira` THROUGH THE WIZARD —
+  // the enum suite pre-selects it but answers `same` — so deleting the jira
+  // branch from the sprint collector would have survived every suite.
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const { layout, questions } = await runWizard([
+      { backend: 'file-system' }, { mode: 'same' },
+      { backend: 'file-system' }, { mode: 'same' },
+      { mode: 'jira' }, { url: 'https://jira.example.com' }, { key: 'MA' },
+    ]);
+    assert.deepStrictEqual(layout.sprintManagement,
+      { mode: 'jira', jiraUrl: 'https://jira.example.com', jiraProjectKey: 'MA' },
+      'the sprint question must still reach collectJiraConfig and return its record');
+
+    // The stores must not have been offered jira in the first place — the writer
+    // rejects it for a knowledge store, so offering it would be a dead end.
+    const storeModeQuestions = questions.filter((q) => q.name === 'mode').slice(0, 2);
+    for (const q of storeModeQuestions) {
+      assert.ok(!q.choices.includes('jira'), `a knowledge store must not be offered jira: ${q.message}`);
+    }
+
+    // ...and both stores are untouched by a Jira sprint backend.
+    assert.deepStrictEqual(layout.systemRequirementsStore, { backend: 'file-system', mode: 'same', path: '.' });
+    assert.deepStrictEqual(layout.softwareRequirementsStore, { backend: 'file-system', mode: 'same', path: '.' });
+
+    silence(() => writeProjectLayoutYaml(layout));
+    const doc = parseLayout(readLayoutFile(tmpDir), 'jira sprint + two stores');
+    assert.strictEqual(doc.sprint_management.mode, 'jira');
+    assert.strictEqual(doc.sprint_management.jira_url, 'https://jira.example.com');
+    assert.strictEqual(doc.sprint_management.jira_project_key, 'MA');
+    assert.strictEqual(doc.system_requirements_store.mode, 'same');
+  } finally {
+    cleanup();
+  }
+});
+
 test('AC7 — each store question states that store\'s contents, and not the other\'s', async () => {
   const { questions } = await runWizard(ALL_DEFAULTS);
   const [systemQ, softwareQ] = questions.filter((q) => q.name === 'backend').map((q) => q.message);
@@ -823,7 +861,7 @@ test('INSTALL PATH — a divergent FILE-SYSTEM pair survives a real `install --y
 // The count is pinned in BOTH directions: a shortfall means tests that never ran
 // (and tests that never ran cannot fail), a surplus means the pin was not
 // updated deliberately.
-const EXPECTED_TEST_COUNT = 15;
+const EXPECTED_TEST_COUNT = 16;
 
 (async () => {
   for (const [name, fn] of tests) {
