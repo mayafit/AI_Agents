@@ -150,13 +150,29 @@ function readConfigField(content, field) {
   return v;
 }
 
-// What `generateBmmConfig` writes for a store's path: its portable path, or `.`
-// when the store has no filesystem path at all (a confluence store).
+/**
+ * What `generateBmmConfig` writes for a store's path — a VERBATIM transcription
+ * of `storeConfigPath` (bin/cli.js:901), which is:
+ *
+ *     toPortablePath(store && store.path, projectRoot).portable
+ *
+ * and which has NO backend check. This function used to carry an extra
+ * `backend !== 'file-system' → '.'` short-circuit, and removing it survived
+ * mutation. It survived because it was dead — the resolver never produces a
+ * non-file-system store carrying a path (`storeFromRaw`'s confluence branch
+ * returns backend/space_key/root_page and nothing else), so
+ * `toPortablePath(undefined)` already returns `.` for exactly those stores.
+ *
+ * It is gone rather than kept, because it was also a DIVERGENCE: had a store
+ * ever arrived with both a backend and a path, the generator would have written
+ * the path while this transcription expected `.`, and the guard would have
+ * reported drift on a config the generator had just written. The construction
+ * that makes the two forms agree is pinned by the M32 test below, so if a future
+ * backend ever resolves with a path, that test fails rather than this silently
+ * disagreeing with the generator.
+ */
 function expectedStorePath(store, projectRoot) {
-  if (!store) return '.';
-  if (store.backend && store.backend !== 'file-system') return '.';
-  const raw = store.path != null ? store.path : '.';
-  return cli.toPortablePath(raw, projectRoot).portable;
+  return cli.toPortablePath(store && store.path, projectRoot).portable;
 }
 
 // The two derived artifact roots `generateBmmConfig` writes when a store sits at
@@ -800,17 +816,16 @@ test('[behaviour] M17 the stamp reader enforces the lowercase-hex rule the shipp
     'claim can drift apart again');
 });
 
-test('[behaviour] M32 a non-file-system store resolves with NO path, so the table\'s `.` rule is exact', () => {
+test('[behaviour] M32 a non-file-system store resolves with NO path, which is why the table\'s `.` rule is exact', () => {
   withTmpDir((tmpDir) => {
-    // `expectedStorePath` returns `.` for a store whose backend is not
-    // `file-system` BEFORE it looks at `store.path`. Deleting that branch
-    // survived mutation, and the reason is worth recording rather than papering
-    // over: the resolver never produces a non-file-system store carrying a path
-    // at all (`storeFromRaw`'s confluence branch returns backend/spaceKey/
-    // rootPage and nothing else), so the two orders are equivalent BY
-    // CONSTRUCTION. This test pins the construction. If a future backend ever
-    // resolves with both a `backend` and a `path`, this fails and the
-    // equivalence stops holding — which is exactly when someone needs to know.
+    // The construction `expectedStorePath` now rests on, pinned. `storeConfigPath`
+    // (bin/cli.js:901) has no backend check: it portable-ises `store.path` and
+    // nothing else. That is only equivalent to the table's "or `.` when its
+    // `backend:` is not `file-system`" because the resolver never produces a
+    // non-file-system store carrying a path at all. If a future backend ever
+    // resolves with BOTH a `backend` and a `path`, this test fails — which is
+    // exactly when someone needs to know, because at that moment the shipped
+    // table and the generator would start disagreeing.
     quiet(() => cli.writeProjectLayoutYaml({
       systemRequirementsStore: {
         backend: 'confluence', spaceKey: 'ENG', rootPage: { title: 'Home', id: '42' },
@@ -1385,16 +1400,22 @@ function parseDerivationTable(block) {
   return rows;
 }
 
-function tableFieldsFor(rows, sprintMode) {
+// `<binding record> → <config field>` PAIRS, not a flat field set. The pair is
+// the semantic unit: a set comparison catches a row being deleted, but a field
+// silently reattributed to a different binding record keeps the set identical
+// while making the drift message name the wrong store.
+function tablePairsFor(rows, sprintMode) {
   const want = sprintMode === 'jira' ? WHEN_JIRA : WHEN_OTHER;
   const out = new Set();
   for (const r of rows) {
-    if (r.when === WHEN_ALWAYS || r.when === want) for (const f of r.fields) out.add(f);
+    if (r.when === WHEN_ALWAYS || r.when === want) {
+      for (const f of r.fields) out.add(`${r.source} → ${f}`);
+    }
   }
   return [...out].sort();
 }
 
-function codeFieldsFor(sprintMode, projectRoot) {
+function codePairsFor(sprintMode, projectRoot) {
   const topology = {
     systemRequirementsStore: { backend: 'file-system', mode: 'same', path: '.' },
     softwareRequirementsStore: { backend: 'file-system', mode: 'same', path: '.' },
@@ -1402,16 +1423,18 @@ function codeFieldsFor(sprintMode, projectRoot) {
       ? { mode: 'jira', jiraUrl: JIRA_URL, jiraProjectKey: JIRA_KEY }
       : { mode: 'same', path: '.' },
   };
-  return [...new Set(derivedFields(topology, projectRoot).map((r) => r.field))].sort();
+  return [...new Set(derivedFields(topology, projectRoot).map((r) => `${r.source} → ${r.field}`))]
+    .sort();
 }
 
 for (const mode of ['file-system', 'jira']) {
-  test(`[text] F2 the shipped P4 table names EXACTLY the fields compared in ${mode} mode`, () => {
+  test(`[text] F2 the shipped P4 table maps EXACTLY the record→field pairs compared in ${mode} mode`, () => {
     const rows = parseDerivationTable(extractBlock(readGuarded(GUARDED[0])));
-    assert.deepStrictEqual(tableFieldsFor(rows, mode), codeFieldsFor(mode, PROJECT_ROOT),
-      `the shipped table and the executed derivation must be the SAME table in ${mode} mode. ` +
-      `Deleting a row from the 41 shipped copies has to turn this red — before this test, it ` +
-      `did not.`);
+    assert.deepStrictEqual(tablePairsFor(rows, mode), codePairsFor(mode, PROJECT_ROOT),
+      `the shipped table and the executed derivation must be the SAME table in ${mode} mode, ` +
+      `down to which binding record each field comes from. Deleting a row from the 41 shipped ` +
+      `copies — or reattributing one field to another record, which leaves the drift message ` +
+      `naming the wrong store — has to turn this red. Before this test, neither did.`);
   });
 }
 
@@ -1536,6 +1559,15 @@ test('[text] F3/AC5 the shipped P2 discriminator names EXACTLY the three F26 mar
   assert.deepStrictEqual([...named].sort(), [...F26_MARKER_FIELDS].sort(),
     'AC5 leans on all three fields: a config that lost only its stamp is still betrayed by ' +
     'the two per-store fields. The shipped text must name the same three the procedure does.');
+  // Both P2 branches, not only the permissive one: `runGuard` tests each marker
+  // with `^field:` under the `m` flag, so a commented-out or indented marker is
+  // not a marker on EITHER side of the discriminator.
+  const halting = conditions.find((l) => /any of/.test(l));
+  assert.ok(halting, 'the P2 halting branch must still enumerate the markers');
+  assert.ok(/at column 0/.test(halting),
+    `the halting branch must be column-0-qualified the way P3's stamp check is — a ` +
+    `\`# system_requirements_path:\` in a comment must not make a pre-F26 project HALT. ` +
+    `Read: ${JSON.stringify(halting.trim())}`);
 });
 
 test('[text] F3/AC5 the shipped permissive branch is conditioned on ALL THREE being absent', () => {
@@ -1623,6 +1655,19 @@ test('[text] F6 the block reads fields at column 0 and compares values, not byte
   assert.ok(/`sprint_backend: "jira"`/.test(p4),
     'the shipped example must show the QUOTED form; `sprint_backend: jira` is not what the ' +
     'generator emits, and a literal-minded agent would compare against the wrong string');
+  assert.ok(/The table below IS the whole comparison/.test(p4),
+    'the table has to be stated as CLOSED — "every field named is compared, and no field ' +
+    'outside it is" — or a reader is free to add a comparison of their own');
+  // F1, in the shipped text. The table already omits `sprint_management_path`
+  // from the jira row, but only this paragraph says WHY — that the generator
+  // never deletes a field — and it is the reason the false clause cannot simply
+  // be reinstated by the next person who notices the field lying there.
+  assert.ok(/`sprint_management_path:` is not compared at all/.test(p4),
+    'P4 must say out loud that `sprint_management_path:` is not compared in jira mode');
+  assert.ok(/it never DELETES a field, it only updates or appends one/.test(p4),
+    'and it must give the reason (`writeConfigField` updates-or-appends), or the false ' +
+    '"and no `sprint_management_path:`" claim gets written back in the next time someone ' +
+    'sees a stale one survive a jira re-bind');
   withTmpDir((tmpDir) => {
     boundProject(tmpDir, jiraLayout());
     const line = readConfig(tmpDir).split(/\r?\n/).find((l) => /^sprint_backend:/.test(l));
