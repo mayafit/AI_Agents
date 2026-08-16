@@ -77,6 +77,37 @@ let passed = 0;
 let failed = 0;
 const errors = [];
 
+// ─── The process-level backstop, REGISTERED FIRST ────────────────────────────
+//
+// A suite that can exit 0 without printing its summary is worse than a suite
+// with a gap in it: the gap loses one assertion, a skipped summary loses all of
+// them, including real failures already recorded. An `&&`-chained runner keys on
+// the exit code alone.
+//
+// WHY IT IS HERE AND NOT AT THE BOTTOM (Story 31.5, wave 2A carry-forward 1).
+// It used to sit BELOW the synchronous tests, so a `process.exit(0)` raised
+// during the synchronous phase still exited 0 with no summary — the listener
+// that would have caught it had not been registered yet. That was unreachable
+// while nothing synchronous could exit, and Story 31.5 is the story that changes
+// it: `collectRepoLayout`'s interactive branch contains
+// `if (!mode) process.exit(0)` and now `if (!backend) process.exit(0)` too, and
+// this file drives that branch. Registering the backstop before the first test
+// closes the window for every phase rather than only the drained one. Setting
+// `process.exitCode` from an 'exit' listener does override an explicit
+// `process.exit(0)` (verified) — which is precisely the case that bit.
+let summaryPrinted = false;
+
+process.on('exit', (code) => {
+  if (summaryPrinted) return;
+  console.error(
+    `\n  FATAL: this suite exited with code ${code} WITHOUT printing its summary, so its ` +
+    `${passed + failed} completed test(s) were never reported. Something aborted the process ` +
+    `mid-run — the usual cause is a cli.js code path calling process.exit() from inside a ` +
+    `test. Forcing a non-zero exit so this cannot read as a pass.`
+  );
+  process.exitCode = code === 0 ? 1 : code;
+});
+
 function test(name, fn) {
   try {
     fn();
@@ -149,12 +180,14 @@ require.cache[promptsModulePath].exports = async function stubPrompts(question) 
 // ─── Load module ─────────────────────────────────────────────────────────────
 let writeProjectLayoutYaml, resolveProjectTopology, BINDING_INVALID,
   STORE_MODES, SPRINT_MODES, STORE_BACKENDS, MODE_PROMPT_TITLES, modeChoicesFor,
-  collectRepoLayout, legalBackendsForMessage;
+  collectRepoLayout, legalBackendsForMessage,
+  STORE_BACKEND_WIZARD, REPO_LAYOUT_CONCERNS, offerableStoreBackends, backendChoicesForStore;
 try {
   ({
     writeProjectLayoutYaml, resolveProjectTopology, BINDING_INVALID,
     STORE_MODES, SPRINT_MODES, STORE_BACKENDS, MODE_PROMPT_TITLES, modeChoicesFor,
     collectRepoLayout, legalBackendsForMessage,
+    STORE_BACKEND_WIZARD, REPO_LAYOUT_CONCERNS, offerableStoreBackends, backendChoicesForStore,
   } = require('../bin/cli.js'));
 } catch (e) {
   console.error('\n  FATAL: Cannot load exports from cli.js');
@@ -662,28 +695,44 @@ async function runWizard(answers, existingLayout = null) {
     `${queue.length} prepared answer(s) went unused — the wizard asked fewer questions than ` +
     `expected, which is as much a change in behaviour as asking more`);
   const modeQuestions = promptLog.filter(q => q && q.name === 'mode');
-  return { layout, modeQuestions };
+  const backendQuestions = promptLog.filter(q => q && q.name === 'backend');
+  return { layout, modeQuestions, backendQuestions };
 }
 
-testAsync('collectRepoLayout offers STORE_MODES for the knowledgebase and SPRINT_MODES for sprint management', async () => {
-  const { modeQuestions } = await runWizard([{ mode: 'same' }, { mode: 'same' }]);
-  assert.strictEqual(modeQuestions.length, 2,
-    `the wizard asks one mode question per concern; got ${modeQuestions.length}`);
+// Story 31.5: THREE concerns, and each of the two store concerns is preceded by
+// a backend question. The all-defaults queue is spelled out once here so the
+// tests below read as "what is offered", not "how many answers does it take".
+// Every question must have an answer — the stub throws by name rather than
+// defaulting, and runWizard asserts the queue was fully consumed in both
+// directions.
+const DEFAULT_ANSWERS = [
+  { backend: 'file-system' }, { mode: 'same' },   // system requirements store
+  { backend: 'file-system' }, { mode: 'same' },   // software requirements store
+  { mode: 'same' },                               // sprint management (FR112, unchanged)
+];
 
-  const [kb, sprint] = modeQuestions;
-  assert.deepStrictEqual(kb.choices.map(c => c.value), [...STORE_MODES],
-    'the knowledgebase question must offer exactly STORE_MODES, in enum order');
+testAsync('collectRepoLayout offers STORE_MODES for each STORE and SPRINT_MODES for sprint management', async () => {
+  const { modeQuestions } = await runWizard(DEFAULT_ANSWERS);
+  assert.strictEqual(modeQuestions.length, 3,
+    `the wizard asks one location question per concern, and Story 31.5 made that three ` +
+    `(system store, software store, sprint management); got ${modeQuestions.length}`);
+
+  const [system, software, sprint] = modeQuestions;
+  for (const [label, q] of [['system requirements', system], ['software requirements', software]]) {
+    assert.deepStrictEqual(q.choices.map(c => c.value), [...STORE_MODES],
+      `the ${label} question must offer exactly STORE_MODES, in enum order`);
+    assert.ok(!q.choices.some(c => c.value === 'jira'),
+      `the ${label} question must not offer jira — the writer would reject it`);
+  }
   assert.deepStrictEqual(sprint.choices.map(c => c.value), [...SPRINT_MODES],
     'the sprint-management question must offer exactly SPRINT_MODES, in enum order');
   assert.ok(sprint.choices.some(c => c.value === 'jira'),
     'sprint management must still offer Jira — a call site that passes a constant concern ' +
     'silently drops it, and every other suite stays green');
-  assert.ok(!kb.choices.some(c => c.value === 'jira'),
-    'the knowledgebase question must not offer jira — the writer would reject it');
 });
 
 testAsync('the wizard offers the titles from MODE_PROMPT_TITLES, not a hardcoded list', async () => {
-  const { modeQuestions } = await runWizard([{ mode: 'same' }, { mode: 'same' }]);
+  const { modeQuestions } = await runWizard(DEFAULT_ANSWERS);
   for (const q of modeQuestions) {
     for (const choice of q.choices) {
       assert.strictEqual(choice.title, MODE_PROMPT_TITLES[choice.value],
@@ -694,15 +743,68 @@ testAsync('the wizard offers the titles from MODE_PROMPT_TITLES, not a hardcoded
 });
 
 testAsync('the wizard pre-selects the existing mode — `initial` still indexes the offered list', async () => {
+  // A pre-31.5 project: ONE committed knowledgebase location and no topology, so
+  // both store questions pre-select from it. That is the collapse
+  // `existingRecordForConcern` falls back to, and it is exact while the two
+  // stores agree — which is every project that can exist before this story.
   const { modeQuestions } = await runWizard(
-    [{ mode: 'same' }, { mode: 'same' }],
+    DEFAULT_ANSWERS,
     { knowledgebase: { mode: 'remote', path: '.' }, sprintManagement: { mode: 'jira' } }
   );
-  const [kb, sprint] = modeQuestions;
-  assert.strictEqual(kb.choices[kb.initial].value, 'remote',
-    `an existing knowledgebase mode of remote must be pre-selected; initial=${kb.initial}`);
+  const [system, software, sprint] = modeQuestions;
+  for (const [label, q] of [['system', system], ['software', software]]) {
+    assert.strictEqual(q.choices[q.initial].value, 'remote',
+      `an existing knowledgebase mode of remote must pre-select the ${label} store; initial=${q.initial}`);
+  }
   assert.strictEqual(sprint.choices[sprint.initial].value, 'jira',
     `an existing sprint mode of jira must be pre-selected; initial=${sprint.initial}`);
+});
+
+testAsync('the wizard asks the BACKEND before the location, for each store and for neither sprint', async () => {
+  const { backendQuestions } = await runWizard(DEFAULT_ANSWERS);
+  assert.strictEqual(backendQuestions.length, 2,
+    `exactly the two knowledge stores select a backend — sprint_management carries none ` +
+    `(P5-9.5); got ${backendQuestions.length}`);
+
+  // ORDER, not merely presence: AC3 is "backend first, THEN that backend's
+  // location". Asserted on the interleaved log so a wizard that asked both
+  // backends up front and both locations afterwards would fail.
+  const names = promptLog.filter(q => q && (q.name === 'backend' || q.name === 'mode')).map(q => q.name);
+  assert.deepStrictEqual(names, ['backend', 'mode', 'backend', 'mode', 'mode'],
+    `expected backend-then-location per store, then the unchanged sprint question; got ${names.join(', ')}`);
+
+  for (const q of backendQuestions) {
+    assert.deepStrictEqual(q.choices.map(c => c.value), offerableStoreBackends(),
+      'the backend question must offer exactly the backends STORE_BACKEND_WIZARD has a flow for');
+    for (const choice of q.choices) {
+      assert.ok(STORE_BACKENDS.has(choice.value),
+        `the wizard offered ${JSON.stringify(choice.value)}, which is not a member of STORE_BACKENDS`);
+      assert.strictEqual(choice.title, STORE_BACKEND_WIZARD[choice.value].title,
+        `the wizard offered ${JSON.stringify(choice.value)} with a title that is not the table's`);
+    }
+  }
+});
+
+testAsync('REPO_LAYOUT_CONCERNS drives the loop — the questions name the three concerns in order', async () => {
+  // A constant concern passed to the loop, or a two-concern loop with the stores
+  // collapsed back into one, is invisible to a test that only counts questions.
+  // The MESSAGES are what the user reads, so they are what is asserted.
+  const { modeQuestions, backendQuestions } = await runWizard(DEFAULT_ANSWERS);
+  const stores = REPO_LAYOUT_CONCERNS.filter(c => c.kind === 'store');
+  assert.strictEqual(stores.length, 2, 'Story 31.5 defines exactly two knowledge stores');
+
+  assert.deepStrictEqual(
+    modeQuestions.map(q => q.message),
+    REPO_LAYOUT_CONCERNS.map(c => `Where is your ${c.label} managed?`),
+    'each location question must name its own concern');
+  assert.deepStrictEqual(
+    backendQuestions.map(q => q.message),
+    stores.map(c => `Which backend holds your ${c.label} — ${c.contents}?`),
+    'each backend question must name its own store AND that store\'s contents (AC7)');
+
+  // FR112 is UNCHANGED: the sprint question is the one it has always asked.
+  assert.strictEqual(modeQuestions[2].message, 'Where is your sprint management managed?',
+    'the sprint-management question must be byte-identical to FR112\'s');
 });
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -765,11 +867,65 @@ test('the exported enums are COPIES — poisoning one cannot widen what cli.js a
       'adding a member to the EXPORTED STORE_MODES must not teach the reader a new store mode');
     assert.deepStrictEqual(modeChoicesFor('knowledgebase').map(c => c.value), ['same', 'local', 'remote'],
       'nor may it widen what the wizard offers');
+    // Story 31.5 — the same property for the BACKEND question, which is the
+    // third direction over that enum and the one a user picks from.
+    assert.deepStrictEqual(backendChoicesForStore().map(c => c.value), ['file-system'],
+      'adding a member to the EXPORTED STORE_BACKENDS must not teach the wizard a new backend');
   } finally {
     STORE_BACKENDS.delete('notion');
     SPRINT_MODES.delete('smartsheet');
     STORE_MODES.delete('sharepoint');
   }
+});
+
+test('STORE_BACKEND_WIZARD names exactly STORE_BACKENDS — no member without a wizard entry', () => {
+  // The same keys-equal-union property MODE_PROMPT_TITLES has, for the same
+  // reason: a backend added to the enum with no entry here would be discovered
+  // by a USER, at the moment the wizard throws "No wizard flow for ...". Both
+  // directions are asserted — a surplus key is a backend that is not in the enum
+  // and can therefore never be offered, which is dead configuration masquerading
+  // as support.
+  assert.deepStrictEqual(
+    Object.keys(STORE_BACKEND_WIZARD).sort(), [...STORE_BACKENDS].sort(),
+    'STORE_BACKEND_WIZARD\'s keys must be exactly the members of STORE_BACKENDS');
+  for (const [backend, entry] of Object.entries(STORE_BACKEND_WIZARD)) {
+    assert.ok(Object.isFrozen(entry), `the ${backend} entry must be frozen`);
+    assert.strictEqual(typeof entry.title, 'string',
+      `the ${backend} entry needs a prompt title`);
+    assert.ok(entry.title.length > 0, `the ${backend} entry's title must not be empty`);
+    assert.ok(entry.collect === null || typeof entry.collect === 'function',
+      `the ${backend} entry's collect must be a function or explicitly null, got ${typeof entry.collect}`);
+  }
+  assert.ok(Object.isFrozen(STORE_BACKEND_WIZARD), 'the table itself must be frozen');
+});
+
+test('confluence is IN the enum but NOT offered — AC5 takes the "not offered until 31.8" branch', () => {
+  // The two halves of AC5 as amended by the implementation-readiness review, and
+  // they must BOTH hold. A test asserting only that confluence is unoffered
+  // would still pass if the member had been deleted from the enum — which would
+  // break every committed Confluence binding the reader and writer accept.
+  assert.ok(STORE_BACKENDS.has('confluence'),
+    'confluence must remain a member of the enum — committed confluence bindings round-trip today');
+  assert.strictEqual(STORE_BACKEND_WIZARD.confluence.collect, null,
+    'confluence has no wizard flow until Story 31.8; that is what makes it unofferable');
+  assert.deepStrictEqual(offerableStoreBackends(), ['file-system'],
+    'only file-system has a wizard flow in this story');
+  assert.deepStrictEqual(backendChoicesForStore().map(c => c.value), ['file-system'],
+    'the offered choices are derived from the table, so confluence cannot appear');
+
+  // ...and offerability is DERIVED, not a second hardcoded list that happens to
+  // read `['file-system']` today. Given a table in which confluence HAS a flow,
+  // both members must be offered, in enum order — the assertion that fails if a
+  // future edit replaces the filter with a literal, leaving Story 31.8 a second
+  // place to find. The real table is frozen, so the alternative is passed in.
+  const withConfluenceFlow = {
+    'file-system': STORE_BACKEND_WIZARD['file-system'],
+    confluence: { title: 'Confluence', collect: async () => ({}) },
+  };
+  assert.deepStrictEqual(offerableStoreBackends(withConfluenceFlow), [...STORE_BACKENDS],
+    'a backend that HAS a flow must be offered — offerability must follow the table, not a literal');
+  assert.deepStrictEqual(offerableStoreBackends(), ['file-system'],
+    'and the default is still the real table');
 });
 
 test('MODE_PROMPT_TITLES is frozen — a consumer cannot rewrite what the wizard offers', () => {
@@ -846,31 +1002,16 @@ test('an unprintable MODE also yields the real message — both writers render v
 
 // ─── Summary ─────────────────────────────────────────────────────────────────
 //
-// Two independent guards, because a suite that can exit 0 without reporting is
-// worse than a suite with a gap in it: the gap loses one assertion, a skipped
-// summary loses all of them, including real failures already recorded by the
-// synchronous tests. An `&&`-chained runner keys on the exit code alone.
+// Two independent guards. The second — the process-level backstop, so the
+// summary cannot be skipped by ANY mechanism rather than only the ones
+// anticipated here — is registered at the TOP of this file, before the first
+// test runs; see the note there for why its position is load-bearing.
 //
-//   1. A hard total. Anything that stops tests running — an early `process.exit`
-//      inside an awaited call, a rejected drain, a `return` that skips a block —
-//      changes this number, and the count is checked before the exit code is.
-//   2. A process-level backstop, so the summary cannot be skipped by ANY
-//      mechanism rather than only the ones anticipated here. Setting
-//      `process.exitCode` from an 'exit' listener does override an explicit
-//      `process.exit(0)` (verified), which is precisely the case that bit.
-const EXPECTED_TEST_COUNT = 25;
-let summaryPrinted = false;
-
-process.on('exit', (code) => {
-  if (summaryPrinted) return;
-  console.error(
-    `\n  FATAL: this suite exited with code ${code} WITHOUT printing its summary, so its ` +
-    `${passed + failed} completed test(s) were never reported. Something aborted the process ` +
-    `mid-run — the usual cause is a cli.js code path calling process.exit() from inside an ` +
-    `awaited test. Forcing a non-zero exit so this cannot read as a pass.`
-  );
-  process.exitCode = code === 0 ? 1 : code;
-});
+// This one is the hard total. Anything that stops tests running — an early
+// `process.exit` inside an awaited call, a rejected drain, a `return` that skips
+// a block — changes this number, and the count is checked before the exit code
+// is. It is a `!==` check, so a SURPLUS fails as loudly as a shortfall.
+const EXPECTED_TEST_COUNT = 29;
 
 function printSummary() {
   const total = passed + failed;

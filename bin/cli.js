@@ -1351,9 +1351,16 @@ const STORE_BACKEND_WIZARD = Object.freeze({
 // The backends the wizard may actually offer — DERIVED from the enum and the
 // table above, listed nowhere. Order is STORE_BACKENDS' insertion order, which
 // is the order the user reads.
-function offerableStoreBackends() {
+//
+// `wizard` is a parameter only so the suite can pin that this really is a
+// derivation rather than a literal that happens to read `['file-system']` today:
+// the table is frozen (deliberately), so the test cannot give confluence a flow
+// in place and observe it become offered. Every production call site takes the
+// default. A hardcoded list here would be a SECOND definition of what Story 31.8
+// has to change, which is exactly the shape this epic keeps re-finding.
+function offerableStoreBackends(wizard = STORE_BACKEND_WIZARD) {
   return [...STORE_BACKENDS].filter((backend) => {
-    const entry = STORE_BACKEND_WIZARD[backend];
+    const entry = wizard[backend];
     return !!(entry && typeof entry.collect === 'function');
   });
 }
