@@ -841,6 +841,18 @@ test('[behaviour] M32 a non-file-system store resolves with NO path, which is wh
       `a non-file-system store must resolve with no path at all, got ${JSON.stringify(store.path)}`);
     assert.strictEqual(expectedStorePath(store, tmpDir), '.',
       'and it therefore derives the local-artifacts default either way');
+
+    // And the transcription must follow `storeConfigPath`, not invent a rule of
+    // its own. Handed a store that DOES carry both a backend and a path — which
+    // the resolver cannot currently produce, which is the whole point — the
+    // generator would write that path, so this must expect that path. A
+    // `backend !== 'file-system' → '.'` short-circuit here would expect `.`
+    // instead and report drift on a config the generator had just written.
+    const hypothetical = { backend: 'confluence', path: path.join(tmpDir, 'somewhere') };
+    assert.strictEqual(expectedStorePath(hypothetical, tmpDir), 'somewhere',
+      'the derivation must mirror `storeConfigPath` (bin/cli.js:901), which portable-ises ' +
+      '`store.path` with no backend check at all — the guard must never expect a value the ' +
+      'generator would not write');
   });
 });
 
