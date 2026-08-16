@@ -434,6 +434,24 @@ test('AC1 — two store questions replace FR111\'s one, and FR112\'s sprint ques
   // ...and it is asked LAST, after both stores, so sprint management is visibly
   // a third concern rather than part of either store (FR112/FR267).
   assert.strictEqual(messages[messages.length - 1], 'Where is your sprint management managed?');
+
+  // THE TWO STORE QUESTIONS MUST BE DISTINGUISHABLE, in literal terms. Every
+  // other assertion in this file that touches wording derives its expectation
+  // from `REPO_LAYOUT_CONCERNS`, which makes those assertions tautological with
+  // respect to the labels themselves: renaming the system store to "software
+  // requirements store" changes the expectation and the actual together, and
+  // leaves the user facing two identically-worded questions. (A live mutant,
+  // M20, found exactly that.) These four are literal on purpose.
+  assert.strictEqual(messages.filter((m) => /\bsystem requirements store\b/.test(m)).length, 2,
+    `both of the system store's questions must say "system requirements store":\n  ${messages.join('\n  ')}`);
+  assert.strictEqual(messages.filter((m) => /\bsoftware requirements store\b/.test(m)).length, 2,
+    `both of the software store's questions must say "software requirements store":\n  ${messages.join('\n  ')}`);
+  assert.strictEqual(new Set(messages).size, messages.length,
+    `no two questions may be worded identically:\n  ${messages.join('\n  ')}`);
+  // ...and the table the rest of the file derives from must itself be distinct.
+  const labels = REPO_LAYOUT_CONCERNS.map((c) => c.label);
+  assert.strictEqual(new Set(labels).size, labels.length,
+    `REPO_LAYOUT_CONCERNS must not give two concerns the same label: ${labels.join(', ')}`);
 });
 
 test('AC1 — FR112\'s sprint question still reaches the Jira flow, and Jira is offered to NEITHER store', async () => {
@@ -553,6 +571,17 @@ test('AC6 — a divergent pair is persisted as answered, and generates per-store
     const doc = parseLayout(readLayoutFile(tmpDir), 'divergent pair');
     assert.notStrictEqual(doc.system_requirements_store.path, doc.software_requirements_store.path,
       'two divergent answers must reach the file as two different paths');
+
+    // FR264 / P5-9.2 — the legacy `knowledgebase` VIEW the wizard hands back must
+    // be the SOFTWARE store. It is what `generateRepoLayoutSection` (and every
+    // other pre-31.5 consumer) reads, and while the two stores agree, pointing it
+    // at the system store instead is completely invisible — a live mutant, M10,
+    // found exactly that. Only a DIVERGENT pair can tell the two apart, so the
+    // assertion belongs here.
+    assert.deepStrictEqual(layout.knowledgebase, layout.softwareRequirementsStore,
+      'the legacy single-valued view must resolve to the SOFTWARE requirements store (FR264)');
+    assert.notDeepStrictEqual(layout.knowledgebase, layout.systemRequirementsStore,
+      'and with divergent stores it must NOT be the system store — otherwise the check is vacuous');
 
     // Story 31.3's generator is downstream of this story's two stores. The
     // per-store fields must follow their OWN store, and the legacy single-valued
