@@ -171,6 +171,25 @@ function unexpectedPrompt(question) {
     `runWizard() queue rather than letting the stub default it.`
   );
 }
+// ...and it never answers the WRONG question either. `{backend: 'file-system'}`
+// handed to the `mode` prompt reads back as `mode === undefined` and reaches the
+// same `process.exit(0)`, so an off-by-one queue, a reordered wizard or a renamed
+// prompt would abort the run rather than fail a named test. The exit backstop at
+// the top of this file catches that, but it can only report "something aborted
+// the run"; this names the question. (Story 31.5 mutation runs produced exactly
+// this shape repeatedly.)
+function requireMatchingAnswer(question, answer) {
+  const name = (question && question.name) || '(unnamed)';
+  if (!answer || typeof answer !== 'object' || !(name in answer)) {
+    throw new Error(
+      `the queued answer ${JSON.stringify(answer)} does not answer prompt ${JSON.stringify(name)} ` +
+      `(${JSON.stringify((question && question.message) || '')}) — the wizard asked a different ` +
+      `question than the runWizard() queue expected, in a different order, or with a different name.`
+    );
+  }
+  return answer;
+}
+
 let promptAnswer = unexpectedPrompt;
 require.cache[promptsModulePath].exports = async function stubPrompts(question) {
   promptLog.push(question);
@@ -681,7 +700,9 @@ test('the jira sprint FIELDS round-trip — this one DOES depend on the early re
 async function runWizard(answers, existingLayout = null) {
   promptLog.length = 0;
   const queue = [...answers];
-  promptAnswer = (question) => (queue.length ? queue.shift() : unexpectedPrompt(question));
+  promptAnswer = (question) => (queue.length
+    ? requireMatchingAnswer(question, queue.shift())
+    : unexpectedPrompt(question));
   let layout;
   const origLog = console.log;
   console.log = () => {};

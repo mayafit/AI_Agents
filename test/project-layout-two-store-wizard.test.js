@@ -95,6 +95,25 @@ function unexpectedPrompt(question) {
     `rather than letting the stub default it.`
   );
 }
+// An answer for the WRONG QUESTION is the same defect as no answer at all, one
+// step along: `{backend: 'file-system'}` handed to the `mode` question reads back
+// as `mode === undefined`, and cli.js's `if (!mode) process.exit(0)` then aborts
+// the process. The suite survives that only because of the exit backstop above,
+// which reports "something aborted the run" rather than naming the question that
+// went unanswered. Several Story 31.5 mutants died that way and were harder to
+// diagnose for it. Checking the key turns them into ordinary named failures.
+function requireMatchingAnswer(question, answer) {
+  const name = (question && question.name) || '(unnamed)';
+  if (!answer || typeof answer !== 'object' || !(name in answer)) {
+    throw new Error(
+      `the queued answer ${JSON.stringify(answer)} does not answer prompt ${JSON.stringify(name)} ` +
+      `(${JSON.stringify((question && question.message) || '')}) — the wizard asked a different ` +
+      `question than the queue expected, in a different order, or with a different name.`
+    );
+  }
+  return answer;
+}
+
 let promptAnswer = unexpectedPrompt;
 require.cache[promptsModulePath].exports = async function stubPrompts(question) {
   promptLog.push(question);
@@ -185,7 +204,9 @@ function parseLayout(content, what) {
 async function runWizard(answers, existingLayout = null) {
   promptLog.length = 0;
   const queue = [...answers];
-  promptAnswer = (question) => (queue.length ? queue.shift() : unexpectedPrompt(question));
+  promptAnswer = (question) => (queue.length
+    ? requireMatchingAnswer(question, queue.shift())
+    : unexpectedPrompt(question));
   let layout;
   const origLog = console.log;
   console.log = () => {};
@@ -779,7 +800,7 @@ test('AC5 — the interactive wizard does NOT ask about a committed confluence s
     // sized for it would be left over and runWizard would fail.
     promptLog.length = 0;
     const queue = [{ backend: 'file-system' }, { mode: 'same' }, { mode: 'same' }];
-    promptAnswer = (q) => (queue.length ? queue.shift() : unexpectedPrompt(q));
+    promptAnswer = (q) => (queue.length ? requireMatchingAnswer(q, queue.shift()) : unexpectedPrompt(q));
     let layout;
     const log = await silenceAsync(async () => { layout = await collectRepoLayout({}, existing); });
     promptAnswer = unexpectedPrompt;
