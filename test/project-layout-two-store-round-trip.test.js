@@ -33,7 +33,7 @@ const fs = require('fs');
 const os = require('os');
 const { spawnSync } = require('child_process');
 
-const EXPECTED_TEST_COUNT = 46;
+const EXPECTED_TEST_COUNT = 50;
 
 let passed = 0;
 let failed = 0;
@@ -1240,6 +1240,116 @@ test('generateRepoLayoutSection is byte-for-byte unchanged for file-system layou
       sprintManagement: { mode: 'same', path: '.' },
     }),
     'stating the default backend must not change the rendering');
+});
+
+// ─── Story 31.5 fix-round, BLOCKING-1 ───────────────────────────────────────
+//
+// `generateRepoLayoutSection` reads `layout.knowledgebase`, which bin/cli.js sets
+// to the SOFTWARE store (`layout.knowledgebase = layout.softwareRequirementsStore`,
+// FR264's legacy view) before handing the object to `updateProjectContextRepoLayout`.
+// Story 31.5 is the first story that can produce a layout whose SYSTEM store lives
+// somewhere the legacy view never mentions, and the renderer had two failures on it:
+//
+//   SHAPE A — system `local /a`, software `same`, sprint `same`. Every field the
+//     early return consulted said "single repo", so it returned '' and the WHOLE
+//     `### Repository Layout` block was dropped. A genuinely multi-repo project was
+//     described to every agent as single-repo. This is the epic's signature shape: a
+//     guard that degrades to permissive instead of failing loud.
+//   SHAPE B — system `local /a`, software `local /b`. The section was emitted, but
+//     one line long; the system store's location was stated nowhere.
+//
+// Both are pinned as FULL-STRING equality, not `includes`, because "the section
+// mentions /a somewhere" is satisfied by a great many wrong renderings — including
+// one that names /a but drops /b.
+
+test('BLOCKING-1 shape A — a divergent SYSTEM store alone must still emit the section', () => {
+  // The section must exist at all. Asserted first and separately from its content,
+  // because '' is what the defect produced and `includes()` on '' is quietly false
+  // for every claim one could make about it.
+  const section = generateRepoLayoutSection({
+    systemRequirementsStore: FS_STORE('/a'),
+    softwareRequirementsStore: FS_STORE('.'),
+    knowledgebase: FS_STORE('.'),
+    sprintManagement: SPRINT_SAME,
+  });
+  assert.notStrictEqual(section, '',
+    'a project whose system requirements store is in ANOTHER repository is not single-repo, ' +
+    'and dropping the section describes it to every agent as if it were');
+  assert.strictEqual(section, [
+    '<!-- ma-agents:repo-layout-start -->',
+    '### Repository Layout',
+    '- **System Requirements Store:** /a',
+    '- **Knowledgebase (software requirements store):** current repository (default)',
+    '- **Sprint Management:** current repository (default)',
+    '- When creating or reading the product brief and PRD, use the system requirements store path',
+    '<!-- ma-agents:repo-layout-end -->',
+  ].join('\n'));
+});
+
+test('BLOCKING-1 shape B — a divergent PAIR states BOTH locations, not just the software one', () => {
+  const section = generateRepoLayoutSection({
+    systemRequirementsStore: FS_STORE('/a'),
+    softwareRequirementsStore: FS_STORE('/b'),
+    knowledgebase: FS_STORE('/b'),
+    sprintManagement: SPRINT_SAME,
+  });
+  assert.ok(section.includes('/a'),
+    `the system store's location must be stated somewhere; it was not:\n${section}`);
+  assert.strictEqual(section, [
+    '<!-- ma-agents:repo-layout-start -->',
+    '### Repository Layout',
+    '- **System Requirements Store:** /a',
+    '- **Knowledgebase (software requirements store):** /b',
+    '- **Sprint Management:** current repository (default)',
+    '- When creating or reading the product brief and PRD, use the system requirements store path',
+    '- When creating or reading planning artifacts, use the knowledgebase path',
+    '<!-- ma-agents:repo-layout-end -->',
+  ].join('\n'));
+});
+
+test('BLOCKING-1 — a CONFLUENCE system store is named, never rendered as a directory', () => {
+  // The other way a system store can be "elsewhere": no `mode` and no `path` at
+  // all. A `mode !== 'same'` test alone would call it divergent for the right
+  // reason and then render `.` for it — the exact B-1-consequence-3 defect, one
+  // store over.
+  const section = generateRepoLayoutSection({
+    systemRequirementsStore: CONF_STORE('SYS', 'System Requirements', '1001'),
+    softwareRequirementsStore: FS_STORE('.'),
+    knowledgebase: FS_STORE('.'),
+    sprintManagement: SPRINT_SAME,
+  });
+  assert.ok(section.includes('confluence'), `must name the backend:\n${section}`);
+  assert.ok(!/undefined/.test(section), `must never emit the literal "undefined":\n${section}`);
+  assert.ok(!/\*\*System Requirements Store:\*\* \.$/m.test(section),
+    `a confluence store must not be described as the directory ".":\n${section}`);
+  assert.ok(!section.includes('use the system requirements store path'),
+    `must not instruct agents to use a path this store does not have:\n${section}`);
+});
+
+test('BLOCKING-1 — the section is still dropped when NEITHER store is elsewhere (NFR82)', () => {
+  // The other direction, and what keeps the fix from being a permissive widening
+  // of its own: a three-record layout in which everything is `same` must render
+  // exactly what a pre-31.5 single-store project renders — nothing.
+  assert.strictEqual(generateRepoLayoutSection({
+    systemRequirementsStore: FS_STORE('.'),
+    softwareRequirementsStore: FS_STORE('.'),
+    knowledgebase: FS_STORE('.'),
+    sprintManagement: SPRINT_SAME,
+  }), '', 'an all-same three-record layout is single-repo and must emit no section');
+  // ...and a layout with NO explicit system record (every project created before
+  // Story 31.5) must render byte-for-byte what it renders today: ONE store line,
+  // labelled exactly `- **Knowledgebase:**`.
+  assert.strictEqual(generateRepoLayoutSection({
+    knowledgebase: FS_STORE('/b'),
+    sprintManagement: SPRINT_SAME,
+  }), [
+    '<!-- ma-agents:repo-layout-start -->',
+    '### Repository Layout',
+    '- **Knowledgebase:** /b',
+    '- **Sprint Management:** current repository (default)',
+    '- When creating or reading planning artifacts, use the knowledgebase path',
+    '<!-- ma-agents:repo-layout-end -->',
+  ].join('\n'), 'a pre-31.5 layout must be unaffected by the two-store rendering');
 });
 
 // ─── Summary ────────────────────────────────────────────────────────────────

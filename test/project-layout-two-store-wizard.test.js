@@ -547,6 +547,53 @@ test('AC7 — each store question states that store\'s contents, and not the oth
   }
 });
 
+test('AC7 — the LOCATION sub-prompts name their own store too, in literal wording', async () => {
+  // Story 31.5 fix-round, NB-4. `grep -rn "Enter local path for" test/` returned
+  // NOTHING before this test: the sub-prompts `collectLocalPath` and
+  // `collectRemotePath` emit were unpinned anywhere in the repo. Changing
+  // `collectLocalPath(concern.label)` to `collectLocalPath('knowledgebase')` left
+  // every suite green while giving BOTH stores an identical
+  // `Enter local path for knowledgebase` prompt — the exact ambiguity AC7 exists
+  // to prevent, and a silent restoration of superseded FR111/FR113 wording.
+  //
+  // AC1's distinctness check does not reach here: it runs on the ALL_DEFAULTS
+  // queue, where every concern answers `same` and no sub-prompt is emitted at all.
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const sysDir = path.join(tmpDir, 'sys-store');
+    fs.mkdirSync(sysDir, { recursive: true });
+
+    // system: local (drives collectLocalPath) — software: remote (drives
+    // collectRemotePath's git-URL question). Both sub-prompt shapes, one run.
+    const { questions } = await runWizard([
+      { backend: 'file-system' }, { mode: 'local' }, { localPath: sysDir },
+      { backend: 'file-system' }, { mode: 'remote' },
+      { url: 'https://example.invalid/swe.git' }, { dest: sysDir }, { confirmed: true },
+      { mode: 'same' },
+    ]);
+    const messages = questions.map((q) => q.message);
+
+    // LITERAL, not derived from REPO_LAYOUT_CONCERNS: an expectation built from
+    // the same table the production code reads moves with any relabelling and
+    // proves nothing about what the user actually sees.
+    assert.ok(messages.includes(
+      'Enter local path for system requirements store (this is the literal folder; ' +
+      'no extra subdirectories will be created):'),
+    `the local-path sub-prompt must name the system requirements store:\n  ${messages.join('\n  ')}`);
+    assert.ok(messages.includes('Enter git URL for software requirements store:'),
+      `the git-URL sub-prompt must name the software requirements store:\n  ${messages.join('\n  ')}`);
+
+    // ...and no sub-prompt may reintroduce FR111's superseded single-store noun,
+    // which is what a collapsed label would read as.
+    assert.ok(!messages.some((m) => /knowledgebase/i.test(m)),
+      `no prompt may say "knowledgebase" — FR111's single store is superseded:\n  ${messages.join('\n  ')}`);
+    assert.strictEqual(new Set(messages).size, messages.length,
+      `no two prompts, sub-prompts included, may be worded identically:\n  ${messages.join('\n  ')}`);
+  } finally {
+    cleanup();
+  }
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 // AC6 — persistence through the 31.2 schema, unconditionally.
 // ══════════════════════════════════════════════════════════════════════════
@@ -828,6 +875,133 @@ test('AC5 — the interactive wizard does NOT ask about a committed confluence s
   }
 });
 
+// ─── Story 31.5 fix-round, BLOCKING-2 ───────────────────────────────────────
+//
+// The preserve-unofferable-store guard in `collectRepoLayout` is LOOP-LEVEL: it
+// runs for whichever store carries the unofferable backend. Every test above,
+// however, gives the CONFLUENCE store to the SYSTEM concern, so the guard was
+// pinned for one of the two roles only. Restricting it to
+// `concern.key === 'systemRequirementsStore'` left both suites fully green —
+// while a project whose SOFTWARE store is Confluence-backed would be asked a
+// backend question offering only `file-system`, and the very first Enter would
+// replace it with `file-system / same / "."`. That is prerequisite 2B's defect
+// B-1 re-entering through the other store, in a table
+// (`STORE_BACKEND_WIZARD`) Story 31.8 is about to edit.
+//
+// The two cases below are the roles-swapped one and the both-stores one. Neither
+// is reachable through any other test in the repo.
+
+// Drives the wizard with a queue that must be consumed EXACTLY, capturing the
+// console output the guard's notice goes to. A guard that fires for too few
+// stores runs out of queue (the stub throws by name); one that fires for too
+// many leaves answers over.
+async function runWizardCapturingLog(answers, existingLayout) {
+  promptLog.length = 0;
+  const queue = [...answers];
+  promptAnswer = (q) => (queue.length ? requireMatchingAnswer(q, queue.shift()) : unexpectedPrompt(q));
+  let layout;
+  const log = await silenceAsync(async () => { layout = await collectRepoLayout({}, existingLayout); });
+  promptAnswer = unexpectedPrompt;
+  assert.strictEqual(queue.length, 0,
+    `${queue.length} prepared answer(s) went unused — the wizard asked fewer questions than expected`);
+  return { layout, log, questions: promptLog.map(summarizeQuestion) };
+}
+
+test('AC5 — the guard protects the SOFTWARE store too, not only the system store', async () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const conf = {
+      backend: 'confluence', spaceKey: 'SWE', rootPage: { title: 'Architecture', id: '2002' },
+    };
+    silence(() => writeProjectLayoutYaml({
+      systemRequirementsStore: { backend: 'file-system', mode: 'same', path: '.' },
+      softwareRequirementsStore: conf,
+      sprintManagement: LEGACY_SPRINT,
+    }));
+    const before = readLayoutFile(tmpDir);
+    const existing = silence(() => readExistingLayout());
+
+    // Three answers: the SYSTEM store's backend and location, then sprint. A
+    // guard keyed on `systemRequirementsStore` would ask the software store for a
+    // backend as well, exhaust this queue, and fail by name.
+    const { layout, log, questions } = await runWizardCapturingLog(
+      [{ backend: 'file-system' }, { mode: 'same' }, { mode: 'same' }], existing);
+
+    assert.strictEqual(questions.filter((q) => q.name === 'backend').length, 1,
+      'only the system store may be asked for a backend — the software store is confluence-backed');
+    assert.ok(!questions.some((q) => /software requirements/.test(q.message)),
+      `the confluence-backed SOFTWARE store must not be asked about: ` +
+      `${questions.map((q) => q.message).join(' | ')}`);
+    assert.ok(/confluence/i.test(log) && /UNCHANGED/.test(log),
+      `the skip must be announced and name the backend, got:\n${log}`);
+    assert.ok(/SWE/.test(log), `the notice must identify the store that was left alone:\n${log}`);
+
+    assert.deepStrictEqual(layout.softwareRequirementsStore, conf,
+      'the committed confluence SOFTWARE record must be carried through verbatim');
+    // ...and FR264's legacy view is the software store, so it must be the
+    // confluence record too — not the file-system answer the system store gave.
+    assert.deepStrictEqual(layout.knowledgebase, conf,
+      'the legacy `knowledgebase` view resolves to the software store, confluence included');
+    assert.deepStrictEqual(layout.systemRequirementsStore,
+      { backend: 'file-system', mode: 'same', path: '.' },
+      'the system store still receives its own answered record');
+
+    silence(() => writeProjectLayoutYaml(layout));
+    assert.strictEqual(withoutGeneratedLine(readLayoutFile(tmpDir)), withoutGeneratedLine(before),
+      'an all-defaults interactive run must not change a committed confluence SOFTWARE store');
+  } finally {
+    cleanup();
+  }
+});
+
+test('AC5 — BOTH stores unofferable: neither is asked about, both survive verbatim', async () => {
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const sysConf = {
+      backend: 'confluence', spaceKey: 'SYS', rootPage: { title: 'System Requirements', id: '3003' },
+    };
+    const sweConf = {
+      backend: 'confluence', spaceKey: 'SWE', rootPage: { title: 'Architecture', id: '4004' },
+    };
+    silence(() => writeProjectLayoutYaml({
+      systemRequirementsStore: sysConf,
+      softwareRequirementsStore: sweConf,
+      sprintManagement: LEGACY_SPRINT,
+    }));
+    const before = readLayoutFile(tmpDir);
+    const existing = silence(() => readExistingLayout());
+
+    // ONE answer — sprint management. Both stores are skipped entirely.
+    const { layout, log, questions } = await runWizardCapturingLog([{ mode: 'same' }], existing);
+
+    assert.strictEqual(questions.length, 1,
+      `only FR112's sprint question may be asked; got: ${questions.map((q) => q.message).join(' | ')}`);
+    assert.strictEqual(questions[0].message, 'Where is your sprint management managed?');
+    assert.strictEqual(questions.filter((q) => q.name === 'backend').length, 0,
+      'neither store may be asked for a backend when both are confluence-backed');
+
+    // The notice must fire TWICE and identify BOTH stores by their own space key.
+    // A guard that fired once and carried the FIRST record into both would say
+    // "SYS" twice, and `layout.softwareRequirementsStore` would be the system
+    // store's record — the collapse this epic keeps re-finding.
+    assert.ok(/SYS/.test(log) && /SWE/.test(log),
+      `both skipped stores must be named in the notice:\n${log}`);
+    assert.strictEqual((log.match(/UNCHANGED/g) || []).length, 2,
+      `each skipped store gets its own notice:\n${log}`);
+
+    assert.deepStrictEqual(layout.systemRequirementsStore, sysConf);
+    assert.deepStrictEqual(layout.softwareRequirementsStore, sweConf);
+    assert.notDeepStrictEqual(layout.systemRequirementsStore, layout.softwareRequirementsStore,
+      'the two preserved records must not have been collapsed onto one');
+
+    silence(() => writeProjectLayoutYaml(layout));
+    assert.strictEqual(withoutGeneratedLine(readLayoutFile(tmpDir)), withoutGeneratedLine(before),
+      'an all-defaults interactive run must not change EITHER committed confluence store');
+  } finally {
+    cleanup();
+  }
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 // THE INSTALL PATH — a divergent FILE-SYSTEM pair, end to end.
 // ══════════════════════════════════════════════════════════════════════════
@@ -911,7 +1085,7 @@ test('INSTALL PATH — a divergent FILE-SYSTEM pair survives a real `install --y
 // The count is pinned in BOTH directions: a shortfall means tests that never ran
 // (and tests that never ran cannot fail), a surplus means the pin was not
 // updated deliberately.
-const EXPECTED_TEST_COUNT = 16;
+const EXPECTED_TEST_COUNT = 19;
 
 (async () => {
   for (const [name, fn] of tests) {

@@ -802,8 +802,87 @@ testAsync('the wizard asks the BACKEND before the location, for each store and f
         `the wizard offered ${JSON.stringify(choice.value)}, which is not a member of STORE_BACKENDS`);
       assert.strictEqual(choice.title, STORE_BACKEND_WIZARD[choice.value].title,
         `the wizard offered ${JSON.stringify(choice.value)} with a title that is not the table's`);
+      // ...and, LITERALLY, the title that names THIS backend. Story 31.5
+      // fix-round, NB-3 / mutant M20: the assertion immediately above takes both
+      // its expectation and its actual from STORE_BACKEND_WIZARD, so retitling
+      // `file-system` to 'Confluence' moves them together and stays green. The
+      // user would then pick a choice labelled "Confluence" and get a file-system
+      // store — "silently records an unusable store", which is precisely what
+      // AC5 exists to forbid. Keyed by backend rather than pinned as a whole
+      // list, so Story 31.8 making `confluence` offerable needs no edit here.
+      assert.strictEqual(choice.title, LITERAL_BACKEND_TITLES[choice.value],
+        `the wizard offered backend ${JSON.stringify(choice.value)} under the label ` +
+        `${JSON.stringify(choice.title)} — a label that does not name that backend sends the ` +
+        `user to a store they did not choose`);
     }
   }
+});
+
+// The titles the user actually reads, written out ONCE, independently of the
+// table the production code renders from. Every member of STORE_BACKENDS needs an
+// entry (asserted below), so this cannot silently go stale as the enum grows.
+const LITERAL_BACKEND_TITLES = Object.freeze({
+  'file-system': 'File system (this repository, a local path, or a remote git repository)',
+  confluence: 'Confluence',
+});
+
+test('every backend label names its own backend, and no two backends share a label', () => {
+  for (const backend of STORE_BACKENDS) {
+    assert.ok(backend in LITERAL_BACKEND_TITLES,
+      `STORE_BACKENDS gained ${JSON.stringify(backend)} with no literal title pinned for it — ` +
+      `add one, or the label-vs-backend check above goes vacuous for that member`);
+    assert.strictEqual(STORE_BACKEND_WIZARD[backend].title, LITERAL_BACKEND_TITLES[backend],
+      `STORE_BACKEND_WIZARD's title for ${JSON.stringify(backend)} is not the one pinned here`);
+  }
+  // Two backends offered under the same label is the same defect as one backend
+  // offered under another's label: the choice the user makes is not the choice
+  // the wizard records.
+  const titles = [...STORE_BACKENDS].map((b) => STORE_BACKEND_WIZARD[b].title);
+  assert.strictEqual(new Set(titles).size, titles.length,
+    `two backends share a wizard label: ${titles.join(' | ')}`);
+});
+
+testAsync('a location flow records the ANSWERED backend, never a re-derived default', async () => {
+  // Story 31.5 fix-round, NB-6. `collectFileSystemStoreLocation` used to write
+  // `backend: DEFAULT_STORE_BACKEND` into every record it returned — a fourth
+  // spelling of the default, correct only because STORE_BACKEND_WIZARD happens to
+  // wire this flow to the `file-system` key today. Called ON BEHALF OF any other
+  // key it would record a backend the user did not choose, which is the
+  // silent-repoint defect one layer in. Driven through the table's own entry, so
+  // this asserts the production contract, not a private helper's signature.
+  const concern = REPO_LAYOUT_CONCERNS.find(c => c.kind === 'store');
+  const collect = STORE_BACKEND_WIZARD['file-system'].collect;
+  assert.strictEqual(typeof collect, 'function', 'the file-system entry must have a flow');
+
+  // The value is deliberately NOT the default: with the old hardcode this comes
+  // back `file-system` and the assertion fails. Any enum member other than the
+  // default would do; `confluence` is the one that exists.
+  const { DEFAULT_STORE_BACKEND } = require('../lib/store-backends.js');
+  const nonDefault = [...STORE_BACKENDS].find(b => b !== DEFAULT_STORE_BACKEND);
+  assert.ok(nonDefault, 'the enum must contain a non-default member for this to assert anything');
+
+  promptLog.length = 0;
+  const queue = [{ mode: 'same' }];
+  promptAnswer = (q) => (queue.length ? requireMatchingAnswer(q, queue.shift()) : unexpectedPrompt(q));
+  let record;
+  const origLog = console.log;
+  console.log = () => {};
+  try {
+    record = await collect(concern, null, nonDefault);
+  } finally {
+    console.log = origLog;
+    promptAnswer = unexpectedPrompt;
+  }
+  assert.strictEqual(record.backend, nonDefault,
+    `the record must name the backend the flow was called for, got ${JSON.stringify(record.backend)}`);
+
+  // ...and no backend at all must FAIL LOUD rather than substitute the default —
+  // a record whose backend was never asked about is exactly what stating it
+  // explicitly exists to rule out.
+  await assert.rejects(
+    () => collect(concern, null, undefined),
+    (err) => /answered backend/.test(err.message) && new RegExp(concern.label).test(err.message),
+    'a location flow called with no answered backend must throw and name the concern');
 });
 
 testAsync('REPO_LAYOUT_CONCERNS drives the loop — the questions name the three concerns in order', async () => {
@@ -1032,7 +1111,7 @@ test('an unprintable MODE also yields the real message — both writers render v
 // `process.exit` inside an awaited call, a rejected drain, a `return` that skips
 // a block — changes this number, and the count is checked before the exit code
 // is. It is a `!==` check, so a SURPLUS fails as loudly as a shortfall.
-const EXPECTED_TEST_COUNT = 29;
+const EXPECTED_TEST_COUNT = 31;
 
 function printSummary() {
   const total = passed + failed;

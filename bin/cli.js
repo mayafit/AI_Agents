@@ -888,8 +888,17 @@ function readProjectLayoutStamp(configContent) {
 function topologyFromLegacyLayout(layout) {
   const kb = (layout && layout.knowledgebase) || { mode: 'same', path: '.' };
   return {
-    systemRequirementsStore: kb,
-    softwareRequirementsStore: kb,
+    // Story 31.5 fix-round, NB-5. The collapse is only correct for a layout that
+    // HAS no per-store records — a pre-31.5 project, where one answered location
+    // stood for both stores. Story 31.5's wizard feeds this path a layout that
+    // carries both: install Step 3.6 reaches it whenever `writeProjectLayoutYaml`
+    // throws (an unwritable `_bmad-output/`), leaving the binding `unbound`, and a
+    // divergent SYSTEM store then silently collapsed onto the software store's
+    // location in the generated `config.yaml` — with the right record sitting
+    // unread on the very object being passed in. Same collapse class the read
+    // path already fixed; prefer the explicit record, fall back to the view.
+    systemRequirementsStore: (layout && layout.systemRequirementsStore) || kb,
+    softwareRequirementsStore: (layout && layout.softwareRequirementsStore) || kb,
     sprintManagement: (layout && layout.sprintManagement) || { mode: 'same', path: '.' },
   };
 }
@@ -2439,6 +2448,16 @@ async function collectRepoLayout(flags, existingLayout = null) {
     // AC3 — the BACKEND first, then that backend's location. Choices are derived
     // from STORE_BACKEND_WIZARD, so no value outside the closed enum can be
     // offered and a member with no wizard flow is not offered at all (AC5).
+    //
+    // FOR STORY 31.8 — mutant M22, EQUIVALENT TODAY, A REAL DEFECT THE DAY YOU
+    // MAKE `confluence` OFFERABLE. `offerableStoreBackends()` returns exactly one
+    // member right now, so the pre-selection below is always index 0 and
+    // replacing the whole expression with the literal `0` cannot be observed by
+    // any test. Once there are two offerable backends, that same literal would
+    // pre-select `file-system` for a project whose committed store is Confluence,
+    // and one Enter would repoint it — B-1 all over again. Add the covering test
+    // (existing backend = the SECOND offerable member, assert `initial` selects
+    // it) in the same change that gives `confluence` a `collect` flow.
     const backendChoices = backendChoicesForStore();
     const initialBackend = existingBackend
       ? backendChoices.findIndex((c) => c.value === existingBackend)
@@ -2467,7 +2486,9 @@ async function collectRepoLayout(flags, existingLayout = null) {
       );
     }
 
-    layout[concern.key] = await entry.collect(concern, existingRecord);
+    // The ANSWERED backend is passed to the flow, so the record it returns names
+    // the backend it was chosen for rather than re-deriving one (NB-6).
+    layout[concern.key] = await entry.collect(concern, existingRecord, backend);
   }
 
   // FR264 / P5-9.2 — the legacy single-valued view resolves to the SOFTWARE
@@ -2530,7 +2551,27 @@ function existingRecordForConcern(existingLayout, concern) {
  * a record that names its own backend cannot be mistaken for one whose backend
  * was never asked about.
  */
-async function collectFileSystemStoreLocation(concern, existingRecord) {
+async function collectFileSystemStoreLocation(concern, existingRecord, backend) {
+  // Story 31.5 fix-round, NB-6. `backend` is the ANSWERED backend, threaded in
+  // from the question, not a fourth spelling of the default. Writing
+  // DEFAULT_STORE_BACKEND into the record was correct only by coincidence — the
+  // table happens to wire this flow to the `file-system` key — and would have
+  // recorded a backend the user did not choose the moment a second key shared
+  // the flow. Fail loud rather than defaulting: a `backend`-less record is
+  // exactly the "never asked about" shape stating it explicitly exists to rule out.
+  if (!backend) {
+    throw new Error(
+      `collectFileSystemStoreLocation was called with no answered backend for ` +
+      `${concern.label}. A location flow must record the backend it was chosen FOR; ` +
+      `refusing to substitute ${describeValue(DEFAULT_STORE_BACKEND)}.`
+    );
+  }
+  // FOR STORY 31.8 — mutant M21, EQUIVALENT TODAY. Both store concerns map to
+  // STORE_MODES, so replacing `concern.key` here with either store's constant key
+  // is unobservable. (It is NOT equivalent in `collectSprintManagementLocation`,
+  // where a store constant would silently withdraw `jira` — pinned in
+  // project-layout-enum-single-source.test.js.) If 31.8 ever gives a backend its
+  // own mode set, this call site needs a per-concern test before that lands.
   const modeChoices = modeChoicesFor(concern.key);
   const existingMode = existingRecord ? existingRecord.mode : null;
   const initialIndex = existingMode ? modeChoices.findIndex((c) => c.value === existingMode) : 0;
@@ -2545,9 +2586,9 @@ async function collectFileSystemStoreLocation(concern, existingRecord) {
 
   if (!mode) process.exit(0);
 
-  if (mode === 'same') return { backend: DEFAULT_STORE_BACKEND, mode: 'same', path: '.' };
-  if (mode === 'local') return { backend: DEFAULT_STORE_BACKEND, ...(await collectLocalPath(concern.label)) };
-  if (mode === 'remote') return { backend: DEFAULT_STORE_BACKEND, ...(await collectRemotePath(concern.label)) };
+  if (mode === 'same') return { backend, mode: 'same', path: '.' };
+  if (mode === 'local') return { backend, ...(await collectLocalPath(concern.label)) };
+  if (mode === 'remote') return { backend, ...(await collectRemotePath(concern.label)) };
 
   // Unreachable: `mode` came out of `modeChoicesFor`, i.e. out of STORE_MODES.
   // Left as a throw rather than a `null` return, because returning null here is
