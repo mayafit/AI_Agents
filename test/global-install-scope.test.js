@@ -622,6 +622,25 @@ test('31.12 AC5/AC6 — the EMITTED notice is a closed set: three facts, one age
     `FR250 fact (iii) is no longer exactly two lines:\n${FACT_3}`);
   assert.strictEqual(para.lines.length, 6,
     `the notice is ${para.lines.length} lines, expected 6 (1 + agent list + 2 + 2)`);
+
+  // Line counts alone still let a fourth statement be appended to a fact ON AN
+  // EXISTING LINE — verified: a mutant appending ` This arrangement is temporary
+  // and will be revisited.` to fact (iii) survived every assertion above, the
+  // source-side closed set, and the tone denylist. AC5's unit is a STATEMENT, so
+  // the sentence count is pinned too: one statement per fact means three facts
+  // are three things. Rewording inside a sentence stays green; adding a sentence
+  // does not. Fact (i) ends in the colon that introduces the agent list, so it
+  // carries no terminator of its own.
+  const sentences = t => (t.replace(/\s+/g, ' ').match(/[.!?](?=\s|$)/g) || []).length;
+  assert.strictEqual(sentences(FACT_1), 0,
+    `FR250 fact (i) now ends a sentence of its own; it is the lead-in to the agent list and ` +
+    `ends with a colon. AC5 caps the notice at three statements.\n${FACT_1}`);
+  assert.strictEqual(sentences(FACT_2), 1,
+    `FR250 fact (ii) is ${sentences(FACT_2)} sentences, expected exactly 1 — a statement was ` +
+    `added to or removed from the notice.\n${FACT_2}`);
+  assert.strictEqual(sentences(FACT_3), 1,
+    `FR250 fact (iii) is ${sentences(FACT_3)} sentences, expected exactly 1 — a statement was ` +
+    `added to or removed from the notice.\n${FACT_3}`);
 });
 
 test('31.12 AC5/AC6 — the notice block prints exactly four things, and they are the three facts', () => {
