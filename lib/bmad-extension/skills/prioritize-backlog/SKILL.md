@@ -234,7 +234,8 @@ Choice:</ask>
   </action>
 
   <action>**3. Dependency weight:**
-  - Read `_bmad-output/planning-artifacts/epics.md` if it exists to identify explicit inter-story dependencies.
+  - Resolve `{planning_artifacts}` from the `planning_artifacts:` field of `_bmad/bmm/config.yaml` — epics are a *software requirements* artifact (FR256) whose store may live in another repository, so the path is read rather than assumed, and is never derived from `sprint_management_path` (FR267). Only Step P2's genuinely pre-F26 config may lack the field; there it has always been `{project-root}/_bmad-output/planning-artifacts`. See `_bmad-output/implementation-artifacts/31-6-artifact-to-store-routing.md`.
+  - Read `{planning_artifacts}/epics.md` if it exists to identify explicit inter-story dependencies.
   - Within the same epic, items with lower story numbers are assumed to be prerequisites for higher-numbered stories. Items that block others get a +15 point boost.
   - Items that are explicitly blocked by other UNASSIGNED backlog items get a -10 point adjustment (they cannot proceed anyway).
   - If epics.md cannot be read or does not define explicit dependencies, use only the intra-epic ordering heuristic.

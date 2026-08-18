@@ -128,10 +128,23 @@ The generated config matches the committed binding. Say NOTHING about the bindin
 Resolve project root as the directory containing `_bmad-output/`. Then set:
 
 - `implementation_artifacts` = `_bmad-output/implementation-artifacts`
-- `planning_artifacts` = `_bmad-output/planning-artifacts`
 - `status_file` = `_bmad-output/implementation-artifacts/sprint-status.yaml`
 - `done_folder` = `_bmad-output/implementation-artifacts/done/`
 - `story_location` = `_bmad-output/implementation-artifacts`
+
+**`planning_artifacts` is deliberately NOT in that list.** Epics are a *software requirements*
+artifact (FR256), and the software requirements store can live in a different repository from
+sprint management — so this path must be resolved, never assumed:
+
+- `planning_artifacts` = the `planning_artifacts:` field of `_bmad/bmm/config.yaml`.
+
+That field is always present in a config the preflight above has just accepted: the generator
+writes it on every run and Step P4 compares it, so an absent one is drift and would already have
+halted. The single exception is Step P2's genuinely pre-F26 project, whose config may predate the
+field; there — and only there — use `{project-root}/_bmad-output/planning-artifacts`, which is what
+such a project has always resolved to. Do **not** derive this path from `sprint_management_path`:
+story files follow sprint management and epics do not (FR267). See
+`_bmad-output/implementation-artifacts/31-6-artifact-to-store-routing.md`.
 
 Attempt to read project name from `_bmad/bmm/config.yaml` (field `project_name`). If the file does not exist or `project_name` is absent, derive project name from the root directory name or use `"Unknown Project"`.
 
@@ -186,8 +199,8 @@ Before executing any file-system operations, determine and route to the correct 
 
 **Epic Discovery Process:**
 
-1. Search for whole document first — look for `epics.md`, `bmm-epics.md`, or any `*epic*.md` file in `_bmad-output/planning-artifacts/`
-2. If whole document not found, look for `_bmad-output/planning-artifacts/epics/index.md` (sharded version)
+1. Search for whole document first — look for `epics.md`, `bmm-epics.md`, or any `*epic*.md` file in `{planning_artifacts}` (resolved above from `_bmad/bmm/config.yaml`, never assumed)
+2. If whole document not found, look for `{planning_artifacts}/epics/index.md` (sharded version)
 3. If sharded version found: read `index.md` then read ALL referenced epic section files
 4. If both exist, use the whole document
 
