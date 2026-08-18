@@ -2637,6 +2637,55 @@ async function reconcileCustomMarketplaceOnUpdate({ projectRoot }) {
 
 // --- Install wizard ---
 
+/**
+ * Story 31.12 AC5/AC6 (FR250 degradation path) — what a global install says
+ * about BMAD.
+ *
+ * Story 31.1's spike returned a FAIL verdict against a live bmad-method@6.10.0:
+ * there is no user-level install target and, decisively, no module-resolution
+ * search order that could find one (`findBmadDir` is a single `path.join` with
+ * no upward walk, `resolve_config.py` hard-fails on a missing project-local
+ * `_bmad/`, ~211 `{project-root}/_bmad/…` literals across 46 skills, no
+ * `BMAD_HOME` escape hatch, and `bmad install --global` errors as an unknown
+ * option). Upstream `bmad-code-org/BMAD-METHOD#1728` would change that, but it
+ * is OPEN and not in 6.10.0 — it is the watch trigger, not a shipped feature.
+ *
+ * So the filter below and the `installScope === 'project'` guard on the BMAD
+ * integration block are CORRECT, not a defect to be lifted. What changes here is
+ * only what the user is told. AC6 makes the tone testable: a global install with
+ * project-scoped BMAD is a SUPPORTED CONFIGURATION, not a degraded one, so this
+ * is not a warning and not an error. The superseded text said "Warning:",
+ * "skipped", and "Run again without --global" — it framed a working mode as a
+ * mistake to undo. It is therefore also no longer rendered through
+ * `chalk.yellow`, this codebase's warning colour (readiness review F-12).
+ *
+ * AC5 fixes the CONTENT at exactly three facts, one per constant below:
+ *   (i)   BMAD remains project-scoped;
+ *   (ii)  the command that installs BMAD into a project;
+ *   (iii) the knowledge-store configuration is unaffected.
+ *
+ * WORDING CONSTRAINT on fact (ii): `cd <project> && ma-agents install` reaches
+ * the BMAD install only when BOTH an IDE-category agent is selected (the
+ * `bmadTools.length > 0` guard, built from `category === 'ide'`) AND the user
+ * accepts the "BMAD-METHOD not detected. Would you like to install it?" confirm.
+ * Declining leaves BMAD uninstalled. The text therefore says the installer
+ * *offers* — it must never imply one invocation guarantees a BMAD install.
+ *
+ * Pinned by test/global-install-scope.test.js ("AC5/AC6" section), which asserts
+ * the three facts AND the absence of the alarming framing, against the output of
+ * a real `install --yes --global` run.
+ */
+const GLOBAL_BMAD_SCOPE_NOTICE_FACT_1 =
+  '  Note: BMAD-METHOD is installed per project rather than globally, so these BMAD agents are not part of a global install:';
+
+const GLOBAL_BMAD_SCOPE_NOTICE_FACT_2 =
+  "  To set BMAD up in a project, run `ma-agents install` from that project's root with an IDE\n" +
+  '  agent selected; the installer then offers to install BMAD-METHOD into that project.';
+
+const GLOBAL_BMAD_SCOPE_NOTICE_FACT_3 =
+  '  Your knowledge-store configuration is unaffected: each project records its own knowledgebase\n' +
+  '  and sprint bindings in its own _bmad-output/project-layout.yaml.';
+
 async function installWizard(preselectedSkill, preselectedAgents, customPath, forceFlag, yesFlag = false, cliScope, bmadModulesFlag = '', bmadModulesPrompt = false, bmadCustomSourceFlag = '') {
   const skills = listSkills();
   const agents = listAgents();
@@ -2966,16 +3015,20 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     repoLayout = await collectRepoLayout({ yes: yesFlag }, existingLayout);
   }
 
-  // Step 3.4: Filter out BMAD agents for global scope (they require project-level install)
+  // Step 3.4: BMAD agents are project-scoped, so a global install does not carry
+  // them. Story 31.12 (FR250 degradation path) KEEPS this filter — under the
+  // Story 31.1 FAIL verdict it is the correct behaviour — and changes only what
+  // the user is told about it. See GLOBAL_BMAD_SCOPE_NOTICE_FACT_1..3 above.
   if (installScope === 'global') {
     const bmadAgentIds = selectedAgentIds.filter(id => {
       const agent = agents.find(a => a.id === id);
       return agent && agent.category === 'bmad';
     });
     if (bmadAgentIds.length > 0) {
-      console.log(chalk.yellow(`\n  Warning: BMAD agents require project-level installation and will be skipped for global scope:`));
-      console.log(chalk.yellow(`    ${bmadAgentIds.join(', ')}`));
-      console.log(chalk.gray(`  Run again without --global to install BMAD agents into the current project.`));
+      console.log(chalk.cyan(`\n${GLOBAL_BMAD_SCOPE_NOTICE_FACT_1}`));
+      console.log(chalk.cyan(`    ${bmadAgentIds.join(', ')}`));
+      console.log(chalk.gray(GLOBAL_BMAD_SCOPE_NOTICE_FACT_2));
+      console.log(chalk.gray(GLOBAL_BMAD_SCOPE_NOTICE_FACT_3));
       selectedAgentIds = selectedAgentIds.filter(id => !bmadAgentIds.includes(id));
     }
   }
@@ -3792,6 +3845,9 @@ module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, recon
   generateBmmConfig, computeProjectLayoutStamp, readProjectLayoutStamp, canonicalBindingBytes,
   STAMP_ABSENT, STAMP_MALFORMED,
   topologyFromLegacyLayout, PROJECT_LAYOUT_STAMP_FIELD, PROJECT_LAYOUT_STAMP_PREFIX,
+  // Story 31.12 (FR250) — exported so the tone/content test binds to the SHIPPED
+  // strings rather than to copies of them, which could drift apart silently.
+  GLOBAL_BMAD_SCOPE_NOTICE_FACT_1, GLOBAL_BMAD_SCOPE_NOTICE_FACT_2, GLOBAL_BMAD_SCOPE_NOTICE_FACT_3,
   // COPIES, not the live Sets. These are the single source of truth for what a
   // store's `mode`/`backend` may be, consumed by the reader, the writer and the
   // wizard alike; handing out the real objects would let any consumer `.add()`
