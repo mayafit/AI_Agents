@@ -888,7 +888,7 @@ function readProjectLayoutStamp(configContent) {
 function topologyFromLegacyLayout(layout) {
   const kb = (layout && layout.knowledgebase) || { mode: 'same', path: '.' };
   return {
-    // Story 31.5 fix-round, NB-5. The collapse is only correct for a layout that
+    // Story 31.5 fix round. The collapse is only correct for a layout that
     // HAS no per-store records — a pre-31.5 project, where one answered location
     // stood for both stores. Story 31.5's wizard feeds this path a layout that
     // carries both: install Step 3.6 reaches it whenever `writeProjectLayoutYaml`
@@ -2487,7 +2487,7 @@ async function collectRepoLayout(flags, existingLayout = null) {
     }
 
     // The ANSWERED backend is passed to the flow, so the record it returns names
-    // the backend it was chosen for rather than re-deriving one (NB-6).
+    // the backend it was chosen for rather than re-deriving one.
     layout[concern.key] = await entry.collect(concern, existingRecord, backend);
   }
 
@@ -2552,7 +2552,7 @@ function existingRecordForConcern(existingLayout, concern) {
  * was never asked about.
  */
 async function collectFileSystemStoreLocation(concern, existingRecord, backend) {
-  // Story 31.5 fix-round, NB-6. `backend` is the ANSWERED backend, threaded in
+  // Story 31.5 fix round. `backend` is the ANSWERED backend, threaded in
   // from the question, not a fourth spelling of the default. Writing
   // DEFAULT_STORE_BACKEND into the record was correct only by coincidence — the
   // table happens to wire this flow to the `file-system` key — and would have
