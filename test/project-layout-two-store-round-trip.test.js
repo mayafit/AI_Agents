@@ -554,7 +554,7 @@ test('all 12 legacy `knowledgebase` x `sprint` mode combinations still resolve o
 test('a legacy single-`knowledgebase` file: the legacy write maps onto both stores, no divergence invented', () => {
   const { tmpDir, cleanup } = withTmpDir();
   try {
-    writeFixture(tmpDir, [
+    const fixture = writeFixture(tmpDir, [
       'generated: "2026-03-26"',
       'knowledgebase:',
       '  mode: local',
@@ -569,10 +569,36 @@ test('a legacy single-`knowledgebase` file: the legacy write maps onto both stor
       existing.topology.softwareRequirementsStore), false,
       'a legacy single-record file must never read as divergent');
     const out = capture(() => writeProjectLayoutYaml(legacyOnly(existing)));
-    assert.ok(!/left UNCHANGED/.test(out), `no divergence notice is due for a legacy file, got: ${out}`);
+    assert.ok(!/SYSTEM requirements store was left UNCHANGED/.test(out),
+      `no divergence notice is due for a legacy file, got: ${out}`);
+
+    // AMENDED BY STORY 31.7 (AC3/AC4), DELIBERATELY. This call moves NOTHING —
+    // it hands the writer back exactly the records it just read. Story 31.7
+    // forbids an install, a bind or an activation rewriting a legacy layout into
+    // two stores without an explicit user choice, and requires a declined
+    // migration to leave the project BYTE-IDENTICAL. Until 31.7 this line
+    // asserted `schema_version: 2`, i.e. that the no-op write upgraded the
+    // schema; that is now exactly the unprompted migration AC3 prohibits, and it
+    // also made AC5 ("repeated installs on an UN-SPLIT legacy project do not
+    // nag") unsatisfiable, since the first install always split the project. See
+    // the LEGACY PRESERVATION block in writeProjectLayoutYaml.
+    //
+    // THIS TEST'S OWN PROPERTY IS UNCHANGED and is still asserted below: one
+    // legacy record maps onto BOTH stores, and no divergence is invented. It is
+    // now observed on a write that actually happens.
+    assert.strictEqual(readLayoutFile(tmpDir), fixture,
+      'Story 31.7 AC3/AC4: a write that moves nothing must leave a legacy file byte-identical');
+
+    // Force a REAL write by moving the one record that is not a knowledge store —
+    // sprint management. The knowledgebase record handed in is still the legacy
+    // one, so the mapping claim is asserted against bytes the writer produced.
+    capture(() => writeProjectLayoutYaml({
+      knowledgebase: existing.knowledgebase,
+      sprintManagement: { mode: 'local', path: path.join(tmpDir, 'sprint') },
+    }));
     const after = readLayoutFile(tmpDir);
     assert.strictEqual((after.match(/kb"/g) || []).length, 2, `both stores expected: ${after}`);
-    assert.ok(after.includes('schema_version: 2'), 'the write upgrades the schema');
+    assert.ok(after.includes('schema_version: 2'), 'a real write emits the current schema');
   } finally {
     cleanup();
   }
@@ -592,7 +618,20 @@ test('a pre-F26 file with no schema_version reads and rewrites without loss', ()
     ]);
     const existing = readExistingLayout();
     assert.strictEqual(existing.topology.schemaVersion, 1);
-    capture(() => writeProjectLayoutYaml(legacyOnly(existing)));
+
+    // AMENDED BY STORY 31.7 (AC3/AC4) — see the note on the previous test. A
+    // no-op write no longer rewrites a legacy file, so "rewrites without loss" is
+    // asserted on a write that actually occurs. The change is in SPRINT
+    // MANAGEMENT only, so the remote knowledgebase record under test — gitUrl and
+    // all — is still the legacy one being mapped onto both stores.
+    const noop = capture(() => writeProjectLayoutYaml(legacyOnly(existing)));
+    assert.ok(/left unchanged/i.test(noop),
+      `a no-op write on a legacy file must say it left the file alone, got: ${noop}`);
+
+    capture(() => writeProjectLayoutYaml({
+      knowledgebase: existing.knowledgebase,
+      sprintManagement: { mode: 'local', path: path.join(tmpDir, 'sprint') },
+    }));
     const after = readLayoutFile(tmpDir);
     assert.strictEqual((after.match(/git\.example\.com\/kb\.git/g) || []).length, 2,
       `the gitUrl must reach both stores: ${after}`);
