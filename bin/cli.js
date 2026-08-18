@@ -888,8 +888,17 @@ function readProjectLayoutStamp(configContent) {
 function topologyFromLegacyLayout(layout) {
   const kb = (layout && layout.knowledgebase) || { mode: 'same', path: '.' };
   return {
-    systemRequirementsStore: kb,
-    softwareRequirementsStore: kb,
+    // Story 31.5 fix round. The collapse is only correct for a layout that
+    // HAS no per-store records — a pre-31.5 project, where one answered location
+    // stood for both stores. Story 31.5's wizard feeds this path a layout that
+    // carries both: install Step 3.6 reaches it whenever `writeProjectLayoutYaml`
+    // throws (an unwritable `_bmad-output/`), leaving the binding `unbound`, and a
+    // divergent SYSTEM store then silently collapsed onto the software store's
+    // location in the generated `config.yaml` — with the right record sitting
+    // unread on the very object being passed in. Same collapse class the read
+    // path already fixed; prefer the explicit record, fall back to the view.
+    systemRequirementsStore: (layout && layout.systemRequirementsStore) || kb,
+    softwareRequirementsStore: (layout && layout.softwareRequirementsStore) || kb,
     sprintManagement: (layout && layout.sprintManagement) || { mode: 'same', path: '.' },
   };
 }
@@ -1308,6 +1317,110 @@ function storeIdentityFields(store) {
   }
   return view.identity(store || {}, backend);
 }
+
+// ─── The per-backend WIZARD view, keyed by STORE_BACKENDS ───────────────────
+//
+// Story 31.5 AC3: each knowledge-store question selects a BACKEND first, and
+// then that backend's location. That makes the wizard a THIRD direction over the
+// `backend` enum — exactly as MODE_PROMPT_TITLES made it a third direction over
+// the `mode` enums — so it gets the same treatment: ONE table keyed by the enum
+// members, with the suite pinning that these keys are exactly STORE_BACKENDS. A
+// wizard carrying its own private list of backends would reinstate the read/write
+// enum disagreement this epic has already fixed three times.
+//
+// `collect` gathers that backend's location. `null` means "a member of the enum
+// whose wizard flow does not exist yet", and such a backend is NOT OFFERED.
+//
+// WHY NOT OFFERED, rather than offered-and-pending. Story 31.5's AC5 allowed
+// either "not offered until 31.8" or "offered, recorded with a clearly-stated
+// configuration-pending state". The implementation-readiness review directed the
+// first: a pending state would need a THIRD value in a two-value schema field
+// that Story 31.2 sealed as a closed enum shared by reader, writer and prompt,
+// which is precisely the closed-enum defect class this epic has already fixed
+// three times. Offering a backend the installer cannot configure would also
+// record an unusable store — the permissive degradation P5-9 exists to prevent.
+// Story 31.8 fills `collect` in for confluence and the wizard offers it with no
+// other change here or in any test that derives its expectation from this table.
+const STORE_BACKEND_WIZARD = Object.freeze({
+  'file-system': Object.freeze({
+    title: 'File system (this repository, a local path, or a remote git repository)',
+    // Named function, not an inline arrow, so the table entry and the flow it
+    // names are greppable in both directions.
+    collect: collectFileSystemStoreLocation,
+  }),
+  confluence: Object.freeze({
+    title: 'Confluence',
+    // Story 31.8. Until then this member exists in the enum (the reader and
+    // writer both accept it, and a committed confluence store round-trips) but
+    // has no wizard flow, so it is not offered.
+    collect: null,
+  }),
+});
+
+// The backends the wizard may actually offer — DERIVED from the enum and the
+// table above, listed nowhere. Order is STORE_BACKENDS' insertion order, which
+// is the order the user reads.
+//
+// `wizard` is a parameter only so the suite can pin that this really is a
+// derivation rather than a literal that happens to read `['file-system']` today:
+// the table is frozen (deliberately), so the test cannot give confluence a flow
+// in place and observe it become offered. Every production call site takes the
+// default. A hardcoded list here would be a SECOND definition of what Story 31.8
+// has to change, which is exactly the shape this epic keeps re-finding.
+function offerableStoreBackends(wizard = STORE_BACKEND_WIZARD) {
+  return [...STORE_BACKENDS].filter((backend) => {
+    const entry = wizard[backend];
+    return !!(entry && typeof entry.collect === 'function');
+  });
+}
+
+function backendChoicesForStore() {
+  return offerableStoreBackends().map((value) => ({
+    title: STORE_BACKEND_WIZARD[value].title,
+    value,
+  }));
+}
+
+// ─── The three concerns the layout wizard asks about (Story 31.5 AC1) ───────
+//
+// FR111's SINGLE knowledgebase question is superseded by two independent
+// knowledge-store questions. FR112's sprint-management question is UNCHANGED and
+// remains a third, separate concern asked exactly as it is today — sprint state
+// is deliberately not folded into either store, because FR112 and FR267 are
+// explicit that it is tracked separately and story files follow
+// `sprint_management_path`, not either store.
+//
+// `contents` is AC7. The wizard states what each store holds AT THE POINT OF
+// ASKING, inside the question text itself rather than in a console.log printed
+// next to it: a nearby line is a line the user may have scrolled past, and a test
+// asserting that it appeared "somewhere in stdout" would prove presence rather
+// than that the two questions are unambiguous. Putting it in the `message` makes
+// the claim checkable against the question the user was actually shown.
+//
+// `key` doubles as the concern name passed to `modeChoicesFor`, which offers
+// SPRINT_MODES for `sprintManagement` and STORE_MODES for everything else — so
+// the two store concerns get STORE_MODES (no `jira`) by construction.
+const REPO_LAYOUT_CONCERNS = Object.freeze([
+  Object.freeze({
+    key: 'systemRequirementsStore',
+    kind: 'store',
+    label: 'system requirements store',
+    contents: 'product brief and PRD (for a sharded PRD, its index and all shards)',
+  }),
+  Object.freeze({
+    key: 'softwareRequirementsStore',
+    kind: 'store',
+    label: 'software requirements store',
+    contents: 'architecture document, UX designs, epics',
+  }),
+  Object.freeze({
+    key: 'sprintManagement',
+    kind: 'sprint',
+    // Byte-identical to the label FR112's question has always used, so
+    // "Where is your sprint management managed?" is unchanged (AC1).
+    label: 'sprint management',
+  }),
+]);
 
 // sprint_management is the third location record and carries NO backend (P5-9.5)
 // — its shape is discriminated by `mode: jira`, which likewise has no `path`.
@@ -2217,6 +2330,30 @@ function ciCloneIfNeeded(destPath, gitUrl, clonedRepos) {
   }
 }
 
+/**
+ * The repository-layout wizard.
+ *
+ * RETURN SHAPE (Story 31.5). Always `{knowledgebase, sprintManagement}` — the
+ * legacy pair every pre-31.5 consumer reads. The INTERACTIVE branch additionally
+ * returns `systemRequirementsStore` and `softwareRequirementsStore`, the two
+ * independently-answered records, and `knowledgebase` is then a VIEW of the
+ * software store (FR264). `writeProjectLayoutYaml` prefers the explicit pair
+ * when present, so two divergent stores are written as answered.
+ *
+ * THE `--yes` BRANCH IS DELIBERATELY UNCHANGED, and does NOT emit the explicit
+ * pair. AC9 requires `--yes` to default both stores to `file-system` / current
+ * repository with no prompts, and P2-10 makes multi-repo interactive-only
+ * configuration — so there is no second store to answer here, only one legacy
+ * location (from `MA_KNOWLEDGEBASE_PATH`, from an existing binding, or the
+ * default). What that ONE location means for TWO stores is already decided, once,
+ * at the write choke point: FR264 applies it to the software store, and a
+ * divergent system store is preserved verbatim. Re-deciding it here would be a
+ * second definition of that rule, in the branch with the least observability —
+ * which is how `install --yes` came to destroy a committed Confluence store in
+ * the first place. Leaving this branch byte-for-byte as it was is also what makes
+ * the NFR82 claim checkable: the non-interactive path is not merely believed
+ * unchanged, it is unchanged.
+ */
 async function collectRepoLayout(flags, existingLayout = null) {
   // CI/CD mode: env vars > existing layout > defaults
   if (flags.yes) {
@@ -2269,45 +2406,229 @@ async function collectRepoLayout(flags, existingLayout = null) {
     };
   }
 
-  const layout = { knowledgebase: null, sprintManagement: null };
-  const labels = { knowledgebase: 'knowledgebase', sprintManagement: 'sprint management' };
+  // ── INTERACTIVE. Story 31.5: THREE concerns, not two. The two knowledge
+  // stores are asked independently — each gets its own backend question and its
+  // own location question, and neither answer is read while resolving the other
+  // (AC2/FR257). The sprint-management question is byte-for-byte the one FR112
+  // has always asked.
+  const layout = {
+    knowledgebase: null,
+    systemRequirementsStore: null,
+    softwareRequirementsStore: null,
+    sprintManagement: null,
+  };
 
-  for (const concern of ['knowledgebase', 'sprintManagement']) {
-    const existingMode = existingLayout && existingLayout[concern] ? existingLayout[concern].mode : null;
-    // Derived from STORE_MODES / SPRINT_MODES via MODE_PROMPT_TITLES rather
-    // than re-listing the members here — see the table's note.
-    const modeChoices = modeChoicesFor(concern);
-    // Pre-select existing mode if available
-    const initialIndex = existingMode ? modeChoices.findIndex(c => c.value === existingMode) : 0;
+  for (const concern of REPO_LAYOUT_CONCERNS) {
+    const existingRecord = existingRecordForConcern(existingLayout, concern);
 
-    const { mode } = await prompts({
+    if (concern.kind === 'sprint') {
+      layout[concern.key] = await collectSprintManagementLocation(concern, existingRecord);
+      continue;
+    }
+
+    // NON-DESTRUCTION, not a silent repoint. A project may already carry a
+    // committed store on a backend this build's wizard cannot offer yet
+    // (`confluence`, until Story 31.8). Asking anyway would offer only
+    // `file-system`, and the first Enter would replace a valid Confluence store
+    // with `file-system / same / "."` — the exact destructive default that a
+    // wizard answer indistinguishable from a real one already caused once in
+    // this epic. Preserve the record verbatim and say so.
+    const existingBackend = existingRecord ? backendOfStore(existingRecord) : null;
+    if (existingBackend && !offerableStoreBackends().includes(existingBackend)) {
+      console.log(chalk.yellow(
+        `  Your ${concern.label} is ${existingBackend}-backed. This installer cannot yet\n` +
+        `  reconfigure a ${existingBackend} store, so it has been left UNCHANGED:\n` +
+        `    ${summarizeStoreIdentity(existingRecord)}\n` +
+        `  To change it, edit _bmad-output/project-layout.yaml.`
+      ));
+      layout[concern.key] = existingRecord;
+      continue;
+    }
+
+    // AC3 — the BACKEND first, then that backend's location. Choices are derived
+    // from STORE_BACKEND_WIZARD, so no value outside the closed enum can be
+    // offered and a member with no wizard flow is not offered at all (AC5).
+    //
+    // FOR STORY 31.8 — mutant M22, EQUIVALENT TODAY, A REAL DEFECT THE DAY YOU
+    // MAKE `confluence` OFFERABLE. `offerableStoreBackends()` returns exactly one
+    // member right now, so the pre-selection below is always index 0 and
+    // replacing the whole expression with the literal `0` cannot be observed by
+    // any test. Once there are two offerable backends, that same literal would
+    // pre-select `file-system` for a project whose committed store is Confluence,
+    // and one Enter would repoint it — B-1 all over again. Add the covering test
+    // (existing backend = the SECOND offerable member, assert `initial` selects
+    // it) in the same change that gives `confluence` a `collect` flow.
+    const backendChoices = backendChoicesForStore();
+    const initialBackend = existingBackend
+      ? backendChoices.findIndex((c) => c.value === existingBackend)
+      : 0;
+    const { backend } = await prompts({
       type: 'select',
-      name: 'mode',
-      message: `Where is your ${labels[concern]} managed?`,
-      choices: modeChoices,
-      initial: initialIndex >= 0 ? initialIndex : 0
+      name: 'backend',
+      // AC7 — the store's contents, stated in the question itself.
+      message: `Which backend holds your ${concern.label} — ${concern.contents}?`,
+      choices: backendChoices,
+      initial: initialBackend >= 0 ? initialBackend : 0,
     });
 
-    if (!mode) process.exit(0);
+    if (!backend) process.exit(0);
 
-    if (mode === 'same') {
-      layout[concern] = { mode: 'same', path: '.' };
-    } else if (mode === 'local') {
-      layout[concern] = await collectLocalPath(labels[concern]);
-    } else if (mode === 'remote') {
-      layout[concern] = await collectRemotePath(labels[concern]);
-    } else if (mode === 'jira') {
-      layout[concern] = await collectJiraConfig();
+    const entry = STORE_BACKEND_WIZARD[backend];
+    if (!entry || typeof entry.collect !== 'function') {
+      // Unreachable while the choices come from the table (the value came OUT of
+      // it), and deliberately a throw rather than a fallback to the file-system
+      // flow: recording a file-system store for a backend the user chose is the
+      // silent-repoint defect one layer in.
+      throw new Error(
+        `No wizard flow for knowledge-store backend ${describeValue(backend)} — ` +
+        `STORE_BACKEND_WIZARD must name every member of STORE_BACKENDS ` +
+        `(${legalBackendsForMessage()}). Refusing to guess a location shape.`
+      );
     }
+
+    // The ANSWERED backend is passed to the flow, so the record it returns names
+    // the backend it was chosen for rather than re-deriving one.
+    layout[concern.key] = await entry.collect(concern, existingRecord, backend);
   }
 
-  // Check if both concerns point to same external path
-  if (layout.knowledgebase.mode !== 'same' && layout.sprintManagement.mode !== 'same'
-      && layout.knowledgebase.path === layout.sprintManagement.path) {
+  // FR264 / P5-9.2 — the legacy single-valued view resolves to the SOFTWARE
+  // requirements store. Every pre-31.5 consumer of this function's return value
+  // (`generateRepoLayoutSection`, `writeRepoLayoutConfig`, and
+  // `writeProjectLayoutYaml`'s legacy branch) reads `knowledgebase`, so it stays
+  // — as a VIEW of a store that was independently answered, never as a third
+  // source of truth. `writeProjectLayoutYaml` prefers the two explicit records
+  // above it, so the view is never what decides what is written.
+  layout.knowledgebase = layout.softwareRequirementsStore;
+
+  // Today's advisory, unchanged in wording and still keyed on the legacy pair
+  // (software store vs sprint management). Guarded on the backend because a
+  // non-file-system store has neither `mode` nor `path`, and `undefined ===
+  // undefined` would otherwise make two unconfigured fields read as "the same
+  // external repository".
+  const software = layout.softwareRequirementsStore;
+  const sprint = layout.sprintManagement;
+  if (backendOfStore(software) === DEFAULT_STORE_BACKEND
+      && software.mode !== 'same' && sprint.mode !== 'same'
+      && software.path === sprint.path) {
     console.log(chalk.cyan('  Both concerns point to same external repository'));
   }
 
   return layout;
+}
+
+/**
+ * Which already-committed record pre-populates this concern's questions.
+ *
+ * The full three-record `topology` is preferred when `readExistingLayout()`
+ * supplied one, so a project whose two stores DIVERGE pre-populates each question
+ * from its OWN store rather than from the collapsed legacy view — which would
+ * show the software store's location as the system store's answer.
+ *
+ * The fallback is the legacy single `knowledgebase` value, which is what every
+ * project created before Story 31.5 has: one answered location standing for both
+ * stores. That is the same collapse `topologyFromLegacyLayout` applies, and it is
+ * exact while the two stores agree.
+ */
+function existingRecordForConcern(existingLayout, concern) {
+  if (!existingLayout) return null;
+  const topology = existingLayout.topology || null;
+  if (topology && topology[concern.key]) return topology[concern.key];
+  if (concern.kind === 'sprint') return existingLayout.sprintManagement || null;
+  return existingLayout.knowledgebase || null;
+}
+
+/**
+ * The `file-system` backend's location flow (AC4). The FR113–FR116 semantics are
+ * REUSED, not reimplemented: the mode choices come from `modeChoicesFor` (so the
+ * store concerns offer STORE_MODES and never `jira`), and the local-path and
+ * remote-clone flows are the existing `collectLocalPath` / `collectRemotePath`,
+ * with their existing-directory confirmation, path validation and clone
+ * behaviour, called once per store with that store's label.
+ *
+ * `backend` is stated explicitly on the returned record. It is redundant on the
+ * write half — `serializeFileSystemStore` emits `backend: file-system`
+ * unconditionally, so the committed bytes are identical either way (NFR82) — but
+ * a record that names its own backend cannot be mistaken for one whose backend
+ * was never asked about.
+ */
+async function collectFileSystemStoreLocation(concern, existingRecord, backend) {
+  // Story 31.5 fix round. `backend` is the ANSWERED backend, threaded in
+  // from the question, not a fourth spelling of the default. Writing
+  // DEFAULT_STORE_BACKEND into the record was correct only by coincidence — the
+  // table happens to wire this flow to the `file-system` key — and would have
+  // recorded a backend the user did not choose the moment a second key shared
+  // the flow. Fail loud rather than defaulting: a `backend`-less record is
+  // exactly the "never asked about" shape stating it explicitly exists to rule out.
+  if (!backend) {
+    throw new Error(
+      `collectFileSystemStoreLocation was called with no answered backend for ` +
+      `${concern.label}. A location flow must record the backend it was chosen FOR; ` +
+      `refusing to substitute ${describeValue(DEFAULT_STORE_BACKEND)}.`
+    );
+  }
+  // FOR STORY 31.8 — mutant M21, EQUIVALENT TODAY. Both store concerns map to
+  // STORE_MODES, so replacing `concern.key` here with either store's constant key
+  // is unobservable. (It is NOT equivalent in `collectSprintManagementLocation`,
+  // where a store constant would silently withdraw `jira` — pinned in
+  // project-layout-enum-single-source.test.js.) If 31.8 ever gives a backend its
+  // own mode set, this call site needs a per-concern test before that lands.
+  const modeChoices = modeChoicesFor(concern.key);
+  const existingMode = existingRecord ? existingRecord.mode : null;
+  const initialIndex = existingMode ? modeChoices.findIndex((c) => c.value === existingMode) : 0;
+
+  const { mode } = await prompts({
+    type: 'select',
+    name: 'mode',
+    message: `Where is your ${concern.label} managed?`,
+    choices: modeChoices,
+    initial: initialIndex >= 0 ? initialIndex : 0,
+  });
+
+  if (!mode) process.exit(0);
+
+  if (mode === 'same') return { backend, mode: 'same', path: '.' };
+  if (mode === 'local') return { backend, ...(await collectLocalPath(concern.label)) };
+  if (mode === 'remote') return { backend, ...(await collectRemotePath(concern.label)) };
+
+  // Unreachable: `mode` came out of `modeChoicesFor`, i.e. out of STORE_MODES.
+  // Left as a throw rather than a `null` return, because returning null here is
+  // what would put an unwritable record into the layout and surface as a
+  // TypeError somewhere else entirely.
+  throw new Error(
+    `Unhandled knowledge-store mode ${describeValue(mode)} for ${concern.label} — ` +
+    `expected one of ${[...STORE_MODES].join(', ')}.`
+  );
+}
+
+/**
+ * FR112's sprint-management question, unchanged (AC1). Extracted from the old
+ * two-concern loop verbatim — same message, same choice list (SPRINT_MODES, so
+ * `jira` is still offered), same pre-selection, same four branches.
+ */
+async function collectSprintManagementLocation(concern, existingRecord) {
+  const modeChoices = modeChoicesFor(concern.key);
+  const existingMode = existingRecord ? existingRecord.mode : null;
+  const initialIndex = existingMode ? modeChoices.findIndex((c) => c.value === existingMode) : 0;
+
+  const { mode } = await prompts({
+    type: 'select',
+    name: 'mode',
+    message: `Where is your ${concern.label} managed?`,
+    choices: modeChoices,
+    initial: initialIndex >= 0 ? initialIndex : 0,
+  });
+
+  if (!mode) process.exit(0);
+
+  if (mode === 'same') return { mode: 'same', path: '.' };
+  if (mode === 'local') return await collectLocalPath(concern.label);
+  if (mode === 'remote') return await collectRemotePath(concern.label);
+  if (mode === 'jira') return await collectJiraConfig();
+
+  throw new Error(
+    `Unhandled sprint_management mode ${describeValue(mode)} — ` +
+    `expected one of ${[...SPRINT_MODES].join(', ')}.`
+  );
 }
 
 // --- BMad module selection ---
@@ -3863,4 +4184,11 @@ module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, recon
   // store.
   STORE_BACKEND_VIEWS, DEFAULT_STORE_BACKEND, backendOfStore, storeIdentityFields,
   sprintIdentityFields, storesDiverge, renderIdentityValue, summarizeStoreIdentity,
-  IDENTITY_NOT_CONFIGURED };
+  IDENTITY_NOT_CONFIGURED,
+  // Story 31.5 — the per-backend WIZARD view and the concern table. Exported for
+  // the same reason STORE_BACKEND_VIEWS is: the suite pins that these keys are
+  // exactly STORE_BACKENDS, so a backend added to the enum without a wizard flow
+  // fails here rather than at the moment a user picks it. Both tables are frozen
+  // entries included, so handing out the real objects is inert.
+  STORE_BACKEND_WIZARD, REPO_LAYOUT_CONCERNS, offerableStoreBackends,
+  backendChoicesForStore };
