@@ -33,7 +33,7 @@ const fs = require('fs');
 const os = require('os');
 const { spawnSync } = require('child_process');
 
-const EXPECTED_TEST_COUNT = 51;
+const EXPECTED_TEST_COUNT = 52; // 51 at Story 31.5; +1 for 31.6's contradiction absence-pin.
 
 let passed = 0;
 let failed = 0;
@@ -1281,11 +1281,36 @@ test('BLOCKING-1 shape A — a divergent SYSTEM store alone must still emit the 
     '- **System Requirements Store:** /a',
     '- **Knowledgebase (software requirements store):** current repository (default)',
     '- **Sprint Management:** current repository (default)',
-    '- When creating or reading the product brief and PRD, use the system requirements store path',
+    // UPDATED BY STORY 31.6 — see the note on the shape-B pin below for why this
+    // pinned string moved and what stayed frozen.
+    "- When creating or reading the product brief or the PRD — including a sharded PRD's index" +
+      ' and every shard — use the system requirements store path',
     '<!-- ma-agents:repo-layout-end -->',
   ].join('\n'));
 });
 
+// ─── Story 31.6 — THE TWO PINNED STRINGS ABOVE AND BELOW WERE DELIBERATELY MOVED
+//
+// Story 31.5 froze this rendering as full-string equality, which is the right
+// shape for it — and froze a CONTRADICTION into it. The two-store branch emitted:
+//
+//     - When creating or reading the product brief and PRD, use the system requirements store path
+//     - When creating or reading planning artifacts, use the knowledgebase path
+//
+// The brief and the PRD ARE planning artifacts, so the second line contradicted
+// the first: an agent could satisfy the section by writing the PRD to either
+// store. It moved no resolved path — `planning_artifacts` still resolves to the
+// software store (FR264) — which is why it shipped green, and why fixing it is
+// this story's job rather than 31.5's: Story 31.6 owns artifact-to-store routing.
+//
+// WHAT CHANGED: in the TWO-STORE branch only, the software-store line now names
+// the artifacts FR256 and the OQ-5 decision give that store — architecture, UX
+// designs, epics, research reports — instead of the overlapping term "planning
+// artifacts"; and the system-store line names the sharded-PRD case AC1 calls out
+// explicitly. WHAT DID NOT CHANGE: the SINGLE-store rendering, still pinned
+// verbatim by the two `'- When creating or reading planning artifacts, use the
+// knowledgebase path'` assertions elsewhere in this file (NFR82) — every project
+// that predates Story 31.5 renders byte-for-byte what it rendered before.
 test('BLOCKING-1 shape B — a divergent PAIR states BOTH locations, not just the software one', () => {
   const section = generateRepoLayoutSection({
     systemRequirementsStore: FS_STORE('/a'),
@@ -1301,10 +1326,37 @@ test('BLOCKING-1 shape B — a divergent PAIR states BOTH locations, not just th
     '- **System Requirements Store:** /a',
     '- **Knowledgebase (software requirements store):** /b',
     '- **Sprint Management:** current repository (default)',
-    '- When creating or reading the product brief and PRD, use the system requirements store path',
-    '- When creating or reading planning artifacts, use the knowledgebase path',
+    "- When creating or reading the product brief or the PRD — including a sharded PRD's index" +
+      ' and every shard — use the system requirements store path',
+    '- When creating or reading the architecture, UX designs, epics or research reports, use the' +
+      ' software requirements store path',
     '<!-- ma-agents:repo-layout-end -->',
   ].join('\n'));
+});
+
+// The contradiction itself, pinned as an ABSENCE so it cannot come back by any
+// route — including a future edit that reintroduces the overlapping term through
+// a different code path than the one fixed. Asserting the new wording is present
+// would not catch that; the old wording sitting alongside it is the defect.
+test('31.6 — the two-store rendering never calls the PRD a "planning artifact"', () => {
+  const section = generateRepoLayoutSection({
+    systemRequirementsStore: FS_STORE('/a'),
+    softwareRequirementsStore: FS_STORE('/b'),
+    knowledgebase: FS_STORE('/b'),
+    sprintManagement: SPRINT_SAME,
+  });
+  assert.ok(!section.includes('planning artifacts'),
+    'with two stores described, "planning artifacts" names a set that spans BOTH of them, so a ' +
+    'line routing it to one store contradicts the line routing the brief and PRD to the other:\n' +
+    section);
+  // ...and the single-store rendering must still use exactly that term. Pinned
+  // here, next to its negation, so the two rules are read together.
+  const legacy = generateRepoLayoutSection({
+    knowledgebase: FS_STORE('/b'),
+    sprintManagement: SPRINT_SAME,
+  });
+  assert.ok(legacy.includes('- When creating or reading planning artifacts, use the knowledgebase path'),
+    `a pre-31.5 single-store project must render today's wording verbatim (NFR82):\n${legacy}`);
 });
 
 test('BLOCKING-1 — a CONFLUENCE system store is named, never rendered as a directory', () => {
