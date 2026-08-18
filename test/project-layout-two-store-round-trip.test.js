@@ -33,7 +33,7 @@ const fs = require('fs');
 const os = require('os');
 const { spawnSync } = require('child_process');
 
-const EXPECTED_TEST_COUNT = 50;
+const EXPECTED_TEST_COUNT = 51;
 
 let passed = 0;
 let failed = 0;
@@ -101,7 +101,7 @@ let writeProjectLayoutYaml, readExistingLayout, resolveProjectTopology, showCurr
   handleConfigLayout, storesDiverge, storeIdentityFields, sprintIdentityFields,
   renderIdentityValue, summarizeStoreIdentity, STORE_BACKEND_VIEWS, STORE_BACKENDS,
   DEFAULT_STORE_BACKEND, IDENTITY_NOT_CONFIGURED, backendOfStore, BINDING_UNBOUND,
-  writeRepoLayoutConfig;
+  writeRepoLayoutConfig, topologyFromLegacyLayout;
 let generateRepoLayoutSection;
 try {
   ({
@@ -109,7 +109,7 @@ try {
     handleConfigLayout, storesDiverge, storeIdentityFields, sprintIdentityFields,
     renderIdentityValue, summarizeStoreIdentity, STORE_BACKEND_VIEWS, STORE_BACKENDS,
     DEFAULT_STORE_BACKEND, IDENTITY_NOT_CONFIGURED, backendOfStore, BINDING_UNBOUND,
-    writeRepoLayoutConfig,
+    writeRepoLayoutConfig, topologyFromLegacyLayout,
   } = require('../bin/cli.js'));
   ({ generateRepoLayoutSection } = require('../lib/installer.js'));
 } catch (e) {
@@ -1350,6 +1350,45 @@ test('BLOCKING-1 — the section is still dropped when NEITHER store is elsewher
     '- When creating or reading planning artifacts, use the knowledgebase path',
     '<!-- ma-agents:repo-layout-end -->',
   ].join('\n'), 'a pre-31.5 layout must be unaffected by the two-store rendering');
+});
+
+test('NB-5 — topologyFromLegacyLayout collapses only a layout that HAS no per-store records', () => {
+  // Story 31.5 fix-round, NB-5. This is the config-generation fallback: install
+  // Step 3.6 reaches it whenever `writeProjectLayoutYaml` throws (an unwritable
+  // `_bmad-output/`), leaving the binding `unbound`. It read ONLY
+  // `layout.knowledgebase` — the software store's legacy view — so a divergent
+  // SYSTEM store was silently collapsed onto the software store's location in the
+  // generated `config.yaml`, with the correct record sitting unread on the very
+  // object being passed in. Same collapse class the read path already fixed.
+  const sys = { backend: 'file-system', mode: 'local', path: '/a' };
+  const swe = { backend: 'file-system', mode: 'local', path: '/b' };
+
+  const rich = topologyFromLegacyLayout({
+    systemRequirementsStore: sys,
+    softwareRequirementsStore: swe,
+    knowledgebase: swe,
+    sprintManagement: SPRINT_SAME,
+  });
+  assert.deepStrictEqual(rich.systemRequirementsStore, sys,
+    'the explicit system record must be preferred over the collapsed legacy view');
+  assert.deepStrictEqual(rich.softwareRequirementsStore, swe);
+  assert.notDeepStrictEqual(rich.systemRequirementsStore, rich.softwareRequirementsStore,
+    'a divergent pair must not be collapsed onto one store');
+
+  // ...and the collapse itself is UNCHANGED for a genuinely legacy layout, which
+  // is what every pre-31.5 project has. Removing the collapse would be as wrong
+  // as applying it unconditionally.
+  const legacy = topologyFromLegacyLayout({ knowledgebase: swe, sprintManagement: SPRINT_SAME });
+  assert.deepStrictEqual(legacy.systemRequirementsStore, swe);
+  assert.deepStrictEqual(legacy.softwareRequirementsStore, swe);
+  assert.deepStrictEqual(legacy.sprintManagement, SPRINT_SAME);
+
+  // An absent layout still defaults to single-repo rather than throwing.
+  assert.deepStrictEqual(topologyFromLegacyLayout(null), {
+    systemRequirementsStore: { mode: 'same', path: '.' },
+    softwareRequirementsStore: { mode: 'same', path: '.' },
+    sprintManagement: { mode: 'same', path: '.' },
+  });
 });
 
 // ─── Summary ────────────────────────────────────────────────────────────────
