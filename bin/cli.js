@@ -1339,8 +1339,11 @@ function storeIdentityFields(store) {
 // which is precisely the closed-enum defect class this epic has already fixed
 // three times. Offering a backend the installer cannot configure would also
 // record an unusable store — the permissive degradation P5-9 exists to prevent.
-// Story 31.8 fills `collect` in for confluence and the wizard offers it with no
-// other change here or in any test that derives its expectation from this table.
+//
+// STORY 31.8 HAS LANDED, and it was exactly the one-line change predicted here:
+// `confluence` now names its flow and is therefore offered, with no other change
+// to this table and none to `offerableStoreBackends` below. `collect: null`
+// remains the documented way to carry a member of the enum ahead of its flow.
 const STORE_BACKEND_WIZARD = Object.freeze({
   'file-system': Object.freeze({
     title: 'File system (this repository, a local path, or a remote git repository)',
@@ -1350,10 +1353,10 @@ const STORE_BACKEND_WIZARD = Object.freeze({
   }),
   confluence: Object.freeze({
     title: 'Confluence',
-    // Story 31.8. Until then this member exists in the enum (the reader and
-    // writer both accept it, and a committed confluence store round-trips) but
-    // has no wizard flow, so it is not offered.
-    collect: null,
+    // Story 31.8 — space (FR259) and root page (FR260), collected OFFLINE. The
+    // flow asks two questions and neither is a credential (NFR79); see the block
+    // comment above `collectConfluenceStoreLocation`.
+    collect: collectConfluenceStoreLocation,
   }),
 });
 
@@ -2427,12 +2430,29 @@ async function collectRepoLayout(flags, existingLayout = null) {
     }
 
     // NON-DESTRUCTION, not a silent repoint. A project may already carry a
-    // committed store on a backend this build's wizard cannot offer yet
-    // (`confluence`, until Story 31.8). Asking anyway would offer only
-    // `file-system`, and the first Enter would replace a valid Confluence store
-    // with `file-system / same / "."` — the exact destructive default that a
-    // wizard answer indistinguishable from a real one already caused once in
-    // this epic. Preserve the record verbatim and say so.
+    // committed store on a backend this build's wizard cannot offer yet.
+    // Asking anyway would offer only the backends that DO have a flow, and the
+    // first Enter would replace a valid store with `file-system / same / "."` —
+    // the exact destructive default that a wizard answer indistinguishable from
+    // a real one already caused once in this epic. Preserve the record verbatim
+    // and say so.
+    //
+    // Story 31.8: `confluence` now HAS a flow, so this block no longer fires for
+    // any member of today's enum — every committed store is reconfigurable, and
+    // `ma-agents config layout` over a Confluence project asks the real
+    // questions instead of declining. That is proved from the other side: the
+    // reconfiguration test in
+    // `test/project-layout-confluence-configuration.test.js` asserts the wizard
+    // ASKS (so this branch was not taken) and that accepting every
+    // pre-population rewrites the committed file byte-identically (so agency is
+    // preserved without an extra "keep it unchanged" question, which would have
+    // meant a non-enum value in a closed-enum prompt — the shape the readiness
+    // review already rejected for the configuration-pending state).
+    //
+    // The guard is KEPT rather than deleted: it is the contract that makes
+    // `collect: null` a safe way to carry a future backend in the enum ahead of
+    // its flow, and deleting it would make the next such member destructive on
+    // the first Enter.
     const existingBackend = existingRecord ? backendOfStore(existingRecord) : null;
     if (existingBackend && !offerableStoreBackends().includes(existingBackend)) {
       console.log(chalk.yellow(
@@ -2449,15 +2469,17 @@ async function collectRepoLayout(flags, existingLayout = null) {
     // from STORE_BACKEND_WIZARD, so no value outside the closed enum can be
     // offered and a member with no wizard flow is not offered at all (AC5).
     //
-    // FOR STORY 31.8 — mutant M22, EQUIVALENT TODAY, A REAL DEFECT THE DAY YOU
-    // MAKE `confluence` OFFERABLE. `offerableStoreBackends()` returns exactly one
-    // member right now, so the pre-selection below is always index 0 and
-    // replacing the whole expression with the literal `0` cannot be observed by
-    // any test. Once there are two offerable backends, that same literal would
-    // pre-select `file-system` for a project whose committed store is Confluence,
-    // and one Enter would repoint it — B-1 all over again. Add the covering test
-    // (existing backend = the SECOND offerable member, assert `initial` selects
-    // it) in the same change that gives `confluence` a `collect` flow.
+    // MUTANT M22 IS NO LONGER EQUIVALENT — Story 31.8 made `confluence`
+    // offerable, so `offerableStoreBackends()` now returns TWO members and the
+    // pre-selection below is load-bearing. Replacing it with the literal `0`
+    // pre-selects `file-system` for a project whose committed store is
+    // Confluence, and one Enter repoints it — B-1 all over again. The covering
+    // test is `test/project-layout-confluence-configuration.test.js`, section
+    // "M22", which pins that an existing confluence store pre-selects the
+    // confluence CHOICE (asserted by value through `choices[initial]`, not by
+    // index, so a reordering of the enum cannot make the assertion pass for the
+    // wrong backend) and that accepting the pre-selection leaves the committed
+    // record byte-identical.
     const backendChoices = backendChoicesForStore();
     const initialBackend = existingBackend
       ? backendChoices.findIndex((c) => c.value === existingBackend)
@@ -2566,12 +2588,28 @@ async function collectFileSystemStoreLocation(concern, existingRecord, backend) 
       `refusing to substitute ${describeValue(DEFAULT_STORE_BACKEND)}.`
     );
   }
-  // FOR STORY 31.8 — mutant M21, EQUIVALENT TODAY. Both store concerns map to
-  // STORE_MODES, so replacing `concern.key` here with either store's constant key
-  // is unobservable. (It is NOT equivalent in `collectSprintManagementLocation`,
-  // where a store constant would silently withdraw `jira` — pinned in
-  // project-layout-enum-single-source.test.js.) If 31.8 ever gives a backend its
-  // own mode set, this call site needs a per-concern test before that lands.
+  // MUTANT M21 — `modeChoicesFor(concern.key)` replaced by a constant.
+  //
+  // Story 31.8 was expected to resolve this and DID NOT, so the status is
+  // recorded honestly rather than quietly closed. `modeChoicesFor` partitions
+  // its argument exactly once — `'sprintManagement'` versus everything else — and
+  // Story 31.8 deliberately gave `confluence` NO mode set (a confluence store has
+  // no `mode` at all; its identity is a space plus a root page, and it never
+  // reaches this function). So:
+  //
+  //   - substituting either STORE concern's key here remains EQUIVALENT, and no
+  //     test can distinguish it, because both map to STORE_MODES. This is a
+  //     property of `modeChoicesFor`'s partition, not a gap in coverage, and it
+  //     will stay equivalent until some store concern is offered a different
+  //     mode set;
+  //   - substituting `'sprintManagement'` is NOT equivalent — it would silently
+  //     add `jira` to a knowledge store's mode choices — and IS covered, on BOTH
+  //     store concerns, by `test/project-layout-confluence-configuration.test.js`
+  //     section "M21" and by project-layout-enum-single-source.test.js.
+  //
+  // The reverse substitution in `collectSprintManagementLocation` (a store key
+  // there would withdraw `jira`) is likewise pinned in
+  // project-layout-enum-single-source.test.js.
   const modeChoices = modeChoicesFor(concern.key);
   const existingMode = existingRecord ? existingRecord.mode : null;
   const initialIndex = existingMode ? modeChoices.findIndex((c) => c.value === existingMode) : 0;
@@ -2598,6 +2636,206 @@ async function collectFileSystemStoreLocation(concern, existingRecord, backend) 
     `Unhandled knowledge-store mode ${describeValue(mode)} for ${concern.label} — ` +
     `expected one of ${[...STORE_MODES].join(', ')}.`
   );
+}
+
+// ─── Story 31.8 — the `confluence` backend's configuration flow ─────────────
+//
+// FR259 (which space) + FR260 (which root page, blank ⇒ generated and NAMED to
+// the user). Two text questions and nothing else. In particular:
+//
+//   - NO credential question. Not a token, not a username, not a base URL that
+//     could carry one, not a "stay signed in" flag. Authentication against
+//     Confluence is entirely the MCP server's responsibility (NFR79, P5-9.6),
+//     and ma-agents writes nothing about it to disk. The absence is the
+//     requirement, so it is asserted as an absence — see
+//     `test/project-layout-confluence-configuration.test.js`.
+//   - NO reachability check. Collecting a space key and a page name is OFFLINE
+//     configuration (NFR80): nothing here resolves a host, opens a socket, or
+//     shells out. Whether the space exists is a RUNTIME question, answered by
+//     Story 31.9's MCP routing; whether the root page exists is Story 31.10's,
+//     which creates it. An install must not require network access.
+//   - NO local mirror, cache or sync of any kind. FR266 is retired at P5-9.6.
+
+/**
+ * The name a blank root-page answer resolves to: `{project_name}` (AC3).
+ *
+ * TWO sources, in this order, and the second is not a permissive degradation of
+ * the first — it is the SAME RULE, applied one layer earlier:
+ *
+ *   1. `project_name` from `_bmad/bmm/config.yaml`, read through
+ *      `bmad.readCanonicalBmadConfig` (the only sanctioned read path for
+ *      BMAD-canonical values in this codebase, so this is not a second spelling
+ *      of where that value lives). This is literally the `{project_name}` the
+ *      acceptance criteria and Story 31.10 name.
+ *   2. The basename of the project root. On a FRESH install this wizard runs at
+ *      install Step 3.3, ABOVE the BMAD install at Step 3.5, so config.yaml does
+ *      not exist yet and source 1 is simply not available. Basename is what
+ *      bmad-method itself seeds `project_name` with
+ *      (`node_modules/bmad-method/tools/installer/ui.js` —
+ *      `project_name: path.basename(directory)`), so the two sources agree by
+ *      construction on every project whose `project_name` has not been hand-edited.
+ *
+ * Returns `null` — never `''` and never a fabricated placeholder — when neither
+ * source yields a name (a project root with no basename, e.g. a filesystem
+ * root). The caller then REQUIRES an explicit answer rather than silently
+ * generating a page named after nothing, which is precisely the "user is left
+ * guessing where the artifacts went" failure AC3 exists to prevent.
+ */
+function generatedRootPageTitle(projectRoot) {
+  const root = path.resolve(projectRoot || process.cwd());
+  let declared = '';
+  try {
+    const config = bmad.readCanonicalBmadConfig(root);
+    if (config && typeof config.project_name === 'string') declared = config.project_name.trim();
+  } catch (e) {
+    // An unreadable/odd config.yaml is not a reason to abort configuration; the
+    // basename below is a complete answer on its own. Nothing is guessed here —
+    // the fallback is a DIFFERENT source, not a relaxed reading of this one.
+    declared = '';
+  }
+  if (declared) return declared;
+  const base = path.basename(root).trim();
+  return base || null;
+}
+
+/**
+ * The prompt-time half of the identity policy — the SAME policy the serializer
+ * enforces, called through the same function (`assertSingleLineIdentity`) rather
+ * than restated here. A second spelling of "what is a legal Confluence identity"
+ * is the read/write-disagreement shape this epic has already fixed three times.
+ *
+ * Returns `true` or a message, which is the contract `prompts` expects. Telling
+ * the user at the moment they type is strictly better than throwing at write
+ * time, but it is the SAME rule, so a value that passes here cannot be one the
+ * writer refuses (and vice versa).
+ */
+function validateConfluenceIdentity(value, fieldName, opts) {
+  const required = !!(opts && opts.required);
+  const s = value == null ? '' : String(value);
+  if (!s.trim()) {
+    if (!required) return true;
+    return fieldName === 'space_key'
+      ? 'A Confluence space key is required — this store has no location without one.'
+      : 'A root page name is required here: this project has no name to generate one from.';
+  }
+  try {
+    assertSingleLineIdentity(s, fieldName);
+  } catch (e) {
+    return e.message;
+  }
+  return true;
+}
+
+/**
+ * AC1–AC3. Asks the space (FR259), then the root page (FR260), and returns the
+ * `{backend, spaceKey, rootPage:{title, id}}` record Story 31.2's schema sealed.
+ *
+ * OQ-4 (root-page identity: human-readable title vs opaque page id) resolves to
+ * TITLE AT CONFIGURATION TIME, `id: null`. Not a preference — AC7 forces it:
+ * turning a title into a page id requires asking Confluence, and this story must
+ * complete with no network access. Story 31.2's schema reserves BOTH fields, so
+ * this populates the reserved object without reopening it, and Story 31.10 — the
+ * layer that actually talks to the MCP — is where an `id` can be learned and
+ * filled in.
+ *
+ * CONSEQUENCE, handled here: on RECONFIGURATION a previously-learned `id` is
+ * carried forward ONLY while the title is unchanged. Change the title and the id
+ * is dropped, because a `{title, id}` pair naming two different pages is worse
+ * than a pair with one field — it is a record that looks resolved and points
+ * somewhere the user did not choose.
+ */
+async function collectConfluenceStoreLocation(concern, existingRecord, backend) {
+  // Same fail-loud contract as the file-system flow: a location flow records the
+  // backend it was chosen FOR. Substituting a default here would record a
+  // backend the user did not answer.
+  if (!backend) {
+    throw new Error(
+      `collectConfluenceStoreLocation was called with no answered backend for ` +
+      `${concern.label}. A location flow must record the backend it was chosen FOR; ` +
+      `refusing to substitute ${describeValue(DEFAULT_STORE_BACKEND)}.`
+    );
+  }
+
+  // Pre-population comes from the existing record ONLY when that record is
+  // itself a confluence store. A file-system record has no space key, and
+  // reading `.spaceKey` off it would pre-fill `undefined`.
+  const existing = (existingRecord && backendOfStore(existingRecord) === 'confluence')
+    ? existingRecord : null;
+  const existingRootPage = (existing && existing.rootPage) || {};
+
+  // AC1 / FR259.
+  const spaceAnswer = await prompts({
+    type: 'text',
+    name: 'spaceKey',
+    message: `Which Confluence space holds your ${concern.label}?`,
+    initial: (existing && existing.spaceKey) || '',
+    validate: (value) => validateConfluenceIdentity(value, 'space_key', { required: true }),
+  });
+  // `undefined` is a CANCELLED prompt; `''` is a real (rejected) answer. The
+  // select-based flows can use `if (!x)` for both because no legal choice is
+  // falsy; a free-text answer cannot, and collapsing the two would turn an empty
+  // string into a silent `process.exit(0)` mid-install.
+  if (spaceAnswer.spaceKey === undefined) process.exit(0);
+  const spaceKey = String(spaceAnswer.spaceKey).trim();
+  if (!spaceKey) {
+    // Unreachable interactively — `validate` above refuses to submit a blank
+    // answer. Kept as a throw rather than a fallback because the fallback shape
+    // ("record it anyway, empty") is a store that resolves nowhere, which is the
+    // permissive degradation P5-9 exists to prevent.
+    throw new Error(
+      `No Confluence space was given for ${concern.label}. A confluence store's space key ` +
+      `is its location; refusing to record a store with none.`
+    );
+  }
+
+  // AC2 / FR260, and AC3's generated name — computed BEFORE the question so the
+  // question can NAME it. "Leave it blank and something will be generated" is
+  // the shape that leaves a user guessing; naming it up front and again after
+  // the answer is what AC3 asks for.
+  const generated = generatedRootPageTitle(process.cwd());
+  const existingTitle = String(existingRootPage.title || '').trim();
+  const rootAnswer = await prompts({
+    type: 'text',
+    name: 'rootPageTitle',
+    message: `Which Confluence page should your ${concern.label} artifacts be created under?`
+      + (generated ? ` (leave blank to use a page named "${generated}", after your project)` : ''),
+    initial: existingTitle,
+    validate: (value) => validateConfluenceIdentity(value, 'root_page.title', { required: !generated }),
+  });
+  if (rootAnswer.rootPageTitle === undefined) process.exit(0);
+  const answeredTitle = String(rootAnswer.rootPageTitle == null ? '' : rootAnswer.rootPageTitle).trim();
+
+  let title;
+  if (answeredTitle) {
+    title = answeredTitle;
+  } else {
+    if (!generated) {
+      // Unreachable interactively (validate makes the answer required in exactly
+      // this case). Fail loud rather than write `title: null` and leave 31.10 to
+      // invent a name at the moment it can no longer ask.
+      throw new Error(
+        `No root page was given for ${concern.label}, and no project name could be derived ` +
+        `to generate one from. Re-run and name the page explicitly.`
+      );
+    }
+    title = generated;
+    // AC3 — the user is TOLD the name, in the same words the record now carries,
+    // so the announcement and the committed file cannot disagree. The creation
+    // itself is Story 31.10's MCP write, so this says "will be created", not
+    // "was created".
+    console.log(chalk.cyan(
+      `  No root page given for your ${concern.label}. ma-agents will use a page named\n` +
+      `  "${title}" (named after your project) in the "${spaceKey}" space, and create it\n` +
+      `  there the first time artifacts are published.`
+    ));
+  }
+
+  // The id survives only while it still identifies the answered page — see the
+  // OQ-4 note above.
+  const carriedId = String(existingRootPage.id || '').trim();
+  const id = (carriedId && existingTitle && existingTitle === title) ? carriedId : null;
+
+  return { backend, spaceKey, rootPage: { title, id } };
 }
 
 /**
@@ -4191,4 +4429,13 @@ module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, recon
   // fails here rather than at the moment a user picks it. Both tables are frozen
   // entries included, so handing out the real objects is inert.
   STORE_BACKEND_WIZARD, REPO_LAYOUT_CONCERNS, offerableStoreBackends,
-  backendChoicesForStore };
+  backendChoicesForStore,
+  // Story 31.8 — the confluence configuration flow and the two pure functions it
+  // is built from. `generatedRootPageTitle` is exported because AC3's promise
+  // ("named for the project, and you are told the name") is only checkable if
+  // the test can compute the SAME name the wizard announces and the record
+  // carries, from the same function, rather than restating the rule.
+  // `validateConfluenceIdentity` is exported for the same reason the prompt
+  // carries it: it is the policy the serializer enforces, and a test must be able
+  // to show the two agree rather than that each exists.
+  collectConfluenceStoreLocation, generatedRootPageTitle, validateConfluenceIdentity };
