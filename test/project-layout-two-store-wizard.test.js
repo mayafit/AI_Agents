@@ -822,14 +822,75 @@ test('AC9 — `--yes` over a DIVERGENT committed pair still asks nothing, and de
 });
 
 // ══════════════════════════════════════════════════════════════════════════
-// AC5 — a backend the wizard cannot offer is never silently replaced.
+// AC5, AS SUPERSEDED BY STORY 31.8 — a committed confluence store is now
+// RECONFIGURABLE, and pressing Enter through the wizard still preserves it.
+//
+// Story 31.5 asserted here that a confluence-backed store was SKIPPED, because
+// `confluence` had no wizard flow and offering only `file-system` would have made
+// the first Enter a silent repoint. Story 31.8 gave confluence a flow, so the
+// skip branch is no longer reachable for any member of today's enum and these
+// three tests are inverted: the wizard ASKS.
+//
+// WHAT MUST NOT CHANGE, and is therefore re-asserted in the new behaviour, is the
+// property the skip was a means to: an all-defaults run must leave a committed
+// confluence store byte-identical, per store, with no collapse of one store onto
+// the other. That is now carried by PRE-POPULATION rather than by refusal — which
+// is why every answer below is the wizard's OWN pre-selected/pre-filled value
+// (see `ACCEPT_DEFAULT`), never a hardcoded copy of the expectation. A wizard
+// that pre-populated the wrong backend, the wrong space or the wrong page would
+// be "accepted" here and the byte comparison would fail.
+//
+// The skip guard itself is KEPT in cli.js (it is what makes `collect: null` a
+// safe way to carry a future backend), but it has no reachable input today, so
+// it is no longer asserted from this side. `STORE_BACKEND_WIZARD` naming exactly
+// STORE_BACKENDS, with every entry carrying a flow, is pinned in
+// project-layout-enum-single-source.test.js.
 // ══════════════════════════════════════════════════════════════════════════
 
-test('AC5 — the interactive wizard does NOT ask about a committed confluence store, and preserves it', async () => {
-  // The destructive default this epic already met once, in its other direction:
-  // a wizard that offers only `file-system` would turn the very first Enter into
-  // "replace my Confluence store with the current repository". The store is
-  // preserved verbatim and the user is told, in the same run.
+// Answering a question with EXACTLY what it pre-selected or pre-filled — i.e.
+// pressing Enter. This is what makes "accepting every default preserves the
+// store" a real claim rather than a restatement of the expectation: the answers
+// come out of the wizard's own pre-population, so a wizard that pre-populated the
+// wrong value preserves the wrong store and the byte comparison catches it.
+const ACCEPT_DEFAULT = Symbol('press Enter: answer with whatever the prompt pre-populated');
+
+function answerByPressingEnter(q) {
+  const name = (q && q.name) || '(unnamed)';
+  if (q && q.type === 'select') {
+    const idx = typeof q.initial === 'number' ? q.initial : 0;
+    const choice = (q.choices || [])[idx];
+    if (!choice) {
+      throw new Error(
+        `prompt ${JSON.stringify(name)} pre-selected index ${q.initial}, which is not one of its ` +
+        `${(q.choices || []).length} choice(s) — pressing Enter would select nothing`);
+    }
+    return { [name]: choice.value };
+  }
+  return { [name]: q && q.initial === undefined ? '' : q.initial };
+}
+
+function resolveQueuedAnswer(q, queued) {
+  if (queued === ACCEPT_DEFAULT) return answerByPressingEnter(q);
+  return requireMatchingAnswer(q, queued);
+}
+
+// Drives the wizard with a queue that must be consumed EXACTLY, capturing the
+// console output any notice goes to. A flow that asks too few questions leaves
+// answers over; one that asks too many runs out of queue and the stub throws by
+// name.
+async function runWizardCapturingLog(answers, existingLayout) {
+  promptLog.length = 0;
+  const queue = [...answers];
+  promptAnswer = (q) => (queue.length ? resolveQueuedAnswer(q, queue.shift()) : unexpectedPrompt(q));
+  let layout;
+  const log = await silenceAsync(async () => { layout = await collectRepoLayout({}, existingLayout); });
+  promptAnswer = unexpectedPrompt;
+  assert.strictEqual(queue.length, 0,
+    `${queue.length} prepared answer(s) went unused — the wizard asked fewer questions than expected`);
+  return { layout, log, questions: promptLog.map(summarizeQuestion) };
+}
+
+test('31.8 supersedes AC5 — a committed confluence SYSTEM store is asked about, and Enter preserves it', async () => {
   const { tmpDir, cleanup } = withTmpDir();
   try {
     const conf = {
@@ -843,30 +904,26 @@ test('AC5 — the interactive wizard does NOT ask about a committed confluence s
     const before = readLayoutFile(tmpDir);
     const existing = silence(() => readExistingLayout());
 
-    // Only THREE answers: the confluence store is skipped entirely, so a queue
-    // sized for it would be left over and runWizard would fail.
-    promptLog.length = 0;
-    const queue = [{ backend: 'file-system' }, { mode: 'same' }, { mode: 'same' }];
-    promptAnswer = (q) => (queue.length ? requireMatchingAnswer(q, queue.shift()) : unexpectedPrompt(q));
-    let layout;
-    const log = await silenceAsync(async () => { layout = await collectRepoLayout({}, existing); });
-    promptAnswer = unexpectedPrompt;
-    assert.strictEqual(queue.length, 0, 'the remaining two questions must still be asked');
+    // FIVE questions now: system backend + space + root page, software backend +
+    // mode, then sprint. Every store answer is Enter.
+    const { layout, log, questions } = await runWizardCapturingLog([
+      ACCEPT_DEFAULT, ACCEPT_DEFAULT, ACCEPT_DEFAULT,   // confluence system store
+      ACCEPT_DEFAULT, ACCEPT_DEFAULT,                   // file-system software store
+      ACCEPT_DEFAULT,                                   // sprint management
+    ], existing);
 
-    assert.strictEqual(promptLog.filter((q) => q.name === 'backend').length, 1,
-      'only the software store may be asked for a backend — the confluence store has no flow yet');
-    assert.ok(!promptLog.some((q) => /system requirements/.test(q.message)),
-      `the confluence-backed system store must not be asked about: ` +
-      `${promptLog.map((q) => q.message).join(' | ')}`);
-
-    // NEVER SILENT. The one thing worse than asking is not asking and saying
-    // nothing — the user would have no way to know the store was skipped.
-    assert.ok(/confluence/i.test(log) && /UNCHANGED/.test(log),
-      `the skip must be announced and name the backend, got:\n${log}`);
-    assert.ok(/SYS/.test(log), `the notice must identify the store that was left alone:\n${log}`);
+    assert.deepStrictEqual(questions.map((q) => q.name),
+      ['backend', 'spaceKey', 'rootPageTitle', 'backend', 'mode', 'mode'],
+      'the confluence store is now asked its own two identity questions, in place of a mode');
+    assert.ok(!/UNCHANGED/.test(log),
+      `the store is reconfigurable now, so nothing may be declined:\n${log}`);
 
     assert.deepStrictEqual(layout.systemRequirementsStore, conf,
-      'the committed confluence record must be carried through verbatim');
+      'pressing Enter through the confluence flow must reproduce the committed record exactly');
+    assert.deepStrictEqual(layout.softwareRequirementsStore,
+      { backend: 'file-system', mode: 'same', path: '.' },
+      'the file-system store still receives its own answered record');
+
     silence(() => writeProjectLayoutYaml(layout));
     assert.strictEqual(withoutGeneratedLine(readLayoutFile(tmpDir)), withoutGeneratedLine(before),
       'an all-defaults interactive run must not change a committed confluence store');
@@ -875,39 +932,18 @@ test('AC5 — the interactive wizard does NOT ask about a committed confluence s
   }
 });
 
-// ─── Story 31.5 fix-round, BLOCKING-2 ───────────────────────────────────────
+// ─── Story 31.5 fix-round, BLOCKING-2, carried forward ──────────────────────
 //
-// The preserve-unofferable-store guard in `collectRepoLayout` is LOOP-LEVEL: it
-// runs for whichever store carries the unofferable backend. Every test above,
-// however, gives the CONFLUENCE store to the SYSTEM concern, so the guard was
-// pinned for one of the two roles only. Restricting it to
-// `concern.key === 'systemRequirementsStore'` left both suites fully green —
-// while a project whose SOFTWARE store is Confluence-backed would be asked a
-// backend question offering only `file-system`, and the very first Enter would
-// replace it with `file-system / same / "."`. That is prerequisite 2B's defect
-// B-1 re-entering through the other store, in a table
-// (`STORE_BACKEND_WIZARD`) Story 31.8 is about to edit.
-//
-// The two cases below are the roles-swapped one and the both-stores one. Neither
-// is reachable through any other test in the repo.
+// The per-store handling in `collectRepoLayout` is LOOP-LEVEL: it runs for
+// whichever store carries which backend. Story 31.5 found that every test gave
+// the CONFLUENCE store to the SYSTEM concern, so one of the two roles was pinned
+// and a `concern.key === 'systemRequirementsStore'` restriction stayed green.
+// The same asymmetry would hide the same class of defect in 31.8's flow — a
+// confluence flow that read the SYSTEM store's committed record when asked about
+// the SOFTWARE store would pre-fill the wrong space key and one Enter would
+// repoint it. So the roles-swapped and both-stores cases are kept, inverted.
 
-// Drives the wizard with a queue that must be consumed EXACTLY, capturing the
-// console output the guard's notice goes to. A guard that fires for too few
-// stores runs out of queue (the stub throws by name); one that fires for too
-// many leaves answers over.
-async function runWizardCapturingLog(answers, existingLayout) {
-  promptLog.length = 0;
-  const queue = [...answers];
-  promptAnswer = (q) => (queue.length ? requireMatchingAnswer(q, queue.shift()) : unexpectedPrompt(q));
-  let layout;
-  const log = await silenceAsync(async () => { layout = await collectRepoLayout({}, existingLayout); });
-  promptAnswer = unexpectedPrompt;
-  assert.strictEqual(queue.length, 0,
-    `${queue.length} prepared answer(s) went unused — the wizard asked fewer questions than expected`);
-  return { layout, log, questions: promptLog.map(summarizeQuestion) };
-}
-
-test('AC5 — the guard protects the SOFTWARE store too, not only the system store', async () => {
+test('31.8 supersedes AC5 — the SOFTWARE store gets its own confluence flow, not the system store\'s', async () => {
   const { tmpDir, cleanup } = withTmpDir();
   try {
     const conf = {
@@ -921,23 +957,26 @@ test('AC5 — the guard protects the SOFTWARE store too, not only the system sto
     const before = readLayoutFile(tmpDir);
     const existing = silence(() => readExistingLayout());
 
-    // Three answers: the SYSTEM store's backend and location, then sprint. A
-    // guard keyed on `systemRequirementsStore` would ask the software store for a
-    // backend as well, exhaust this queue, and fail by name.
-    const { layout, log, questions } = await runWizardCapturingLog(
-      [{ backend: 'file-system' }, { mode: 'same' }, { mode: 'same' }], existing);
+    const { layout, questions } = await runWizardCapturingLog([
+      ACCEPT_DEFAULT, ACCEPT_DEFAULT,                   // file-system system store
+      ACCEPT_DEFAULT, ACCEPT_DEFAULT, ACCEPT_DEFAULT,   // confluence software store
+      ACCEPT_DEFAULT,                                   // sprint management
+    ], existing);
 
-    assert.strictEqual(questions.filter((q) => q.name === 'backend').length, 1,
-      'only the system store may be asked for a backend — the software store is confluence-backed');
-    assert.ok(!questions.some((q) => /software requirements/.test(q.message)),
-      `the confluence-backed SOFTWARE store must not be asked about: ` +
-      `${questions.map((q) => q.message).join(' | ')}`);
-    assert.ok(/confluence/i.test(log) && /UNCHANGED/.test(log),
-      `the skip must be announced and name the backend, got:\n${log}`);
-    assert.ok(/SWE/.test(log), `the notice must identify the store that was left alone:\n${log}`);
+    assert.deepStrictEqual(questions.map((q) => q.name),
+      ['backend', 'mode', 'backend', 'spaceKey', 'rootPageTitle', 'mode'],
+      'the confluence flow must attach to the SOFTWARE store, in its own position in the loop');
+    // The confluence questions must NAME the software store. A flow handed the
+    // wrong concern would ask the right questions about the wrong store.
+    for (const q of questions.filter((x) => x.name === 'spaceKey' || x.name === 'rootPageTitle')) {
+      assert.ok(/software requirements store/.test(q.message),
+        `the confluence questions must name the store they configure, got: ${q.message}`);
+      assert.ok(!/system requirements store/.test(q.message),
+        `...and not the other one, got: ${q.message}`);
+    }
 
     assert.deepStrictEqual(layout.softwareRequirementsStore, conf,
-      'the committed confluence SOFTWARE record must be carried through verbatim');
+      'the committed confluence SOFTWARE record must be reproduced exactly');
     // ...and FR264's legacy view is the software store, so it must be the
     // confluence record too — not the file-system answer the system store gave.
     assert.deepStrictEqual(layout.knowledgebase, conf,
@@ -954,7 +993,7 @@ test('AC5 — the guard protects the SOFTWARE store too, not only the system sto
   }
 });
 
-test('AC5 — BOTH stores unofferable: neither is asked about, both survive verbatim', async () => {
+test('31.8 supersedes AC5 — BOTH stores confluence: each is asked separately, neither collapses onto the other', async () => {
   const { tmpDir, cleanup } = withTmpDir();
   try {
     const sysConf = {
@@ -971,28 +1010,32 @@ test('AC5 — BOTH stores unofferable: neither is asked about, both survive verb
     const before = readLayoutFile(tmpDir);
     const existing = silence(() => readExistingLayout());
 
-    // ONE answer — sprint management. Both stores are skipped entirely.
-    const { layout, log, questions } = await runWizardCapturingLog([{ mode: 'same' }], existing);
+    const { layout, questions } = await runWizardCapturingLog([
+      ACCEPT_DEFAULT, ACCEPT_DEFAULT, ACCEPT_DEFAULT,
+      ACCEPT_DEFAULT, ACCEPT_DEFAULT, ACCEPT_DEFAULT,
+      ACCEPT_DEFAULT,
+    ], existing);
 
-    assert.strictEqual(questions.length, 1,
-      `only FR112's sprint question may be asked; got: ${questions.map((q) => q.message).join(' | ')}`);
-    assert.strictEqual(questions[0].message, 'Where is your sprint management managed?');
-    assert.strictEqual(questions.filter((q) => q.name === 'backend').length, 0,
-      'neither store may be asked for a backend when both are confluence-backed');
+    assert.deepStrictEqual(questions.map((q) => q.name),
+      ['backend', 'spaceKey', 'rootPageTitle', 'backend', 'spaceKey', 'rootPageTitle', 'mode'],
+      'two confluence stores get two independent flows');
 
-    // The notice must fire TWICE and identify BOTH stores by their own space key.
-    // A guard that fired once and carried the FIRST record into both would say
-    // "SYS" twice, and `layout.softwareRequirementsStore` would be the system
-    // store's record — the collapse this epic keeps re-finding.
-    assert.ok(/SYS/.test(log) && /SWE/.test(log),
-      `both skipped stores must be named in the notice:\n${log}`);
-    assert.strictEqual((log.match(/UNCHANGED/g) || []).length, 2,
-      `each skipped store gets its own notice:\n${log}`);
+    // THE COLLAPSE CHECK, moved onto the pre-population. A flow that read the
+    // FIRST store's committed record for both concerns would pre-fill "SYS"
+    // twice, and pressing Enter would repoint the software store to the system
+    // store's space — silently, with the right number of questions asked.
+    const spaceQuestions = questions.filter((q) => q.name === 'spaceKey');
+    assert.deepStrictEqual(spaceQuestions.map((q) => q.initial), ['SYS', 'SWE'],
+      'each store\'s space question must be pre-filled from its OWN committed record');
+    assert.deepStrictEqual(
+      questions.filter((q) => q.name === 'rootPageTitle').map((q) => q.initial),
+      ['System Requirements', 'Architecture'],
+      'and so must each root-page question');
 
     assert.deepStrictEqual(layout.systemRequirementsStore, sysConf);
     assert.deepStrictEqual(layout.softwareRequirementsStore, sweConf);
     assert.notDeepStrictEqual(layout.systemRequirementsStore, layout.softwareRequirementsStore,
-      'the two preserved records must not have been collapsed onto one');
+      'the two records must not have been collapsed onto one');
 
     silence(() => writeProjectLayoutYaml(layout));
     assert.strictEqual(withoutGeneratedLine(readLayoutFile(tmpDir)), withoutGeneratedLine(before),
