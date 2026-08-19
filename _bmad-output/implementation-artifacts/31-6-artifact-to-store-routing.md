@@ -168,7 +168,8 @@ Recorded so a reviewer sees a decision rather than an omission. Neither entry is
   `{output_folder}/planning-artifacts/...`. They are not FR119 workflows (they neither create,
   edit nor validate those artifacts), and Story 31.4's OQ-3 answer **pins sqa-audit by name** as an
   `{output_folder}`-only consumer that must resolve no binding-derived field
-  (`test/project-layout-staleness-guard.test.js:1744`). Making them store-aware would move all
+  (`test/project-layout-staleness-guard.test.js:1745`, which names the file at `:1750`). Making
+  them store-aware would move all
   three into the guarded set, requiring the preflight block to be added byte-identically to three
   more entry documents and their plugin mirrors, and would break that pin. **Deferred and
   reported**, not silently skipped: in a two-store project these three audit skills look for the
