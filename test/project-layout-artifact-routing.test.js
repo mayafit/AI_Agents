@@ -107,25 +107,40 @@ const DESTINATIONS = Object.freeze([SYSTEM, SOFTWARE, SPRINT]);
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
+ * ONE numbered section of the shipped table document, delimited by its heading
+ * and the next `## `. Sections are read individually rather than the file being
+ * grepped as a whole: a claim about what Section 4 records must be false when
+ * Section 4 is deleted, even though the words survive elsewhere in the file.
+ * Throws on an absent or empty section rather than returning ''.
+ */
+function tableSection(headingPrefix) {
+  const abs = path.join(PROJECT_ROOT, TABLE_REL);
+  if (!fs.existsSync(abs)) {
+    throw new Error(`the routing table AC6 requires does not exist at ${TABLE_REL}`);
+  }
+  const body = fs.readFileSync(abs, 'utf-8');
+  const start = body.indexOf(`\n${headingPrefix}`);
+  if (start === -1) {
+    throw new Error(`${TABLE_REL} has no section starting "${headingPrefix}" — this suite binds ` +
+      `to that heading, and a renamed or deleted section must fail rather than be skipped`);
+  }
+  const rest = body.slice(start + 1);
+  const end = rest.indexOf('\n## ', 1);
+  const section = end === -1 ? rest : rest.slice(0, end);
+  if (section.trim().split(/\r?\n/).length < 2) {
+    throw new Error(`section "${headingPrefix}" of ${TABLE_REL} is empty`);
+  }
+  return section;
+}
+
+/**
  * Pull Section 3's table out of the shipped markdown. Throws rather than
  * returning empty: a suite that quietly finds zero rows and then reports every
  * "for each row" test as green is the failure mode this epic has already shipped
  * once, in a suite that exited 0 having asserted nothing.
  */
 function parseRoutingTable() {
-  const abs = path.join(PROJECT_ROOT, TABLE_REL);
-  if (!fs.existsSync(abs)) {
-    throw new Error(`the routing table AC6 requires does not exist at ${TABLE_REL}`);
-  }
-  const body = fs.readFileSync(abs, 'utf-8');
-  const HEADING = '## 3. THE ROUTING TABLE';
-  const start = body.indexOf(HEADING);
-  if (start === -1) {
-    throw new Error(`${TABLE_REL} no longer contains the "${HEADING}" heading this suite binds to`);
-  }
-  const rest = body.slice(start);
-  const end = rest.indexOf('\n## ', 1);
-  const section = end === -1 ? rest : rest.slice(0, end);
+  const section = tableSection('## 3. THE ROUTING TABLE');
 
   const rows = [];
   for (const rawLine of section.split(/\r?\n/)) {
@@ -442,15 +457,33 @@ test('AC4/OQ-5 all three research reports are routed, and to the SOFTWARE store'
 });
 
 test('AC4/OQ-5 the decision is RECORDED with its rationale, not just applied', () => {
-  const body = fs.readFileSync(path.join(PROJECT_ROOT, TABLE_REL), 'utf-8');
-  assert.ok(/OQ-5/.test(body), 'the table never names the open question it settles');
-  assert.ok(/2026-08-12/.test(body), 'the decision date is not recorded');
-  assert.ok(/NFR82/.test(body),
-    'the recorded rationale rests on NFR82 (legacy fields already resolve to the software ' +
-    'store, so no project\'s research paths move); without it the entry is a bare assertion');
-  assert.ok(/[Rr]ejected/.test(body),
-    'AC4 wants the choice recorded as a story-level decision — the rejected alternatives are ' +
-    'part of that record');
+  // MUTATION FINDING (survivors M24b/M24c). This test originally grepped the
+  // WHOLE file. Deleting the entire OQ-5 decision record survived, because
+  // "OQ-5", "2026-08-12" and "NFR82" all still occurred elsewhere — in the
+  // table's own Rule-source cells and in the directory-derivation section. That
+  // is proof of presence rather than proof of the record, the exact shape this
+  // epic keeps producing. The record is now located and read on its own.
+  const section = tableSection('## 4.');
+  assert.ok(/OQ-5/.test(section), 'the decision section never names the open question it settles');
+  assert.ok(/2026-08-12/.test(section), 'the decision date is not recorded in the decision itself');
+  assert.ok(/\bDecision\b/.test(section) && /software requirements\s*\n?store|SOFTWARE requirements/i.test(section),
+    'the section does not state the decision it is the record of');
+  // MUTATION FINDING (survivor M24c). A whole-section `NFR82` check also
+  // survived deleting the rationale, because the REJECTED-alternative bullet
+  // mentions NFR82 too ("would need an explicit NFR82 exemption"). So the
+  // rationale is located as its own bullet and read there.
+  const rationale = section.split(/\n(?=- \*\*)/).find((b) => /^- \*\*Rationale/.test(b.trim()));
+  assert.ok(rationale,
+    'the decision section records no **Rationale** — AC4 asks for the choice to be recorded as a ' +
+    'story-level decision, and a decision with no stated reason is a bare assertion');
+  assert.ok(/NFR82/.test(rationale),
+    `the recorded rationale must rest on NFR82 (FR264's legacy fields already resolve to the ` +
+    `software store, so no project's research paths move); it says instead:\n${rationale.trim()}`);
+  const rejected = (section.match(/\*\*Rejected/g) || []).length;
+  assert.ok(rejected >= 2,
+    `AC4 wants the choice recorded as a story-level DECISION; a decision record names what was ` +
+    `rejected and why. Found ${rejected} rejected alternatives in the section (expected the two ` +
+    `on record: the system store, and a split by research type).`);
 });
 
 test('the PRD assigns FR255 to the system store and FR256 to the software store', () => {
