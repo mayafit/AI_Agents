@@ -728,14 +728,16 @@ test('AC2 — the notice does NOT print on a two-store, unbound, or faulted proj
 test('AC2 — the notice is non-blocking: it never throws, never exits, and writes nothing under _bmad-output/', () => {
   const { tmpDir, cleanup } = withTmpDir();
   try {
-    const before = sha256Tree(path.dirname(layoutPathOf(tmpDir)) === tmpDir
-      ? tmpDir : (writeLegacyLayout(tmpDir), path.join(tmpDir, '_bmad-output')));
+    writeLegacyLayout(tmpDir, { mode: 'local', kbPath: '../kb' });
     const outDir = path.join(tmpDir, '_bmad-output');
     const beforeOut = sha256Tree(outDir);
-    assert.doesNotThrow(() => captureLog(() => showLegacySingleStoreNoticeOnce(tmpDir)));
+    let printed;
+    assert.doesNotThrow(
+      () => { printed = captureLog(() => showLegacySingleStoreNoticeOnce(tmpDir)); },
+      'the notice must never throw at its caller — it cannot be allowed to abort an install');
+    assert.ok(printed.length > 0, 'the fixture must be one the notice actually speaks about');
     assert.strictEqual(sha256Tree(outDir), beforeOut,
       '_bmad-output/ must be byte-identical after the notice — it is informational, not a migration');
-    assert.ok(typeof before === 'string');
   } finally { cleanup(); }
 });
 
