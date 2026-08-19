@@ -37,7 +37,7 @@ const fs = require('fs');
 const yaml = require('js-yaml');
 const { execFileSync } = require('child_process');
 const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout, migrateRetiredSkills, reconcileAgentsSharedSkills } = require('../lib/installer');
-const { getProfile, setProfile, resolveProfile, getBmadModules, setBmadModules, showDemerzelDeprecationNoticeOnce, getCustomMarketplaceSelection } = require('../lib/profile');
+const { getProfile, setProfile, resolveProfile, getBmadModules, setBmadModules, showDemerzelDeprecationNoticeOnce, getCustomMarketplaceSelection, hasShownNotice, markNoticeShown } = require('../lib/profile');
 const { reconfigure: runReconfigure, ReconfigureYesRejectedError, ManifestNotFoundError, RoomodesSlugDivergenceError } = require('../lib/reconfigure');
 const { uninstallProfileArtifacts } = require('../lib/uninstall');
 const bmad = require('../lib/bmad');
@@ -1893,14 +1893,40 @@ function resolveProjectTopology(projectRoot) {
   }
 
   try {
-    if (schemaVersion >= PROJECT_LAYOUT_SCHEMA_VERSION && raw.system_requirements_store) {
+    // THE DECLARED VERSION DECIDES WHICH SHAPE IS EXPECTED — always, with no
+    // fallback. This condition used to also require `raw.system_requirements_store`
+    // to be present, which meant a file DECLARING `schema_version: 2` while
+    // carrying only a v1 `knowledgebase:` record fell through to the legacy branch
+    // below and was reported as `schemaVersion: 1` — the declared version silently
+    // ignored, the only place in this resolver where that happened. Story 31.7's
+    // preservation branch in `writeProjectLayoutYaml` then made that permanent:
+    // before it, the next install overwrote the incoherent file with a real v2 one
+    // and the problem self-healed; after it, "nothing moved" is true (both stores
+    // derive from the one legacy record) so nothing is ever written again, and the
+    // legacy notice tells the user their file "predates the two-store layout"
+    // about a file that declares schema 2. Frozen, and told something false.
+    //
+    // ma-agents cannot produce this shape: the writer emits `schema_version:` and
+    // both store records together. It is reachable only by hand-editing or a bad
+    // merge, so it is MALFORMED, and the posture for a malformed authoritative
+    // file in this epic is to fail loud and touch nothing (P5-9.3): a v3 file is
+    // `too-new` and refused, a v2 file missing one store record is `invalid`.
+    // Reading a declared-v2 file as v1 was the sole exception. It now classifies
+    // `invalid` like its siblings, which also restores a way OUT — the
+    // non-destruction guard prints the message below and names the recovery — and
+    // makes the detector's justifying comment true rather than false. Nothing is
+    // migrated and nothing is rewritten; this is a refusal, not a repair.
+    if (schemaVersion >= PROJECT_LAYOUT_SCHEMA_VERSION) {
       const systemStore = storeFromRaw(raw.system_requirements_store, projectRoot);
       const softwareStore = storeFromRaw(raw.software_requirements_store, projectRoot);
       if (!systemStore || !softwareStore) {
         return fail(BINDING_INVALID,
           `_bmad-output/project-layout.yaml declares schema_version ${schemaVersion} but is ` +
           `missing a required store record (system_requirements_store / ` +
-          `software_requirements_store).`);
+          `software_requirements_store). A file that declares schema ` +
+          `${PROJECT_LAYOUT_SCHEMA_VERSION} while carrying only a pre-F26 knowledgebase record ` +
+          `is malformed, not legacy - a genuine pre-F26 file declares no schema_version at all. ` +
+          `Fix it by hand, or delete it and re-run the installer to write a fresh binding.`);
       }
       return {
         ok: true,
@@ -1914,8 +1940,11 @@ function resolveProjectTopology(projectRoot) {
       };
     }
 
-    // Legacy (FR122/Story 16.2 shape, or a schema_version < 2 file): a single
-    // `knowledgebase:` record read as both stores pointing at that location.
+    // Legacy (FR122/Story 16.2 shape, or a file declaring a schema_version below
+    // the current one): a single `knowledgebase:` record read as both stores
+    // pointing at that location. Only reachable now when the DECLARED version is
+    // below the current one — a declared-current file is adjudicated above,
+    // whatever records it happens to carry.
     const legacyStore = storeFromRaw(raw.knowledgebase, projectRoot);
     if (!legacyStore) {
       return fail(BINDING_INVALID,
@@ -1939,6 +1968,193 @@ function resolveProjectTopology(projectRoot) {
     // here so that this function's never-throws contract holds for every caller.
     return fail(BINDING_INVALID, e.message);
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STORY 31.7 (FR265, NFR82) — LEGACY SINGLE-STORE COMPATIBILITY, AND A
+// MIGRATION THAT IS OFFERED AND NEVER PERFORMED.
+//
+// ── HOW LEGACY IS DETECTED, AND WHY NOT BY FIELD NAMES ────────────────────
+// The story's own technical note is explicit: detect legacy by the ABSENCE of
+// Story 31.2's `schema_version` field, not by heuristics over which field names
+// happen to be present. That is what this function does, and it does it by
+// asking `resolveProjectTopology` rather than re-reading the file: the resolver
+// already derives `topology.schemaVersion` from exactly one thing — a present,
+// numeric `schema_version:` line, defaulting to 1 when absent or empty — and it
+// is the ONLY place that derivation exists. A second reader here would be a
+// second definition of "what schema is this file", i.e. the read/write enum
+// disagreement this epic has already fixed three times, one layer up.
+//
+// A heuristic over field names would ALSO be wrong on its own terms, not merely
+// duplicative. `knowledgebase:` present is not sufficient (a hand-edited v2 file
+// may carry a stale one), and `system_requirements_store:` absent is not
+// sufficient either: a file that DECLARES the current schema but is missing a
+// store record is `invalid` — a fault, not a legacy layout — whether what it
+// carries instead is a stale `knowledgebase:` record or nothing at all.
+//
+// That second claim is now true of EVERY declared-current file. It was NOT true
+// when this comment was first written: the shape `schema_version: 2` + a
+// `knowledgebase:` record and no `system_requirements_store:` fell through to the
+// resolver's legacy branch and came back `ok:true, schemaVersion: 1` — i.e. as
+// precisely the "legacy layout" this paragraph asserted it could not be, which
+// then earned it a notice saying its file "predates the two-store layout" about a
+// file declaring schema 2. The resolver was corrected (see the block above the
+// declared-version gate in `resolveProjectTopology`); the shape is pinned in
+// test/project-layout-legacy-single-store.test.js.
+//
+// ── WHY THIS CANNOT CONTRADICT STORY 31.4'S DISCRIMINATOR ─────────────────
+// Story 31.4's skill preflight decides "is this genuinely a pre-F26 project?"
+// in its Step P2 — the branch it reaches ONLY when `_bmad-output/
+// project-layout.yaml` is ABSENT (or blank/comments-only). There it corroborates
+// the absent `project_layout_stamp` against `system_requirements_path` /
+// `software_requirements_path` in `config.yaml`, because a config carrying those
+// is demonstrably NOT pre-F26 and must HALT.
+//
+// This function is disjoint from that branch BY CONSTRUCTION: it returns
+// `legacy: false` for every `ok:false` result, so it can only ever fire where a
+// `project-layout.yaml` EXISTS AND RESOLVES — which is precisely the input on
+// which 31.4 takes Step P1 → Step P3 and never reaches Step P2 at all. The two
+// therefore cannot disagree about the same project: for any project one of them
+// classifies, the other is in a different branch. Pinned in
+// test/project-layout-legacy-single-store.test.js ("agreement with Story 31.4").
+//
+// It also never reads a stamp, and never reads `config.yaml` at all. An absent
+// stamp is 31.4's evidence, and reusing it here would couple the informational
+// notice to the blocking guard's evidence — the coupling the story's second
+// technical note forbids.
+//
+// ── THE RESULT IS DISCRIMINATED, for the same reason 31.2's and 31.3's are ──
+//     { legacy: true,  topology }
+//     { legacy: false, reason: 'two-store', topology }
+//     { legacy: false, reason: 'unbound'|'unreadable'|'invalid'|'too-new', message }
+// A bare boolean would collapse "this project is fine, it is already split" into
+// "this project's binding is corrupt", and the caller would print an
+// informational notice for both — or, worse, for neither.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// AC1's second clause — "already on the two-store layout" — is a NON-legacy
+// outcome with its own name, so a caller cannot confuse it with a fault.
+const LEGACY_TWO_STORE = 'two-store';
+
+function detectLegacySingleStore(projectRoot) {
+  const binding = resolveProjectTopology(projectRoot);
+  if (!binding.ok) {
+    // Every fault, and `unbound`, are NOT legacy. `unbound` especially: a project
+    // with no committed binding is Story 31.4's Step P2 input and is decided
+    // there, against `config.yaml`'s per-store fields. Claiming it here would be
+    // this story contradicting that discriminator — the exact failure the
+    // technical notes warn about.
+    return { legacy: false, reason: binding.reason, message: binding.message };
+  }
+  if (binding.topology.schemaVersion >= PROJECT_LAYOUT_SCHEMA_VERSION) {
+    return { legacy: false, reason: LEGACY_TWO_STORE, topology: binding.topology };
+  }
+  return { legacy: true, topology: binding.topology };
+}
+
+// ── THE NOTICE (AC2) ───────────────────────────────────────────────────────
+//
+// AC2 fixes the content at exactly three facts, one per constant below:
+//   (i)   this project is on the legacy single-store layout;
+//   (ii)  what that means — both stores resolve to the one location, and
+//         nothing has been changed or moved;
+//   (iii) the EXACT command that splits it, and that nothing happens unless the
+//         user runs it.
+//
+// ── CHANNEL SEPARATION FROM STORY 31.4'S DRIFT ERROR ──────────────────────
+// The story's second technical note makes this a requirement, not a nicety:
+// legacy is informational and non-blocking, drift is loud and blocking, and if
+// they share a channel the user learns to ignore both. Four things keep them
+// apart, and each is pinned by a test:
+//
+//   1. DIFFERENT SURFACE. 31.4's guard lives in the 41 byte-identical preflight
+//      blocks embedded in the skill entry documents and speaks at SKILL
+//      ACTIVATION. This notice is printed by the ma-agents CLI during `install`
+//      and nowhere else. No skill document mentions the legacy layout at all —
+//      a legacy project produces ZERO extra output on skill activation, which is
+//      also how AC5 is satisfied for "activations".
+//   2. DIFFERENT COLOUR. 31.4 halts in the red/`stopping` register. This is
+//      chalk.cyan + chalk.gray — the same informational register Story 30.4's
+//      one-time notice uses, and deliberately NOT chalk.yellow (this codebase's
+//      warning colour) either.
+//   3. DIFFERENT VOCABULARY. The halt blocks open "ma-agents — stopping:" and
+//      close "Nothing has been read or written on your behalf." Those phrases
+//      are ABSENT here, and the test asserts their absence rather than merely
+//      asserting this text is present.
+//   4. DIFFERENT CONSEQUENCE. 31.4 refuses to proceed. This returns a boolean
+//      and the install continues; it cannot halt anything, because it is a
+//      `console.log` and a manifest write and has no other effect.
+//
+// The command is its own constant so a test can bind AC2's "the exact command"
+// claim to the shipped string rather than to a copy of it, and so a mutant that
+// changes the command cannot survive by matching a looser regex.
+const LEGACY_SINGLE_STORE_SPLIT_COMMAND = 'ma-agents config layout';
+
+const LEGACY_SINGLE_STORE_NOTICE_FACT_1 =
+  '  Note: this project uses the legacy single-store knowledge layout.';
+
+const LEGACY_SINGLE_STORE_NOTICE_FACT_2 =
+  '  What that means: _bmad-output/project-layout.yaml predates the two-store layout, so the\n' +
+  '  system requirements store (product brief, PRD) and the software requirements store\n' +
+  '  (architecture, UX designs, epics) both resolve to the SAME one location:';
+
+const LEGACY_SINGLE_STORE_NOTICE_FACT_3 =
+  `  Nothing has been changed or moved and every artifact path is exactly where it was. To\n` +
+  `  split the two stores so they can live in different places, run \`${LEGACY_SINGLE_STORE_SPLIT_COMMAND}\`.\n` +
+  `  Nothing is migrated unless you run it. This message is shown once.`;
+
+const LEGACY_SINGLE_STORE_NOTICE_ID = 'legacy-single-store';
+
+/**
+ * AC2 + AC5 — print the legacy notice AT MOST ONCE, EVER, for this project.
+ *
+ * Idempotence uses Story 30.4's generic one-time-notice tracking verbatim
+ * (`lib/profile.js#hasShownNotice` / `#markNoticeShown`, persisted under
+ * `notices` in the project-root `.ma-agents.json`), rather than a second
+ * mechanism that would have to be kept honest separately. AC5 names that pattern
+ * explicitly.
+ *
+ * NON-BLOCKING BY CONSTRUCTION (AC2): this function prompts nothing, throws
+ * nothing at its caller, exits nothing, and writes nothing under `_bmad-output/`.
+ * It touches exactly one file, `.ma-agents.json`, and only to record that it has
+ * spoken. A failure to record that is deliberately swallowed: an unwritable
+ * manifest must not abort an install over an informational message. The cost of
+ * swallowing is that the notice may print again next time — the safe direction,
+ * and the only direction available, since the alternative is failing an install.
+ *
+ * MIGRATION IS OFFERED, NEVER PERFORMED (AC3): this is the entire offer. It
+ * names `ma-agents config layout` — which since Story 31.5 asks the two
+ * independent store questions and writes through Story 31.2's
+ * `writeProjectLayoutYaml` — and does not itself call, schedule or arm anything.
+ * Accepting the offer means the user runs that command; declining means they do
+ * not, and a project on which they do not run it is left byte-identical (AC4),
+ * which `writeProjectLayoutYaml`'s legacy-preservation branch is what actually
+ * guarantees.
+ *
+ * @param {string} projectRoot
+ * @returns {boolean} true if the notice printed on this call; false if the
+ *   project is not legacy, or the notice had already been shown.
+ */
+function showLegacySingleStoreNoticeOnce(projectRoot) {
+  const detection = detectLegacySingleStore(projectRoot);
+  if (!detection.legacy) return false;
+  if (hasShownNotice(projectRoot, LEGACY_SINGLE_STORE_NOTICE_ID)) return false;
+
+  console.log(chalk.cyan(`\n${LEGACY_SINGLE_STORE_NOTICE_FACT_1}`));
+  console.log(chalk.gray(LEGACY_SINGLE_STORE_NOTICE_FACT_2));
+  console.log(chalk.gray(
+    `    ${summarizeStoreIdentity(detection.topology.softwareRequirementsStore)}`));
+  console.log(chalk.gray(`${LEGACY_SINGLE_STORE_NOTICE_FACT_3}\n`));
+
+  try {
+    markNoticeShown(projectRoot, LEGACY_SINGLE_STORE_NOTICE_ID);
+  } catch (e) {
+    // See the NON-BLOCKING note above. Said out loud rather than silently
+    // dropped, so a user who sees the notice twice knows why.
+    console.log(chalk.gray(
+      `  (could not record that this notice was shown: ${e.message} — it may appear again)`));
+  }
+  return true;
 }
 
 // Enumerate exactly {mode, path, gitUrl} — see the NFR79 note at the top of
@@ -2175,6 +2391,97 @@ function writeProjectLayoutYaml(layout) {
       `  To change it, edit the system_requirements_store record in\n` +
       `  _bmad-output/project-layout.yaml.`
     ));
+  }
+
+  // ── STORY 31.7 AC3/AC4 — LEGACY PRESERVATION. NOTHING MOVED ⇒ NOTHING WRITTEN.
+  //
+  // THIS IS A FIX TO A STORY 31.2 IMPLEMENTATION DEFECT, NOT A RESOLUTION OF ANY
+  // REQUIREMENTS CONFLICT. Stated precisely, because an in-source rationale that
+  // mis-states a merged story's AC is exactly what 31.2's R-6 guard exists to
+  // prevent.
+  //
+  // STORY 31.2 AC5 ALREADY FORBADE THIS REWRITE, in its own words: a pre-F26
+  // `project-layout.yaml` is read as both stores pointing at that one location
+  // "with no error AND NO REWRITE". 31.2 AC2 and 31.2 AC5 do not collide and
+  // never did — AC2 removes the "both concerns are same-repo ⇒ do not write"
+  // CONDITIONAL SCOPE branch; AC5 carves out the LEGACY case. They are
+  // complementary halves of one story, written together.
+  //
+  // What shipped was AC5's read half only. `resolveProjectTopology` classifies a
+  // legacy file correctly, but "no rewrite" was never implemented at all: this
+  // function emits `schema_version: PROJECT_LAYOUT_SCHEMA_VERSION`
+  // unconditionally, and AC2 makes it run on EVERY install and bind — so the
+  // first `ma-agents install` over a pre-F26 project silently converted its
+  // single `knowledgebase:` record into `system_requirements_store:` +
+  // `software_requirements_store:`, with no question asked and no way back. Two
+  // of 31.2's OWN round-trip tests pinned that behaviour as correct (one asserted
+  // `schema_version: 2` after a write that moved nothing, with the message "the
+  // write upgrades the schema"), which is how a green suite carried the defect
+  // through an initial review and three fix rounds. Both were amended by this
+  // story — see `test/project-layout-two-store-round-trip.test.js`.
+  //
+  // Filed, with the account of why those review rounds missed it, in
+  // `_bmad-output/implementation-artifacts/bug-31-2-ac5-no-rewrite-half-was-never-implemented.md`.
+  //
+  // 31.7's own ACs are satisfied by the same branch and independently require it:
+  // AC3 forbids any install, bind or skill activation rewriting a legacy layout
+  // into two stores without an explicit user choice; AC4 requires that declining
+  // the split leaves the project BYTE-IDENTICAL; and AC5 requires the notice not
+  // to nag across "repeated installs on an un-split legacy project", which
+  // presupposes a project can STILL BE legacy after an install. Under the shipped
+  // behaviour it never could be — the first install always split it — so AC5 was
+  // unsatisfiable and AC4's byte-identity was false on the very first run.
+  //
+  // The rule is deliberately narrow: it applies ONLY to a file that is already
+  // legacy, and only when NOTHING WOULD MOVE. A schema v2 file is untouched by
+  // this branch and keeps today's behaviour, including its refreshed `generated:`
+  // date — so no Story 31.2/31.3/31.5 behaviour changes.
+  //
+  // WHAT "NOTHING WOULD MOVE" MEANS, and why it is not a hand-rolled comparison:
+  // `canonicalBindingBytes` is Story 31.3's existing canonicalisation of exactly
+  // the three location records, through the SAME serializers that write this
+  // file. It already excludes `schema_version`, the `generated:` date, comments,
+  // key order and line endings — the full list is in the stamp contract above,
+  // and the `schema_version` exclusion is documented there as being for this very
+  // case. Reusing it means "nothing moved" here is the same question, answered by
+  // the same code, as "no drift" in Story 31.4. A private field-by-field compare
+  // would be a second definition of store identity, free to disagree.
+  //
+  // Consequence, and it is the intended one: a legacy project that answers the
+  // wizard with the SAME location for both stores is also left byte-identical,
+  // because those answers canonicalise to the existing bytes. A user only leaves
+  // the legacy layout by actually splitting the stores — which is what "migration
+  // is offered, never performed" means in practice.
+  if (existingTopology && existingTopology.schemaVersion < PROJECT_LAYOUT_SCHEMA_VERSION) {
+    let unchanged = false;
+    try {
+      const candidate = {
+        systemRequirementsStore: systemStore,
+        softwareRequirementsStore: softwareStore,
+        sprintManagement,
+      };
+      unchanged = canonicalBindingBytes(candidate, projectRoot)
+        === canonicalBindingBytes(existingTopology, projectRoot);
+    } catch {
+      // A value one of the serializers refuses to write. NOT treated as
+      // "unchanged" — that would silently swallow a real error and skip a write
+      // the caller asked for. Fall through, so the same throw reaches the caller
+      // from the real write below and is reported there, exactly as it is today.
+      unchanged = false;
+    }
+    if (unchanged) {
+      // Deliberately ONE terse line, and deliberately NOT a second copy of the
+      // offer. This line prints on every install, in place of the
+      // `Wrote _bmad-output/project-layout.yaml` line it substitutes for, so it
+      // must stay a statement of what happened to the file. Repeating "run
+      // `ma-agents config layout`" here would be the nagging AC5 forbids — the
+      // offer is made once, by showLegacySingleStoreNoticeOnce, and that is the
+      // only place it lives.
+      console.log(chalk.gray(
+        `  _bmad-output/project-layout.yaml left unchanged (legacy single-store layout, nothing moved)`
+      ));
+      return;
+    }
   }
 
   const date = new Date().toISOString().slice(0, 10);
@@ -3803,6 +4110,22 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     // usable config. When the binding exists it wins outright — see
     // generateBmmConfig.
     generateBmmConfig({ projectRoot: process.cwd(), fallbackLayout: repoLayout });
+
+    // Story 31.7 (FR265) AC2/AC5 — tell the user, ONCE and non-blockingly, that
+    // this project is on the legacy single-store layout and name the command
+    // that splits it. No-op on a two-store project, on an unbound one, on a
+    // binding this build refuses to read, and on every run after the first.
+    //
+    // AFTER the two writes above, deliberately: the notice describes the state
+    // the install LEAVES the project in, and under the legacy-preservation branch
+    // in `writeProjectLayoutYaml` that state is still legacy. Printing before
+    // would risk describing a layout the install was about to change.
+    //
+    // Inside the `installScope === 'project'` gate for the same FR251 reason the
+    // Demerzel notice is (Story 31.11 AC3): the shown-once flag is per-project
+    // state in the project-root `.ma-agents.json`, and a global install has no
+    // project to stamp it into.
+    showLegacySingleStoreNoticeOnce(process.cwd());
   }
 
   // Step 4: Confirm
@@ -4415,6 +4738,14 @@ module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, recon
   // Story 31.12 (FR250) — exported so the tone/content test binds to the SHIPPED
   // strings rather than to copies of them, which could drift apart silently.
   GLOBAL_BMAD_SCOPE_NOTICE_FACT_1, GLOBAL_BMAD_SCOPE_NOTICE_FACT_2, GLOBAL_BMAD_SCOPE_NOTICE_FACT_3,
+  // Story 31.7 (FR265) — legacy detection, and the notice bound to its SHIPPED
+  // strings for the same reason as the 31.12 constants above. The split command
+  // is its own export so AC2's "the exact command" claim is checkable against
+  // one string rather than against a regex over prose.
+  detectLegacySingleStore, showLegacySingleStoreNoticeOnce,
+  LEGACY_SINGLE_STORE_NOTICE_ID, LEGACY_SINGLE_STORE_SPLIT_COMMAND, LEGACY_TWO_STORE,
+  LEGACY_SINGLE_STORE_NOTICE_FACT_1, LEGACY_SINGLE_STORE_NOTICE_FACT_2,
+  LEGACY_SINGLE_STORE_NOTICE_FACT_3,
   // COPIES, not the live Sets. These are the single source of truth for what a
   // store's `mode`/`backend` may be, consumed by the reader, the writer and the
   // wizard alike; handing out the real objects would let any consumer `.add()`
