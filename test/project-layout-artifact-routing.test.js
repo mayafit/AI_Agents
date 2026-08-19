@@ -41,7 +41,7 @@ const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 
-const EXPECTED_TEST_COUNT = 54;
+const EXPECTED_TEST_COUNT = 56;
 
 let passed = 0;
 let failed = 0;
@@ -287,6 +287,29 @@ const DESTINATION_ORACLES = Object.freeze([
     earnedBy: /\{sprint_management_path\}/,
     forbids: /\*\*(?:system|software) requirements store\*\*/i,
   },
+]);
+
+/**
+ * Where each requirement ENUMERATES its artifact types, so the enumeration can
+ * be walked item by item.
+ *
+ * FIX-ROUND, NB-7. Every coverage check asks "does the table have a row for each
+ * TERM this requirement names?" — which is silent about an artifact type the PRD
+ * GROWS that `TERMS` has never heard of. Adding "threat models" to FR256 left
+ * the suite green with no routing row for it, and FR119's `named.length >= 5`
+ * floor catches that list COLLAPSING, not growing. So the enumerations are now
+ * walked item by item and an entry no term recognises fails loudly.
+ *
+ * FR120 is deliberately absent: its parenthetical enumerates WORKFLOWS ("sprint
+ * planning", "story creation"), not artifact types, so item-by-item recognition
+ * is not meaningful there. The artifact it does name (`sprint-status.yaml`) is
+ * matched by the ordinary term scan.
+ */
+const ENUMERATED_REQUIREMENTS = Object.freeze([
+  { id: 'FR119', enumeration: /planning artifacts \(([^)]+)\)/ },
+  { id: 'FR255', enumeration: /:\s([^:]+)$/ },
+  { id: 'FR256', enumeration: /:\s([^:]+)$/ },
+  { id: 'FR267', enumeration: /FR267:\s(.+?)\sbelong to/ },
 ]);
 
 /** The OQ-5 decision, READ OUT OF the decision record rather than restated. */
@@ -944,6 +967,50 @@ test('AC1/AC2/AC3 EVERY row, checked against the artifact it names — group-ind
       'a row belongs to no destination group, so the three group tests skip it entirely');
     for (const r of ROWS) assertRowRoutes(cfg, r, requiredDestinationOf(r).dest);
   });
+});
+
+test('BLOCKING-1 requiredDestinationOf reads the ARTIFACT, never the row\'s own store cell', () => {
+  // The one mutation the rest of this section cannot catch: turning
+  // `requiredDestinationOf` back into `return r.store` restores the tautology
+  // and every check above goes green again, because they all consult it. So it
+  // is probed directly, with a row whose store cell is deliberately WRONG.
+  const probes = [
+    { row: { num: 0, artifact: 'Architecture document', store: SPRINT, source: 'probe' }, want: SOFTWARE },
+    { row: { num: 0, artifact: 'Product brief', store: SOFTWARE, source: 'probe' }, want: SYSTEM },
+    { row: { num: 0, artifact: 'Story files', store: SYSTEM, source: 'probe' }, want: SPRINT },
+  ];
+  for (const p of probes) {
+    assert.strictEqual(requiredDestinationOf(p.row).dest, p.want,
+      `requiredDestinationOf("${p.row.artifact}") returned ${JSON.stringify(p.row.store)} — the ` +
+      `probe row's own deliberately-wrong store cell. The BLOCKING-1 tautology is back: every ` +
+      `per-row check in this suite is now X === X.`);
+  }
+  // And an artifact nothing recognises must THROW rather than default to
+  // anything, which is what stops a new row from being silently unchecked.
+  assert.throws(() => requiredDestinationOf({ num: 0, artifact: 'Threat model', store: SOFTWARE }),
+    /no artifact this suite has an outside authority for/);
+});
+
+test('NB-7 the artifact-term list is not stale against the requirements it reads', () => {
+  for (const o of ENUMERATED_REQUIREMENTS) {
+    const line = requirementLine(o.id);
+    const m = line.match(o.enumeration);
+    assert.ok(m, `${o.id}'s line no longer carries the artifact enumeration this suite walks ` +
+      `(${o.enumeration}), so nothing checks that TERMS keeps up with it:\n${line}`);
+    const items = m[1]
+      .split(/,|\band\b/i)
+      .map((s) => s.replace(/[()*`{}\][]/g, ' ').trim())
+      .filter((s) => /[a-z]{3}/i.test(s));
+    assert.ok(items.length >= 2,
+      `${o.id}'s enumeration parsed to ${JSON.stringify(items)} — too few to be the artifact list`);
+    const unknown = items.filter((s) => !TERMS.some((t) => t.re.test(s)));
+    assert.deepStrictEqual(unknown, [],
+      `${o.id} enumerates ${JSON.stringify(unknown)}, which this suite's TERMS list does not ` +
+      `recognise. An artifact type the PRD grows that TERMS has never heard of is invisible to ` +
+      `every coverage check here: the routing table could ship with no row for it and this suite ` +
+      `would stay green. Add it to TERMS — with the requirement that assigns it a store and its ` +
+      `project-context.md guidance spelling — and give it a routing row.`);
+  }
 });
 
 test('the per-artifact oracle really is independent of the table it checks', () => {
