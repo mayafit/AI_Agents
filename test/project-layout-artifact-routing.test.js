@@ -41,7 +41,7 @@ const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 
-const EXPECTED_TEST_COUNT = 56;
+const EXPECTED_TEST_COUNT = 59;
 
 let passed = 0;
 let failed = 0;
@@ -664,6 +664,52 @@ test('no artifact is claimed by two different destinations', () => {
     }
     seen.set(key, r.store);
   }
+});
+
+test('AC6 Section 1 names the config field that really carries each destination', () => {
+  // FIX-ROUND (own mutation run). Section 1's table was pinned only against
+  // deletion: pointing the system row's "store path field" cell at
+  // `software_requirements_path` survived, and that cell is the first thing a
+  // reader of the deliverable uses. Each row is now measured against a real
+  // generated config — the named field must actually hold that destination's
+  // location — and each binding record against a real project-layout.yaml.
+  const section = tableSection('## 1. The three destinations');
+  const rows = [];
+  for (const raw of section.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line.startsWith('|')) continue;
+    const cells = line.split('|').slice(1, -1).map((c) => c.trim());
+    if (cells.length !== 3) continue;
+    if (/^-+$/.test(cells[0]) || cells[0] === 'Destination') continue;
+    rows.push({
+      dest: cells[0],
+      record: (cells[1].match(/`([a-z_]+)`/) || [])[1],
+      fields: (cells[2].match(/`([a-z_]+)`/g) || []).map((s) => s.slice(1, -1)),
+    });
+  }
+  assert.strictEqual(rows.length, 3,
+    `Section 1 says there are exactly three destinations; its table has ${rows.length} rows`);
+  const LOCATION_OF = { [SYSTEM]: SYS_LOC, [SOFTWARE]: SW_LOC, [SPRINT]: SP_LOC };
+  const realBinding = schema2Binding('/a', '/b', '/c');
+  divergentFixture((cfg) => {
+    for (const r of rows) {
+      assert.ok(DESTINATIONS.includes(r.dest),
+        `Section 1 lists a destination ${JSON.stringify(r.dest)} that is not one of the three`);
+      assert.ok(r.record && new RegExp(`^${r.record}:`, 'm').test(realBinding),
+        `Section 1 says the ${r.dest} destination is bound by the record \`${r.record}\`, which a ` +
+        `real project-layout.yaml does not carry`);
+      assert.ok(r.fields.length >= 1, `Section 1 names no config field for ${r.dest}`);
+      for (const f of r.fields) {
+        assert.ok(Object.prototype.hasOwnProperty.call(cfg, f),
+          `Section 1 names \`${f}\` as ${r.dest}'s store path field, and generateBmmConfig writes ` +
+          `no such field`);
+        assert.ok(String(cfg[f]).includes(LOCATION_OF[r.dest]),
+          `Section 1 says \`${f}\` carries the ${r.dest} store's path. In a real generated config ` +
+          `with all three destinations in different places it is ${JSON.stringify(cfg[f])}, which ` +
+          `is not that store's location.`);
+      }
+    }
+  });
 });
 
 test('NB-6 every rule-source cell cites something that actually exists', () => {
@@ -1487,15 +1533,103 @@ test('the deferred audit consumers are still `{output_folder}`-only, so the excl
 });
 
 test('the deferred set is recorded in the routing table, not silently dropped', () => {
-  const body = fs.readFileSync(path.join(PROJECT_ROOT, TABLE_REL), 'utf-8');
-  for (const rel of DEFERRED_OUTPUT_FOLDER_CONSUMERS) {
-    const skill = rel.split('/').slice(-2)[0];
-    assert.ok(body.includes(skill),
-      `${skill} is excluded from routing but the table never says so — AC4 wants decisions ` +
-      `recorded, and an undocumented exclusion reads as an oversight`);
-  }
-  assert.ok(/Deliberately NOT routed/i.test(body),
+  // FIX-ROUND (own mutation run). This used to grep the WHOLE file for each
+  // skill name, so deleting `sqa-audit` from Section 6's enumeration survived —
+  // the name still occurs in the prose two lines below ("pins sqa-audit by
+  // name"). Proof of presence again. The ENUMERATION is now read on its own and
+  // required to be exactly the set this suite excludes.
+  const section = tableSection('## 6. Deliberately NOT routed');
+  const bullet = section.split(/\n(?=- \*\*)/)
+    .find((b) => /\{output_folder\}`-only consumers/.test(b));
+  assert.ok(bullet,
+    'Section 6 no longer carries the `{output_folder}`-only consumers bullet that records which ' +
+    'skills this story deliberately left unrouted');
+  const m = bullet.match(/consumers:\s*([^*]+?)\.\*\*/);
+  assert.ok(m, `Section 6's exclusion bullet does not enumerate the skills:\n${bullet.slice(0, 200)}`);
+  const named = (m[1].match(/`([a-z0-9-]+)`/g) || []).map((s) => s.slice(1, -1)).sort();
+  const expected = DEFERRED_OUTPUT_FOLDER_CONSUMERS.map((r) => r.split('/').slice(-2)[0]).sort();
+  assert.deepStrictEqual(named, expected,
+    `Section 6 enumerates ${JSON.stringify(named)} as the deferred `
+    + `\`{output_folder}\`-only consumers, and this suite excludes ${JSON.stringify(expected)} `
+    + `from routing. An exclusion the deliverable does not record reads as an oversight, and one `
+    + `the deliverable records but nothing enforces is worse.`);
+  assert.ok(/Deliberately NOT routed/i.test(sectionHeadings().join('\n')),
     'the table has no section recording what this story deliberately left unrouted');
+});
+
+test('AC6 Section 5.2\'s before/after table matches what the entry documents actually say', () => {
+  // FIX-ROUND (own mutation run). Section 5.2 is the change record a reviewer
+  // reads instead of diffing six files, and nothing checked it: reverting the
+  // "After" cell of the routing-defect row back to the buggy
+  // `{sprint_management_path}/…/epics.md` survived. Each row is now measured
+  // against the document it names.
+  const section = tableSection('## 5. What consumes this table');
+  const rows = [];
+  for (const raw of section.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line.startsWith('|')) continue;
+    const cells = line.split('|').slice(1, -1).map((c) => c.trim());
+    if (cells.length !== 4) continue;
+    if (/^-+$/.test(cells[0]) || cells[0] === 'Entry document') continue;
+    rows.push({ doc: (cells[0].match(/`([^`]+)`/) || [])[1], row: cells[1],
+      before: cells[2], after: cells[3] });
+  }
+  assert.strictEqual(rows.length, EPICS_CONSUMERS.length,
+    `Section 5.2 lists ${rows.length} entry documents; this story routes ${EPICS_CONSUMERS.length}`);
+  const tokensIn = (cell) => (cell.match(/`[^`]+`/g) || [])
+    .map((s) => s.slice(1, -1)).filter((s) => s.includes('{'));
+
+  for (const r of rows) {
+    assert.ok(EPICS_CONSUMERS.includes(r.doc),
+      `Section 5.2 lists ${JSON.stringify(r.doc)}, which is not one of this story's epics ` +
+      `consumers: ${JSON.stringify(EPICS_CONSUMERS)}`);
+    assert.ok(ROWS.some((x) => String(x.num) === r.row),
+      `Section 5.2 says ${r.doc} resolves row ${r.row}, which the routing table does not have`);
+    const body = withoutPreflight(r.doc);
+
+    // The "After" column is a claim about the document as it stands now.
+    const after = tokensIn(r.after);
+    const claimed = after.length ? after : tokensIn(r.before); // "unchanged" rows
+    assert.ok(claimed.length > 0,
+      `Section 5.2's row for ${r.doc} states no resolved path in either column, so it claims ` +
+      `nothing checkable`);
+    for (const tok of claimed) {
+      assert.ok(body.includes(tok),
+        `Section 5.2 says ${r.doc} now resolves \`${tok}\`, and that document does not contain it`);
+    }
+    for (const tok of after) {
+      assert.ok(!/^\{sprint_management_path\}/.test(tok),
+        `Section 5.2's "After" column for ${r.doc} is ${JSON.stringify(tok)} — the very defect ` +
+        `this story fixed. Epics are a software-requirements artifact (FR256); sprint management ` +
+        `is not their store (FR267).`);
+    }
+    // ...and the "Before" column must genuinely be gone.
+    for (const tok of tokensIn(r.before).filter((t) => /^\{sprint_management_path\}/.test(t))) {
+      assert.ok(!body.includes(tok),
+        `Section 5.2 says ${r.doc} no longer resolves \`${tok}\`, and it still does`);
+    }
+  }
+});
+
+test('AC6 Section 7 states AC5\'s two rules as PROHIBITIONS', () => {
+  // FIX-ROUND (own mutation run). Section 7 is where AC5's negative rules are
+  // written down, and inverting rule 2 from "No workflow hardcodes …" to
+  // "Workflows may hardcode …" survived: the section was pinned against
+  // deletion, not against saying the opposite.
+  const section = tableSection('## 7. AC5');
+  const items = section.split(/\n(?=\d+\. )/).filter((s) => /^\d+\. /.test(s.trim()));
+  assert.strictEqual(items.length, 2,
+    `AC5 has exactly two negative rules; Section 7 states ${items.length}`);
+  for (const it of items) {
+    assert.ok(/^\d+\. \*\*No workflow /.test(it.trim()),
+      `each rule in Section 7 is a NEGATIVE rule and must be stated as one ("**No workflow …"). ` +
+      `This one is not, so the section records a permission where AC5 requires a prohibition:\n` +
+      `  ${it.trim().slice(0, 160)}`);
+  }
+  assert.ok(items.some((i) => /project-layout\.yaml/.test(i)),
+    'Section 7 no longer states the rule that no workflow resolves from project-layout.yaml');
+  assert.ok(items.some((i) => /_bmad-output\//.test(i)),
+    'Section 7 no longer states the rule against hardcoding _bmad-output/ as a relative path');
 });
 
 test('the epics-consuming set is complete — no other entry document reads epics.md', () => {
@@ -1720,6 +1854,24 @@ test('BLOCKING-4 no shipped skill document cites a file this repository does not
 test('BLOCKING-4 the guard has real reach — it inspects every shipped skill tree', () => {
   // Without this, the guard above would pass trivially if a root were renamed or
   // the walk returned nothing, and the two would move together.
+  // FIX-ROUND (own mutation run). Asserting each listed root EXISTS does not
+  // stop a root being dropped from the list: removing
+  // `lib/bmad-extension-plugin/skills` left the guard green while the shipped
+  // plugin mirror went unscanned. The list is now DERIVED from the tree and the
+  // constant must match it, so a new shipped skill tree is covered on the day it
+  // appears rather than the day someone remembers.
+  const discovered = [];
+  if (fs.existsSync(path.join(PROJECT_ROOT, 'skills'))) discovered.push('skills');
+  for (const d of fs.readdirSync(path.join(PROJECT_ROOT, 'lib'), { withFileTypes: true })) {
+    if (!d.isDirectory()) continue;
+    if (fs.existsSync(path.join(PROJECT_ROOT, 'lib', d.name, 'skills'))) {
+      discovered.push(`lib/${d.name}/skills`);
+    }
+  }
+  assert.deepStrictEqual([...SHIPPED_SKILL_ROOTS].sort(), discovered.sort(),
+    `the guard scans ${JSON.stringify([...SHIPPED_SKILL_ROOTS])} but this repository ships skill ` +
+    `trees at ${JSON.stringify(discovered)}. A tree missing from the list is a tree nothing ` +
+    `checks.`);
   for (const root of SHIPPED_SKILL_ROOTS) {
     const abs = path.join(PROJECT_ROOT, root);
     assert.ok(fs.existsSync(abs), `${root} does not exist — the guard scans nothing there`);
