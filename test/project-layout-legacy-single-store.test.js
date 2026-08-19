@@ -1108,13 +1108,31 @@ test('AC5 — a THIRD and FOURTH call are also silent: no escalation, no re-armi
 test('AC5 — the shown-once flag is the Story 30.4 mechanism, and does not disturb sibling notices', () => {
   const { tmpDir, cleanup } = withTmpDir();
   try {
+    // THE ID IS ASSERTED AS A LITERAL. Reading it off the exported constant and
+    // then looking THAT up in the manifest is TAUTOLOGICAL — it passes for any
+    // id, including one already in use by another notice. A mutation round
+    // proved exactly that: pointing this notice at Story 30.4's
+    // `demerzel-deprecation` id SURVIVED, and under it a project that had seen
+    // the Demerzel notice would never be told about its legacy layout.
+    assert.strictEqual(LEGACY_SINGLE_STORE_NOTICE_ID, 'legacy-single-store',
+      'this notice must have its OWN id — stated here as a literal contract');
+
     writeLegacyLayout(tmpDir);
     fs.writeFileSync(path.join(tmpDir, '.ma-agents.json'),
       JSON.stringify({ profile: 'default', notices: { 'demerzel-deprecation': true } }, null, 2), 'utf-8');
-    captureLog(() => showLegacySingleStoreNoticeOnce(tmpDir));
+
+    // BEHAVIOURAL half, which kills the shared-id mutant without depending on
+    // what the id is: a project that has already seen a DIFFERENT notice must
+    // still be told about its legacy layout.
+    let printed;
+    const out = captureLog(() => { printed = showLegacySingleStoreNoticeOnce(tmpDir); });
+    assert.strictEqual(printed, true,
+      'an unrelated notice already having been shown must not suppress this one');
+    assert.ok(out.includes(LEGACY_SINGLE_STORE_NOTICE_FACT_1));
+
     const manifest = JSON.parse(fs.readFileSync(path.join(tmpDir, '.ma-agents.json'), 'utf-8'));
-    assert.strictEqual(manifest.notices[LEGACY_SINGLE_STORE_NOTICE_ID], true,
-      'the flag must be recorded under Story 30.4\'s `notices` map');
+    assert.strictEqual(manifest.notices['legacy-single-store'], true,
+      "the flag must be recorded under Story 30.4's `notices` map, under this notice's own id");
     assert.strictEqual(manifest.notices['demerzel-deprecation'], true,
       'a sibling notice flag must survive');
     assert.strictEqual(manifest.profile, 'default', 'unrelated manifest fields must survive');
