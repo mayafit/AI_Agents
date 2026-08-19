@@ -838,6 +838,24 @@ test('AC5 — the prompt refuses a multi-line identity using the SERIALIZER\'S O
       assert.strictEqual(typeof q.validate('a\nb'), 'string',
         `the ${name} question's validator must refuse a line break`);
     }
+
+    // ...and each is wired with the REQUIREDNESS its own AC calls for, asserted
+    // on the live question rather than on a direct call to the validator. The
+    // two differ, and the difference is the whole of AC3: a blank space key is
+    // a store that resolves nowhere, while a blank root page is the documented
+    // way to ask for a generated one. Testing the exported validator alone
+    // leaves the `required:` argument at each call site unpinned in both
+    // directions — either could be flipped with no test noticing.
+    const spaceQ = questions.find((x) => x.name === 'spaceKey');
+    assert.strictEqual(typeof spaceQ.validate(''), 'string',
+      'the space question must REFUSE a blank answer — there is no default space');
+    assert.strictEqual(typeof spaceQ.validate('   '), 'string',
+      '...whitespace included');
+    const rootQ = questions.find((x) => x.name === 'rootPageTitle');
+    assert.strictEqual(rootQ.validate(''), true,
+      'the root-page question must ACCEPT a blank answer when a name can be generated (AC3)');
+    assert.strictEqual(rootQ.validate('   '), true,
+      '...and whitespace is blank, which is still an acceptable "generate one" answer');
   } finally { cleanup(); }
 });
 
@@ -958,7 +976,7 @@ function mkdir(root, name) {
 test('AC6/FR257 — both stores confluence in DIFFERENT spaces, and neither space reaches the other', async () => {
   const { tmpDir, cleanup } = withTmpDir();
   try {
-    const { layout } = await runWizard([
+    const { layout, questions } = await runWizard([
       ...confluenceAnswers('SYSTEMS', 'Requirements Home'),
       ...confluenceAnswers('PLATFORM', 'Architecture Home'),
       ...SPRINT_SAME,
@@ -974,6 +992,24 @@ test('AC6/FR257 — both stores confluence in DIFFERENT spaces, and neither spac
       'two confluence stores must be able to live in different spaces (FR257)');
     assert.strictEqual(sys.root_page.title, 'Requirements Home');
     assert.strictEqual(swe.root_page.title, 'Architecture Home');
+
+    // And each store's FOUR questions named THAT store. A flow handed a constant
+    // concern would ask the right questions the right number of times, in the
+    // right order, and land the right answers in the right records — while
+    // telling the user it was configuring the system store twice. Only the
+    // wording catches it, so the wording is asserted per store.
+    const storeConcerns = REPO_LAYOUT_CONCERNS.filter((c) => c.kind === 'store');
+    const identityQuestions = questions.filter(
+      (q) => q.name === 'spaceKey' || q.name === 'rootPageTitle');
+    assert.strictEqual(identityQuestions.length, 4, 'two stores, two identity questions each');
+    for (let i = 0; i < 4; i++) {
+      const own = storeConcerns[Math.floor(i / 2)];
+      const other = storeConcerns[1 - Math.floor(i / 2)];
+      assert.ok(identityQuestions[i].message.includes(own.label),
+        `question ${i} must name ${own.label}, got: ${identityQuestions[i].message}`);
+      assert.ok(!identityQuestions[i].message.includes(other.label),
+        `question ${i} must NOT name ${other.label}, got: ${identityQuestions[i].message}`);
+    }
     // The collapse check, stated as an absence: neither store's answer may appear
     // anywhere in the other's record.
     assert.ok(!JSON.stringify(sys).includes('PLATFORM') && !JSON.stringify(sys).includes('Architecture'),
