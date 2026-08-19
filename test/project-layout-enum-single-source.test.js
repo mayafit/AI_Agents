@@ -1031,6 +1031,27 @@ test('confluence is IN the enum AND offered — Story 31.8 gave it a flow, and o
     'a backend with NO flow must not be offered — offerability must follow the table, not a literal');
   assert.deepStrictEqual(offerableStoreBackends(), [...STORE_BACKENDS],
     'and the default is still the real table, which now covers the whole enum');
+
+  // The same probe ONE LAYER UP, which is the layer the wizard actually calls.
+  // Story 31.8 mutation round: `backendChoicesForStore` could be replaced with a
+  // literal two-element list and every existing assertion still passed — the
+  // enum-poisoning test adds a member and checks the choices do not GROW, which a
+  // literal satisfies too, and the probe above only reached
+  // `offerableStoreBackends`. Both the values and the TITLES must follow the
+  // table handed in.
+  assert.deepStrictEqual(backendChoicesForStore(withoutConfluenceFlow).map((c) => c.value),
+    ['file-system'],
+    'backendChoicesForStore must derive from the table as well, not carry its own list');
+  const renamed = {
+    'file-system': { title: 'Renamed file system', collect: STORE_BACKEND_WIZARD['file-system'].collect },
+    confluence: { title: 'Renamed confluence', collect: STORE_BACKEND_WIZARD.confluence.collect },
+  };
+  assert.deepStrictEqual(backendChoicesForStore(renamed),
+    [{ title: 'Renamed file system', value: 'file-system' },
+      { title: 'Renamed confluence', value: 'confluence' }],
+    'the offered TITLES must come from the table too — a hardcoded pair would ignore it');
+  assert.deepStrictEqual(backendChoicesForStore().map((c) => c.value), [...STORE_BACKENDS],
+    'and the default is still the real table');
 });
 
 test('MODE_PROMPT_TITLES is frozen — a consumer cannot rewrite what the wizard offers', () => {

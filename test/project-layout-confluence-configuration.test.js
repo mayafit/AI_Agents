@@ -1466,6 +1466,49 @@ test('the record names the ANSWERED backend when it DIFFERS from the committed o
   }
 });
 
+test('switching a store TO confluence starts from blank identity, not from the old record\'s leftovers', async () => {
+  // The confluence flow pre-populates ONLY from a record that is itself a
+  // confluence store. Reading identity off whatever record happens to be
+  // committed looks harmless while a file-system record has no space key — and
+  // stops being harmless the moment one carries a stray field, which a
+  // hand-edited `project-layout.yaml`, a partially-migrated legacy record or a
+  // future third backend can all produce. The user is CHANGING backend here;
+  // nothing from the backend they are leaving may be offered back to them as
+  // this store's identity.
+  const { cleanup } = withTmpDir();
+  try {
+    const existing = {
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' },
+      topology: {
+        systemRequirementsStore: {
+          backend: 'file-system', mode: 'same', path: '.',
+          // Not part of the file-system shape. Present exactly as a leftover.
+          spaceKey: 'STALE-SPACE',
+          rootPage: { title: 'Stale Page', id: 'stale-id' },
+        },
+        softwareRequirementsStore: { backend: 'file-system', mode: 'same', path: '.' },
+        sprintManagement: { mode: 'same', path: '.' },
+      },
+    };
+    const { questions, layout } = await runWizard([
+      ...confluenceAnswers('FRESH', 'Fresh Page'),
+      ...FILE_SYSTEM_SAME,
+      ...SPRINT_SAME,
+    ], existing);
+
+    const space = questions.find((q) => q.name === 'spaceKey');
+    const root = questions.find((q) => q.name === 'rootPageTitle');
+    assert.strictEqual(space.initial, '',
+      `the space question must start blank, not at ${JSON.stringify(space.initial)}`);
+    assert.strictEqual(root.initial, '',
+      `the root-page question must start blank, not at ${JSON.stringify(root.initial)}`);
+    assert.deepStrictEqual(layout.systemRequirementsStore, {
+      backend: 'confluence', spaceKey: 'FRESH', rootPage: { title: 'Fresh Page', id: null },
+    }, 'and no leftover id may be carried into the newly-chosen backend');
+  } finally { cleanup(); }
+});
+
 test('the confluence flow REFUSES to substitute a backend when it was handed none', async () => {
   // Same fail-loud contract the file-system flow already carries. A flow that
   // defaulted here would record a backend the user never answered — correct only
@@ -1618,7 +1661,7 @@ test('`ma-agents config layout` over a confluence project ASKS, and Enter leaves
 // The count is pinned in BOTH directions: a shortfall means tests that never ran
 // (and tests that never ran cannot fail), a surplus means the pin was not
 // updated deliberately.
-const EXPECTED_TEST_COUNT = 37;
+const EXPECTED_TEST_COUNT = 38;
 
 (async () => {
   for (const [name, fn] of tests) {

@@ -1377,9 +1377,17 @@ function offerableStoreBackends(wizard = STORE_BACKEND_WIZARD) {
   });
 }
 
-function backendChoicesForStore() {
-  return offerableStoreBackends().map((value) => ({
-    title: STORE_BACKEND_WIZARD[value].title,
+// Story 31.8 mutation round. `wizard` is threaded through here for exactly the
+// reason it exists on `offerableStoreBackends` above, and it was missing: with
+// two offerable backends, replacing this body with the literal
+// `[{...'file-system'}, {...confluence}]` was UNDETECTABLE. The existing
+// enum-poisoning test adds a member and asserts the choices do NOT grow — which a
+// hardcoded list also satisfies — and the derivation probe was aimed one function
+// too low. The parameter makes the derivation observable at the layer the wizard
+// actually calls. Every production call site takes the default.
+function backendChoicesForStore(wizard = STORE_BACKEND_WIZARD) {
+  return offerableStoreBackends(wizard).map((value) => ({
+    title: wizard[value].title,
     value,
   }));
 }
