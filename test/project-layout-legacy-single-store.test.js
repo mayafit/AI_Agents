@@ -46,9 +46,9 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 
-// AC1 x4, detection x6, 31.4-agreement x4, AC2 x6, channel-separation x5,
-// AC3 x4, AC4 x4 + 2 preservation-scope, AC5 x4, AC6/NFR82 x7.
-const EXPECTED_TEST_COUNT = 46;
+// AC1 x4, detection x9, 31.4-agreement x4, AC2 x7, channel-separation x5,
+// AC3 x4, AC4 x5 + 2 preservation-scope, AC5 x4, AC6/NFR82 x7.
+const EXPECTED_TEST_COUNT = 51;
 
 let passed = 0;
 let failed = 0;
@@ -121,6 +121,7 @@ try {
 const {
   detectLegacySingleStore, showLegacySingleStoreNoticeOnce, resolveProjectTopology,
   writeProjectLayoutYaml, collectRepoLayout, readExistingLayout, generateBmmConfig,
+  handleConfigLayout,
   canonicalBindingBytes, readProjectLayoutStamp, computeProjectLayoutStamp,
   PROJECT_LAYOUT_SCHEMA_VERSION, LEGACY_TWO_STORE,
   LEGACY_SINGLE_STORE_NOTICE_ID, LEGACY_SINGLE_STORE_SPLIT_COMMAND,
@@ -521,6 +522,109 @@ test('detection — every resolver fault, and `unbound`, are NOT legacy and carr
   }
 });
 
+test('detection — a file DECLARING the current schema while carrying only a `knowledgebase:` record is INVALID, not legacy', () => {
+  // The shape: `schema_version: 2` (or whatever the current version is) and a
+  // pre-F26 single `knowledgebase:` record, with NEITHER per-store record. It
+  // declares one schema and carries another's body.
+  //
+  // It used to resolve `ok:true, schemaVersion: 1` — the resolver's v2 branch was
+  // additionally conditioned on `raw.system_requirements_store` being present, so
+  // an absent one fell THROUGH to the legacy branch and the declared version was
+  // silently discarded. Two consequences, both bad, and both made permanent by
+  // this story's preservation branch (before it, the next install overwrote the
+  // incoherent file and it self-healed):
+  //   1. FROZEN FOREVER. "Nothing would move" is true — both stores derive from
+  //      the one legacy record — so `writeProjectLayoutYaml` skips every write.
+  //   2. TOLD SOMETHING FALSE. The notice says the file "predates the two-store
+  //      layout", about a file that declares the two-store schema on its first
+  //      line.
+  // ma-agents cannot write this shape; it is hand-edited or a bad merge, i.e.
+  // MALFORMED. So it fails loud like its siblings (`too-new`, and v2-missing-one-
+  // store), which also gives the user a way out.
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    fs.mkdirSync(path.join(tmpDir, '_bmad-output'), { recursive: true });
+    fs.writeFileSync(layoutPathOf(tmpDir),
+      `schema_version: ${PROJECT_LAYOUT_SCHEMA_VERSION}\n` +
+      'generated: "2026-03-28"\n' +
+      'knowledgebase:\n  mode: local\n  path: "../kb"\n' +
+      'sprint_management:\n  mode: same\n  path: "."\n', 'utf-8');
+
+    const r = resolveProjectTopology(tmpDir);
+    assert.strictEqual(r.ok, false,
+      `a file declaring schema ${PROJECT_LAYOUT_SCHEMA_VERSION} with no store record must not ` +
+      `resolve: ${JSON.stringify(r)}`);
+    assert.strictEqual(r.reason, BINDING_INVALID,
+      'the declared version decides which shape is expected; a body that does not match it is a fault');
+    assert.ok(/malformed, not legacy/.test(r.message),
+      `the message must say why this is not simply a legacy file, got: ${r.message}`);
+
+    const d = detectLegacySingleStore(tmpDir);
+    assert.strictEqual(d.legacy, false,
+      'a declared-current file is never legacy, whatever body it carries');
+    assert.strictEqual(d.reason, BINDING_INVALID);
+  } finally { cleanup(); }
+});
+
+test('detection — that malformed file gets NO notice, and the writer refuses it instead of freezing it silently', () => {
+  // The other half. Being `invalid` is only useful if the two things that used to
+  // go wrong now go right: no factually-false notice, and no permanent silent
+  // no-op. The non-destruction guard (Story 31.2 R-2) is what produces the
+  // refusal, and it names the recovery — the way OUT that the
+  // fell-through-to-legacy classification did not have.
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    fs.mkdirSync(path.join(tmpDir, '_bmad-output'), { recursive: true });
+    const original =
+      `schema_version: ${PROJECT_LAYOUT_SCHEMA_VERSION}\n` +
+      'knowledgebase:\n  mode: local\n  path: "../kb"\n' +
+      'sprint_management:\n  mode: same\n  path: "."\n';
+    fs.writeFileSync(layoutPathOf(tmpDir), original, 'utf-8');
+
+    let printed;
+    const noticeOut = captureLog(() => { printed = showLegacySingleStoreNoticeOnce(tmpDir); });
+    assert.strictEqual(printed, false, 'a malformed file is not a legacy project and gets no offer');
+    assert.strictEqual(noticeOut, '',
+      `no notice is due for a malformed file, got:\n${noticeOut}`);
+
+    const writeOut = captureLog(() => writeProjectLayoutYaml({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: { mode: 'same', path: '.' },
+    }));
+    assert.ok(/Refusing to overwrite/.test(writeOut),
+      `the writer must refuse loudly, not skip silently, got:\n${writeOut}`);
+    assert.ok(!/left unchanged \(legacy single-store layout/.test(writeOut),
+      'the LEGACY-PRESERVATION no-op line would mean this was classified legacy again');
+    assert.ok(/delete/.test(writeOut),
+      'the refusal must name a recovery, or the file really is frozen');
+    assert.strictEqual(fs.readFileSync(layoutPathOf(tmpDir), 'utf-8'), original,
+      'refusing must still leave the bytes exactly as they were');
+  } finally { cleanup(); }
+});
+
+test('detection — a file declaring a schema BELOW the current one is still read as legacy', () => {
+  // The boundary the fix above must not overreach past. `schema_version: 1` is a
+  // DECLARED legacy file (ma-agents never wrote one, but a hand-edit may), and it
+  // is coherent: declared version 1, v1 body. It stays legacy, exactly like a file
+  // with no `schema_version:` line at all. Only a file declaring the CURRENT (or a
+  // higher) version is adjudicated against the two-store shape.
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    fs.mkdirSync(path.join(tmpDir, '_bmad-output'), { recursive: true });
+    fs.writeFileSync(layoutPathOf(tmpDir),
+      'schema_version: 1\n' +
+      'knowledgebase:\n  mode: local\n  path: "../kb"\n' +
+      'sprint_management:\n  mode: same\n  path: "."\n', 'utf-8');
+    const d = detectLegacySingleStore(tmpDir);
+    assert.strictEqual(d.legacy, true,
+      'a coherent v1 file is legacy — the fix classifies by the DECLARED version, not by ' +
+      'the mere presence of a schema_version line');
+    assert.strictEqual(d.topology.schemaVersion, 1);
+    assertSamePath(d.topology.systemRequirementsStore.path, d.topology.softwareRequirementsStore.path,
+      'and it still reads as both stores at the one location (AC1)');
+  } finally { cleanup(); }
+});
+
 test('detection — a `too-new` file is never read as legacy even though it has no store records this build knows', () => {
   // Guards the specific degradation the epic keeps producing: a validation
   // falling through to the permissive branch. `too-new` has no
@@ -661,6 +765,26 @@ test('AC2 — the notice prints on a legacy project and returns true', () => {
     assert.ok(out.includes(LEGACY_SINGLE_STORE_NOTICE_FACT_2), 'fact 2 (what that means) missing');
     assert.ok(out.includes(LEGACY_SINGLE_STORE_NOTICE_FACT_3), 'fact 3 (the command) missing');
   } finally { cleanup(); }
+});
+
+test('AC2 — fact 1 states WHAT THIS PROJECT IS, stated here as a literal contract', () => {
+  // THE ID FIX, APPLIED TO FACT 1 — the sixth instance of this suite's tautology
+  // class. Every other assertion about fact 1 in this file takes its expectation
+  // from `LEGACY_SINGLE_STORE_NOTICE_FACT_1` itself, i.e. from the very constant
+  // cli.js prints, so all of them pass for ANY string. A mutation round proved it:
+  // replacing fact 1 with a benign placeholder left the whole suite green, and
+  // under that mutant AC2's FIRST required fact — that this project is using the
+  // legacy single-store layout — was never told to anyone. (The one site that
+  // looks like a content check concatenates facts 1 and 2 and then asserts
+  // phrases that all live in fact 2.)
+  //
+  // Asserted as a literal for the same reason the notice id is, and unlike fact 3
+  // (bound through LEGACY_SINGLE_STORE_SPLIT_COMMAND) and fact 2 (bound to a
+  // phrase list), fact 1 had no independent binding at all.
+  assert.strictEqual(LEGACY_SINGLE_STORE_NOTICE_FACT_1,
+    '  Note: this project uses the legacy single-store knowledge layout.',
+    'AC2 requires the notice to say the project is using the legacy single-store layout; ' +
+    'this literal is the contract, so a reword is a deliberate act rather than a silent one');
 });
 
 test('AC2 — the notice names the EXACT command that splits the stores', () => {
@@ -967,6 +1091,62 @@ test('AC4 accept — answering two DIFFERENT locations rewrites the layout throu
         'the system store must land at its OWN answered location');
       assert.strictEqual(detectLegacySingleStore(tmpDir).legacy, false,
         'after an accepted split the project is no longer legacy');
+    } finally { cleanup(); }
+  })();
+});
+
+test('AC4 accept — the `config layout` HANDLER itself splits a legacy project, not just its two halves', () => {
+  // AC4's ACCEPT half, driven through `handleConfigLayout` rather than through
+  // `collectRepoLayout` + `writeProjectLayoutYaml` called side by side. Both halves
+  // are well pinned individually and the handler is a thin composition of them, so
+  // the risk is low — but the DECLINE half already has a handler-level test
+  // (`config layout --yes`, spawned) and the accept half had only the two halves
+  // and a source grep. This closes the asymmetry: it proves the handler reads the
+  // existing legacy binding, asks Story 31.5's questions, and passes the answers
+  // to the writer in that order — an ordering bug between the three would survive
+  // every test of the halves.
+  //
+  // In-process rather than spawned, because an accepted split needs interactive
+  // answers and the prompts stub is the only thing in this suite that can supply
+  // them deterministically.
+  return (async () => {
+    const { tmpDir, cleanup } = withTmpDir();
+    try {
+      writeLegacyLayout(tmpDir, { mode: 'same', kbPath: '.' });
+      writeLegacyConfig(tmpDir, '.');
+      const sysDir = path.join(tmpDir, 'sysreq');
+      fs.mkdirSync(sysDir, { recursive: true });
+
+      const queue = [
+        { backend: 'file-system' }, { mode: 'local' }, { localPath: sysDir },
+        { backend: 'file-system' }, { mode: 'same' },
+        { mode: 'same' },
+      ];
+      promptLog.length = 0;
+      promptAnswer = (q) => (queue.length ? requireMatchingAnswer(q, queue.shift()) : unexpectedPrompt(q));
+      try {
+        await captureLogAsync(() => handleConfigLayout([]));
+      } finally { promptAnswer = unexpectedPrompt; }
+      assert.strictEqual(queue.length, 0,
+        `${queue.length} prepared answer(s) went unused — the handler asked fewer questions than ` +
+        `the wizard does, so it is not driving Story 31.5's wizard`);
+
+      const parsed = yaml.load(fs.readFileSync(layoutPathOf(tmpDir), 'utf-8'));
+      assert.strictEqual(parsed.schema_version, PROJECT_LAYOUT_SCHEMA_VERSION,
+        'an accepted split through the handler writes the current schema');
+      assert.ok(!('knowledgebase' in parsed),
+        'the collapsed legacy record is replaced, not kept alongside');
+      assert.strictEqual(parsed.system_requirements_store.path, 'sysreq',
+        'the answered system location must reach the file THROUGH the handler');
+      assert.strictEqual(parsed.software_requirements_store.path, '.');
+      assert.strictEqual(detectLegacySingleStore(tmpDir).legacy, false,
+        'after an accepted split the project is no longer legacy');
+
+      // And the derived config was regenerated from the NEW binding — the step
+      // that distinguishes the handler from a bare call to the writer.
+      const config = fs.readFileSync(configPathOf(tmpDir), 'utf-8');
+      assert.ok(/^system_requirements_path:/m.test(config),
+        `the handler must regenerate config.yaml from the new binding, got:\n${config}`);
     } finally { cleanup(); }
   })();
 });

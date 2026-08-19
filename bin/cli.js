@@ -1882,14 +1882,40 @@ function resolveProjectTopology(projectRoot) {
   }
 
   try {
-    if (schemaVersion >= PROJECT_LAYOUT_SCHEMA_VERSION && raw.system_requirements_store) {
+    // THE DECLARED VERSION DECIDES WHICH SHAPE IS EXPECTED — always, with no
+    // fallback. This condition used to also require `raw.system_requirements_store`
+    // to be present, which meant a file DECLARING `schema_version: 2` while
+    // carrying only a v1 `knowledgebase:` record fell through to the legacy branch
+    // below and was reported as `schemaVersion: 1` — the declared version silently
+    // ignored, the only place in this resolver where that happened. Story 31.7's
+    // preservation branch in `writeProjectLayoutYaml` then made that permanent:
+    // before it, the next install overwrote the incoherent file with a real v2 one
+    // and the problem self-healed; after it, "nothing moved" is true (both stores
+    // derive from the one legacy record) so nothing is ever written again, and the
+    // legacy notice tells the user their file "predates the two-store layout"
+    // about a file that declares schema 2. Frozen, and told something false.
+    //
+    // ma-agents cannot produce this shape: the writer emits `schema_version:` and
+    // both store records together. It is reachable only by hand-editing or a bad
+    // merge, so it is MALFORMED, and the posture for a malformed authoritative
+    // file in this epic is to fail loud and touch nothing (P5-9.3): a v3 file is
+    // `too-new` and refused, a v2 file missing one store record is `invalid`.
+    // Reading a declared-v2 file as v1 was the sole exception. It now classifies
+    // `invalid` like its siblings, which also restores a way OUT — the
+    // non-destruction guard prints the message below and names the recovery — and
+    // makes the detector's justifying comment true rather than false. Nothing is
+    // migrated and nothing is rewritten; this is a refusal, not a repair.
+    if (schemaVersion >= PROJECT_LAYOUT_SCHEMA_VERSION) {
       const systemStore = storeFromRaw(raw.system_requirements_store, projectRoot);
       const softwareStore = storeFromRaw(raw.software_requirements_store, projectRoot);
       if (!systemStore || !softwareStore) {
         return fail(BINDING_INVALID,
           `_bmad-output/project-layout.yaml declares schema_version ${schemaVersion} but is ` +
           `missing a required store record (system_requirements_store / ` +
-          `software_requirements_store).`);
+          `software_requirements_store). A file that declares schema ` +
+          `${PROJECT_LAYOUT_SCHEMA_VERSION} while carrying only a pre-F26 knowledgebase record ` +
+          `is malformed, not legacy - a genuine pre-F26 file declares no schema_version at all. ` +
+          `Fix it by hand, or delete it and re-run the installer to write a fresh binding.`);
       }
       return {
         ok: true,
@@ -1903,8 +1929,11 @@ function resolveProjectTopology(projectRoot) {
       };
     }
 
-    // Legacy (FR122/Story 16.2 shape, or a schema_version < 2 file): a single
-    // `knowledgebase:` record read as both stores pointing at that location.
+    // Legacy (FR122/Story 16.2 shape, or a file declaring a schema_version below
+    // the current one): a single `knowledgebase:` record read as both stores
+    // pointing at that location. Only reachable now when the DECLARED version is
+    // below the current one — a declared-current file is adjudicated above,
+    // whatever records it happens to carry.
     const legacyStore = storeFromRaw(raw.knowledgebase, projectRoot);
     if (!legacyStore) {
       return fail(BINDING_INVALID,
@@ -1948,8 +1977,19 @@ function resolveProjectTopology(projectRoot) {
 // A heuristic over field names would ALSO be wrong on its own terms, not merely
 // duplicative. `knowledgebase:` present is not sufficient (a hand-edited v2 file
 // may carry a stale one), and `system_requirements_store:` absent is not
-// sufficient either (the resolver refuses to read a v2 file missing a store
-// record — that is `invalid`, a fault, not a legacy layout).
+// sufficient either: a file that DECLARES the current schema but is missing a
+// store record is `invalid` — a fault, not a legacy layout — whether what it
+// carries instead is a stale `knowledgebase:` record or nothing at all.
+//
+// That second claim is now true of EVERY declared-current file. It was NOT true
+// when this comment was first written: the shape `schema_version: 2` + a
+// `knowledgebase:` record and no `system_requirements_store:` fell through to the
+// resolver's legacy branch and came back `ok:true, schemaVersion: 1` — i.e. as
+// precisely the "legacy layout" this paragraph asserted it could not be, which
+// then earned it a notice saying its file "predates the two-store layout" about a
+// file declaring schema 2. The resolver was corrected (see the block above the
+// declared-version gate in `resolveProjectTopology`); the shape is pinned in
+// test/project-layout-legacy-single-store.test.js.
 //
 // ── WHY THIS CANNOT CONTRADICT STORY 31.4'S DISCRIMINATOR ─────────────────
 // Story 31.4's skill preflight decides "is this genuinely a pre-F26 project?"
@@ -2344,19 +2384,42 @@ function writeProjectLayoutYaml(layout) {
 
   // ── STORY 31.7 AC3/AC4 — LEGACY PRESERVATION. NOTHING MOVED ⇒ NOTHING WRITTEN.
   //
+  // THIS IS A FIX TO A STORY 31.2 IMPLEMENTATION DEFECT, NOT A RESOLUTION OF ANY
+  // REQUIREMENTS CONFLICT. Stated precisely, because an in-source rationale that
+  // mis-states a merged story's AC is exactly what 31.2's R-6 guard exists to
+  // prevent.
+  //
+  // STORY 31.2 AC5 ALREADY FORBADE THIS REWRITE, in its own words: a pre-F26
+  // `project-layout.yaml` is read as both stores pointing at that one location
+  // "with no error AND NO REWRITE". 31.2 AC2 and 31.2 AC5 do not collide and
+  // never did — AC2 removes the "both concerns are same-repo ⇒ do not write"
+  // CONDITIONAL SCOPE branch; AC5 carves out the LEGACY case. They are
+  // complementary halves of one story, written together.
+  //
+  // What shipped was AC5's read half only. `resolveProjectTopology` classifies a
+  // legacy file correctly, but "no rewrite" was never implemented at all: this
+  // function emits `schema_version: PROJECT_LAYOUT_SCHEMA_VERSION`
+  // unconditionally, and AC2 makes it run on EVERY install and bind — so the
+  // first `ma-agents install` over a pre-F26 project silently converted its
+  // single `knowledgebase:` record into `system_requirements_store:` +
+  // `software_requirements_store:`, with no question asked and no way back. Two
+  // of 31.2's OWN round-trip tests pinned that behaviour as correct (one asserted
+  // `schema_version: 2` after a write that moved nothing, with the message "the
+  // write upgrades the schema"), which is how a green suite carried the defect
+  // through an initial review and three fix rounds. Both were amended by this
+  // story — see `test/project-layout-two-store-round-trip.test.js`.
+  //
+  // Filed, with the account of why those review rounds missed it, in
+  // `_bmad-output/implementation-artifacts/bug-31-2-ac5-no-rewrite-half-was-never-implemented.md`.
+  //
+  // 31.7's own ACs are satisfied by the same branch and independently require it:
   // AC3 forbids any install, bind or skill activation rewriting a legacy layout
-  // into two stores without an explicit user choice, and AC4 requires that
-  // declining the split leaves the project BYTE-IDENTICAL. Before this branch
-  // neither held: Story 31.2 AC2 makes this function run on EVERY project
-  // install, and it only ever emits schema v2 — so the first `ma-agents install`
-  // over a pre-F26 project silently converted its single `knowledgebase:` record
-  // into `system_requirements_store:` + `software_requirements_store:`, with no
-  // question asked and no way back. AC5 is what makes that unmistakably wrong
-  // rather than merely arguable: it requires the notice not to nag across
-  // "repeated installs on an un-split legacy project", which presupposes a
-  // project can STILL BE legacy after an install. Under the old behaviour it
-  // never could be — the first install always split it — so AC5 was unsatisfiable
-  // and AC4's byte-identity was false on the very first run.
+  // into two stores without an explicit user choice; AC4 requires that declining
+  // the split leaves the project BYTE-IDENTICAL; and AC5 requires the notice not
+  // to nag across "repeated installs on an un-split legacy project", which
+  // presupposes a project can STILL BE legacy after an install. Under the shipped
+  // behaviour it never could be — the first install always split it — so AC5 was
+  // unsatisfiable and AC4's byte-identity was false on the very first run.
   //
   // The rule is deliberately narrow: it applies ONLY to a file that is already
   // legacy, and only when NOTHING WOULD MOVE. A schema v2 file is untouched by
