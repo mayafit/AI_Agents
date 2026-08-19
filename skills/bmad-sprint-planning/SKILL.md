@@ -143,8 +143,7 @@ writes it on every run and Step P4 compares it, so an absent one is drift and wo
 halted. The single exception is Step P2's genuinely pre-F26 project, whose config may predate the
 field; there — and only there — use `{project-root}/_bmad-output/planning-artifacts`, which is what
 such a project has always resolved to. Do **not** derive this path from `sprint_management_path`:
-story files follow sprint management and epics do not (FR267). See
-`_bmad-output/implementation-artifacts/31-6-artifact-to-store-routing.md`.
+story files follow sprint management and epics do not (FR267).
 
 Attempt to read project name from `_bmad/bmm/config.yaml` (field `project_name`). If the file does not exist or `project_name` is absent, derive project name from the root directory name or use `"Unknown Project"`.
 

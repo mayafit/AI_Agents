@@ -188,7 +188,7 @@ Before executing any file-system operations, determine and route to the correct 
 </step>
 
 <step n="3" goal="Extract stories from epics.md">
-  <action>Resolve `{planning_artifacts}` — the directory epics live in — from the `planning_artifacts:` field of `_bmad/bmm/config.yaml`. Epics are a *software requirements* artifact (FR256) and that store can live in another repository, so this path is read, never assumed, and never derived from `sprint_management_path` (FR267). The field is always present in a config the preflight above accepted; only in Step P2's genuinely pre-F26 case may it be absent, and there it has always been `{project-root}/_bmad-output/planning-artifacts`. See `_bmad-output/implementation-artifacts/31-6-artifact-to-store-routing.md`.</action>
+  <action>Resolve `{planning_artifacts}` — the directory epics live in — from the `planning_artifacts:` field of `_bmad/bmm/config.yaml`. Epics are a *software requirements* artifact (FR256) and that store can live in another repository, so this path is read, never assumed, and never derived from `sprint_management_path` (FR267). The field is always present in a config the preflight above accepted; only in Step P2's genuinely pre-F26 case may it be absent, and there it has always been `{project-root}/_bmad-output/planning-artifacts`.</action>
   <action>Read `{planning_artifacts}/epics.md`</action>
   <check if="file does not exist">
     <output>WARNING: `epics.md` not found at `{planning_artifacts}/epics.md`. No stories will be extracted from epics. Continuing with bug-only backlog.</output>
