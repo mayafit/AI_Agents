@@ -47,8 +47,8 @@ const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 
 // AC1 x4, detection x6, 31.4-agreement x4, AC2 x6, channel-separation x5,
-// AC3 x4, AC4 x4, AC5 x4, AC6/NFR82 x7.
-const EXPECTED_TEST_COUNT = 44;
+// AC3 x4, AC4 x4 + 2 preservation-scope, AC5 x4, AC6/NFR82 x7.
+const EXPECTED_TEST_COUNT = 46;
 
 let passed = 0;
 let failed = 0;
@@ -1007,6 +1007,71 @@ test('AC4 — the byte-identity is CONDITIONAL on nothing moving, not a blanket 
     const parsed = yaml.load(fs.readFileSync(layoutPathOf(tmpDir), 'utf-8'));
     assert.strictEqual(parsed.schema_version, PROJECT_LAYOUT_SCHEMA_VERSION);
     assert.strictEqual(parsed.system_requirements_store.path, 'elsewhere');
+  } finally { cleanup(); }
+});
+
+// ─── The preservation branch's SCOPE, pinned in both directions ──────────────
+//
+// Both tests below were added after a mutation round found the corresponding
+// mutants ALIVE. They pin the two decisions that make this branch narrow — and
+// narrowness is the whole reason it is safe to add to a function four merged
+// stories already depend on.
+
+test('preservation is scoped to LEGACY files: a schema v2 file with unchanged records is STILL rewritten', () => {
+  // KILLS the `<` → `<=` mutant. Widening the branch to schema v2 would stop
+  // `generated:` refreshing on every install for every modern project — a change
+  // to Story 31.2/31.3 behaviour that nothing else in the suite would notice,
+  // because those suites deliberately ignore the `generated:` line.
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    fs.mkdirSync(path.join(tmpDir, '_bmad-output'), { recursive: true });
+    fs.writeFileSync(layoutPathOf(tmpDir),
+      `schema_version: ${PROJECT_LAYOUT_SCHEMA_VERSION}\n` +
+      'generated: "2020-01-01"\n' +
+      'system_requirements_store:\n  backend: file-system\n  mode: same\n  path: "."\n' +
+      'software_requirements_store:\n  backend: file-system\n  mode: same\n  path: "."\n' +
+      'sprint_management:\n  mode: same\n  path: "."\n', 'utf-8');
+    const beforeSha = sha256File(layoutPathOf(tmpDir));
+
+    // The SAME records back in — so the only thing standing between "rewritten"
+    // and "preserved" is the schema comparison.
+    const t = resolveProjectTopology(tmpDir).topology;
+    const out = captureLog(() => writeProjectLayoutYaml({
+      systemRequirementsStore: t.systemRequirementsStore,
+      softwareRequirementsStore: t.softwareRequirementsStore,
+      sprintManagement: t.sprintManagement,
+    }));
+
+    assert.notStrictEqual(sha256File(layoutPathOf(tmpDir)), beforeSha,
+      'a schema v2 file must take the ordinary write path — the legacy-preservation branch is ' +
+      'scoped to pre-F26 files and must not silently change modern behaviour');
+    assert.ok(!/left unchanged/i.test(out),
+      `a schema v2 file must not report the legacy-preservation outcome, got: ${out}`);
+    assert.ok(!fs.readFileSync(layoutPathOf(tmpDir), 'utf-8').includes('2020-01-01'),
+      'the generated: date must refresh on a schema v2 rewrite, as it did before this story');
+  } finally { cleanup(); }
+});
+
+test('preservation never swallows a serializer failure: an unwritable record on a legacy project still throws', () => {
+  // KILLS the `unchanged = false` → `unchanged = true` mutant in the catch.
+  // Treating "I could not serialize this" as "nothing moved" is the
+  // validation-degrading-to-permissive shape this epic keeps producing: the
+  // write the caller asked for would be skipped, silently, and the return value
+  // is indistinguishable from a genuine no-op.
+  const { tmpDir, cleanup } = withTmpDir();
+  try {
+    const original = writeLegacyLayout(tmpDir, { mode: 'same', kbPath: '.' });
+    assert.throws(
+      () => captureLog(() => writeProjectLayoutYaml({
+        systemRequirementsStore: { backend: 'notion', mode: 'same', path: '.' },
+        softwareRequirementsStore: { backend: 'file-system', mode: 'same', path: '.' },
+        sprintManagement: { mode: 'same', path: '.' },
+      })),
+      /backend/i,
+      'an unwritable record must still fail loud on a legacy project — the preservation branch ' +
+      'must not become a silent swallow for serializer errors');
+    assert.strictEqual(fs.readFileSync(layoutPathOf(tmpDir), 'utf-8'), original,
+      'and the committed file must be left exactly as it was');
   } finally { cleanup(); }
 });
 
