@@ -968,8 +968,11 @@ test('the exported enums are COPIES — poisoning one cannot widen what cli.js a
     assert.deepStrictEqual(modeChoicesFor('knowledgebase').map(c => c.value), ['same', 'local', 'remote'],
       'nor may it widen what the wizard offers');
     // Story 31.5 — the same property for the BACKEND question, which is the
-    // third direction over that enum and the one a user picks from.
-    assert.deepStrictEqual(backendChoicesForStore().map(c => c.value), ['file-system'],
+    // third direction over that enum and the one a user picks from. Story 31.8
+    // made `confluence` offerable, so the expected list is now both real
+    // members — spelled out LITERALLY rather than derived from STORE_BACKENDS,
+    // which this test has deliberately poisoned with `notion` two lines up.
+    assert.deepStrictEqual(backendChoicesForStore().map(c => c.value), ['file-system', 'confluence'],
       'adding a member to the EXPORTED STORE_BACKENDS must not teach the wizard a new backend');
   } finally {
     STORE_BACKENDS.delete('notion');
@@ -999,32 +1002,55 @@ test('STORE_BACKEND_WIZARD names exactly STORE_BACKENDS — no member without a 
   assert.ok(Object.isFrozen(STORE_BACKEND_WIZARD), 'the table itself must be frozen');
 });
 
-test('confluence is IN the enum but NOT offered — AC5 takes the "not offered until 31.8" branch', () => {
-  // The two halves of AC5 as amended by the implementation-readiness review, and
-  // they must BOTH hold. A test asserting only that confluence is unoffered
-  // would still pass if the member had been deleted from the enum — which would
-  // break every committed Confluence binding the reader and writer accept.
+test('confluence is IN the enum AND offered — Story 31.8 gave it a flow, and offerability is still derived', () => {
+  // Story 31.5 asserted the "not offered until 31.8" half of AC5. Story 31.8
+  // landed the flow, so the assertion is INVERTED — but the halves that were
+  // load-bearing then are still load-bearing now. A test asserting only that
+  // confluence is offered would still pass if the member had been deleted from
+  // the enum, or if `offerableStoreBackends` had been replaced by a literal.
   assert.ok(STORE_BACKENDS.has('confluence'),
-    'confluence must remain a member of the enum — committed confluence bindings round-trip today');
-  assert.strictEqual(STORE_BACKEND_WIZARD.confluence.collect, null,
-    'confluence has no wizard flow until Story 31.8; that is what makes it unofferable');
-  assert.deepStrictEqual(offerableStoreBackends(), ['file-system'],
-    'only file-system has a wizard flow in this story');
-  assert.deepStrictEqual(backendChoicesForStore().map(c => c.value), ['file-system'],
-    'the offered choices are derived from the table, so confluence cannot appear');
+    'confluence must remain a member of the enum — committed confluence bindings round-trip');
+  assert.strictEqual(typeof STORE_BACKEND_WIZARD.confluence.collect, 'function',
+    'Story 31.8 gives confluence a wizard flow; that is what makes it offerable');
+  assert.deepStrictEqual(offerableStoreBackends(), ['file-system', 'confluence'],
+    'both members of the enum now have a wizard flow, in enum order');
+  assert.deepStrictEqual(backendChoicesForStore().map(c => c.value), ['file-system', 'confluence'],
+    'the offered choices are derived from the table, so both appear');
 
-  // ...and offerability is DERIVED, not a second hardcoded list that happens to
-  // read `['file-system']` today. Given a table in which confluence HAS a flow,
-  // both members must be offered, in enum order — the assertion that fails if a
-  // future edit replaces the filter with a literal, leaving Story 31.8 a second
-  // place to find. The real table is frozen, so the alternative is passed in.
-  const withConfluenceFlow = {
+  // ...and offerability is still DERIVED, not a second hardcoded list that now
+  // happens to read `['file-system', 'confluence']`. The probe is the MIRROR of
+  // Story 31.5's: given a table in which confluence has NO flow, it must drop
+  // out of the offered set. That is the assertion which fails if the filter is
+  // ever replaced by a literal — in either direction. The real table is frozen,
+  // so the alternative is passed in.
+  const withoutConfluenceFlow = {
     'file-system': STORE_BACKEND_WIZARD['file-system'],
-    confluence: { title: 'Confluence', collect: async () => ({}) },
+    confluence: { title: 'Confluence', collect: null },
   };
-  assert.deepStrictEqual(offerableStoreBackends(withConfluenceFlow), [...STORE_BACKENDS],
-    'a backend that HAS a flow must be offered — offerability must follow the table, not a literal');
-  assert.deepStrictEqual(offerableStoreBackends(), ['file-system'],
+  assert.deepStrictEqual(offerableStoreBackends(withoutConfluenceFlow), ['file-system'],
+    'a backend with NO flow must not be offered — offerability must follow the table, not a literal');
+  assert.deepStrictEqual(offerableStoreBackends(), [...STORE_BACKENDS],
+    'and the default is still the real table, which now covers the whole enum');
+
+  // The same probe ONE LAYER UP, which is the layer the wizard actually calls.
+  // Story 31.8 mutation round: `backendChoicesForStore` could be replaced with a
+  // literal two-element list and every existing assertion still passed — the
+  // enum-poisoning test adds a member and checks the choices do not GROW, which a
+  // literal satisfies too, and the probe above only reached
+  // `offerableStoreBackends`. Both the values and the TITLES must follow the
+  // table handed in.
+  assert.deepStrictEqual(backendChoicesForStore(withoutConfluenceFlow).map((c) => c.value),
+    ['file-system'],
+    'backendChoicesForStore must derive from the table as well, not carry its own list');
+  const renamed = {
+    'file-system': { title: 'Renamed file system', collect: STORE_BACKEND_WIZARD['file-system'].collect },
+    confluence: { title: 'Renamed confluence', collect: STORE_BACKEND_WIZARD.confluence.collect },
+  };
+  assert.deepStrictEqual(backendChoicesForStore(renamed),
+    [{ title: 'Renamed file system', value: 'file-system' },
+      { title: 'Renamed confluence', value: 'confluence' }],
+    'the offered TITLES must come from the table too — a hardcoded pair would ignore it');
+  assert.deepStrictEqual(backendChoicesForStore().map((c) => c.value), [...STORE_BACKENDS],
     'and the default is still the real table');
 });
 
