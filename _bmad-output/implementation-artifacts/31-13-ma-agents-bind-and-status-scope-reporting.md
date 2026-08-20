@@ -15,7 +15,7 @@
 | `lib/bound-projects.js` | **NEW.** The per-machine bound-project registry. Settles **OQ-1**. |
 | `bin/cli.js` | `case 'bind':` dispatch; `handleBind`, `offerBind`, `bindOfferDecision`, `detectInstallScopes`, `describeBoundProjects`, `printScopeReport`; scope report wired into `showStatus`; help text. |
 | `lib/installer.js` | `ensureManifest` back-fills `scope` on its **migrate** branch (handoff (c)); `GLOBAL_BIND_OFFER_HEADER`'s last two lines corrected — they claimed `ma-agents bind` did not exist yet, which **this story made false**. |
-| `test/project-layout-bind.test.js` | **NEW**, 55 tests. |
+| `test/project-layout-bind.test.js` | **NEW**, 57 tests. |
 | `test/project-layout-config-generation.test.js` | Story 31.3's generation-call-site pin widened 2 → 3 sites and **strengthened from a count to an identification** (see §6). |
 | `package.json` | New suite registered in the `npm test` chain, additively. |
 
@@ -93,8 +93,18 @@ skills is exactly the machine whose bound-project list the user needs. Each reco
 against `resolveProjectTopology` — the same resolver everything else uses — so a moved or deleted
 project shows as `[missing]`, never as `[bound]`.
 
-**AC8 — see §2.** Four properties, four tests, plus determinism, de-duplication, version and
-entry-shape invariants.
+**AC8 — see §2.** Four properties, four tests, plus determinism, de-duplication, version,
+entry-shape and path-identity invariants.
+
+### The AC3 offer's CLI call site — and why it is `status`
+
+`offerBind` is not a seam left dangling. An exported function nothing calls is the *presence, not
+effect* shape this epic keeps producing, and it is exactly what left Story 31.11's AC6 offer with no
+reader. The offer is therefore made from `showStatus` when — and only when — the install scope is
+global and the current project has no committed binding: the one CLI moment at which the user is
+asking about precisely that state. `yes` is derived from `process.stdin.isTTY`, so a piped or CI
+`status` states the remedy and stops rather than prompting; it can never bind unasked. Three mutants
+(M31/M32/M33) cover the call site, its scope gate, and the TTY derivation.
 
 ---
 
@@ -146,7 +156,7 @@ Green baseline re-confirmed at every suite named in the brief; all exit 0.
 
 | Suite | Result |
 | --- | --- |
-| `project-layout-bind` (NEW) | **55 passed, 0 failed**, exit 0 |
+| `project-layout-bind` (NEW) | **57 passed, 0 failed**, exit 0 |
 | `project-layout-config-generation` | 32 passed, exit 0 (pin amended, see below) |
 | `project-layout-binding-spine` | 69, exit 0 |
 | `project-layout-staleness-guard` | 61, exit 0 |
@@ -177,8 +187,9 @@ under `lib/bmad-extension/` or `skills/`. The 41-copy / one-sha256 invariant is 
 
 ## 7. Mutation testing
 
-**30 mutants · 30 killed · 0 survivors** (25 killed in round 1; the 5 survivors below were closed by
-new tests and re-run in round 2, all killed).
+**33 mutants · 33 killed · 0 survivors.** Round 1 ran 30 mutants and killed 25; the 5 survivors were
+closed by new tests and re-killed. A final full run of all 33 (M31-M33 added for the AC3 CLI call
+site introduced afterwards) killed every one.
 
 Run in a **byte-for-byte robocopy `/MIR /XJ` mirror** with a uniquely-named harness
 (`mut-3113-runner.js` — the scratchpad is shared with a sibling agent). Every anchor was validated up
@@ -214,11 +225,14 @@ revert was sha256-verified against the pristine bytes.
 | M23 | `cli` | a MOVED project is reported as healthy | KILLED | |
 | M24 | `cli` | an unreadable binding at a bound root reported healthy | KILLED | |
 | M25 | `cli` | the listing is printed for a NON-global install | KILLED | |
-| M26 | `cli` | the scope report moves below the early return | KILLED | |
+| M26 | `cli` | the scope report is suppressed when no skills are listed | KILLED | |
 | **M27** | `cli` | a lost registry and a damaged one print the same message | **SURVIVED** | KILLED |
 | M28 | `installer` | the `ensureManifest` scope back-fill is removed | KILLED | |
 | M29 | `installer` | the back-fill erases a recorded scope | KILLED | |
 | M30 | `installer` | the global offer names `bind` before `install` | KILLED | |
+| M31 | `cli` | the AC3 offer loses its production caller | KILLED | |
+| M32 | `cli` | status offers the bind on a NON-global install | KILLED | |
+| M33 | `cli` | the CLI offer prompts with no TTY attached | KILLED | |
 
 **What the five survivors were, and what closed them** — each was a real gap, not a scoring artifact:
 
