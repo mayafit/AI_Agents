@@ -54,7 +54,7 @@ const { execFileSync } = require('child_process');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 
-const EXPECTED_TEST_COUNT = 72;
+const EXPECTED_TEST_COUNT = 73;
 
 let passed = 0;
 let failed = 0;
@@ -370,6 +370,32 @@ test('[behaviour] AC2 re-binding AWAY from confluence clears the space key, not 
     assert.strictEqual(configField(second, 'software_requirements_backend').value, 'file-system');
     assert.strictEqual(configField(second, 'software_requirements_space_key').value, '',
       'the old space key survived a re-bind to file-system');
+  });
+});
+
+test('[behaviour] AC2 the BACKEND decides whether a space key is published, not the field\'s presence', () => {
+  // Found by this story's own mutation run: `confluenceSpaceKeyOf` could be
+  // rewritten to publish `store.spaceKey` unconditionally and every test stayed
+  // green, because no reachable binding produces a file-system store carrying a
+  // stray `spaceKey`. That is exactly the "no test measured the guard" shape, so
+  // the guard is measured here — through the unbound/fallback path, which passes
+  // the caller's store objects straight into the generator.
+  withTmpDir((tmpDir) => {
+    quiet(() => cli.generateBmmConfig({
+      projectRoot: tmpDir,
+      fallbackLayout: {
+        systemRequirementsStore: { backend: 'file-system', mode: 'same', path: '.' },
+        softwareRequirementsStore: {
+          backend: 'file-system', mode: 'same', path: '.', spaceKey: 'LEAKED',
+        },
+        sprintManagement: { mode: 'same', path: '.' },
+      },
+    }));
+    const cfg = fs.readFileSync(path.join(tmpDir, CONFIG_REL), 'utf-8');
+    assert.strictEqual(configField(cfg, 'software_requirements_backend').value, 'file-system');
+    assert.strictEqual(configField(cfg, 'software_requirements_space_key').value, '',
+      `a file-system store published a space key:\n${cfg}`);
+    assert.ok(!cfg.includes('LEAKED'), `the stray space key reached config.yaml:\n${cfg}`);
   });
 });
 
