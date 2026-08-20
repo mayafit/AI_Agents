@@ -57,8 +57,11 @@ const crypto = require('crypto');
 // A `!==` check — a SURPLUS fails as loudly as a shortfall.
 // 61 at Story 31.4; +1 in Story 31.9, which closed half of the drift gap this
 // suite pinned (a backend change is now visible to the field table) and added
-// the test that proves it.
-const EXPECTED_TEST_COUNT = 62;
+// the test that proves it; +2 in Story 31.9's fix round (NB-4), which pinned the
+// two PROSE edits that story made to this sealed block — until then two of its
+// four edits were pinned zero ways, and both a deletion and a restoration of a
+// now-false sentence survived across all 41 shipped copies.
+const EXPECTED_TEST_COUNT = 64;
 
 let passed = 0;
 let failed = 0;
@@ -1609,6 +1612,105 @@ test('[text] F2 each shipped row derives EXACTLY its own fields, measured on the
   }
   assert.ok(exercised >= 8,
     `this test must actually observe generated fields changing; it saw ${exercised}`);
+});
+
+// ─── NB-4 — Story 31.9's two PROSE edits to this sealed block ────────────────
+//
+// Story 31.9 made four edits here: two TABLE CELLS (pinned by the F2 tests
+// above, which killed three mutants) and two SENTENCES, pinned zero ways.
+// Deleting one of them from all 41 shipped copies was green, and restoring the
+// other to its pre-31.9 — now FALSE — wording was green too. Both are checked
+// against the REAL generator rather than merely asserted to exist, so a sentence
+// that survives while becoming untrue still fails.
+
+/** The paragraph of the shipped block that contains a phrase, or null. */
+function blockParagraph(block, needle) {
+  return block.split(/\n\s*\n/).find((p) => p.includes(needle)) || null;
+}
+
+/** Every column-0 field name a real generated config.yaml carries. */
+function generatedFieldNames(layouts) {
+  const names = new Set();
+  for (const layout of layouts) {
+    withTmpDir((tmpDir) => {
+      boundProject(tmpDir, layout);
+      for (const m of readConfig(tmpDir).matchAll(/^([a-z_]+):/gm)) names.add(m[1]);
+    });
+  }
+  return [...names].sort();
+}
+
+test('[text] NB-4/AC1 the block says how a NON-PATH field disagreement is reported', () => {
+  // The P4 halt template speaks only of paths ("was `{path in config.yaml}`, is
+  // now `{path in project-layout.yaml}`"). Story 31.9 put fields in the table
+  // that are NOT paths, so without this sentence an agent has no stated way to
+  // render their disagreement — and deleting it was invisible.
+  const block = extractBlock(readGuarded(GUARDED[0]));
+  const rows = parseDerivationTable(block);
+  const fields = [...new Set(rows.reduce((a, r) => a.concat(r.fields), []))];
+
+  // Which of the table's fields are not paths is MEASURED on a real generated
+  // config, not classified by a name pattern kept here.
+  let nonPath = [];
+  withTmpDir((tmpDir) => {
+    boundProject(tmpDir, CONFLUENCE_BASE);
+    const cfg = readConfig(tmpDir);
+    nonPath = fields.filter((f) => {
+      const v = readConfigField(cfg, f);
+      return v !== null && v !== '' && v !== '.' && !/[\\/]/.test(v);
+    });
+  });
+  assert.ok(nonPath.length > 0,
+    `the P4 table names ${JSON.stringify(fields)} and a real generated config makes every one ` +
+    `of them a path — so this test has stopped covering anything. If the non-path fields were ` +
+    `removed from the table, the sentence below can go too, deliberately.`);
+
+  const concepts = [...new Set(nonPath.map((f) =>
+    f.replace(/^(?:system|software)_requirements_/, '').replace(/^sprint_/, '')))].sort();
+
+  const para = blockParagraph(block, 'the value that disagrees');
+  assert.ok(para,
+    `the block generates ${JSON.stringify(nonPath)}, none of which is a path, and it no ` +
+    `longer tells an agent how to report their disagreement. The halt template's ` +
+    `\`{path in …}\` placeholders are the only rendering it states, and they do not fit a ` +
+    `backend or a space key.`);
+  for (const concept of concepts) {
+    assert.ok(new RegExp('`' + concept + ':`').test(para),
+      `the rendering instruction does not name \`${concept}:\`, which the table derives and a ` +
+      `real generated config carries as a non-path value:\n${para.trim()}`);
+  }
+  assert.ok(/name the two values you actually compared/.test(para),
+    `the instruction must say to name BOTH values, or a halt can report a disagreement ` +
+    `without saying what disagreed:\n${para.trim()}`);
+});
+
+test('[text] NB-4/AC6 the stamp-gap sentence names ONLY things config.yaml really lacks', () => {
+  // The sentence explains why the field table is not the whole check. Before
+  // Story 31.9 its examples were "a store's `backend:`, a Confluence
+  // `space_key:`" — which that story made FALSE by putting both in the generated
+  // config. Restoring the old wording was green, because nothing checked the
+  // claim against the generator. Now it is checked: every example the sentence
+  // gives must be a binding concept no generated field carries.
+  const block = extractBlock(readGuarded(GUARDED[0]));
+  const para = blockParagraph(block, 'The stamp covers binding state that `config.yaml` does not carry');
+  assert.ok(para,
+    'the block no longer explains why the field table alone cannot see every move — that ' +
+    'sentence is what makes the optional stamp check something other than belt-and-braces');
+
+  const claim = para.split('\n')[0];
+  const examples = [...claim.matchAll(/`([A-Za-z_]+):`/g)].map((m) => m[1]);
+  assert.ok(examples.length > 0,
+    `the sentence claims config.yaml omits binding state but gives no example of what:\n${claim}`);
+
+  const generated = generatedFieldNames([CONFLUENCE_BASE, jiraLayout(), SAME]);
+  for (const ex of examples) {
+    const carriers = generated.filter((f) => f.includes(ex));
+    assert.deepStrictEqual(carriers, [],
+      `the sentence offers \`${ex}:\` as binding state that \`config.yaml\` does not carry, ` +
+      `and a real generated config carries ${JSON.stringify(carriers)}. Story 31.9 added ` +
+      `those fields precisely so the gateway check could read them; a sentence that still ` +
+      `says otherwise tells an agent the field table cannot see a drift class it can.`);
+  }
 });
 
 // ─── F3 — AC5's discriminator, pinned in the SHIPPED TEXT ────────────────────
