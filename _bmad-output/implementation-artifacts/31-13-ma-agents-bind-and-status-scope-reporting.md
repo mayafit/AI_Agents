@@ -15,7 +15,7 @@
 | `lib/bound-projects.js` | **NEW.** The per-machine bound-project registry. Settles **OQ-1**. |
 | `bin/cli.js` | `case 'bind':` dispatch; `handleBind`, `offerBind`, `bindOfferDecision`, `detectInstallScopes`, `describeBoundProjects`, `printScopeReport`; scope report wired into `showStatus`; help text. |
 | `lib/installer.js` | `ensureManifest` back-fills `scope` on its **migrate** branch (handoff (c)); `GLOBAL_BIND_OFFER_HEADER`'s last two lines corrected — they claimed `ma-agents bind` did not exist yet, which **this story made false**. |
-| `test/project-layout-bind.test.js` | **NEW**, 50 tests. |
+| `test/project-layout-bind.test.js` | **NEW**, 55 tests. |
 | `test/project-layout-config-generation.test.js` | Story 31.3's generation-call-site pin widened 2 → 3 sites and **strengthened from a count to an identification** (see §6). |
 | `package.json` | New suite registered in the `npm test` chain, additively. |
 
@@ -146,7 +146,7 @@ Green baseline re-confirmed at every suite named in the brief; all exit 0.
 
 | Suite | Result |
 | --- | --- |
-| `project-layout-bind` (NEW) | **50 passed, 0 failed**, exit 0 |
+| `project-layout-bind` (NEW) | **55 passed, 0 failed**, exit 0 |
 | `project-layout-config-generation` | 32 passed, exit 0 (pin amended, see below) |
 | `project-layout-binding-spine` | 69, exit 0 |
 | `project-layout-staleness-guard` | 61, exit 0 |
@@ -177,8 +177,62 @@ under `lib/bmad-extension/` or `skills/`. The 41-copy / one-sha256 invariant is 
 
 ## 7. Mutation testing
 
-30 mutants, run in a **byte-for-byte robocopy `/MIR /XJ` mirror** with a uniquely-named harness
-(`mut-3113-runner.js`), with every anchor validated up front against each file's **own** line endings
-(`bin/cli.js` and `lib/installer.js` are CRLF, `lib/bound-projects.js` is LF — an LF-only anchor
-would have silently skipped 22 of the 30), the sandbox baseline confirmed green before any mutant,
-and every revert sha256-verified. Results are recorded in §8 of the run report.
+**30 mutants · 30 killed · 0 survivors** (25 killed in round 1; the 5 survivors below were closed by
+new tests and re-run in round 2, all killed).
+
+Run in a **byte-for-byte robocopy `/MIR /XJ` mirror** with a uniquely-named harness
+(`mut-3113-runner.js` — the scratchpad is shared with a sibling agent). Every anchor was validated up
+front against each file's **own** line endings (`bin/cli.js` and `lib/installer.js` are CRLF,
+`lib/bound-projects.js` is LF; an LF-only anchor would have matched nothing in 22 of the 30 and
+silently skipped them). The sandbox baseline was confirmed green before any mutant ran, and every
+revert was sha256-verified against the pristine bytes.
+
+| # | File | Mutation | R1 | R2 |
+| --- | --- | --- | --- | --- |
+| M1 | `bound-projects` | registry path cached at module load | KILLED | |
+| M2 | `bound-projects` | project identity no longer case-folded | KILLED | |
+| M3 | `bound-projects` | recording APPENDS instead of replacing | KILLED | |
+| M4 | `bound-projects` | a damaged registry reports `absent` | KILLED | |
+| M5 | `bound-projects` | registry version check removed | KILLED | |
+| M6 | `bound-projects` | recorded list no longer sorted | KILLED | |
+| **M7** | `bound-projects` | `normalizeProjectRoot` uses `realpathSync` | **SURVIVED** | KILLED |
+| M8 | `bound-projects` | malformed entries no longer dropped | KILLED | |
+| M9 | `cli` | an unreadable binding is OFFERED a fresh bind | KILLED | |
+| M10 | `cli` | an already-bound project is offered a bind | KILLED | |
+| M11 | `cli` | the offer AUTO-ACCEPTS under `--yes` | KILLED | |
+| **M12** | `cli` | the offer treats anything not-`false` as acceptance | **SURVIVED** | KILLED |
+| M13 | `cli` | bind proceeds over an unreadable binding | KILLED | |
+| M14 | `cli` | a non-interactive re-bind re-answers and rewrites | KILLED | |
+| **M15** | `cli` | the re-bind edit prompt defaults to YES | **SURVIVED** | KILLED |
+| M16 | `cli` | bind OVERWRITES an existing `project-context.md` | KILLED | |
+| **M17** | `cli` | bind does not regenerate `config.yaml` on a no-edit re-run | **SURVIVED** | KILLED |
+| M18 | `cli` | bind never records the project in the registry | KILLED | |
+| M19 | `cli` | bind writes an extra BMAD module tree | KILLED | |
+| M20 | `cli` | bind installs a skill directory | KILLED | |
+| M21 | `cli` | bind stops asking the sprint-management question | KILLED | |
+| M22 | `cli` | install scope always reports `global` | KILLED | |
+| M23 | `cli` | a MOVED project is reported as healthy | KILLED | |
+| M24 | `cli` | an unreadable binding at a bound root reported healthy | KILLED | |
+| M25 | `cli` | the listing is printed for a NON-global install | KILLED | |
+| M26 | `cli` | the scope report moves below the early return | KILLED | |
+| **M27** | `cli` | a lost registry and a damaged one print the same message | **SURVIVED** | KILLED |
+| M28 | `installer` | the `ensureManifest` scope back-fill is removed | KILLED | |
+| M29 | `installer` | the back-fill erases a recorded scope | KILLED | |
+| M30 | `installer` | the global offer names `bind` before `install` | KILLED | |
+
+**What the five survivors were, and what closed them** — each was a real gap, not a scoring artifact:
+
+- **M7** — the registry recorded a link's *target* rather than the path the user bound. Closed by a
+  junction/symlink fixture asserting the recorded root is `path.resolve(bound)`.
+- **M12** — a **cancelled** prompt (`undefined`, what `prompts` returns on Ctrl-C) read as
+  acceptance. Defect shape (a) exactly. Closed by a test that cancels the offer and proves, by
+  byte-identity, that nothing was written.
+- **M15** — the re-bind "change any of these answers?" prompt could default to YES and the AC4
+  byte-identity test would still pass, because re-collecting and accepting every pre-population
+  reproduces the same bytes on the same calendar day. Closed by asserting the prompt's `initial` is
+  the literal `false`, *in addition to* byte-identity.
+- **M17** — the most important one. Making regeneration conditional on an edit broke Story 31.4's
+  HALT remedy in the one case it is written for, and nothing caught it. Closed by a test that damages
+  `config.yaml` between two binds and proves the no-edit second run restores it byte-for-byte.
+- **M27** — `absent` vs `unreadable` was discriminated in the data and collapsed in the output.
+  Closed by comparing the two `status` renderings.
