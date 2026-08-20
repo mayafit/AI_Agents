@@ -911,6 +911,22 @@ function storeConfigPath(store, projectRoot) {
   return toPortablePath(store && store.path, projectRoot).portable;
 }
 
+// A store's value for a `*_space_key` field in config.yaml (Story 31.9).
+//
+// Keyed on the RESOLVED backend rather than on the presence of `.spaceKey`, so a
+// file-system store that somehow carries a stray `spaceKey` never publishes one
+// — the backend is the fact, the key is only meaningful under it. Returns `''`
+// (which `yamlEscapeValue` renders as `""`) for every non-confluence store, and
+// also for a confluence store whose space key was never recorded: the routing
+// block distinguishes "not recorded" from "recorded" itself, and must be able to
+// say so rather than print `undefined`.
+function confluenceSpaceKeyOf(store) {
+  const backend = backendOfStore(store);
+  if (backend !== 'confluence') return '';
+  const key = store && store.spaceKey;
+  return typeof key === 'string' ? key : '';
+}
+
 /**
  * Story 31.3 — GENERATE `_bmad/bmm/config.yaml` FROM `_bmad-output/project-layout.yaml`.
  *
@@ -1114,6 +1130,45 @@ function generateBmmConfig(opts) {
     // reader of the new field must not have to know the legacy one exists.
     content = writeConfigField(content, 'system_requirements_path', storeConfigPath(systemStore, projectRoot));
     content = writeConfigField(content, 'software_requirements_path', kbPath);
+
+    // ── STORY 31.9 — THE BACKEND, IN THE RESOLVED CONFIGURATION.
+    //
+    // FR261/AC2 requires each skill to read its store's backend "from the
+    // resolved configuration as a gateway check at the start", following
+    // `mcp-detection-pattern-spec.md` §2.6. The resolved configuration is THIS
+    // file: Story 31.6's AC5 rule 1 makes `_bmad-output/project-layout.yaml`
+    // one-way (workflows resolve from the generated config, never from the
+    // binding), and it is enforced by a test that scans every skill entry
+    // document with Story 31.4's preflight removed. So the backend has to be
+    // HERE, or the gateway check cannot exist without opening a second source.
+    //
+    // Four fields, not two, and written UNCONDITIONALLY:
+    //
+    //   - `*_backend` — the RESOLVED backend (`backendOfStore` already collapses
+    //     absent/empty to `file-system`, R-5), so the value is always a member of
+    //     the closed enum. Written for a file-system store too: a field present
+    //     only when it is `confluence` would make "absent" mean two different
+    //     things (a pre-F26 config vs. a file-system store) and §2.7's default
+    //     would have to swallow both.
+    //
+    //   - `*_space_key` — the Confluence space, or `""` for a file-system store.
+    //     Written even when empty because `writeConfigField` updates-or-appends
+    //     and NEVER deletes (see the F1 note on `sprint_management_path`): a
+    //     project re-bound from `confluence` back to `file-system` would
+    //     otherwise keep its old space key in a freshly generated config, and the
+    //     halt message would name a space that is no longer configured.
+    //
+    // NFR79 SCOPE. The space key is the ONLY Confluence value that crosses into
+    // config.yaml. No token, no username, no URL — Story 31.8 does not record
+    // them, so nothing here can leak them. `root_page` stays in the binding: the
+    // gate does not need it, and 31.10 owns it.
+    //
+    // NFR82. All four are ADDITIVE. No existing field's value changes, so no
+    // artifact moves for any project that exists today.
+    content = writeConfigField(content, 'system_requirements_backend', systemBackend);
+    content = writeConfigField(content, 'software_requirements_backend', softwareBackend);
+    content = writeConfigField(content, 'system_requirements_space_key', confluenceSpaceKeyOf(systemStore));
+    content = writeConfigField(content, 'software_requirements_space_key', confluenceSpaceKeyOf(softwareStore));
 
     // 3.12.3: when the user provides a non-`.` path for knowledgebase /
     // sprint management, treat that path as the literal artifacts directory
