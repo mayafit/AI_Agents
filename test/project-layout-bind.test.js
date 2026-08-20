@@ -52,7 +52,7 @@ const { spawnSync } = require('child_process');
 
 // A `!==` check — a SURPLUS fails as loudly as a shortfall. This epic has already
 // shipped one suite that exited 0 having reported nothing.
-const EXPECTED_TEST_COUNT = 50;
+const EXPECTED_TEST_COUNT = 55;
 
 const REPO_ROOT = path.join(__dirname, '..');
 const CLI_PATH = path.join(REPO_ROOT, 'bin', 'cli.js');
@@ -76,12 +76,17 @@ const INSTALLER_SOURCE = fs.readFileSync(INSTALLER_PATH, 'utf-8').replace(/\r\n/
 const promptsModulePath = require.resolve('prompts');
 require('prompts');
 let promptLog = [];
+// `false` | `true` | `undefined` (a CANCELLED prompt — what `prompts` returns when
+// the user hits Ctrl-C) | PRESS_ENTER (answer with whatever the prompt itself
+// pre-selected, which is how a default is exercised rather than restated).
+const PRESS_ENTER = Symbol('press Enter on a confirm prompt');
 let confirmAnswer = false;
 require.cache[promptsModulePath].exports = async function stubPrompts(question) {
   promptLog.push({
     name: (question && question.name) || '(unnamed)',
     type: question && question.type,
     message: (question && question.message) || '',
+    initial: question && question.initial,
   });
   const name = (question && question.name) || '(unnamed)';
   if (question && question.type === 'select') {
@@ -95,7 +100,10 @@ require.cache[promptsModulePath].exports = async function stubPrompts(question) 
     }
     return { [name]: choice.value };
   }
-  if (question && question.type === 'confirm') return { [name]: confirmAnswer };
+  if (question && question.type === 'confirm') {
+    if (confirmAnswer === PRESS_ENTER) return { [name]: question.initial };
+    return { [name]: confirmAnswer };
+  }
   return { [name]: question && question.initial === undefined ? '' : question.initial };
 };
 
@@ -543,6 +551,31 @@ test('[behaviour] AC3 — a NON-INTERACTIVE offer does not auto-accept itself', 
   }
 });
 
+test('[behaviour] AC3 — a CANCELLED offer prompt is a refusal, not an acceptance', async () => {
+  // The permissive-degrade shape this epic keeps producing. `prompts` returns an
+  // object with NO key when the user hits Ctrl-C, so the answer reads back as
+  // `undefined`. A guard written as `if (answer === false)` treats that as a yes
+  // and binds a project the user just walked away from. Only an explicit `true`
+  // may run bind.
+  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ma-bind-cxl-')));
+  const origCwd = process.cwd();
+  try {
+    process.chdir(base);
+    const before = fingerprint(base);
+    confirmAnswer = undefined;
+    promptLog = [];
+    const r = await cli.offerBind({ projectRoot: base, yes: false });
+    assert.ok(promptLog.length >= 1, 'no question was asked, so the cancellation was never exercised');
+    assert.strictEqual(r.ran, false, 'a cancelled prompt ran bind — only an explicit yes may');
+    assert.deepStrictEqual(fingerprint(base), before, 'a cancelled offer wrote a file');
+  } finally {
+    confirmAnswer = false;
+    process.chdir(origCwd);
+    process.exitCode = 0;
+    try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
+});
+
 test('[text] AC3 — the offer sits in the documents a skill ACTUALLY LOADS, and names a command that dispatches', () => {
   // THE SURFACE QUESTION. Story 31.11 AC6 put its offer in the global
   // `MANIFEST.yaml`; its reviewer established that nothing directs an agent to
@@ -661,6 +694,44 @@ test('[behaviour] AC4 — the second run REPORTED the existing bindings rather t
     `the second run did not state that nothing was changed:\n${out}`);
 });
 
+test('[behaviour] AC4 — the re-bind "change any of these answers?" prompt DEFAULTS TO NO', async () => {
+  // Defect shape (a): a default degrading to permissive. Pressing Enter on a
+  // re-bind must not re-answer the wizard, because AC4's "changes nothing unless
+  // the user EXPLICITLY edits an answer" is what makes bind safe to run on a
+  // whim — and Story 31.4's HALT text tells users to do exactly that.
+  //
+  // The expectation is the literal `false`, checked against the prompt the code
+  // actually issued. Asserting byte-identity alone would not catch this: a
+  // re-collection that accepts every pre-population reproduces the same bytes on
+  // the same calendar day, so the wrong default would pass unnoticed.
+  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ma-bind-def-')));
+  const origCwd = process.cwd();
+  try {
+    process.chdir(base);
+    confirmAnswer = PRESS_ENTER;
+    promptLog = [];
+    await cli.handleBind([]);                    // first bind: writes the binding
+    const afterFirst = fingerprint(base);
+    assert.ok(Object.keys(afterFirst).length >= 3, 'the first bind wrote nothing to compare against');
+
+    promptLog = [];
+    await cli.handleBind([]);                    // second bind: interactive, Enter
+    const edit = promptLog.filter((q) => q.type === 'confirm');
+    assert.strictEqual(edit.length, 1,
+      `a re-bind must ask exactly one confirm question, asked ${edit.length}: ${JSON.stringify(promptLog)}`);
+    assert.strictEqual(edit[0].initial, false,
+      `the re-bind edit prompt pre-selects ${JSON.stringify(edit[0].initial)} — pressing Enter would ` +
+      `re-answer the whole wizard`);
+    assert.deepStrictEqual(fingerprint(base), afterFirst,
+      'pressing Enter on the re-bind prompt changed a file');
+  } finally {
+    confirmAnswer = false;
+    process.chdir(origCwd);
+    process.exitCode = 0;
+    try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // AC5 — bind never overwrites an existing project-context.md
 // ═══════════════════════════════════════════════════════════════════════════
@@ -731,6 +802,37 @@ test('[behaviour] AC6 — neither _bmad/config.user.toml nor _bmad/custom/config
 
     assert.strictEqual(fs.readFileSync(a, 'utf-8'), A, '_bmad/config.user.toml was modified (P5-9.4)');
     assert.strictEqual(fs.readFileSync(b, 'utf-8'), B, '_bmad/custom/config.user.toml was modified (P5-9.4)');
+  });
+});
+
+test('[behaviour] AC6 — a re-bind that edits NOTHING still regenerates a STALE config.yaml', () => {
+  // THE STORY 31.4 REMEDY, END TO END. Its staleness HALT says: "Run `ma-agents
+  // bind` to regenerate `_bmad/bmm/config.yaml` from the committed binding."
+  // The user reaching that message has changed NOTHING — the binding moved under
+  // them, or the config was damaged — so a bind that skipped generation whenever
+  // no answer was edited would leave that instruction false in the one situation
+  // it is ever given in. This is also why AC4's byte-identity is proved by
+  // determinism rather than by "nothing ran".
+  withSandbox(({ home, project }) => {
+    const first = runCli(['bind', '--yes'], { home, cwd: project });
+    assert.strictEqual(first.code, 0, `the first bind exited ${first.code}:\n${first.out}`);
+    const cfgPath = path.join(project, '_bmad', 'bmm', 'config.yaml');
+    const good = fs.readFileSync(cfgPath, 'utf-8');
+    assert.ok(/^knowledgebase_path: *"\."$/m.test(good),
+      `the generated config does not carry the expected knowledgebase_path:\n${good}`);
+
+    // Damage it the way a bad merge or a hand-edit would.
+    fs.writeFileSync(cfgPath, good.replace(/^knowledgebase_path: *".*"$/m,
+      'knowledgebase_path: "/somewhere/the/stores/used/to/be"'), 'utf-8');
+    assert.ok(/used\/to\/be/.test(fs.readFileSync(cfgPath, 'utf-8')), 'the damage was not applied');
+
+    const second = runCli(['bind', '--yes'], { home, cwd: project });
+    assert.strictEqual(second.code, 0, `the second bind exited ${second.code}:\n${second.out}`);
+    assert.ok(/left unchanged/i.test(second.out),
+      `the second run took the EDIT path, so this does not test the no-edit branch:\n${second.out}`);
+    assert.strictEqual(fs.readFileSync(cfgPath, 'utf-8'), good,
+      'a no-edit re-bind did not regenerate a stale config.yaml, so Story 31.4\'s HALT remedy does ' +
+      'not work for the case it is written for');
   });
 });
 
@@ -1113,6 +1215,59 @@ test('[behaviour] AC8 — a damaged ENTRY is dropped; it never surfaces as an un
       assert.notStrictEqual(p.root, '');
     }
   });
+});
+
+test('[behaviour] AC8 — the record names the root the user BOUND, not one resolved through a link', () => {
+  // `path.resolve`, never `fs.realpathSync`. A bound project that has since been
+  // DELETED is exactly the case AC7 exists to surface, and `realpathSync` throws
+  // on a path that no longer exists; resolving through a link would also make
+  // `status` list a path the user never typed.
+  withSandboxHome((base) => {
+    const real = path.join(base, 'real-project');
+    const link = path.join(base, 'linked-project');
+    fs.mkdirSync(real, { recursive: true });
+    try {
+      fs.symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
+    } catch (e) {
+      throw new Error(`could not create a link fixture (${e.message}) — this test must not silently skip`);
+    }
+    assert.ok(fs.existsSync(link), 'the link fixture was not created');
+    assert.notStrictEqual(fs.realpathSync(link), path.resolve(link),
+      'the link resolves to itself on this filesystem, so the distinction cannot be observed');
+
+    boundProjects.recordBoundProject(link);
+    const r = boundProjects.readBoundProjects();
+    assert.strictEqual(r.ok, true);
+    assert.deepStrictEqual(r.projects.map((p) => p.root), [path.resolve(link)],
+      `the registry recorded ${JSON.stringify(r.projects.map((p) => p.root))} rather than the path ` +
+      `that was bound (${path.resolve(link)})`);
+  });
+});
+
+test('[behaviour] AC8 — status says WHICH failure it found: an absent record reads differently from a damaged one', () => {
+  // The `absent` / `unreadable` distinction has to survive all the way to the
+  // output, or the discriminated result is doing no work for the user. "Nothing
+  // has been bound on this machine" and "there is a record here I cannot read"
+  // call for different actions.
+  const absentMsg = withSandbox(({ base, home, project }) => {
+    runCli(['bind', '--yes'], { home, cwd: project });
+    plantGlobalInstall(home);
+    fs.rmSync(path.join(home, '.ma-agents'), { recursive: true, force: true });
+    return runCli(['status'], { home, cwd: base }).out;
+  });
+  const damagedMsg = withSandbox(({ base, home, project }) => {
+    runCli(['bind', '--yes'], { home, cwd: project });
+    plantGlobalInstall(home);
+    fs.writeFileSync(path.join(home, '.ma-agents', 'bound-projects.json'), '{ not json', 'utf-8');
+    return runCli(['status'], { home, cwd: base }).out;
+  });
+  assert.ok(/No projects recorded as bound on this machine/.test(absentMsg),
+    `the absent case does not say the record is empty:\n${absentMsg}`);
+  assert.ok(/could not be read/.test(damagedMsg),
+    `the damaged case does not say the record could not be read:\n${damagedMsg}`);
+  assert.ok(!/No projects recorded as bound on this machine/.test(damagedMsg),
+    `a DAMAGED record is reported as "nothing has been bound" — the two facts are conflated, and the ` +
+    `user is told their projects are gone rather than that the file is broken:\n${damagedMsg}`);
 });
 
 test('[text] AC8/OQ-1 — the decision is RECORDED in the source, as a story-level decision', () => {
