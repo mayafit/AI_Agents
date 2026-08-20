@@ -52,7 +52,7 @@ const { spawnSync } = require('child_process');
 
 // A `!==` check — a SURPLUS fails as loudly as a shortfall. This epic has already
 // shipped one suite that exited 0 having reported nothing.
-const EXPECTED_TEST_COUNT = 46;
+const EXPECTED_TEST_COUNT = 50;
 
 const REPO_ROOT = path.join(__dirname, '..');
 const CLI_PATH = path.join(REPO_ROOT, 'bin', 'cli.js');
@@ -1001,6 +1001,118 @@ test('[behaviour] AC8 — an UNREADABLE record is not conflated with an absent o
     if (origProfile === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = origProfile;
     try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* best effort */ }
   }
+});
+
+/** Run `fn` with HOME/USERPROFILE redirected into a throwaway directory. */
+function withSandboxHome(fn) {
+  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ma-bind-hm-')));
+  const origHome = process.env.HOME;
+  const origProfile = process.env.USERPROFILE;
+  try {
+    process.env.HOME = base;
+    process.env.USERPROFILE = base;
+    assert.ok(boundProjectsPathIsUnder(base), 'HOME redirection did not take effect');
+    return fn(base);
+  } finally {
+    if (origHome === undefined) delete process.env.HOME; else process.env.HOME = origHome;
+    if (origProfile === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = origProfile;
+    try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
+}
+function boundProjectsPathIsUnder(base) {
+  return path.resolve(boundProjects.boundProjectsPath()).startsWith(path.resolve(base) + path.sep);
+}
+
+test('[behaviour] AC8 — the record is DETERMINISTIC: the same set of projects gives the same bytes', () => {
+  // NFR81's determinism rule, applied to the registry. Written in two different
+  // orders; the file must not depend on which project happened to be bound first,
+  // or the record becomes a source of spurious diffs and of "did it change?"
+  // ambiguity in `status`.
+  // The sandbox home differs between the two runs, so it is masked out of the
+  // BYTES before comparison — in its JSON-ESCAPED form, which is how it actually
+  // appears in the file (`C:\\Users\\…`). Masking the un-escaped form matches
+  // nothing on Windows, and the comparison then fails for a reason that has
+  // nothing to do with ordering. The mask asserts it actually fired.
+  const at = new Date('2026-01-01T00:00:00.000Z');
+  const readMasked = (base) => {
+    const raw = fs.readFileSync(boundProjects.boundProjectsPath(), 'utf-8');
+    const escaped = JSON.stringify(base).slice(1, -1);
+    const masked = raw.split(escaped).join('<HOME>');
+    assert.ok(masked.includes('<HOME>'),
+      `the sandbox home was not found in the registry bytes, so the mask did nothing:\n${raw}`);
+    return masked;
+  };
+  const forward = withSandboxHome((base) => {
+    boundProjects.recordBoundProject(path.join(base, 'alpha'), at);
+    boundProjects.recordBoundProject(path.join(base, 'beta'), at);
+    boundProjects.recordBoundProject(path.join(base, 'gamma'), at);
+    return readMasked(base);
+  });
+  const backward = withSandboxHome((base) => {
+    boundProjects.recordBoundProject(path.join(base, 'gamma'), at);
+    boundProjects.recordBoundProject(path.join(base, 'beta'), at);
+    boundProjects.recordBoundProject(path.join(base, 'alpha'), at);
+    return readMasked(base);
+  });
+  assert.ok(forward.includes('alpha') && forward.includes('gamma'),
+    'the fixture did not record three projects, so this comparison is vacuous');
+  assert.strictEqual(backward, forward,
+    'the registry bytes depend on the ORDER projects were bound in, not on the set of them');
+});
+
+test('[behaviour] AC8 — re-binding the same project does not append a second entry', () => {
+  withSandboxHome((base) => {
+    const p = path.join(base, 'proj');
+    boundProjects.recordBoundProject(p);
+    boundProjects.recordBoundProject(p);
+    boundProjects.recordBoundProject(p);
+    const r = boundProjects.readBoundProjects();
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.projects.length, 1,
+      `three binds of one project produced ${r.projects.length} entries — \`status\` would list it repeatedly`);
+  });
+  // …and on a case-insensitive filesystem, a differently-cased root is the SAME
+  // project. Only asserted where the platform actually is case-insensitive;
+  // stated as a skip rather than passing silently elsewhere.
+  if (process.platform === 'win32' || process.platform === 'darwin') {
+    withSandboxHome((base) => {
+      boundProjects.recordBoundProject(path.join(base, 'Proj'));
+      boundProjects.recordBoundProject(path.join(base, 'proj'));
+      assert.strictEqual(boundProjects.readBoundProjects().projects.length, 1,
+        'a differently-cased project root produced a second entry on a case-insensitive filesystem');
+    });
+  }
+});
+
+test('[behaviour] AC8 — a registry from a different shape version is `unreadable`, not silently accepted', () => {
+  withSandboxHome((base) => {
+    fs.mkdirSync(path.join(base, '.ma-agents'), { recursive: true });
+    fs.writeFileSync(path.join(base, '.ma-agents', 'bound-projects.json'),
+      JSON.stringify({ version: 999, projects: [{ root: 'C:\\somewhere' }] }), 'utf-8');
+    const r = boundProjects.readBoundProjects();
+    assert.strictEqual(r.ok, false,
+      'a registry declaring an unknown version was read as if this build wrote it');
+    assert.strictEqual(r.reason, 'unreadable', `got ${JSON.stringify(r.reason)}`);
+  });
+});
+
+test('[behaviour] AC8 — a damaged ENTRY is dropped; it never surfaces as an unnamed project', () => {
+  withSandboxHome((base) => {
+    const good = path.join(base, 'good');
+    fs.mkdirSync(path.join(base, '.ma-agents'), { recursive: true });
+    fs.writeFileSync(path.join(base, '.ma-agents', 'bound-projects.json'), JSON.stringify({
+      version: 1,
+      projects: [{ root: good, boundAt: '2026-01-01T00:00:00.000Z' }, { boundAt: 'x' }, null, { root: '' }, 'nonsense'],
+    }), 'utf-8');
+    const r = boundProjects.readBoundProjects();
+    assert.strictEqual(r.ok, true, 'one damaged entry made the whole registry unreadable, hiding every other project');
+    assert.deepStrictEqual(r.projects.map((p) => p.root), [good],
+      `damaged entries leaked into the listing: ${JSON.stringify(r.projects)}`);
+    for (const p of r.projects) {
+      assert.strictEqual(typeof p.root, 'string');
+      assert.notStrictEqual(p.root, '');
+    }
+  });
 });
 
 test('[text] AC8/OQ-1 — the decision is RECORDED in the source, as a story-level decision', () => {
