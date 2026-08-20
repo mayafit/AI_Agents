@@ -55,7 +55,10 @@ const os = require('os');
 const crypto = require('crypto');
 
 // A `!==` check — a SURPLUS fails as loudly as a shortfall.
-const EXPECTED_TEST_COUNT = 61;
+// 61 at Story 31.4; +1 in Story 31.9, which closed half of the drift gap this
+// suite pinned (a backend change is now visible to the field table) and added
+// the test that proves it.
+const EXPECTED_TEST_COUNT = 62;
 
 let passed = 0;
 let failed = 0;

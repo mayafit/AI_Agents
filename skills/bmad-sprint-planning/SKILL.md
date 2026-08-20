@@ -123,6 +123,53 @@ node -e "const c=require('ma-agents/bin/cli.js'),f=require('fs'),p=process.cwd()
 
 The generated config matches the committed binding. Say NOTHING about the binding, the stamp or this preflight — a matched project gets no message — and continue with the rest of this skill.
 
+## Knowledge Store Backend Routing
+
+**Gateway check — run this immediately after the preflight above, and before anything else.** Before any read, any write, any user prompt, and before the sprint-tracking `## Backend Routing` check below. No step of this skill executes until this check returns PROCEED.
+
+This is the SAME routing pattern the sprint skills use for Jira, applied to a knowledge store instead of to sprint tracking. It is not a second mechanism: read the backend from the resolved configuration, branch on its value, and where it cannot be honoured say exactly what is wrong and stop. `mcp-detection-pattern-spec.md` defines the shape — §2.6 (this is a gateway check, not an afterthought), §2.7 (absent or empty means `file-system`), §6.6 (a backend is added by adding a branch, and the `file-system` branch is untouched).
+
+**Which store gates this skill.** This skill resolves epics, and epics are a *software requirements* artifact (FR256), so the store that gates it is the **software requirements store**. Read these two fields from `_bmad/bmm/config.yaml`, each only from a line at column 0, stripping one balanced pair of surrounding quotes from the value:
+
+- `software_requirements_backend:` — the backend of the store this skill reads its epics from.
+- `software_requirements_space_key:` — that store's Confluence space, when it has one.
+
+A skill that resolves a *system requirements* artifact reads `system_requirements_backend:` and `system_requirements_space_key:` instead and takes exactly these branches; nothing else about the check changes. Sprint execution state — story files, `sprint-status.yaml`, bugs, retrospectives — belongs to NEITHER knowledge store (FR267), so nothing this skill does with those artifacts is affected by any branch below.
+
+Take the first branch that matches, and stop there.
+
+### Step B1 — `file-system`, or the field is absent, or its value is empty
+
+**PROCEED** with the rest of this skill exactly as written below, unchanged. Say NOTHING about the backend: a file-system project gets no message from this section, no prompt, and no offer. This is the default (§2.7), and it is what every project that has not configured a Confluence store gets — including every project generated before the field existed. Nothing in this section reads, writes, resolves or reports anything on this path.
+
+### Step B2 — `confluence`
+
+That store's artifacts live in Confluence, and Confluence is the source of truth for them. Before resolving, reading or writing ANY artifact belonging to that store, determine whether a Confluence-capable tool is available to you in your current tool context — an MCP server, plugin or native integration connected to the Confluence instance that hosts the space named above. Do not assume one is present because the backend says `confluence`: the backend is a statement of configuration, and availability is a fact about this run.
+
+- **A Confluence-capable tool IS available** → route this store's reads and writes to it, in the space named by the space-key field, and treat what it returns as the source of truth for that store. Do NOT read that store's artifacts from a local directory instead, and do NOT write, copy, cache, export or reconcile a local copy of anything Confluence returns. There is no mirror and no cache, so there is nothing to synchronise and nothing to fall out of date.
+
+- **No Confluence-capable tool is available** → **HALT** and report:
+
+  > **ma-agents — stopping: this knowledge store is Confluence-backed and no Confluence MCP was detected.**
+  > Store: the software requirements store. Space: {the value of the space-key field, or `not recorded` when that field is absent or empty}.
+  > No Confluence MCP server is available in this agent's tool context, so that store cannot be read or written.
+  > To configure one, add a Confluence-capable MCP server to your agent's MCP configuration, pointed at the Confluence instance that hosts that space, and authorise it; then run this skill again. Alternatively, re-run the installer (or `ma-agents bind`) to bind that store to the file system instead.
+  > Nothing has been read or written on your behalf, and nothing has been written locally. Stopping rather than guessing.
+
+  Then STOP. Do NOT fall back to the file system. Do NOT read, create or offer to create a local copy of that store's artifacts. Do NOT continue with a partial or empty result as though the store were empty. Do NOT change the configured backend on the user's behalf. A Confluence-backed store with no Confluence MCP has no degraded mode — halting IS the behaviour, not a failure to find one.
+
+### Step B3 — any other value
+
+**HALT** and report:
+
+  > **ma-agents — stopping: unrecognised knowledge-store backend.**
+  > Store: the software requirements store. Backend: `{the value you read}`. The backends this build understands are `file-system` and `confluence`.
+  > `_bmad/bmm/config.yaml` is generated, so a value outside that set means it was hand-edited or written by a different build — and every artifact this skill would resolve for that store depends on which of the two it actually is.
+  > Run `ma-agents bind` to regenerate `_bmad/bmm/config.yaml`, or re-run the installer.
+  > Nothing has been read or written on your behalf. Stopping rather than guessing.
+
+**Default-deny, deliberately.** This is the one place this block departs from `mcp-detection-pattern-spec.md`, which for an unrecognised *sprint tracking* value prints a message and falls back to the file system (§2.5). A knowledge store does not get that treatment: falling back would resolve a store this build cannot identify to local files, which is exactly the silent degradation FR262 forbids. Step B1's default is for a field that was never stated. It is not a catch-all, and it must never absorb a value that IS stated and is not understood.
+
 ## INITIALIZATION
 
 ### Path Resolution
