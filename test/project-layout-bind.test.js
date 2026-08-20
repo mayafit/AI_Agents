@@ -52,7 +52,7 @@ const { spawnSync } = require('child_process');
 
 // A `!==` check — a SURPLUS fails as loudly as a shortfall. This epic has already
 // shipped one suite that exited 0 having reported nothing.
-const EXPECTED_TEST_COUNT = 55;
+const EXPECTED_TEST_COUNT = 57;
 
 const REPO_ROOT = path.join(__dirname, '..');
 const CLI_PATH = path.join(REPO_ROOT, 'bin', 'cli.js');
@@ -574,6 +574,43 @@ test('[behaviour] AC3 — a CANCELLED offer prompt is a refusal, not an acceptan
     process.exitCode = 0;
     try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* best effort */ }
   }
+});
+
+test('[behaviour] AC3 — the offer HAS a production caller: `status` on a global install in an unbound project makes it', () => {
+  // An exported `offerBind` that nothing calls would be the "presence, not
+  // effect" shape this epic keeps producing — and it is exactly what left Story
+  // 31.11's AC6 offer with no reader. This proves the CLI reaches it.
+  withSandbox(({ home, project }) => {
+    plantGlobalInstall(home);
+    const unbound = runCli(['status'], { home, cwd: project });
+    assert.strictEqual(unbound.code, 0, `status exited ${unbound.code}:\n${unbound.out}`);
+    assert.ok(/no _bmad-output\/project-layout\.yaml/.test(unbound.out),
+      `status in an unbound project made no offer:\n${unbound.out}`);
+    assert.ok(/Run `ma-agents bind` in this project to create one\. Not doing it for you\./.test(unbound.out),
+      `the offer did not state the remedy and stop:\n${unbound.out}`);
+    // …and, being non-interactive (spawnSync attaches no TTY), it must NOT have bound.
+    assert.deepStrictEqual(fileList(project), [],
+      `\`status\` wrote to the project root — the offer bound it without being asked: ` +
+      `${JSON.stringify(fileList(project))}`);
+
+    // CONTROL: once the project IS bound, the same command makes no offer. Without
+    // this, the assertion above would pass for a status that offers unconditionally.
+    const bound = runCli(['bind', '--yes'], { home, cwd: project });
+    assert.strictEqual(bound.code, 0, `bind exited ${bound.code}:\n${bound.out}`);
+    const after = runCli(['status'], { home, cwd: project });
+    assert.strictEqual(after.code, 0, `status exited ${after.code}:\n${after.out}`);
+    assert.ok(!/Run `ma-agents bind` in this project to create one/.test(after.out),
+      `status still offers to bind an already-bound project:\n${after.out}`);
+  });
+});
+
+test('[behaviour] AC3 — `status` on a NON-global install makes no offer (FR252 is the global case)', () => {
+  withSandbox(({ home, project }) => {
+    const r = runCli(['status'], { home, cwd: project });
+    assert.strictEqual(r.code, 0, `status exited ${r.code}:\n${r.out}`);
+    assert.ok(!/Run `ma-agents bind` in this project to create one/.test(r.out),
+      `a non-global install was offered the bind:\n${r.out}`);
+  });
 });
 
 test('[text] AC3 — the offer sits in the documents a skill ACTUALLY LOADS, and names a command that dispatches', () => {

@@ -222,7 +222,7 @@ function showAgents() {
   console.log('');
 }
 
-function showStatus(args) {
+async function showStatus(args) {
   const globalFlag = args.includes('--global');
   const scope = globalFlag ? 'global' : 'project';
   const positional = args.filter(a => a !== '--global');
@@ -236,7 +236,29 @@ function showStatus(args) {
   // and no project-scope skills takes that return, and it is precisely the
   // machine whose bound-project list the user needs. Reporting scope only when
   // skills happen to be listed would make AC7 invisible on its own primary case.
-  printScopeReport(detectInstallScopes());
+  const scopes = detectInstallScopes();
+  printScopeReport(scopes);
+
+  // Story 31.13 AC3 — THE OFFER'S CLI CALL SITE.
+  //
+  // The offer that reaches a globally-installed SKILL at activation time is the
+  // Story 31.4 preflight embedded in the skill documents; the CLI is not present
+  // at that moment and cannot be. But `offerBind` must not be a seam with no
+  // production caller — an exported function nothing calls is the "presence, not
+  // effect" shape this epic keeps producing, and it is what left Story 31.11's
+  // AC6 offer with no reader.
+  //
+  // `status` on a GLOBAL install, run inside a project with no committed binding,
+  // is the one CLI moment where the user is asking about exactly this state. So
+  // the offer is made here, and only here.
+  //
+  // `yes` is derived from whether a TTY is attached. Without one — a pipe, a CI
+  // step, a test harness — there is no user to choose, so `offerBind` states the
+  // remedy and stops rather than prompting. It never binds either way; only an
+  // explicit `true` answer can do that.
+  if (scopes.global) {
+    await offerBind({ projectRoot: process.cwd(), yes: !process.stdin.isTTY });
+  }
 
   if (results.length === 0) {
     console.log(chalk.gray(`\n  No skills installed (${scope} scope)\n`));
@@ -5015,7 +5037,7 @@ async function interactiveMode() {
   }
 
   if (action === 'status') {
-    showStatus([]);
+    await showStatus([]);
     process.exit(0);
   }
 
@@ -5061,7 +5083,7 @@ async function main() {
       await handleUninstall(args.slice(1));
       break;
     case 'status':
-      showStatus(args.slice(1));
+      await showStatus(args.slice(1));
       break;
     // Story 31.13 (FR252). Story 31.4's preflight — embedded in every shipped
     // skill document — instructs the user to run this command in five separate
