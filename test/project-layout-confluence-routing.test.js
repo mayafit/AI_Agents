@@ -658,6 +658,16 @@ test('[behaviour] §2.7 an EMPTY backend field proceeds as file-system, silently
 
 // The defect shape this epic keeps producing: a permissive default absorbing a
 // value that IS stated and is NOT understood. Every one of these must HALT.
+//
+// THESE RUN AGAINST THE ORACLE, so they are only about the SHIPPED text for as
+// long as the shipped Step B1 states the same condition the oracle's B1
+// implements. That link is what
+// "[text] BLOCKING-1 the gate declares EXACTLY three steps, matched whole-line"
+// holds: before the fix round, the B1 heading was matched with `includes()`, so
+// widening it to "…or any value not listed below" made Step B3 dead code and
+// silently degraded all eighteen of these values while every case below stayed
+// green. If that heading test is ever loosened, this table stops meaning
+// anything about the shipped block.
 const MALFORMED_BACKENDS = Object.freeze([
   'Confluence',      // right word, wrong case — the enum is case-sensitive
   'CONFLUENCE',
