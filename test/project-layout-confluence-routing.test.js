@@ -54,7 +54,7 @@ const { execFileSync } = require('child_process');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 
-const EXPECTED_TEST_COUNT = 74;
+const EXPECTED_TEST_COUNT = 75;
 
 let passed = 0;
 let failed = 0;
@@ -994,9 +994,25 @@ test('[text] every branch the shipped block states is a verdict the oracle can r
     `A fourth step nothing exercises is the shape this test exists to catch.`);
 });
 
+/** One `### Step Bn` of the shipped gate, up to the next `### ` heading. */
+function gateStep(n) {
+  const start = SHIPPED_GATE.indexOf(`### Step B${n} `);
+  assert.notStrictEqual(start, -1, `the shipped block has no Step B${n}`);
+  const rest = SHIPPED_GATE.slice(start);
+  const end = rest.indexOf('\n### ', 1);
+  return end === -1 ? rest : rest.slice(0, end);
+}
+
 test('[text] AC3 the shipped block states all four required facts, checked against literals', () => {
   // The facts are written out HERE. Nothing is derived from the block, and
   // nothing is derived from the oracle's message either.
+  //
+  // SCOPED TO STEP B2, found by this story's mutation run (M17): asserted over
+  // the whole block, deleting "Store: the software requirements store" from the
+  // MCP-absent message left the suite green, because Step B3's unrelated message
+  // names the store too. A fact has to be present in the message that must carry
+  // it, not merely somewhere in the document.
+  const b2 = gateStep(2);
   const REQUIRED = {
     'the affected store': /Store: the software requirements store/,
     'its configured space': /Space: \{the value of the space-key field/,
@@ -1004,9 +1020,36 @@ test('[text] AC3 the shipped block states all four required facts, checked again
     'how to configure one': /add a Confluence-capable MCP server to your agent's MCP configuration/,
   };
   for (const [fact, needle] of Object.entries(REQUIRED)) {
-    assert.ok(needle.test(SHIPPED_GATE),
-      `the shipped halt message does not name ${fact}`);
+    assert.ok(needle.test(b2),
+      `Step B2's halt message does not name ${fact}`);
   }
+});
+
+test('[text] AC3/FR262 each shipped step states its OWN disposition — B1 proceeds, B2 and B3 halt', () => {
+  // Found by this story's mutation run (M18): rewriting Step B3's disposition
+  // from "**HALT** and report" to "output the message, then **PROCEED**" left
+  // every test green, because nothing measured the DISPOSITION — only that the
+  // message text still existed. That is the "proves presence, not behaviour"
+  // shape, applied to the block's most important word.
+  const b1 = gateStep(1);
+  const b2 = gateStep(2);
+  const b3 = gateStep(3);
+
+  assert.ok(/\*\*PROCEED\*\*/.test(b1), 'Step B1 must say PROCEED');
+  assert.ok(!/\*\*HALT\*\*/.test(b1), 'Step B1 must not halt — file-system is unchanged');
+
+  assert.ok(/\*\*HALT\*\*/.test(b2), 'Step B2\'s no-tool branch must say HALT');
+  assert.ok(!/\*\*PROCEED\*\*/.test(b2),
+    'Step B2 must never offer to proceed — that is the FR262 degradation');
+
+  assert.ok(/\*\*HALT\*\*/.test(b3),
+    'Step B3 must HALT on an unrecognised backend. Falling back to the file system is ' +
+    'mcp-detection-pattern-spec.md §2.5\'s behaviour for SPRINT TRACKING, and the block ' +
+    'departs from it deliberately — a value that IS stated and is NOT understood must ' +
+    'never be absorbed by Step B1\'s never-stated default.');
+  assert.ok(!/\*\*PROCEED\*\*/.test(b3), 'Step B3 must not proceed');
+  assert.ok(!/File-System branch|fall back to the file system/i.test(b3),
+    'Step B3 must not route to the file-system branch');
 });
 
 test('[text] FR262 the block forbids every form of degradation, by name', () => {
