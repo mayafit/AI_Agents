@@ -54,7 +54,7 @@ const { execFileSync } = require('child_process');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 
-const EXPECTED_TEST_COUNT = 75;
+const EXPECTED_TEST_COUNT = 89;
 
 let passed = 0;
 let failed = 0;
@@ -155,6 +155,143 @@ const SHIPPED_GATE = (() => {
 })();
 
 // ═════════════════════════════════════════════════════════════════════════════
+// WHICH STORE THIS GATE IS ABOUT — resolved from authorities OUTSIDE the gate
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * FIX-ROUND, BLOCKING-2. Nothing bound the gate to the store it must gate.
+ * Rewriting the two field bullets from `software_requirements_*` to
+ * `system_requirements_*` across all nine shipped copies left this suite green
+ * AND left `project-layout-artifact-routing.test.js` — which owns FR256 routing
+ * — green, because the oracle below silently defaults to `software_requirements`
+ * and nothing cross-checked that default against the shipped text.
+ *
+ * The field consequence is not cosmetic. A project with the SOFTWARE store on
+ * Confluence and the SYSTEM store on the file system — FR257's independence
+ * case, and this suite's own `SOFTWARE_CONFLUENCE` fixture — would read
+ * `file-system`, take Step B1, and resolve its epics from local files in
+ * silence. That is FR262's exact failure with the gate fully "present".
+ *
+ * So the store is RESOLVED, never transcribed, through two documents neither of
+ * which is the gate and neither of which this story wrote:
+ *
+ *   1. Story 31.6's routing table, §5.2 — WHICH ARTIFACT an ma-agents-owned
+ *      skill resolves, and the exact set of entry documents that resolve it.
+ *   2. The PRD capability document — WHICH STORE owns that artifact, read out
+ *      of the requirement lines' own bold words, by the same rule
+ *      `project-layout-artifact-routing.test.js`'s `destinationOf` uses.
+ *
+ * The `config.yaml` field prefix is then derived from the store's name. Every
+ * store name and field name this file asserts against the shipped block comes
+ * from here, so a shipped block that names the other store fails even though
+ * nothing in this file ever spells that store out.
+ */
+const ROUTING_TABLE_REL =
+  '_bmad-output/implementation-artifacts/31-6-artifact-to-store-routing.md';
+const PRD_REL = '_bmad-output/planning-artifacts/prd/capabilities/' +
+  'project-knowledge-and-repository-layout.md';
+
+function readAuthority(rel) {
+  const abs = path.join(PROJECT_ROOT, rel);
+  if (!fs.existsSync(abs)) {
+    throw new Error(`${rel} is missing — this suite's store oracle is an OUTSIDE authority, ` +
+      `and without it the only thing left to check the gate against is the gate`);
+  }
+  return fs.readFileSync(abs, 'utf-8').replace(/\r\n/g, '\n');
+}
+
+const AUTHORITY = (() => {
+  // ── 1. The artifact, and the documents that resolve it (Story 31.6 §5.2).
+  const table = readAuthority(ROUTING_TABLE_REL);
+  const flat = table.replace(/\s+/g, ' ');
+  const m = flat.match(
+    /Only \*\*([A-Za-z][A-Za-z ]*?)\*\* \(row (\d+)\) is resolved by an ma-agents-owned skill/);
+  if (!m) {
+    throw new Error(`${ROUTING_TABLE_REL} §5.2 no longer states which artifact an ` +
+      `ma-agents-owned skill resolves, in the form "Only **<artifact>** (row <n>) is resolved ` +
+      `by an ma-agents-owned skill". That sentence is this suite's only non-circular source ` +
+      `for what the gate is gating.`);
+  }
+  const artifact = m[1].trim();
+  const row = m[2];
+
+  const at = table.indexOf('### 5.2');
+  const section = table.slice(at, (() => {
+    const j = table.indexOf('\n## ', at);
+    return j === -1 ? table.length : j;
+  })());
+  const docs = [...section.matchAll(/^\| `([^`]+)` \| (\d+) \|/gm)]
+    .filter((r) => r[2] === row).map((r) => r[1]).sort();
+
+  // ── 2. The store that owns it (the PRD's own words).
+  const prd = readAuthority(PRD_REL);
+  const reqLines = prd.split('\n').filter((l) => /^- N?FR\d+:/.test(l.trim()));
+  const storesIn = (line) => [...new Set(
+    (line.match(/\*\*(?:system|software) requirements store\*\*/gi) || [])
+      .map((s) => s.replace(/\*/g, '').toLowerCase()))];
+  const artifactRe = new RegExp(`\\b${artifact}\\b`, 'i');
+
+  const assigning = [];
+  for (const line of reqLines) {
+    if (!artifactRe.test(line)) continue;
+    const stores = storesIn(line);
+    if (stores.length !== 1) continue;
+    assigning.push({ id: line.trim().match(/^- (N?FR\d+):/)[1], store: stores[0], line });
+  }
+  if (assigning.length === 0) {
+    throw new Error(`${PRD_REL} states no requirement that both names ` +
+      `${JSON.stringify(artifact)} and assigns exactly one knowledge store — the store ` +
+      `oracle has no source`);
+  }
+  const distinct = [...new Set(assigning.map((a) => a.store))];
+  if (distinct.length !== 1) {
+    throw new Error(`the PRD assigns ${JSON.stringify(artifact)} to more than one store ` +
+      `(${JSON.stringify(distinct)}); the gate cannot be bound to an ambiguous authority`);
+  }
+  const store = distinct[0];
+
+  // The PRIMARY assigning requirement: the one whose line's subject IS the store
+  // ("- FRnnn: The **<store>** holds …"). Picked by that rule rather than by id,
+  // so the id the shipped block cites is checked against the PRD and not against
+  // a number written here.
+  const primary = assigning.filter((a) =>
+    new RegExp(`^- ${a.id}: The \\*\\*${a.store}\\*\\* holds`, 'i').test(a.line.trim()));
+  if (primary.length !== 1) {
+    throw new Error(`exactly one PRD requirement must define ${JSON.stringify(store)} by ` +
+      `holding its artifacts; found ${JSON.stringify(primary.map((p) => p.id))}`);
+  }
+
+  // The complement, so "the OTHER store" is derived too rather than spelled out.
+  const bothStores = [...new Set(
+    (prd.match(/\*\*(?:system|software) requirements store\*\*/gi) || [])
+      .map((s) => s.replace(/\*/g, '').toLowerCase()))].sort();
+  if (bothStores.length !== 2) {
+    throw new Error(`the PRD names ${bothStores.length} knowledge stores; F26 has two`);
+  }
+  const otherStore = bothStores.find((s) => s !== store);
+
+  const nounOf = (s) => s.replace(/ store$/, '');
+  const prefixOf = (s) => nounOf(s).replace(/ /g, '_');
+
+  return Object.freeze({
+    artifact,                       // e.g. "epics"
+    row,
+    docs,                           // the entry documents §5.2 says resolve it
+    requirement: primary[0].id,     // e.g. "FR256"
+    store,                          // e.g. "software requirements store"
+    noun: nounOf(store),            // e.g. "software requirements"
+    prefix: prefixOf(store),        // e.g. "software_requirements"
+    otherStore,
+    otherNoun: nounOf(otherStore),
+    otherPrefix: prefixOf(otherStore),
+  });
+})();
+
+/** The closed backend enum, single-sourced — the gate may name these and no others. */
+const { STORE_BACKEND_LIST, DEFAULT_STORE_BACKEND } =
+  require(path.join(PROJECT_ROOT, 'lib', 'store-backends.js'));
+const NON_DEFAULT_BACKEND = STORE_BACKEND_LIST.find((b) => b !== DEFAULT_STORE_BACKEND);
+
+// ═════════════════════════════════════════════════════════════════════════════
 // THE EXECUTABLE ORACLE — the decision procedure the shipped block describes
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -179,12 +316,18 @@ function configField(content, field) {
  * The gate, executed. Deliberately shaped as the shipped block's three steps so
  * the correspondence tests below can bind step-for-step.
  *
+ * ITS DEFAULT STORE IS A LITERAL ON PURPOSE. `software_requirements` is written
+ * here rather than derived from `AUTHORITY`, so that the two are independent
+ * statements: the test
+ * "[behaviour] BLOCKING-2 the oracle's default store is the store the PRD
+ * assigns the gated artifact to" measures them against each other. Deriving it
+ * would make that check tautological, which is exactly how the shipped block
+ * came to be able to name the wrong store with this suite green.
+ *
  * @param {string} configContent  a REAL generated `_bmad/bmm/config.yaml`
  * @param {object} env
  * @param {object|null} env.confluence  the mock MCP surface, or null when absent
  * @param {string} env.storeField       which store's fields to read
- * @param {object} env.localReads       recorder: any local artifact read
- * @param {object} env.localWrites      recorder: any local artifact write
  */
 function runBackendGate(configContent, env) {
   const opts = env || {};
@@ -588,6 +731,32 @@ test('[behaviour] AC5 MCP present routes to the MCP, in the configured space', (
   });
 });
 
+// FIX-ROUND, NB-5. The two snapshot proofs below were near-vacuous as written:
+// they snapshot a tree, call a test-local function that provably performs no
+// I/O, and snapshot again. What actually carried the claim was the reviewer's
+// manual observation that `runBackendGate` contains no write. That observation
+// is now a machine check, so the snapshots are corroboration of a pinned fact
+// rather than the whole of it — and the snapshots' own messages below now state
+// what they do and do not establish.
+test('[behaviour] AC4 the oracle is a PURE decision function — pinned, not observed', () => {
+  const src = fs.readFileSync(__filename, 'utf-8');
+  const start = src.indexOf('function runBackendGate(');
+  assert.notStrictEqual(start, -1, 'the oracle is gone — every AC4 claim below rests on it');
+  const end = src.indexOf('\n}\n', start);
+  assert.notStrictEqual(end, -1, 'could not delimit the oracle body');
+  const body = src.slice(start, end);
+  assert.ok(body.length > 800,
+    `the located oracle body is ${body.length} chars — too short to be the real function, so ` +
+    `this test would be checking nothing`);
+  for (const primitive of ['fs.', 'require(', 'child_process', 'execFile', 'writeFile',
+    'mkdir', 'rmSync', 'process.env', 'process.cwd']) {
+    assert.ok(!body.includes(primitive),
+      `the oracle reaches ${JSON.stringify(primitive)}. It is the decision procedure ONLY: ` +
+      `the AC4 "no local artifact" proofs are snapshot comparisons around it, and they are ` +
+      `only meaningful while it cannot touch the filesystem in the first place.`);
+  }
+});
+
 test('[behaviour] AC4 the MCP-present path writes NO local artifact — byte-exact tree comparison', () => {
   withTmpDir((tmpDir) => {
     boundConfig(tmpDir, SOFTWARE_CONFLUENCE);
@@ -599,7 +768,11 @@ test('[behaviour] AC4 the MCP-present path writes NO local artifact — byte-exa
     const after = snapshot(tmpDir);
     assert.deepStrictEqual(after, before,
       'P5-9.6: routing to Confluence must produce no mirror, no cache and no local copy — ' +
-      'the project tree must be byte-identical afterwards');
+      'the project tree must be byte-identical afterwards. WHAT THIS ESTABLISHES: the ' +
+      'decision procedure, plus the real binding writer and config generator that ran before ' +
+      'it, left the tree untouched. It does NOT establish that a language model obeying the ' +
+      'shipped block writes nothing — no test here can. The absence-of-machinery proof below ' +
+      'and the shipped block\'s explicit prohibition are the other two legs.');
   });
 });
 
@@ -611,7 +784,8 @@ test('[behaviour] AC4 the HALT path writes NO local artifact either', () => {
     const r = runBackendGate(cfg, { confluence: null });
     assert.strictEqual(r.verdict, V.HALT_NO_MCP, 'precondition: the halt branch was taken');
     assert.deepStrictEqual(snapshot(tmpDir), before,
-      'a halt must not leave a partial file, a stub, or a "local copy for now" behind');
+      'a halt must not leave a partial file, a stub, or a "local copy for now" behind. Same ' +
+      'limit as the test above: this is the oracle and the real generator, not an agent.');
   });
 });
 
@@ -739,6 +913,14 @@ try { require('https').get('https://example.invalid/'); } catch (e) {
 }
 if (!armed) { console.log(JSON.stringify({ ok: false, why: 'egress block did not arm' })); process.exit(0); }
 
+// FIX-ROUND, NB-6. The probe's own entry used to be removed on the PARENT side,
+// by filtering 'https.get' out of the recorder — which discarded a genuine
+// https.get by the flow along with it, i.e. the exact call the recorder exists to
+// catch. The probe's entry is CLEARED here instead, and what it recorded is
+// reported separately so the recorder itself is proven to work. After this line
+// the list contains only what the FLOW attempted, and the parent filters nothing.
+const PROBE = BLOCKED.splice(0, BLOCKED.length);
+
 const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ma-airgap-')));
 const cwd = process.cwd();
@@ -755,10 +937,11 @@ try {
   const cfg = fs.readFileSync(path.join(tmp, '_bmad', 'bmm', 'config.yaml'), 'utf-8');
   const backend = (cfg.match(/^software_requirements_backend:[ \t]*(.*)$/m) || [])[1];
   const topo = cli.resolveProjectTopology(tmp);
-  result = { ok: true, armed: true, blocked: BLOCKED, backend: (backend || '').trim(),
+  result = { ok: true, armed: true, probe: PROBE, blocked: BLOCKED,
+    backend: (backend || '').trim(),
     bindingOk: !!topo.ok, hasConfig: fs.existsSync(path.join(tmp, '_bmad', 'bmm', 'config.yaml')) };
 } catch (e) {
-  result = { ok: false, why: e.message, blocked: BLOCKED };
+  result = { ok: false, why: e.message, probe: PROBE, blocked: BLOCKED };
 } finally {
   console.log = orig;
   process.chdir(cwd);
@@ -797,12 +980,16 @@ test('[behaviour] AC6 the fully-file-system flow COMPLETES with all egress block
 
 test('[behaviour] AC6 and it never even ATTEMPTED egress', () => {
   // Stronger than "it completed": the recorder proves no primitive was reached.
-  // The arming probe runs before this list is read, so it is reset by
-  // construction — the child records only what the FLOW attempted.
+  // FIX-ROUND, NB-6: the arming probe's entry is CLEARED in the child before the
+  // flow starts and reported separately, so nothing is filtered here. Filtering
+  // 'https.get' — as this test used to — would have discarded a genuine
+  // `https.get` by the flow, which is precisely the call being watched for.
   assert.strictEqual(AIRGAP.ok, true, `the air-gapped child failed: ${AIRGAP.why}`);
-  const duringFlow = (AIRGAP.blocked || []).filter((b) => b !== 'https.get');
-  assert.deepStrictEqual(duringFlow, [],
-    `the file-system flow reached for the network: ${JSON.stringify(duringFlow)}`);
+  assert.deepStrictEqual(AIRGAP.probe, ['https.get'],
+    `the recorder must have caught the arming probe, or an empty flow list proves nothing ` +
+    `about the recorder: ${JSON.stringify(AIRGAP.probe)}`);
+  assert.deepStrictEqual(AIRGAP.blocked, [],
+    `the file-system flow reached for the network: ${JSON.stringify(AIRGAP.blocked)}`);
 });
 
 test('[text] AC6 the air-gap posture is STATED, and stated correctly, where it is documented', () => {
@@ -947,6 +1134,55 @@ test('[text] §2.6 the gate precedes the first instruction that resolves an arti
   assert.strictEqual(exercised, GATED.length, 'every gated document must be exercised');
 });
 
+// FIX-ROUND, NB-3. AC2's whole §2.6 obligation rode on ONE sentence — "run this
+// immediately after the preflight above, and before anything else" — and that
+// sentence was pinned zero ways: replacing it with "Optional check — run this at
+// whatever point is convenient, including after the skill has resolved and read
+// its artifacts" left every suite green. Its wording is now inside the closed
+// prose set above; its MEANING is measured here, the way Story 31.4's preflight
+// measures its own (`project-layout-staleness-guard.test.js`, ordering against
+// ACTION_MARKERS). Position asserted on instructions, not on headings, because a
+// skill can carry an instruction in prose above its next heading.
+const ACTION_MARKERS = Object.freeze([
+  '<action>', '<step', 'Load config', 'Read `', 'Locate `', 'Resolve project root',
+  'Load and read', 'Attempt to read',
+]);
+
+test('[text] AC2/§2.6/NB-3 the gate precedes the FIRST actionable instruction in each skill', () => {
+  let exercised = 0;
+  for (const rel of GATED) {
+    const body = readDoc(rel);
+    const gateAt = body.indexOf(GATE_HEADING);
+    // Both blocks are blanked to their own length rather than deleted, so the
+    // gate's own "Read these two fields" and the preflight's own "Read
+    // `_bmad-output/project-layout.yaml`" are not mistaken for the SKILL's first
+    // instruction, and the surviving offsets stay comparable with the real ones.
+    const blank = (s, block) => {
+      const i = s.indexOf(block);
+      return i === -1 ? s : s.slice(0, i) + ' '.repeat(block.length) + s.slice(i + block.length);
+    };
+    const guard = (() => {
+      const i = body.indexOf(GUARD_HEADING);
+      const rest = body.slice(i);
+      const j = rest.indexOf('\n## ', 1);
+      return j === -1 ? rest : rest.slice(0, j);
+    })();
+    const stripped = blank(blank(body, extractGate(body)), guard);
+    for (const m of ACTION_MARKERS) {
+      const at = stripped.indexOf(m);
+      if (at === -1) continue;
+      exercised++;
+      assert.ok(gateAt < at,
+        `${rel}: ${JSON.stringify(m)} appears at offset ${at}, before the gate at ${gateAt}. ` +
+        `§2.6 makes this a gateway check: no step of the skill executes until the backend is ` +
+        `confirmed, so an instruction cannot sit above it.`);
+    }
+  }
+  assert.ok(exercised >= GATED.length,
+    `this test must actually find instructions to order against; it matched only ` +
+    `${exercised} across ${GATED.length} documents, which means the marker list has gone stale`);
+});
+
 test('[text] §2.6 the gate precedes Story 17.22\'s sprint Backend Routing block', () => {
   const withSprint = GATED.filter((rel) => readDoc(rel).includes('\n## Backend Routing'));
   assert.ok(withSprint.length >= 3,
@@ -973,26 +1209,37 @@ const BRANCH_MARKERS = Object.freeze({
 });
 
 test('[text] every verdict the oracle can return is a named branch of the shipped block', () => {
+  // FIX-ROUND, BLOCKING-1. A heading marker is now matched as a WHOLE LINE.
+  // `includes()` tolerated any suffix, so widening Step B1's heading to
+  // "…or any value not listed below" — which makes Step B3 dead code and every
+  // unrecognised backend degrade silently — left this green, and also detached
+  // the 18-case MALFORMED_BACKENDS table from the text it is about.
+  const lines = SHIPPED_GATE.split('\n');
   for (const verdict of Object.values(V)) {
     const marker = BRANCH_MARKERS[verdict];
     assert.ok(marker, `verdict ${verdict} has no marker — the map has gone stale`);
-    assert.ok(SHIPPED_GATE.includes(marker),
-      `the shipped block does not state the ${verdict} branch (looked for ` +
-      `${JSON.stringify(marker)})`);
+    if (marker.startsWith('### ')) {
+      assert.ok(lines.includes(marker),
+        `the shipped block has no line EXACTLY equal to the ${verdict} heading. A heading ` +
+        `matched by substring can be widened without moving this test, which is how a ` +
+        `default branch grows a catch-all. Looked for ${JSON.stringify(marker)}`);
+    } else {
+      assert.ok(SHIPPED_GATE.includes(marker),
+        `the shipped block does not state the ${verdict} branch (looked for ` +
+        `${JSON.stringify(marker)})`);
+    }
   }
 });
 
-test('[text] every branch the shipped block states is a verdict the oracle can return', () => {
-  // The other direction: a marker in the map that no verdict claims would mean
-  // the block describes behaviour nothing exercises.
-  const claimed = new Set(Object.keys(BRANCH_MARKERS));
-  assert.deepStrictEqual([...claimed].sort(), Object.values(V).sort(),
-    'the marker map and the verdict set must be the same set');
-  const steps = (SHIPPED_GATE.match(/^### Step B\d+ /gm) || []).length;
-  assert.strictEqual(steps, 3,
-    `the shipped block states ${steps} steps; the oracle implements three (B1/B2/B3). ` +
-    `A fourth step nothing exercises is the shape this test exists to catch.`);
-});
+/** Every `### Step Bn` heading LINE of the shipped gate, in document order. */
+function gateStepHeadings() {
+  return SHIPPED_GATE.split('\n').filter((l) => /^### Step B\d+ /.test(l));
+}
+
+/** The step numbers the shipped gate actually declares. */
+function gateStepNumbers() {
+  return gateStepHeadings().map((l) => Number(l.match(/^### Step B(\d+) /)[1]));
+}
 
 /** One `### Step Bn` of the shipped gate, up to the next `### ` heading. */
 function gateStep(n) {
@@ -1002,6 +1249,295 @@ function gateStep(n) {
   const end = rest.indexOf('\n### ', 1);
   return end === -1 ? rest : rest.slice(0, end);
 }
+
+/**
+ * The OUTCOMES one shipped step states, at BULLET granularity.
+ *
+ * FIX-ROUND, BLOCKING-1. Direction 2 used to count `### Step B\d+ ` HEADINGS and
+ * assert three. Step B2 branches on BULLETS, not on headings, so the block could
+ * gain, lose or invert a Confluence branch without that count moving — and it
+ * did: a fourth B2 bullet ("a Confluence tool is available but returns an error
+ * → use the local copies and carry on") and an FR266-style "ask the user whether
+ * to carry on locally" bullet both survived. A step with no `- **…** →` bullets
+ * states exactly one outcome itself (B1 proceeds, B3 halts).
+ */
+function stepOutcomes(n) {
+  const s = gateStep(n);
+  const bullets = [...s.matchAll(/^- \*\*(.+?)\*\* → *(.*)$/gm)]
+    .map((b) => ({ condition: b[1], rest: b[2] }));
+  return bullets.length > 0 ? bullets : [{ condition: null, rest: s }];
+}
+
+test('[text] every branch the shipped block states is a verdict the oracle can return', () => {
+  // The other direction: a marker in the map that no verdict claims would mean
+  // the block describes behaviour nothing exercises.
+  const claimed = new Set(Object.keys(BRANCH_MARKERS));
+  assert.deepStrictEqual([...claimed].sort(), Object.values(V).sort(),
+    'the marker map and the verdict set must be the same set');
+  const outcomes = gateStepNumbers().reduce((a, n) => a.concat(stepOutcomes(n)), []);
+  assert.strictEqual(outcomes.length, Object.values(V).length,
+    `the shipped block states ${outcomes.length} decision outcomes and the oracle implements ` +
+    `${Object.values(V).length}. Counted at BULLET granularity, not heading granularity, ` +
+    `because Step B2 branches on bullets: ` +
+    `${JSON.stringify(outcomes.map((o) => o.condition || '(the step itself)'))}`);
+});
+
+test('[text] BLOCKING-1 the gate declares EXACTLY three steps, matched whole-line', () => {
+  // A closed set, and its two backend values come from the single-sourced enum
+  // rather than from literals here — so widening a heading, renaming a value, or
+  // adding a fourth step all fail, and none of them can be absorbed.
+  assert.deepStrictEqual(gateStepHeadings(), [
+    `### Step B1 — \`${DEFAULT_STORE_BACKEND}\`, or the field is absent, or its value is empty`,
+    `### Step B2 — \`${NON_DEFAULT_BACKEND}\``,
+    '### Step B3 — any other value',
+  ], 'the shipped step headings are the block\'s branch structure. Step B1\'s heading in ' +
+     'particular is the condition the 18-case MALFORMED_BACKENDS table is about: if it can ' +
+     'grow "or any value not listed below", every one of those 18 values degrades silently ' +
+     'while the table — which runs against the ORACLE — stays green.');
+});
+
+test('[text] BLOCKING-1 Step B2 states EXACTLY the two sanctioned outcomes', () => {
+  // Positive/closed-set form, deliberately: a third outcome fails whatever it
+  // says, so a reworded permission cannot walk past it the way it walks past a
+  // phrase denylist.
+  const outcomes = stepOutcomes(2);
+  assert.deepStrictEqual(outcomes.map((o) => o.condition), [
+    'A Confluence-capable tool IS available',
+    'No Confluence-capable tool is available',
+  ], 'Step B2 is a two-way branch on tool availability. Any third outcome — an error path ' +
+     'that falls back to local copies, or a prompt asking the user whether to carry on — is ' +
+     'FR262 degradation reintroduced as an extra bullet.');
+  assert.ok(/^route this store's reads and writes to it/.test(outcomes[0].rest),
+    `Step B2's available branch must route to the tool, not merely mention it: ` +
+    `${JSON.stringify(outcomes[0].rest.slice(0, 120))}`);
+  assert.strictEqual(outcomes[1].rest, '**HALT** and report:',
+    `Step B2's unavailable branch must HALT and report, with no alternative offered: ` +
+    `${JSON.stringify(outcomes[1].rest)}`);
+});
+
+// ─── The gate's prose, as a CLOSED SET ───────────────────────────────────────
+//
+// FIX-ROUND, BLOCKING-1. Every disposition check in this suite used to be a
+// `regexp.test()` for a phrase the author had already written, so a sentence
+// ADDED alongside them was invisible: `!/\*\*PROCEED\*\*/` catches the bold word
+// and not "carry on"; the FR262 forbid-list asserts four "Do NOT" sentences are
+// PRESENT, and a contradicting permission placed next to them leaves all four
+// intact. Five separate permissive insertions survived that shape.
+//
+// A denylist of permissive phrases is the same weak shape one level out — a
+// reworded permission walks past it, exactly as Story 31.12's tone denylist was
+// walked past. So the primary check is POSITIVE and CLOSED: the gate's prose is
+// exactly these lines and no others. An inserted sentence fails whatever it
+// says, and so does a deleted one.
+//
+// The store names and field names below are HOLES, filled from `AUTHORITY` —
+// Story 31.6's routing table and the PRD's own requirement lines. Nothing here
+// transcribes which store gates this skill; this file never spells it out.
+//
+// Message BLOCKQUOTES are excluded on purpose: their contents are checked
+// fact-by-fact by the AC3/FR262 tests below, which is the right granularity for
+// a user-facing message. This set is the DECISION surface.
+
+/** The prose of one region: no headings, no blockquote lines, no blanks. */
+function proseLines(region) {
+  return region.split('\n').map((l) => l.trim())
+    .filter((l) => l !== '' && !l.startsWith('#') && !l.startsWith('>'));
+}
+
+/** Everything between the gate's own `## ` heading and its first step. */
+function gatePreamble() {
+  const at = SHIPPED_GATE.search(/^### Step B\d+ /m);
+  assert.notStrictEqual(at, -1, 'the shipped block declares no steps at all');
+  return SHIPPED_GATE.slice(0, at);
+}
+
+const A = AUTHORITY;
+
+const SANCTIONED_PROSE = Object.freeze({
+  preamble: [
+    '**Gateway check — run this immediately after the preflight above, and before anything ' +
+    'else.** Before any read, any write, any user prompt, and before the sprint-tracking ' +
+    '`## Backend Routing` check below. No step of this skill executes until this check ' +
+    'returns PROCEED.',
+
+    'This is the SAME routing pattern the sprint skills use for Jira, applied to a knowledge ' +
+    'store instead of to sprint tracking. It is not a second mechanism: read the backend from ' +
+    'the resolved configuration, branch on its value, and where it cannot be honoured say ' +
+    'exactly what is wrong and stop. `mcp-detection-pattern-spec.md` defines the shape — ' +
+    '§2.6 (this is a gateway check, not an afterthought), §2.7 (absent or empty means ' +
+    `\`${DEFAULT_STORE_BACKEND}\`), §6.6 (a backend is added by adding a branch, and the ` +
+    `\`${DEFAULT_STORE_BACKEND}\` branch is untouched).`,
+
+    `**Which store gates this skill.** This skill resolves ${A.artifact}, and ${A.artifact} ` +
+    `are a *${A.noun}* artifact (${A.requirement}), so the store that gates it is the ` +
+    `**${A.store}**. Read these two fields from \`_bmad/bmm/config.yaml\`, each only from a ` +
+    'line at column 0, stripping one balanced pair of surrounding quotes from the value:',
+
+    `- \`${A.prefix}_backend:\` — the backend of the store this skill reads its ` +
+    `${A.artifact} from.`,
+
+    `- \`${A.prefix}_space_key:\` — that store's Confluence space, when it has one.`,
+
+    `A skill that resolves a *${A.otherNoun}* artifact reads \`${A.otherPrefix}_backend:\` ` +
+    `and \`${A.otherPrefix}_space_key:\` instead and takes exactly these branches; nothing ` +
+    'else about the check changes. Sprint execution state — story files, ' +
+    '`sprint-status.yaml`, bugs, retrospectives — belongs to NEITHER knowledge store ' +
+    '(FR267), so nothing this skill does with those artifacts is affected by any branch below.',
+
+    'Take the first branch that matches, and stop there.',
+  ],
+
+  B1: [
+    '**PROCEED** with the rest of this skill exactly as written below, unchanged. Say NOTHING ' +
+    `about the backend: a ${DEFAULT_STORE_BACKEND} project gets no message from this ` +
+    'section, no prompt, and no offer. This is the default (§2.7), and it is what every ' +
+    'project that has not configured a Confluence store gets — including every project ' +
+    'generated before the field existed. Nothing in this section reads, writes, resolves or ' +
+    'reports anything on this path.',
+  ],
+
+  B2: [
+    'That store\'s artifacts live in Confluence, and Confluence is the source of truth for ' +
+    'them. Before resolving, reading or writing ANY artifact belonging to that store, ' +
+    'determine whether a Confluence-capable tool is available to you in your current tool ' +
+    'context — an MCP server, plugin or native integration connected to the Confluence ' +
+    'instance that hosts the space named above. Do not assume one is present because the ' +
+    `backend says \`${NON_DEFAULT_BACKEND}\`: the backend is a statement of configuration, ` +
+    'and availability is a fact about this run.',
+
+    '- **A Confluence-capable tool IS available** → route this store\'s reads and writes to ' +
+    'it, in the space named by the space-key field, and treat what it returns as the source ' +
+    'of truth for that store. Do NOT read that store\'s artifacts from a local directory ' +
+    'instead, and do NOT write, copy, cache, export or reconcile a local copy of anything ' +
+    'Confluence returns. There is no mirror and no cache, so there is nothing to synchronise ' +
+    'and nothing to fall out of date.',
+
+    '- **No Confluence-capable tool is available** → **HALT** and report:',
+
+    'Then STOP. Do NOT fall back to the file system. Do NOT read, create or offer to create a ' +
+    'local copy of that store\'s artifacts. Do NOT continue with a partial or empty result as ' +
+    'though the store were empty. Do NOT change the configured backend on the user\'s behalf. ' +
+    'A Confluence-backed store with no Confluence MCP has no degraded mode — halting IS the ' +
+    'behaviour, not a failure to find one.',
+  ],
+
+  B3: [
+    '**HALT** and report:',
+
+    '**Default-deny, deliberately.** This is the one place this block departs from ' +
+    '`mcp-detection-pattern-spec.md`, which for an unrecognised *sprint tracking* value ' +
+    'prints a message and falls back to the file system (§2.5). A knowledge store does not ' +
+    'get that treatment: falling back would resolve a store this build cannot identify to ' +
+    'local files, which is exactly the silent degradation FR262 forbids. Step B1\'s default ' +
+    'is for a field that was never stated. It is not a catch-all, and it must never absorb a ' +
+    'value that IS stated and is not understood.',
+  ],
+});
+
+for (const region of ['preamble', 'B1', 'B2', 'B3']) {
+  test(`[text] BLOCKING-1 the shipped gate's ${region} prose is EXACTLY the sanctioned lines`, () => {
+    const text = region === 'preamble' ? gatePreamble() : gateStep(Number(region.slice(1)));
+    assert.deepStrictEqual(proseLines(text), SANCTIONED_PROSE[region],
+      `${region}'s decision prose has changed. This is a CLOSED set, not a presence check: a ` +
+      `sentence added beside the prohibitions is as much a failure as a sentence removed, ` +
+      `because that is how every permissive-degradation mutant this block survived was ` +
+      `shaped. If the change is deliberate, update SANCTIONED_PROSE — and note that the ` +
+      `store names and \`config.yaml\` field names in it are FILLED FROM the PRD and Story ` +
+      `31.6's routing table, so a store change belongs in those documents first.`);
+  });
+}
+
+test('[text] BLOCKING-1 second line: no permissive phrasing anywhere in Step B1 or Step B2', () => {
+  // Deliberately SECONDARY. The closed set above is what actually holds the
+  // line; a denylist is the shape this epic keeps watching walk past it. This
+  // one earns its place only by naming the defect when it fires.
+  const PERMISSIVE = [
+    [/carry on/i, 'offers to carry on'],
+    [/continue against/i, 'offers to continue against something local'],
+    [/local cop(y|ies)/i, 'offers a local copy as an alternative to halting'],
+    [/for this run/i, 'makes the disposition conditional on convenience'],
+    [/ask the user whether/i, 'reintroduces FR266 as a user prompt'],
+    [/if the user (chooses|prefers|says)/i, 'makes degradation a user choice'],
+    [/you may instead/i, 'grants an alternative to the stated disposition'],
+  ];
+  for (const step of [1, 2]) {
+    // The prohibitions legitimately say "do NOT … create a local copy"; the
+    // denylist is applied to the text with those four sentences removed, so it
+    // fires on a PERMISSION and not on a PROHIBITION.
+    const text = gateStep(step)
+      .replace(/Do NOT [^.]*\./g, '')
+      .replace(/do NOT [^.]*\./g, '');
+    for (const [re, why] of PERMISSIVE) {
+      assert.ok(!re.test(text),
+        `Step B${step} ${why} (${re}). FR262 says a Confluence-backed store with no ` +
+        `Confluence MCP has no degraded mode; a sentence that supplies one is the defect ` +
+        `even when every "Do NOT" around it survives intact.`);
+    }
+  }
+});
+
+// ─── BLOCKING-2 — the gate is bound to the store it must gate ────────────────
+
+test('[text] BLOCKING-2 §5.2\'s epics-consumer set is exactly the set of gated documents', () => {
+  // The first half of the derivation: the documents this suite gates are the
+  // documents Story 31.6 says resolve the artifact. If they diverge, everything
+  // below is checking the gate against the wrong artifact's store.
+  assert.deepStrictEqual(A.docs, [...GATED].sort(),
+    `Story 31.6 §5.2 says row ${A.row} (${A.artifact}) is resolved by ${JSON.stringify(A.docs)}, ` +
+    `and this suite gates ${JSON.stringify([...GATED].sort())}. The two must be the same set, ` +
+    `or the store this gate is bound to is derived from documents it does not gate.`);
+});
+
+test('[text] BLOCKING-2 the shipped gate reads the store the PRD assigns its artifact to', () => {
+  // The defect: rewriting the two field bullets to the OTHER store's fields
+  // survived every suite, including the one that owns FR256 routing. A project
+  // with this store on Confluence and the other on the file system then reads
+  // `file-system`, takes Step B1, and resolves its artifacts locally in silence.
+  const preamble = gatePreamble();
+  assert.ok(preamble.includes(`(${A.requirement})`),
+    `the gate must cite the requirement that assigns ${A.artifact} to a store; the PRD's is ` +
+    `${A.requirement}`);
+  assert.ok(preamble.includes(`**${A.store}**`),
+    `the gate must name the ${A.store} — that is the store the PRD assigns ${A.artifact} to`);
+
+  const readFields = [...preamble.matchAll(/^- `([a-z_]+):`/gm)].map((x) => x[1]);
+  assert.deepStrictEqual(readFields, [`${A.prefix}_backend`, `${A.prefix}_space_key`],
+    `the gate reads ${JSON.stringify(readFields)}. ${PRD_REL} assigns ${A.artifact} to the ` +
+    `${A.store} (${A.requirement}), so the fields it must read are ` +
+    `${JSON.stringify([`${A.prefix}_backend`, `${A.prefix}_space_key`])}. Reading the other ` +
+    `store's fields is FR262 silent degradation for every project whose two stores differ.`);
+
+  assert.ok(!new RegExp(`^- \`${A.otherPrefix}_`, 'm').test(preamble),
+    `the gate reads a ${A.otherStore} field as one of its own — that store does not hold ` +
+    `${A.artifact}`);
+});
+
+test('[behaviour] BLOCKING-2 the ORACLE\'s default store is the same store, measured', () => {
+  // The oracle's default is a literal (see its doc comment). This is where the
+  // two independent statements are compared: a config that states ONLY the
+  // gating store's backend must reach the confluence branch, and one that states
+  // only the other store's must not.
+  const gating = runBackendGate(`${A.prefix}_backend: "${NON_DEFAULT_BACKEND}"\n`, {});
+  assert.strictEqual(gating.verdict, V.HALT_NO_MCP,
+    `the oracle's default store does not read \`${A.prefix}_backend\`, which is the field ` +
+    `${PRD_REL} (${A.requirement}) makes authoritative for ${A.artifact}`);
+  const other = runBackendGate(`${A.otherPrefix}_backend: "${NON_DEFAULT_BACKEND}"\n`, {});
+  assert.strictEqual(other.verdict, V.PROCEED_FILE_SYSTEM,
+    `the oracle's default store reads \`${A.otherPrefix}_backend\` too, so this suite could ` +
+    `not tell the two stores apart`);
+  assert.strictEqual(gating.store, `the ${A.store}`,
+    `the oracle labels its default store ${JSON.stringify(gating.store)}; the PRD says ` +
+    `${A.artifact} belong to the ${A.store}`);
+});
+
+test('[text] BLOCKING-2 both shipped halt messages name that same store', () => {
+  for (const step of [2, 3]) {
+    assert.ok(gateStep(step).includes(`Store: the ${A.store}.`),
+      `Step B${step}'s halt message must name the ${A.store} — the store the PRD assigns ` +
+      `${A.artifact} to. A halt that names the wrong store sends the user to fix the wrong ` +
+      `binding.`);
+  }
+});
 
 test('[text] AC3 the shipped block states all four required facts, checked against literals', () => {
   // The facts are written out HERE. Nothing is derived from the block, and
@@ -1088,6 +1624,28 @@ test('[text] AC1/FR261 the block cites the canonical spec, by section', () => {
   assert.ok(/SAME routing pattern the sprint skills use for Jira/.test(SHIPPED_GATE),
     'the block must say it is the same pattern, so a reviewer who knows the Jira path ' +
     'recognises this one');
+});
+
+test('[text] NB-7 the spec\'s own §2.5 scopes its fallback rule to sprint tracking', () => {
+  // Disclosing the departure only in the skill text left `mcp-detection-pattern-
+  // spec.md` §2.5 reading as universal, while `skills/generate-backlog/SKILL.md`
+  // carried TWO backend switches with OPPOSITE dispositions for an unrecognised
+  // value — this story's, which halts, and Story 17.22's sprint routing, which
+  // falls back. A reader of the spec alone would have found only one of them.
+  const spec = readAuthority('_bmad-output/planning-artifacts/mcp-detection-pattern-spec.md');
+  const at = spec.indexOf('### 2.5');
+  assert.notStrictEqual(at, -1, 'the spec no longer has a §2.5');
+  const next = spec.indexOf('\n### ', at + 1);
+  const section = spec.slice(at, next === -1 ? spec.length : next);
+
+  assert.ok(/tracking_system/.test(section) && /falls back to file-system/.test(section),
+    'the sprint-tracking rule §2.5 states must survive — this story does not change it');
+  assert.ok(/sprint tracking only/i.test(section),
+    '§2.5 must scope its fallback, or it reads as the rule for every backend switch');
+  assert.ok(/knowledge store/i.test(section) && /HALT/.test(section),
+    '§2.5 must say what a knowledge store does instead of falling back');
+  assert.ok(/FR262/.test(section),
+    '§2.5 must give the requirement that makes a knowledge store default-deny');
 });
 
 test('[text] NFR17 the one departure from the spec is STATED, not silent', () => {
