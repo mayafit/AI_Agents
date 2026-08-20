@@ -213,6 +213,17 @@ The registry has stayed **YAML** throughout — only its path has moved. (`tools
 
 > **Maintenance note:** because the registry path has now moved twice (YAML→YAML→YAML at three locations), the cache builder fails loud — if the resolved `type: bmad-org` set is smaller than the known bundled set, or no module source is found, it exits non-zero rather than producing a thin/empty cache, so a future BMAD registry move surfaces at build time, not as a broken air-gapped install.
 
+#### 3.6.1 Air-gap posture with a Confluence-backed knowledge store (NFR80)
+
+F26 lets each of the two knowledge stores choose a `backend` of `file-system` or `confluence`, which changes what "offline" means for a project — so the posture is stated exactly here rather than left to be inferred from the paragraph above:
+
+- **Installation and skill loading require no network at all**, unchanged. Neither reads a knowledge store: the installer writes the binding and generates `_bmad/bmm/config.yaml` from it, and both are local files.
+- **Every `file-system`-backed workflow requires no network at all**, unchanged. The backend gate embedded in the skills that resolve knowledge-store artifacts reads `{system,software}_requirements_backend` out of the generated `config.yaml` — a local read — and on `file-system` proceeds exactly as it did before, consulting nothing.
+- **A `confluence`-backed store additionally requires its Confluence host to be reachable from the machine running the agent.** That is not the same as requiring internet egress: an intra-perimeter Confluence Server or Data Center on an air-gapped network satisfies it. It does require a Confluence-capable MCP server configured in the agent; with none, the affected skill halts loudly and does not degrade to local files (FR262). There is no local mirror, no cache and therefore no sync (P5-9.6).
+- **A project that must operate with no network whatsoever keeps both stores `file-system`-backed.** That is the default, and it is what `--yes` always selects.
+
+Proven rather than asserted: `test/project-layout-confluence-routing.test.js` runs the whole binding-and-generation flow in a child process whose `dns`, `net`, `http`, `https`, `tls` and `fetch` primitives are poisoned, verifies that the block actually armed, and requires the flow to complete having attempted no egress at all.
+
 ## 4. Data Flow
 
 ### 4.1 Install Flow

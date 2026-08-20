@@ -54,7 +54,7 @@ const { execFileSync } = require('child_process');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 
-const EXPECTED_TEST_COUNT = 73;
+const EXPECTED_TEST_COUNT = 74;
 
 let passed = 0;
 let failed = 0;
@@ -803,6 +803,34 @@ test('[behaviour] AC6 and it never even ATTEMPTED egress', () => {
   const duringFlow = (AIRGAP.blocked || []).filter((b) => b !== 'https.get');
   assert.deepStrictEqual(duringFlow, [],
     `the file-system flow reached for the network: ${JSON.stringify(duringFlow)}`);
+});
+
+test('[text] AC6 the air-gap posture is STATED, and stated correctly, where it is documented', () => {
+  // "Preserved and correctly stated" is half an AC about a document. Before this
+  // story, docs/architecture.md said only that installs run "fully offline in
+  // air-gapped environments" — true, and now incomplete, because a project can
+  // bind a store to Confluence. Each of the four facts is checked separately, so
+  // dropping one is a failure rather than a shorter paragraph.
+  const doc = fs.readFileSync(path.join(PROJECT_ROOT, 'docs', 'architecture.md'), 'utf-8');
+  const at = doc.indexOf('Air-gap posture with a Confluence-backed knowledge store');
+  assert.notStrictEqual(at, -1, 'the NFR80 posture section is gone from docs/architecture.md');
+  const section = doc.slice(at, doc.indexOf('\n## ', at));
+  const REQUIRED = {
+    'install and skill loading need no network':
+      /Installation and skill loading require no network at all/,
+    'every file-system workflow needs no network':
+      /Every `file-system`-backed workflow requires no network at all/,
+    'a confluence store needs its host reachable, which intra-perimeter satisfies':
+      /intra-perimeter Confluence Server or Data Center on an air-gapped network satisfies it/,
+    'a no-network-whatsoever project keeps both stores file-system':
+      /no network whatsoever keeps both stores `file-system`-backed/,
+  };
+  for (const [fact, needle] of Object.entries(REQUIRED)) {
+    assert.ok(needle.test(section), `the posture no longer states: ${fact}`);
+  }
+  // And it must not overclaim in the other direction either.
+  assert.ok(!/works offline in every configuration|no network is ever required/i.test(section),
+    'the posture must not claim a Confluence store needs no host at all');
 });
 
 test('[behaviour] AC6 a confluence store is the ONLY thing that needs a reachable host', () => {
