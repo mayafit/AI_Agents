@@ -52,7 +52,7 @@ const { spawnSync } = require('child_process');
 
 // A `!==` check — a SURPLUS fails as loudly as a shortfall. This epic has already
 // shipped one suite that exited 0 having reported nothing.
-const EXPECTED_TEST_COUNT = 57;
+const EXPECTED_TEST_COUNT = 71;
 
 const REPO_ROOT = path.join(__dirname, '..');
 const CLI_PATH = path.join(REPO_ROOT, 'bin', 'cli.js');
@@ -87,6 +87,10 @@ require.cache[promptsModulePath].exports = async function stubPrompts(question) 
     type: question && question.type,
     message: (question && question.message) || '',
     initial: question && question.initial,
+    // N4. `choices` was never captured, so the anti-drift comparison below could
+    // not see a divergent backend enum even in principle. Captured verbatim; the
+    // comparison digests it.
+    choices: (question && question.choices) || null,
   });
   const name = (question && question.name) || '(unnamed)';
   if (question && question.type === 'select') {
@@ -228,6 +232,32 @@ function fingerprint(root) {
   };
   if (fs.existsSync(root)) walk(root);
   return out;
+}
+
+/**
+ * N4 — THE ANTI-DRIFT COMPARISON KEY, WIDENED.
+ *
+ * The key used to be `${type}:${name}:${message}`. The stub RECORDED `initial`
+ * and then excluded it from the key, and never captured `choices` at all. So a
+ * drifted copy of the wizard asking the same type/name/message with a FLIPPED
+ * `initial`, or with a DIVERGENT backend enum in `choices`, produced a
+ * byte-identical question stream and stayed green.
+ *
+ * That is not hypothetical: this story's own M15 mutant was a flipped `initial`,
+ * and it was killed only by a separate hand-written assertion covering the ONE
+ * re-bind confirm prompt. The five collection prompts had no such pin at all.
+ *
+ * `choices` is folded in as a short sha256 of its value/title pairs rather than
+ * verbatim, so the key stays legible in a failure message while still breaking on
+ * any change to the enum a prompt offers.
+ */
+function promptSignature(q) {
+  const choicesKey = Array.isArray(q.choices)
+    ? crypto.createHash('sha256')
+      .update(JSON.stringify(q.choices.map((c) => [c && c.value, c && c.title])))
+      .digest('hex').slice(0, 12)
+    : 'none';
+  return `${q.type}:${q.name}:${q.message}:initial=${JSON.stringify(q.initial)}:choices=${choicesKey}`;
 }
 
 /** Every file path under `root`, relative and slash-normalised. */
@@ -375,12 +405,12 @@ test('[behaviour] AC1/reuse — bind asks the SAME questions, in the same order,
     process.chdir(dirA);
     promptLog = [];
     await cli.collectRepoLayout({ yes: false }, null);
-    const viaCollect = promptLog.map((q) => `${q.type}:${q.name}:${q.message}`);
+    const viaCollect = promptLog.map(promptSignature);
 
     process.chdir(dirB);
     promptLog = [];
     await cli.handleBind([]);
-    const viaBind = promptLog.map((q) => `${q.type}:${q.name}:${q.message}`);
+    const viaBind = promptLog.map(promptSignature);
 
     assert.ok(viaCollect.length >= 5,
       `collectRepoLayout asked ${viaCollect.length} question(s) — too few for this comparison to mean anything`);
@@ -613,14 +643,21 @@ test('[behaviour] AC3 — `status` on a NON-global install makes no offer (FR252
   });
 });
 
-test('[text] AC3 — the offer sits in the documents a skill ACTUALLY LOADS, and names a command that dispatches', () => {
-  // THE SURFACE QUESTION. Story 31.11 AC6 put its offer in the global
-  // `MANIFEST.yaml`; its reviewer established that nothing directs an agent to
-  // read that file at activation time. The surface that IS read when a skill
-  // activates is the skill document itself. This asserts the offer is there —
-  // in every document carrying Story 31.4's preflight — rather than only in a
-  // manifest header.
-  const skillsRoot = path.join(REPO_ROOT, 'lib', 'bmad-extension', 'skills');
+// ─── The SHIPPED skill trees ─────────────────────────────────────────────────
+//
+// N1. TWO trees ship, and `package.json`'s `files` list is the proof: `lib/`
+// carries `lib/bmad-extension/skills` (the plugin-bundle mirror) and `skills/` is
+// listed in its own right (the source tree, installed directly). Every walk in
+// this suite was rooted at the FIRST one only, so the second was never inspected —
+// which is precisely the gap that let Story 31.4's derivation table and Story
+// 31.11's offer through review. The roots are enumerated ONCE, here, and every
+// walk takes this list, so a tree cannot be silently omitted from one check.
+const SHIPPED_SKILL_ROOTS = [
+  path.join(REPO_ROOT, 'lib', 'bmad-extension', 'skills'),
+  path.join(REPO_ROOT, 'skills'),
+];
+
+function markdownDocsUnder(root) {
   const docs = [];
   const walk = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -629,16 +666,55 @@ test('[text] AC3 — the offer sits in the documents a skill ACTUALLY LOADS, and
       else if (e.isFile() && e.name.endsWith('.md')) docs.push(full);
     }
   };
-  walk(skillsRoot);
-  const withPreflight = docs.filter((f) =>
-    fs.readFileSync(f, 'utf-8').includes('Knowledge Store Binding Preflight'));
-  assert.ok(withPreflight.length >= 10,
-    `only ${withPreflight.length} shipped skill document(s) carry the Story 31.4 preflight — ` +
-    `too few for this claim to mean anything`);
-  const missing = withPreflight.filter((f) => !fs.readFileSync(f, 'utf-8').includes('ma-agents bind'));
+  walk(root);
+  return docs;
+}
+
+test('[text] N1 — the shipped-skill root list covers everything package.json actually ships', () => {
+  // The guard on the guard. If a THIRD skill tree is added to `files` later, the
+  // walks below would quietly keep inspecting two of three; this fails instead.
+  const files = require(path.join(REPO_ROOT, 'package.json')).files || [];
+  assert.ok(files.includes('skills/'),
+    'package.json no longer ships skills/ — the walks below must be re-argued, not narrowed');
+  assert.ok(files.includes('lib/'),
+    'package.json no longer ships lib/ — lib/bmad-extension/skills is no longer a shipped tree');
+  for (const root of SHIPPED_SKILL_ROOTS) {
+    assert.ok(fs.existsSync(root), `shipped skill root does not exist: ${root}`);
+  }
+  // …and each root must actually contain documents, so an empty tree cannot make
+  // every per-root assertion below vacuously true.
+  for (const root of SHIPPED_SKILL_ROOTS) {
+    assert.ok(markdownDocsUnder(root).length >= 50,
+      `${path.relative(REPO_ROOT, root)} holds only ${markdownDocsUnder(root).length} .md file(s) — ` +
+      `too few for the per-root assertions to mean anything`);
+  }
+});
+
+test('[text] AC3 — the offer sits in the documents a skill ACTUALLY LOADS, and names a command that dispatches', () => {
+  // THE SURFACE QUESTION. Story 31.11 AC6 put its offer in the global
+  // `MANIFEST.yaml`; its reviewer established that nothing directs an agent to
+  // read that file at activation time. The surface that IS read when a skill
+  // activates is the skill document itself. This asserts the offer is there —
+  // in every document carrying Story 31.4's preflight — rather than only in a
+  // manifest header.
+  // N1. Walked PER ROOT, and the floor is asserted per root: a union count would
+  // let one tree carry all the preflights while the other carried none.
+  const missing = [];
+  for (const root of SHIPPED_SKILL_ROOTS) {
+    const withPreflight = markdownDocsUnder(root).filter((f) =>
+      fs.readFileSync(f, 'utf-8').includes('Knowledge Store Binding Preflight'));
+    assert.ok(withPreflight.length >= 10,
+      `only ${withPreflight.length} document(s) under ${path.relative(REPO_ROOT, root)} carry the ` +
+      `Story 31.4 preflight — too few for this claim to mean anything for that tree`);
+    for (const f of withPreflight) {
+      if (!fs.readFileSync(f, 'utf-8').includes('ma-agents bind')) {
+        missing.push(path.relative(REPO_ROOT, f));
+      }
+    }
+  }
   assert.deepStrictEqual(missing, [],
-    `these skill documents carry the preflight but never name \`ma-agents bind\`, so a skill ` +
-    `activating in an unbound project has no offer on the surface it reads`);
+    `these shipped skill documents carry the preflight but never name \`ma-agents bind\`, so a ` +
+    `skill activating in an unbound project has no offer on the surface it reads`);
 });
 
 test('[text] AC3 — the offer text HALTS and instructs; it never tells an agent to run bind itself', () => {
@@ -661,21 +737,19 @@ test('[text] AC3 — no shipped skill document points an agent at the GLOBAL MAN
   // MANIFEST.yaml a shipped skill document cites is a `{project-root}` path — the
   // per-project skills manifest — never the global skills directory's manifest
   // that GLOBAL_BIND_OFFER_HEADER is written into.
-  const skillsRoot = path.join(REPO_ROOT, 'lib', 'bmad-extension', 'skills');
+  // N1. Both shipped trees. `skills/` cites MANIFEST.yaml zero times today, so
+  // this is the lower-risk half of the widening — but "zero today" is exactly the
+  // state an unasserted check is worst at protecting.
   const offenders = [];
-  const walk = (dir) => {
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) { walk(full); continue; }
-      if (!e.isFile() || !e.name.endsWith('.md')) continue;
+  for (const root of SHIPPED_SKILL_ROOTS) {
+    for (const full of markdownDocsUnder(root)) {
       for (const line of fs.readFileSync(full, 'utf-8').split(/\r?\n/)) {
         if (line.includes('MANIFEST.yaml') && !line.includes('{project-root}')) {
           offenders.push(`${path.relative(REPO_ROOT, full)}: ${line.trim()}`);
         }
       }
     }
-  };
-  walk(skillsRoot);
+  }
   assert.deepStrictEqual(offenders, [],
     `a shipped skill document now cites a MANIFEST.yaml outside {project-root}. If the AC3 offer ` +
     `has been moved onto that surface, this suite's "the offer reaches a reader" claim must be ` +
@@ -1386,6 +1460,363 @@ test('[behaviour] ensureManifest BACK-FILLS scope on its migrate branch', () => 
   } finally {
     try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* best effort */ }
   }
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FIX ROUND — A BIND WHOSE AUTHORITATIVE WRITE FAILED MUST NOT REPORT SUCCESS
+//
+// The defect, verbatim from the review: a bind run in a project where
+// `_bmad-output` is a FILE printed `Bound.`, exited 0, generated
+// `_bmad/bmm/config.yaml` from a binding that does not exist, and recorded the
+// project in the per-machine registry.
+//
+// The root cause was STRUCTURAL. `writeProjectLayoutYaml` swallowed the failure
+// and returned void from all five of its exits, so `handleBind`'s own try/catch —
+// written for exactly this hazard — was DEAD CODE on that path, and `handleBind`
+// had no way to learn the write had failed. Testing the four symptoms alone would
+// leave that blindness in place for the next caller, so the OUTCOME CONTRACT is
+// tested first and the symptoms second.
+// ═══════════════════════════════════════════════════════════════════════════
+console.log('\nFIX ROUND — the authoritative write reports its outcome, and bind gates on it');
+
+// `capture` above returns the LOG TEXT and drops the return value, which is what
+// most of this suite needs. These tests need the value, so they use this instead.
+function silently(fn) {
+  const orig = console.log;
+  const lines = [];
+  console.log = (...a) => lines.push(a.join(' '));
+  try { return { value: fn(), out: lines.join('\n') }; } finally { console.log = orig; }
+}
+
+// The legacy `{knowledgebase, sprintManagement}` shape every caller of
+// writeProjectLayoutYaml still passes. Single-repo, so nothing below depends on a
+// particular path resolving.
+const FIX_LAYOUT = Object.freeze({
+  knowledgebase: { mode: 'same', path: '.' },
+  sprintManagement: { mode: 'same', path: '.' },
+});
+
+/** A throwaway cwd, entered and left. */
+function inTmp(prefix, fn) {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+  const origCwd = process.cwd();
+  try { process.chdir(dir); return fn(dir); } finally {
+    process.chdir(origCwd);
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
+}
+
+/** A project root whose `_bmad-output` cannot be created, because a FILE is there. */
+function withUnwritableOutputDir(fn) {
+  return withSandbox((sb) => {
+    fs.writeFileSync(path.join(sb.project, '_bmad-output'), 'not a directory', 'utf-8');
+    return fn(sb);
+  });
+}
+
+test('[behaviour] the write reports a NAMED outcome from each of its four reachable exits', () => {
+  // Not "it returns something truthy". Each exit is IDENTIFIED, because two of the
+  // five mean the binding on disk is good and three mean it is not, and the whole
+  // fix rests on the caller being able to tell them apart.
+  const seen = {};
+  const at = (label, setup) => inTmp('ma-bind-out-', () => {
+    if (setup) setup();
+    let r;
+    try { r = silently(() => cli.writeProjectLayoutYaml(FIX_LAYOUT)).value; }
+    catch (e) { r = { outcome: 'THREW: ' + e.message }; }
+    seen[label] = r && r.outcome;
+  });
+
+  at('wrote', null);
+  at('failed-mkdir', () => fs.writeFileSync('_bmad-output', 'not a directory', 'utf-8'));
+  at('refused', () => {
+    fs.mkdirSync('_bmad-output', { recursive: true });
+    fs.writeFileSync(path.join('_bmad-output', 'project-layout.yaml'), 'schema_version: 99999\n', 'utf-8');
+  });
+  at('unchanged-legacy', () => {
+    fs.mkdirSync('_bmad-output', { recursive: true });
+    fs.writeFileSync(path.join('_bmad-output', 'project-layout.yaml'),
+      'schema_version: 1\ngenerated: "2026-01-01"\nknowledgebase:\n  mode: same\n  path: "."\n' +
+      'sprint_management:\n  mode: same\n  path: "."\n', 'utf-8');
+  });
+
+  assert.deepStrictEqual(seen, {
+    wrote: cli.LAYOUT_WRITE_WROTE,
+    'failed-mkdir': cli.LAYOUT_WRITE_FAILED_MKDIR,
+    refused: cli.LAYOUT_WRITE_REFUSED,
+    'unchanged-legacy': cli.LAYOUT_WRITE_UNCHANGED_LEGACY,
+  }, 'writeProjectLayoutYaml no longer reports which of its exits it took');
+});
+
+test('[behaviour] the fifth exit — a failing writeFileSync — is `failed-write`, and a DIRECTORY is not', () => {
+  // Reached by injection, deliberately. A DIRECTORY at the layout path does NOT
+  // reach it: such a file is unreadable-as-a-file, so the non-destruction guard
+  // refuses first. Both facts are pinned, so the distinction is a recorded decision
+  // rather than something a later reader has to rediscover.
+  const realWrite = fs.writeFileSync;
+  try {
+    inTmp('ma-bind-out5-', () => {
+      fs.mkdirSync('_bmad-output', { recursive: true });
+      fs.writeFileSync = function (p, ...rest) {
+        if (String(p).endsWith('project-layout.yaml')) {
+          const e = new Error('EROFS: read-only file system'); e.code = 'EROFS'; throw e;
+        }
+        return realWrite.call(fs, p, ...rest);
+      };
+      const r = silently(() => cli.writeProjectLayoutYaml(FIX_LAYOUT)).value;
+      fs.writeFileSync = realWrite;
+      assert.strictEqual(r && r.outcome, cli.LAYOUT_WRITE_FAILED_WRITE,
+        `an I/O failure in the write itself reported ${JSON.stringify(r)}`);
+      assert.ok(!fs.existsSync(path.join('_bmad-output', 'project-layout.yaml')),
+        'a failed write left a file behind — a truncated binding is worse than none');
+    });
+    inTmp('ma-bind-outd-', () => {
+      fs.mkdirSync(path.join('_bmad-output', 'project-layout.yaml'), { recursive: true });
+      const dirCase = silently(() => cli.writeProjectLayoutYaml(FIX_LAYOUT)).value;
+      assert.strictEqual(dirCase && dirCase.outcome, cli.LAYOUT_WRITE_REFUSED,
+        'a DIRECTORY at the layout path must be REFUSED by the non-destruction guard, not ' +
+        'reported as a write failure — the two are different facts and must not collapse');
+    });
+  } finally {
+    fs.writeFileSync = realWrite;
+  }
+});
+
+test('[behaviour] the bound/unbound partition is DEFAULT-DENY, so a sixth outcome fails closed', () => {
+  // Story 31.7's legacy skip is the one that must not read as a failure: nothing
+  // was written because NOTHING MOVED, and the project IS bound — by the file that
+  // was already there. "Skipped because legacy" and "failed to write" must never
+  // collapse, in either direction.
+  assert.strictEqual(cli.projectLayoutWriteIsBound({ outcome: cli.LAYOUT_WRITE_WROTE }), true,
+    'a successful write was classified as unbound');
+  assert.strictEqual(cli.projectLayoutWriteIsBound({ outcome: cli.LAYOUT_WRITE_UNCHANGED_LEGACY }), true,
+    'the Story 31.7 legacy skip was classified as a FAILURE — a legacy project that binds ' +
+    'successfully would then be told it is unbound, and Story 31.7 AC4 would report an error');
+  for (const bad of [cli.LAYOUT_WRITE_REFUSED, cli.LAYOUT_WRITE_FAILED_MKDIR,
+    cli.LAYOUT_WRITE_FAILED_WRITE, 'an-outcome-added-later']) {
+    assert.strictEqual(cli.projectLayoutWriteIsBound({ outcome: bad }), false,
+      `${bad} was classified as BOUND`);
+  }
+  for (const bad of [undefined, null, {}, 'wrote', 0]) {
+    assert.strictEqual(cli.projectLayoutWriteIsBound(bad), false,
+      `${JSON.stringify(bad)} was classified as BOUND — the void return this fix replaced must ` +
+      `never again be readable as a success`);
+  }
+});
+
+test('[behaviour] BLOCKING — a bind whose write FAILED does not say `Bound.` and exits NON-ZERO', () => {
+  withUnwritableOutputDir(({ home, project }) => {
+    const r = runCli(['bind', '--yes'], { home, cwd: project });
+    assert.ok(/could not create _bmad-output/.test(r.out),
+      `the failure fixture did not fire, so this test proves nothing:\n${r.out}`);
+    assert.ok(!/Bound\./.test(r.out),
+      `bind reported \`Bound.\` after a write that FAILED:\n${r.out}`);
+    assert.notStrictEqual(r.code, 0,
+      `bind exited 0 after a write that FAILED — a CI step trusting the exit code is told a ` +
+      `project is bound when it is not:\n${r.out}`);
+    assert.ok(/NOT BOUND/.test(r.out),
+      `the failure was not stated in terms the user can act on:\n${r.out}`);
+  });
+});
+
+test('[behaviour] BLOCKING — and it generates NO config.yaml and writes NO project files', () => {
+  withUnwritableOutputDir(({ home, project }) => {
+    runCli(['bind', '--yes'], { home, cwd: project });
+    // The orphaned `_bmad/bmm/config.yaml` is the damaging half: a config with no
+    // `project-layout.yaml` behind it is exactly the drifted state Story 31.4's
+    // guard exists to catch (that guard HALTS on it, `halt:binding-missing`) — and
+    // it was being manufactured while this command reported success.
+    assert.ok(!fs.existsSync(path.join(project, '_bmad', 'bmm', 'config.yaml')),
+      'a failed bind generated _bmad/bmm/config.yaml from a binding that does not exist');
+    assert.deepStrictEqual(fileList(project), ['_bmad-output'],
+      `a failed bind wrote project files: ${JSON.stringify(fileList(project))}`);
+  });
+});
+
+test('[behaviour] BLOCKING — and it does NOT record the project in the per-machine registry', () => {
+  withUnwritableOutputDir(({ home, project }) => {
+    runCli(['bind', '--yes'], { home, cwd: project });
+    const reg = path.join(home, '.ma-agents', 'bound-projects.json');
+    const recorded = fs.existsSync(reg)
+      ? (JSON.parse(fs.readFileSync(reg, 'utf-8')).projects || [])
+      : [];
+    assert.deepStrictEqual(recorded, [],
+      `a bind that bound NOTHING registered the project: ${JSON.stringify(recorded)}. This also ` +
+      `bounds N5: recordBoundProject replaces an unreadable registry WHOLESALE, so a bind that ` +
+      `bound nothing could otherwise destroy the records of projects that ARE bound.`);
+  });
+});
+
+test('[behaviour] CONTROL — a bind that CAN write still says `Bound.`, exits 0, and records', () => {
+  // Without this, every assertion above would pass equally well for a bind that
+  // refused unconditionally.
+  withSandbox(({ home, project }) => {
+    const r = runCli(['bind', '--yes'], { home, cwd: project });
+    assert.strictEqual(r.code, 0, `a clean bind exited ${r.code}:\n${r.out}`);
+    assert.ok(/Bound\./.test(r.out), `a clean bind did not report success:\n${r.out}`);
+    assert.ok(fs.existsSync(path.join(project, '_bmad-output', 'project-layout.yaml')),
+      'a clean bind wrote no binding');
+    assert.ok(fs.existsSync(path.join(project, '_bmad', 'bmm', 'config.yaml')),
+      'a clean bind generated no config.yaml — AC6 regressed');
+    assert.ok(fs.existsSync(path.join(home, '.ma-agents', 'bound-projects.json')),
+      'a clean bind recorded nothing — AC8 regressed');
+  });
+});
+
+test('[behaviour] CONTROL — the no-edit re-bind still regenerates config.yaml (Story 31.4\'s remedy)', () => {
+  // The gate must apply ONLY to the path that attempted a write. Story 31.4's
+  // staleness HALT tells the user to run `ma-agents bind` to REGENERATE a drifted
+  // config from an UNCHANGED binding; a gate that skipped Step 4 whenever no write
+  // happened would make that instruction false in the one case it is ever given in.
+  withSandbox(({ home, project }) => {
+    assert.strictEqual(runCli(['bind', '--yes'], { home, cwd: project }).code, 0, 'the first bind failed');
+    const cfg = path.join(project, '_bmad', 'bmm', 'config.yaml');
+    fs.writeFileSync(cfg, '# clobbered\n', 'utf-8');
+    const r = runCli(['bind', '--yes'], { home, cwd: project });
+    assert.strictEqual(r.code, 0, `the no-edit re-bind exited ${r.code}:\n${r.out}`);
+    assert.ok(/Bound\./.test(r.out), `the no-edit re-bind did not report success:\n${r.out}`);
+    assert.ok(fs.readFileSync(cfg, 'utf-8').includes('knowledgebase_path'),
+      'the no-edit re-bind did not regenerate config.yaml — Story 31.4\'s HALT remedy is now false');
+  });
+});
+
+test('[text] every step after the authoritative write is GATED on its outcome', () => {
+  // The anti-regression that matters most, and the one no behavioural test gives:
+  // the ORDER. All four things that used to run unconditionally must sit AFTER the
+  // gate inside handleBind's own body.
+  const m = /\nasync function handleBind\([\s\S]*?\n\}\n/.exec(CLI_SOURCE);
+  assert.ok(m, 'handleBind() was not found — a rename makes every check here vacuous');
+  const body = m[0];
+  // Anchored on the CALL, not on a mention: the identifier also appears in this
+  // function's explanatory comments, and an anchor a comment can satisfy is not an
+  // anchor at all.
+  const gate = body.indexOf('if (!projectLayoutWriteIsBound(');
+  assert.ok(gate > 0, 'handleBind no longer consults the write outcome at all');
+  assert.ok(body.indexOf('writeProjectLayoutYaml') < gate,
+    'the gate does not follow the write it is supposed to be gating');
+  for (const [label, needle] of [
+    ['config.yaml generation', 'generateBmmConfig('],
+    ['the per-machine registry', 'recordBoundProject('],
+    // Anchored on the CALL, not on the word: the word appears in this function's
+    // own explanatory comments, and an anchor that a comment can satisfy is not an
+    // anchor.
+    ['the `Bound.` success line', 'chalk.bold.green('],
+  ]) {
+    const at = body.indexOf(needle);
+    assert.ok(at > gate,
+      `${label} is not gated on the write outcome (found at ${at}, gate at ${gate}) — this is the ` +
+      `exact shape of the defect this fix round exists to close`);
+  }
+  const after = body.slice(gate, gate + 1800);
+  assert.ok(/return \{ bound: false/.test(after),
+    'the gate does not RETURN — a warning that falls through IS the original defect');
+  assert.ok(/process\.exitCode = 1/.test(after),
+    'the gate does not set a non-zero exit code, so a CI step is still told the bind succeeded');
+});
+
+test('[text] TTY POLARITY — the status offer is gated on `!process.stdin.isTTY`, never its inverse', () => {
+  // Nothing pinned this. Flipping it to `process.stdin.isTTY` makes `status`
+  // AUTO-PROMPT in CI — the offer prompting where there is no user to answer, which
+  // is the one thing AC3 forbids. `yes` is honoured as a REFUSAL to offer, so the
+  // negation is load-bearing rather than cosmetic. Pinned as text here and as
+  // behaviour below.
+  assert.ok(/yes: !process\.stdin\.isTTY/.test(CLI_SOURCE),
+    '`status`\'s offerBind gate is no longer `yes: !process.stdin.isTTY`');
+  assert.ok(!/yes: process\.stdin\.isTTY/.test(CLI_SOURCE),
+    'the gate has been INVERTED — `status` now prompts when there is no user to answer');
+});
+
+test('[behaviour] TTY POLARITY — `yes: true` states the remedy and asks NOTHING; `yes: false` asks', async () => {
+  // The behavioural half of the pin. Under the correct polarity a piped or CI
+  // `status` reaches offerBind with `yes: true`, which must produce the
+  // state-and-stop line and ZERO prompts. Under the flip it would reach the prompt
+  // instead — and these two assertions are what separate the two.
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ma-bind-tty-')));
+  const origCwd = process.cwd();
+  try {
+    process.chdir(dir);
+    promptLog = [];
+    const nonInteractive = silently(() => cli.offerBind({ projectRoot: dir, yes: true }));
+    const res = await nonInteractive.value;
+    assert.strictEqual(promptLog.length, 0,
+      `\`yes: true\` asked ${promptLog.length} question(s) — a non-interactive run has no user to ` +
+      `answer them: ${JSON.stringify(promptLog)}`);
+    assert.strictEqual(res.ran, false, '`yes: true` ran bind');
+    assert.strictEqual(res.reason, 'declined-non-interactive',
+      `expected declined-non-interactive, got ${res.reason}`);
+    assert.deepStrictEqual(fileList(dir), [], '`yes: true` wrote to the project');
+
+    confirmAnswer = false;
+    promptLog = [];
+    const res2 = await silently(() => cli.offerBind({ projectRoot: dir, yes: false })).value;
+    assert.ok(promptLog.length >= 1,
+      '`yes: false` asked nothing — the two polarities are then indistinguishable, so the gate ' +
+      'could be flipped without any test noticing');
+    assert.strictEqual(res2.ran, false, 'a declined offer ran bind');
+  } finally {
+    confirmAnswer = false;
+    process.chdir(origCwd);
+    process.exitCode = 0;
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
+});
+
+test('[behaviour] N3 — the root the offer DECIDED on must be the root that gets bound', async () => {
+  // `offerBind` decides on `projectRoot`; `handleBind`, `writeProjectLayoutYaml`,
+  // `readExistingLayout` and `collectRepoLayout` all re-derive `process.cwd()`.
+  // Unreachable from today's only caller, and the failure mode is binding the WRONG
+  // PROJECT silently having decided against a different one — which, before the fix
+  // above, would ALSO have reported `Bound.` and exited 0 while doing it. A latent
+  // trap with a failing-if-touched test is a decision; without one it is a trap.
+  const decided = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ma-bind-n3a-')));
+  const actual = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ma-bind-n3b-')));
+  const origCwd = process.cwd();
+  try {
+    process.chdir(actual);          // …while the offer is decided for `decided`
+    confirmAnswer = true;           // an explicit YES: only the mismatch may stop it
+    promptLog = [];
+    const res = await silently(() => cli.offerBind({ projectRoot: decided, yes: false })).value;
+    assert.strictEqual(res.ran, false, 'the offer bound a project it had not decided on');
+    assert.strictEqual(res.reason, 'project-root-mismatch',
+      `expected project-root-mismatch, got ${res.reason}`);
+    assert.deepStrictEqual(fileList(actual), [],
+      `the WRONG project was written to: ${JSON.stringify(fileList(actual))}`);
+    assert.deepStrictEqual(fileList(decided), [],
+      `the decided-on project was written to despite the refusal: ${JSON.stringify(fileList(decided))}`);
+
+    // CONTROL: with the two in AGREEMENT and the same explicit yes, it DOES bind —
+    // so the refusal above is the mismatch and not a blanket refusal.
+    promptLog = [];
+    const ok = await silently(() => cli.offerBind({ projectRoot: actual, yes: false })).value;
+    assert.strictEqual(ok.ran, true, `agreeing roots did not bind: ${JSON.stringify(ok)}`);
+    assert.ok(fs.existsSync(path.join(actual, '_bmad-output', 'project-layout.yaml')),
+      'the control run reported ran:true but wrote no binding');
+  } finally {
+    confirmAnswer = false;
+    process.chdir(origCwd);
+    process.exitCode = 0;
+    for (const d of [decided, actual]) {
+      try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* best effort */ }
+    }
+  }
+});
+
+test('[text] the expired "a future `ma-agents bind`" promise is gone from every site', () => {
+  // Three sites printed "(a future `ma-agents bind` will do this without a full
+  // re-install)" — one of them TO A USER RUNNING `ma-agents bind` right then. This
+  // story amended GLOBAL_BIND_OFFER_HEADER for exactly that staleness and missed
+  // these. Scanned rather than asserted per-site, so a fourth cannot appear.
+  const stale = [];
+  CLI_SOURCE.split('\n').forEach((line, i) => {
+    if (/a future .?ma-agents bind/.test(line)) stale.push(`bin/cli.js:${i + 1}: ${line.trim()}`);
+  });
+  INSTALLER_SOURCE.split('\n').forEach((line, i) => {
+    if (/a future .?ma-agents bind/.test(line)) stale.push(`lib/installer.js:${i + 1}: ${line.trim()}`);
+  });
+  assert.deepStrictEqual(stale, [],
+    `\`ma-agents bind\` ships in this release, so nothing may describe it as future work:\n` +
+    `${stale.join('\n')}`);
 });
 
 // ─── Summary ─────────────────────────────────────────────────────────────────
