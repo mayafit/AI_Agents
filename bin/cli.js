@@ -2391,7 +2391,8 @@ function writeProjectLayoutYaml(layout) {
         `${existing.reason}:\n` +
         `    ${existing.message}\n` +
         `  The file has been left UNCHANGED. To recover: fix it by hand, or delete ` +
-        `_bmad-output/project-layout.yaml and re-run the installer to write a fresh binding.`
+        `_bmad-output/project-layout.yaml and run \`${NAME} bind\` to write a fresh binding\n` +
+        `  (or re-run the installer, which does the same thing plus a full re-install).`
       )
     );
     return { outcome: LAYOUT_WRITE_REFUSED, reason: existing.reason, error: null };
