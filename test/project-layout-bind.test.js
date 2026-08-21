@@ -52,7 +52,7 @@ const { spawnSync } = require('child_process');
 
 // A `!==` check — a SURPLUS fails as loudly as a shortfall. This epic has already
 // shipped one suite that exited 0 having reported nothing.
-const EXPECTED_TEST_COUNT = 72;
+const EXPECTED_TEST_COUNT = 73;
 
 const REPO_ROOT = path.join(__dirname, '..');
 const CLI_PATH = path.join(REPO_ROOT, 'bin', 'cli.js');
@@ -81,6 +81,12 @@ let promptLog = [];
 // pre-selected, which is how a default is exercised rather than restated).
 const PRESS_ENTER = Symbol('press Enter on a confirm prompt');
 let confirmAnswer = false;
+// Per-prompt answer overrides, keyed by prompt NAME, consulted before the
+// press-Enter default. Used only where a test must inject a value the wizard
+// cannot pre-select for itself — a confluence backend, and an identity carrying
+// a line break — so that a serializer throw originates inside the write that
+// handleBind called, which is the branch under test.
+let answerOverrides = {};
 require.cache[promptsModulePath].exports = async function stubPrompts(question) {
   promptLog.push({
     name: (question && question.name) || '(unnamed)',
@@ -93,6 +99,9 @@ require.cache[promptsModulePath].exports = async function stubPrompts(question) 
     choices: (question && question.choices) || null,
   });
   const name = (question && question.name) || '(unnamed)';
+  if (Object.prototype.hasOwnProperty.call(answerOverrides, name)) {
+    return { [name]: answerOverrides[name] };
+  }
   if (question && question.type === 'select') {
     const idx = typeof question.initial === 'number' ? question.initial : 0;
     const choice = (question.choices || [])[idx];
@@ -1748,6 +1757,57 @@ test('[behaviour] CONTROL — the no-edit re-bind still regenerates config.yaml 
   });
 });
 
+test('[behaviour] a serializer THROW out of the write is treated as NOT BOUND, not as a bound project', async () => {
+  // THE `catch` IN handleBind's STEP 3, which the outcome contract does NOT
+  // cover. `writeProjectLayoutYaml` still throws DELIBERATELY on values it
+  // refuses to write — the closed backend enum, and the confluence identity guard
+  // (`assertSingleLineIdentity`). Those never reach the outcome return at all, so
+  // remapping the caught error to a BOUND outcome would restore the whole defect
+  // through a door the five-exit contract leaves open. Mutant M9 survived the
+  // first mutation round for exactly that reason: nothing exercised this path.
+  //
+  // The line break is injected through the prompt answer rather than by editing a
+  // fixture file, because the throw has to originate INSIDE the write that
+  // handleBind called — a hand-written bad file would be classified by the
+  // resolver and refused at Step 1 instead, which is a different branch.
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ma-bind-thr-')));
+  const origCwd = process.cwd();
+  try {
+    process.chdir(dir);
+    answerOverrides = { backend: 'confluence', spaceKey: 'ENG\nINEERING' };
+    promptLog = [];
+    const out = capture(() => {});
+    let result;
+    const orig = console.log;
+    const lines = [];
+    console.log = (...a) => lines.push(a.join(' '));
+    try { result = await cli.handleBind([]); } finally { console.log = orig; }
+    const said = lines.join('\n').replace(/\[[0-9;]*m/g, '');
+
+    assert.ok(/line break/.test(said),
+      `the confluence identity guard did not fire, so this test exercised the wrong path:\n${said}`);
+    assert.strictEqual(result.bound, false,
+      `a bind whose write THREW reported bound:${result.bound} — the throw was swallowed into a ` +
+      `success:\n${said}`);
+    assert.ok(!/Bound\./.test(said), `bind said \`Bound.\` after the write threw:\n${said}`);
+    assert.ok(/NOT BOUND/.test(said), `the failure was not reported to the user:\n${said}`);
+    assert.strictEqual(process.exitCode, 1,
+      `bind exited 0 after the write threw (exitCode=${process.exitCode})`);
+
+    // …and none of the four gated steps ran.
+    assert.ok(!fs.existsSync(path.join(dir, '_bmad-output', 'project-layout.yaml')),
+      'the throw still left a binding on disk');
+    assert.ok(!fs.existsSync(path.join(dir, '_bmad', 'bmm', 'config.yaml')),
+      'config.yaml was generated from a binding whose write threw');
+    void out;
+  } finally {
+    answerOverrides = {};
+    process.chdir(origCwd);
+    process.exitCode = 0;
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
+});
+
 test('[text] every step after the authoritative write is GATED on its outcome', () => {
   // The anti-regression that matters most, and the one no behavioural test gives:
   // the ORDER. All four things that used to run unconditionally must sit AFTER the
@@ -1874,12 +1934,18 @@ test('[text] the expired "a future `ma-agents bind`" promise is gone from every 
   // re-install)" — one of them TO A USER RUNNING `ma-agents bind` right then. This
   // story amended GLOBAL_BIND_OFFER_HEADER for exactly that staleness and missed
   // these. Scanned rather than asserted per-site, so a fourth cannot appear.
+  // The source escapes the command name inside a template literal, so between
+  // "a future " and "ma-agents bind" there is a BACKSLASH AND A BACKTICK, not one
+  // character. An earlier `.?` here matched neither the original text nor a
+  // reinstated one, which made this whole test vacuous — caught by mutant M12,
+  // not by reading it.
+  const STALE_PROMISE = /a future[^A-Za-z\n]{0,4}ma-agents bind/;
   const stale = [];
   CLI_SOURCE.split('\n').forEach((line, i) => {
-    if (/a future .?ma-agents bind/.test(line)) stale.push(`bin/cli.js:${i + 1}: ${line.trim()}`);
+    if (STALE_PROMISE.test(line)) stale.push(`bin/cli.js:${i + 1}: ${line.trim()}`);
   });
   INSTALLER_SOURCE.split('\n').forEach((line, i) => {
-    if (/a future .?ma-agents bind/.test(line)) stale.push(`lib/installer.js:${i + 1}: ${line.trim()}`);
+    if (STALE_PROMISE.test(line)) stale.push(`lib/installer.js:${i + 1}: ${line.trim()}`);
   });
   assert.deepStrictEqual(stale, [],
     `\`ma-agents bind\` ships in this release, so nothing may describe it as future work:\n` +

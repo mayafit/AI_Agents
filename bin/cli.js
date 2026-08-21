@@ -1059,7 +1059,7 @@ function generateBmmConfig(opts) {
     console.log(chalk.yellow(
       `  Skipping _bmad/bmm/config.yaml generation: this project has no committed binding in\n` +
       `  _bmad-output/project-layout.yaml and no layout was supplied to generate from.\n` +
-      `  Run the installer (or a future \`ma-agents bind\`) to write the binding first.`
+      `  Run \`${NAME} bind\` (or the installer) to write the binding first.`
     ));
     return false;
   }
