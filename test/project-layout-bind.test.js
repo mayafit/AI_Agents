@@ -52,7 +52,7 @@ const { spawnSync } = require('child_process');
 
 // A `!==` check — a SURPLUS fails as loudly as a shortfall. This epic has already
 // shipped one suite that exited 0 having reported nothing.
-const EXPECTED_TEST_COUNT = 71;
+const EXPECTED_TEST_COUNT = 72;
 
 const REPO_ROOT = path.join(__dirname, '..');
 const CLI_PATH = path.join(REPO_ROOT, 'bin', 'cli.js');
@@ -422,6 +422,73 @@ test('[behaviour] AC1/reuse — bind asks the SAME questions, in the same order,
     process.chdir(origCwd);
     process.exitCode = 0;
     for (const d of [dirA, dirB]) { try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* best effort */ } }
+  }
+});
+
+test('[behaviour] N4 — on a FRESH project every collection prompt pre-selects the SAFE default, and its enum is pinned', async () => {
+  // WHY THE PARITY TEST ABOVE IS NOT ENOUGH, established by mutation rather than
+  // by argument. Parity compares bind's question stream against
+  // `collectRepoLayout`'s — but both drivers run the SAME code, so a change to the
+  // shared wizard moves BOTH streams identically and parity stays green. Mutating
+  // a `mode` prompt's `initial` from 0 to 1 SURVIVED the parity test even after the
+  // comparison key was widened to carry `initial` and a `choices` digest.
+  //
+  // Parity catches a DIVERGENT COPY living inside bind. Only an ABSOLUTE pin
+  // catches the shared wizard itself drifting, and that is the half this story's
+  // own M15 mutant (a flipped `initial`) exposed: it was killed only by a
+  // hand-written assertion covering the ONE re-bind confirm prompt, and the five
+  // collection prompts had no such pin at all.
+  //
+  // The property being pinned is NOT "these exact bytes". It is that on an UNBOUND
+  // project, pressing Enter through the whole wizard yields the SAFE SINGLE-REPO
+  // DEFAULT — `file-system` and `same` — and never `confluence` or `local` or
+  // `jira`. A flipped pre-selection silently binds a project to a store nobody
+  // chose, from the same keystrokes.
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ma-bind-n4-')));
+  const origCwd = process.cwd();
+  try {
+    process.chdir(dir);
+    promptLog = [];
+    await cli.handleBind([]);
+
+    const selects = promptLog.filter((q) => q.type === 'select');
+    assert.strictEqual(selects.length, 5,
+      `bind asked ${selects.length} select question(s) on a fresh project, expected 5 — the ` +
+      `wizard's shape changed, so every pin below is about a different flow: ` +
+      `${JSON.stringify(promptLog.map((q) => q.name))}`);
+
+    // 1. THE PRE-SELECTION. Every one of them, by index.
+    const initials = selects.map((q) => q.initial);
+    assert.deepStrictEqual(initials, [0, 0, 0, 0, 0],
+      `a collection prompt on an UNBOUND project no longer pre-selects its first choice: ` +
+      `${JSON.stringify(selects.map((q) => ({ name: q.name, message: q.message, initial: q.initial })))}. ` +
+      `Pressing Enter would now bind the project to something the user did not choose.`);
+
+    // 2. …AND WHAT THAT INDEX RESOLVES TO. An index alone is meaningless if the
+    //    choice list is reordered underneath it, so the resolved VALUE is pinned
+    //    too — this is what makes the two assertions independent rather than one
+    //    assertion written twice.
+    const resolved = selects.map((q) => (q.choices || [])[q.initial] && (q.choices || [])[q.initial].value);
+    assert.deepStrictEqual(resolved, ['file-system', 'same', 'file-system', 'same', 'same'],
+      `pressing Enter through the wizard on a fresh project no longer yields the safe ` +
+      `single-repo default: ${JSON.stringify(resolved)}`);
+
+    // 3. THE ENUMS THEMSELVES. A backend or mode silently added to, removed from,
+    //    or reordered within a shipped choice list changes what the wizard can
+    //    produce, and `project-layout-enum-single-source` pins the enum CONSTANTS
+    //    rather than what these five prompts actually offer.
+    const enums = selects.map((q) => (q.choices || []).map((c) => c.value));
+    assert.deepStrictEqual(enums, [
+      ['file-system', 'confluence'],
+      ['same', 'local', 'remote'],
+      ['file-system', 'confluence'],
+      ['same', 'local', 'remote'],
+      ['same', 'local', 'remote', 'jira'],
+    ], `a collection prompt's choice list changed: ${JSON.stringify(enums)}`);
+  } finally {
+    process.chdir(origCwd);
+    process.exitCode = 0;
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
   }
 });
 
