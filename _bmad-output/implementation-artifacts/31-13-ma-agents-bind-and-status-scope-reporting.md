@@ -250,3 +250,108 @@ revert was sha256-verified against the pristine bytes.
   `config.yaml` between two binds and proves the no-edit second run restores it byte-for-byte.
 - **M27** — `absent` vs `unreadable` was discriminated in the data and collapsed in the output.
   Closed by comparing the two `status` renderings.
+
+---
+
+## 8. Fix round — the blocking defect, and what else it turned up
+
+**Status stays `review`.** This round was implemented by a different agent from the one that wrote
+the story; nothing here is a verdict on it.
+
+### 8.1 The open question, answered FIRST: what Story 31.4's guard does to the half-bound project
+
+**It HALTS.** Verdict `halt:binding-missing`, `silent: false`.
+
+Reproduced against unmodified `47c6b8f`, then run through the **real** `runGuard()` — extracted
+verbatim out of `test/project-layout-staleness-guard.test.js` and evaluated, rather than
+re-transcribed, so the answer is about the guard that ships and not about a paraphrase of it:
+
+```
+markers: ["system_requirements_path","software_requirements_path"]
+message: _bmad/bmm/config.yaml carries system_requirements_path, software_requirements_path,
+         which only an F26 generation writes — so this project HAS been bound — but
+         _bmad-output/project-layout.yaml is not here. Restore it, or run `ma-agents bind`
+         to write a fresh one.
+```
+
+**So the blast radius is NOT larger than filed: the damage was contained and visible.** Three
+findings worth recording anyway, because the containment is thinner than it looks:
+
+1. **The orphaned config carries NO `project_layout_stamp`.** `generateBmmConfig`'s
+   unbound-plus-fallback branch deliberately writes no stamp. Detection therefore rests entirely on
+   the other two F26 marker fields. Had those not been written either, the config would carry **zero**
+   markers, AC5's corroboration would classify it `proceed:pre-f26`, and a skill would have run
+   silently against `.`-everywhere defaults.
+2. **The halt message says "this project HAS been bound", which is false here** — it was never
+   bound. The wording is right for the case it was written for (a deleted binding) and wrong for this
+   one. Not changed: it is Story 31.4's text, byte-identical across 27 shipped copies.
+3. **Its remedy is `ma-agents bind` — the command that created the state.** Before this round that
+   was a loop. It is not any more, because bind now refuses instead of half-succeeding.
+
+The scenario turns out to be independently pinned already, by two tests in 31.4's own suite
+(`an UNBOUND project generated from a fallback layout carries NO stamp` and `and the guard HALTS on
+it, because the per-store fields betray it`). That corroborates the finding rather than replacing it —
+neither test was reached through `bind`.
+
+### 8.2 The blocking fix — the write's outcome is now a VALUE
+
+The root cause was **structural**, and fixing only `handleBind` would have reproduced it one layer
+out. `writeProjectLayoutYaml` has five exits and returned `undefined` from every one of them; it
+swallowed both I/O failures itself, which is why `handleBind`'s own `try/catch` — written for exactly
+this hazard — was **dead code** on those paths.
+
+It now returns one of five **named** outcomes, kept separate for the reason `BINDING_UNBOUND` and
+`BINDING_UNREADABLE` are separate:
+
+| Outcome | Exit | Bound? |
+| --- | --- | --- |
+| `wrote` | the write succeeded | **yes** |
+| `unchanged-legacy` | Story 31.7 AC3/AC4 — legacy layout, nothing moved | **yes** |
+| `refused` | the non-destruction guard would not overwrite | no |
+| `failed-mkdir` | `_bmad-output/` could not be created | no |
+| `failed-write` | `writeFileSync` threw | no |
+
+`projectLayoutWriteIsBound` **enumerates the bound set and denies everything else**. The inverse
+spelling (`!== failed-mkdir && !== failed-write`) would silently admit a sixth outcome as a success —
+the same shape as the defect being removed — so it is written default-deny and mutant M5 proves the
+difference is detected.
+
+**"Skipped because legacy" and "failed to write" do not collapse.** They are distinct constants,
+`unchanged-legacy` counts as **bound**, and mutant M3 (collapsing one into the other) is killed.
+
+`handleBind` gates Steps 4 (config generation), 5 (`project-context.md`), 6 (registry) and the
+`Bound.` line on that outcome, and sets `process.exitCode = 1`.
+
+**The other call sites are untouched by construction:** a caller that ignores the return value sees
+no change, and neither the installer's Step 3.6 nor `handleConfigLayout` was edited. Pinned by
+`two-store-round-trip` 52/0, `binding-spine` 69/0, `legacy-single-store` 51/0 and
+`config-lost-on-update`, all green.
+
+### 8.3 The expired-wording audit — the review named three sites; there were FOUR
+
+`bin/cli.js:2329`, `:2554` and `:4142` all promised `ma-agents bind` as *future work*, one of them to
+a user running it right then. All three fixed.
+
+The scan test written to cover them was then **mutated (M12) and survived** — proving the test was
+vacuous. Its regex allowed one character between `a future ` and `ma-agents bind`; the source escapes
+the command inside a template literal, so there are **two** (a backslash and a backtick). It matched
+neither the original nor a reinstated one.
+
+Repairing the regex immediately found the **fourth** site — `bin/cli.js:1062`, inside
+`generateBmmConfig`'s no-binding-and-no-fallback branch. Fixed. The scan now reports zero across both
+`bin/cli.js` and `lib/installer.js`, and mutants M12 and M14 are killed.
+
+### 8.4 N1-N5 and the TTY pin
+
+| | Disposition |
+| --- | --- |
+| **N1** | **Fixed.** Both shipped trees are walked (`lib/` ships `lib/bmad-extension/skills`, 114 `.md` / 14 preflight; `skills/` ships in its own right, 88 / 13). The floor is asserted **per root** — a union count would let one tree carry everything. A new test pins the root list against `package.json`'s `files` so a third tree cannot appear unnoticed. Mutants M13 and M18 (stripping the offer from one tree, then the other) are both killed; before the fix, M13 would have survived. |
+| **N2** | **Fixed, and there were TWO copies.** `binding-spine:2007` was inverted. The review did not name the second: `staleness-guard:1271` carried the same expired claim, resting on the same false premise. Both rested on "in this release the installer is the only writer of the binding", which stopped being true when `case 'bind':` began dispatching. The shipped refusal now names `ma-agents bind` **and** keeps the installer as the alternative — the remedy is widened, not swapped. The staleness-guard test's real claim (that 31.4's guard did not reach into a different message) is preserved and now asserted directly. |
+| **N3** | **Fixed as a CHECK, not as plumbing.** `handleBind`, `writeProjectLayoutYaml`, `readExistingLayout` and `collectRepoLayout` all re-derive `process.cwd()`; passing `projectRoot` into `handleBind` would have fixed one of four and left the write itself pointed at the cwd — worse than the disagreement. `offerBind` now verifies the two agree and refuses otherwise. Pinned behaviourally, with a control proving agreeing roots still bind. Mutant M10 killed. |
+| **N4** | **Fixed, and the review's remedy alone was NOT sufficient.** The key now carries `initial` and a sha256 of the choice value/title pairs, and the stub captures `choices`. That was not enough: mutating a prompt's `initial` **still survived**, because parity compares bind's stream against `collectRepoLayout`'s and **both drivers run the same code** — a shared-wizard change moves both streams identically. Parity catches a divergent *copy*; only an **absolute** pin catches the wizard itself drifting. Added, on three independent axes (every prompt pre-selects index 0; that index *resolves* to `file-system`/`same`; each enum is pinned as offered). Mutants L1-L4 killed. |
+| **N5** | **Justified, and the amplifying condition removed at the source.** The wholesale replacement of an `unreadable` registry is correct in isolation and the reasoning is sound — it is a rebuildable display cache, and refusing to record would let one damaged byte permanently blind `status`. The danger the review names is the **combination**, and that is gone: `recordBoundProject` is no longer reached at all on a failed bind. Fixing the registry policy instead would have left the real defect (calling it after a failed bind) in place while touching `lib/bound-projects.js`, whose status-only property the review confirmed sound. Pinned by a test asserting a failed bind registers nothing. |
+| **TTY polarity** | **Pinned, and the review's prediction was wrong — the mutant is KILLED.** Pinned twice anyway: as text (`yes: !process.stdin.isTTY`, and its inverse must not appear) and as behaviour (`yes: true` asks **zero** questions; `yes: false` asks at least one), so the two polarities are distinguishable rather than merely documented. |
+
+`enclosingFunctionName` (`config-generation:669`) was **left alone** — low priority, and its suite is
+green at 32/0. It remains a latent misattribution risk if a `generateBmmConfig` call is ever added
+after `handleBind`'s closing brace.
