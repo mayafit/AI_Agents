@@ -1260,18 +1260,29 @@ test('[text] AC1 the block names `ma-agents bind` in the drift branch', () => {
 });
 
 test('[text] the block does not contradict Story 31.2\'s pinned UNBOUND wording', () => {
-  // 31.2 round 3 pinned that the refuse-to-overwrite message in bin/cli.js says
-  // "delete _bmad-output/project-layout.yaml and re-run the installer" and does
-  // NOT say `ma-agents bind`, because in this release the installer is the only
-  // writer of the binding. That is a DIFFERENT message from this guard's, and
-  // this test proves the guard did not reach into it.
+  // AMENDED BY STORY 31.13's FIX ROUND — the SECOND copy of an expired assertion
+  // whose twin lives in test/project-layout-binding-spine.test.js. Both rested on
+  // "in this release the installer is the only writer of the binding", which
+  // stopped being true the moment `ma-agents bind` began dispatching in bin/cli.js.
+  //
+  // What this test is actually FOR survives intact: the refuse-to-overwrite message
+  // is a DIFFERENT message from this guard's, and 31.4 must not have reached into
+  // it. That is now checked by asserting the message's own content directly rather
+  // than by forbidding a word that has since become correct.
   const cliSrc = fs.readFileSync(path.join(PROJECT_ROOT, 'bin', 'cli.js'), 'utf-8');
   const refusal = cliSrc.slice(cliSrc.indexOf('Refusing to overwrite _bmad-output/project-layout.yaml'));
-  const window = refusal.slice(0, 700);
+  const window = refusal.slice(0, 900);
   assert.ok(/re-run the installer/.test(window),
-    'the refuse-to-overwrite message must still tell the user to re-run the installer');
-  assert.ok(!/ma-agents bind/.test(window),
-    'Story 31.2 deliberately kept `ma-agents bind` OUT of that message — 31.4 must not add it');
+    'the refuse-to-overwrite message must still name the installer as a remedy');
+  // NOTE: this greps the SOURCE, in which the message is split across
+  // template-literal concatenations, so the anchor must be a span that survives
+  // that split — the whole phrase 'delete _bmad-output/project-layout.yaml' does
+  // not appear contiguously anywhere in bin/cli.js.
+  assert.ok(/_bmad-output\/project-layout\.yaml and run/.test(window),
+    'the refuse-to-overwrite message must still say which file to delete');
+  // It must NOT have acquired this guard's drift vocabulary — the actual claim.
+  assert.ok(!/no longer matches the state|stale/.test(window),
+    'the refuse-to-overwrite message has acquired the staleness guard\'s wording — the two messages describe different states and must not be merged');
 });
 
 // ═════════════════════════════════════════════════════════════════════════════

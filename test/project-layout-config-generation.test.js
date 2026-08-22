@@ -657,9 +657,33 @@ test('AC3: generation is called from install and reconfigure only — both insid
     `checked for it. Found ${wrapperCallers.length}: ${JSON.stringify(wrapperCallers)}`);
 
   const callSites = allCalls.filter((c) => !wrapperInternalCalls.some((w) => w.n === c.n));
-  assert.strictEqual(callSites.length, 2,
-    `generateBmmConfig must be called from exactly two production sites (install + reconfigure), ` +
-    `found ${callSites.length}: ${JSON.stringify(callSites)}`);
+
+  // ── AMENDED BY STORY 31.13, which is the "bind" half this suite's own AC3
+  // heading has always named ("generation fires on install and bind only") and
+  // which this file's wrapper assertion above already anticipated by name. The
+  // count moves 2 → 3; nothing about the FR251 gating analysis below changes.
+  //
+  // AND IT IS NOW AN IDENTIFICATION, NOT MERELY A COUNT. A bare count of 3 is
+  // satisfied by ANY three call sites — including a fourth one added while one of
+  // the expected three was deleted. Each site is therefore attributed to its
+  // enclosing named function and the SET is asserted against literals written
+  // here, so a generation site appearing anywhere else fails by name.
+  function enclosingFunctionName(callLineNumber) {
+    for (let i = callLineNumber - 1; i >= 0; i--) {
+      const m = /^(?:async\s+)?function\s+(\w+)\s*\(/.exec(lines[i]);
+      if (m) return m[1];
+    }
+    return '(top level)';
+  }
+  const EXPECTED_GENERATION_SITES = ['handleBind', 'handleConfigLayout', 'installWizard'];
+  const actualSites = callSites.map((c) => enclosingFunctionName(c.n)).sort();
+  assert.deepStrictEqual(actualSites, EXPECTED_GENERATION_SITES,
+    `generateBmmConfig must be called from exactly three production sites — the installer, ` +
+    `\`ma-agents config layout\`, and Story 31.13's \`ma-agents bind\` — and from no other. ` +
+    `Found ${JSON.stringify(callSites.map((c) => ({ n: c.n, fn: enclosingFunctionName(c.n) })))}`);
+  assert.strictEqual(callSites.length, 3,
+    `generateBmmConfig must be called from exactly three production sites ` +
+    `(install + reconfigure + bind), found ${callSites.length}: ${JSON.stringify(callSites)}`);
 
   const gated = callSites
     .map((site) => ({ site, opener: enclosingBlockOpenerLine(site.n) }))
@@ -676,11 +700,16 @@ test('AC3: generation is called from install and reconfigure only — both insid
       openerText: (lines[enclosingBlockOpenerLine(s.n) - 1] || '').trim(),
     })))}`);
 
-  // The other call site is `handleConfigLayout` — the `ma-agents config layout`
-  // reconfigure command, which is inherently project-scoped (it is refusing to
-  // exist at all without a project) and correctly ungated.
+  // The other two call sites are `handleConfigLayout` (the `ma-agents config
+  // layout` reconfigure command) and `handleBind` (`ma-agents bind`). Both are
+  // inherently project-scoped — each is a command the user runs INSIDE a project
+  // and which refuses to exist without one — so neither is, or should be, inside
+  // an `installScope === 'project'` gate. FR251 is about a GLOBAL INSTALL doing
+  // project work, not about a project command being run.
   const ungated = callSites.filter((s) => !gated.some((g) => g.site.n === s.n));
-  assert.strictEqual(ungated.length, 1, 'the remaining call site must be the reconfigure one');
+  assert.deepStrictEqual(ungated.map((s) => enclosingFunctionName(s.n)).sort(),
+    ['handleBind', 'handleConfigLayout'],
+    'the remaining call sites must be the reconfigure and bind commands');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

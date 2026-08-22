@@ -36,7 +36,12 @@ const fs = require('fs');
 // resolveProjectTopology). Already loaded on every run via lib/bmad.js.
 const yaml = require('js-yaml');
 const { execFileSync } = require('child_process');
-const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout, migrateRetiredSkills, reconcileAgentsSharedSkills } = require('../lib/installer');
+const { installSkill, uninstallSkill, getStatus, listSkills, listAgents, updateProjectContextRepoLayout, migrateRetiredSkills, reconcileAgentsSharedSkills, generateProjectContext } = require('../lib/installer');
+// Story 31.13 / OQ-1 — the PER-MACHINE bound-project record. Required here and
+// nowhere else: `resolveProjectTopology` must never depend on it (NFR83), and the
+// single import site is what makes "losing it degrades `status` only" a
+// structural property rather than a promise.
+const { readBoundProjects, recordBoundProject, boundProjectsPath } = require('../lib/bound-projects');
 const { getProfile, setProfile, resolveProfile, getBmadModules, setBmadModules, showDemerzelDeprecationNoticeOnce, getCustomMarketplaceSelection, hasShownNotice, markNoticeShown } = require('../lib/profile');
 const { reconfigure: runReconfigure, ReconfigureYesRejectedError, ManifestNotFoundError, RoomodesSlugDivergenceError } = require('../lib/reconfigure');
 const { uninstallProfileArtifacts } = require('../lib/uninstall');
@@ -119,7 +124,9 @@ ${chalk.bold('Usage:')}
   ${chalk.cyan(`npx ${NAME} install`)} <skill> <agents...>  Install directly
   ${chalk.cyan(`npx ${NAME} uninstall`)} <skill> <agents..> Uninstall a skill
   ${chalk.cyan(`npx ${NAME} uninstall --profile-artifacts`)}  Remove ma-agents-owned profile content from all injection files
-  ${chalk.cyan(`npx ${NAME} status`)}                       Show installed skills
+  ${chalk.cyan(`npx ${NAME} status`)}                       Show install scope, bound projects and installed skills
+  ${chalk.cyan(`npx ${NAME} bind`)}                         Bind this project (knowledge stores + sprint management)
+                                             — installs nothing
   ${chalk.cyan(`npx ${NAME} list`)}                         List available skills
   ${chalk.cyan(`npx ${NAME} agents`)}                       List supported agents
   ${chalk.cyan(`npx ${NAME} create-skill`)} <name>           Scaffold a new skill directory
@@ -215,12 +222,43 @@ function showAgents() {
   console.log('');
 }
 
-function showStatus(args) {
+async function showStatus(args) {
   const globalFlag = args.includes('--global');
   const scope = globalFlag ? 'global' : 'project';
   const positional = args.filter(a => a !== '--global');
 
   const results = getStatus(positional, '', scope);
+
+  // Story 31.13 AC7 (FR253) — the ACTIVE install scope, and for a global install
+  // the per-machine list of bound projects with each one's binding health.
+  //
+  // BEFORE the early return below, deliberately: a machine with a global install
+  // and no project-scope skills takes that return, and it is precisely the
+  // machine whose bound-project list the user needs. Reporting scope only when
+  // skills happen to be listed would make AC7 invisible on its own primary case.
+  const scopes = detectInstallScopes();
+  printScopeReport(scopes);
+
+  // Story 31.13 AC3 — THE OFFER'S CLI CALL SITE.
+  //
+  // The offer that reaches a globally-installed SKILL at activation time is the
+  // Story 31.4 preflight embedded in the skill documents; the CLI is not present
+  // at that moment and cannot be. But `offerBind` must not be a seam with no
+  // production caller — an exported function nothing calls is the "presence, not
+  // effect" shape this epic keeps producing, and it is what left Story 31.11's
+  // AC6 offer with no reader.
+  //
+  // `status` on a GLOBAL install, run inside a project with no committed binding,
+  // is the one CLI moment where the user is asking about exactly this state. So
+  // the offer is made here, and only here.
+  //
+  // `yes` is derived from whether a TTY is attached. Without one — a pipe, a CI
+  // step, a test harness — there is no user to choose, so `offerBind` states the
+  // remedy and stops rather than prompting. It never binds either way; only an
+  // explicit `true` answer can do that.
+  if (scopes.global) {
+    await offerBind({ projectRoot: process.cwd(), yes: !process.stdin.isTTY });
+  }
 
   if (results.length === 0) {
     console.log(chalk.gray(`\n  No skills installed (${scope} scope)\n`));
@@ -1021,7 +1059,7 @@ function generateBmmConfig(opts) {
     console.log(chalk.yellow(
       `  Skipping _bmad/bmm/config.yaml generation: this project has no committed binding in\n` +
       `  _bmad-output/project-layout.yaml and no layout was supplied to generate from.\n` +
-      `  Run the installer (or a future \`ma-agents bind\`) to write the binding first.`
+      `  Run \`${NAME} bind\` (or the installer) to write the binding first.`
     ));
     return false;
   }
@@ -1807,6 +1845,45 @@ const BINDING_UNREADABLE = 'unreadable';
 const BINDING_INVALID = 'invalid';
 const BINDING_TOO_NEW = 'too-new';
 
+/**
+ * Story 31.13 fix round — THE OUTCOME OF AN AUTHORITATIVE WRITE, AS A VALUE.
+ *
+ * `writeProjectLayoutYaml` has five exits and used to return `undefined` from
+ * every one of them, so a caller could not tell "wrote it" from "could not create
+ * the directory". `handleBind` consequently printed `Bound.`, exited 0, generated
+ * a `config.yaml` and registered the project after a write that had FAILED — the
+ * blocking defect this round exists to close. A guard bolted onto `handleBind`
+ * alone would have left the same blindness for the next caller, so the outcome is
+ * made observable AT THE SOURCE instead.
+ *
+ * The five outcomes are kept SEPARATE, by name, for the reason `BINDING_UNBOUND`
+ * and `BINDING_UNREADABLE` are separate: two of them mean the binding on disk is
+ * good and three mean it is not, and collapsing them loses exactly the distinction
+ * the caller needs. In particular `UNCHANGED_LEGACY` (Story 31.7 AC3/AC4 declined
+ * to rewrite a legacy file because NOTHING MOVED — the project IS bound, by the
+ * file that was already there) must never read as a failure, and `FAILED_MKDIR` /
+ * `FAILED_WRITE` must never read as a success.
+ */
+const LAYOUT_WRITE_WROTE = 'wrote';
+const LAYOUT_WRITE_UNCHANGED_LEGACY = 'unchanged-legacy';
+const LAYOUT_WRITE_REFUSED = 'refused';
+const LAYOUT_WRITE_FAILED_MKDIR = 'failed-mkdir';
+const LAYOUT_WRITE_FAILED_WRITE = 'failed-write';
+
+/**
+ * Which outcomes leave a usable committed binding on disk.
+ *
+ * DEFAULT-DENY, deliberately: the bound set is enumerated and everything else is
+ * unbound, so an outcome added later is treated as NOT-bound until someone decides
+ * otherwise. The inverse spelling (`=== FAILED_MKDIR || === FAILED_WRITE`) would
+ * silently admit a sixth outcome as a success, which is the shape of the defect
+ * this whole mechanism replaces.
+ */
+function projectLayoutWriteIsBound(outcome) {
+  const o = outcome && outcome.outcome;
+  return o === LAYOUT_WRITE_WROTE || o === LAYOUT_WRITE_UNCHANGED_LEGACY;
+}
+
 function resolveProjectTopology(projectRoot) {
   const layoutPath = path.join(projectRoot, '_bmad-output', 'project-layout.yaml');
   const fail = (reason, message) => ({ ok: false, reason, message });
@@ -2287,11 +2364,11 @@ function writeProjectLayoutYaml(layout) {
     console.log(
       chalk.yellow(
         `  Warning: could not create _bmad-output/ for project-layout.yaml: ${e.message}\n` +
-        `  The project is left UNBOUND — re-run the installer once _bmad-output/ is writable\n` +
-        `  (a future \`ma-agents bind\` will do this without a full re-install).`
+        `  The project is left UNBOUND — fix the path above, then re-run\n` +
+        `  \`${NAME} bind\` (or \`npx ${NAME} install\`) to write the binding.`
       )
     );
-    return;
+    return { outcome: LAYOUT_WRITE_FAILED_MKDIR, error: e };
   }
 
   // R-2 - THE NON-DESTRUCTION GUARD. AC2 makes this function run on every
@@ -2314,10 +2391,11 @@ function writeProjectLayoutYaml(layout) {
         `${existing.reason}:\n` +
         `    ${existing.message}\n` +
         `  The file has been left UNCHANGED. To recover: fix it by hand, or delete ` +
-        `_bmad-output/project-layout.yaml and re-run the installer to write a fresh binding.`
+        `_bmad-output/project-layout.yaml and run \`${NAME} bind\` to write a fresh binding\n` +
+        `  (or re-run the installer, which does the same thing plus a full re-install).`
       )
     );
-    return;
+    return { outcome: LAYOUT_WRITE_REFUSED, reason: existing.reason, error: null };
   }
 
   // ── PRESERVATION. A record the caller did not supply is carried over from the
@@ -2480,7 +2558,7 @@ function writeProjectLayoutYaml(layout) {
       console.log(chalk.gray(
         `  _bmad-output/project-layout.yaml left unchanged (legacy single-store layout, nothing moved)`
       ));
-      return;
+      return { outcome: LAYOUT_WRITE_UNCHANGED_LEGACY, error: null };
     }
   }
 
@@ -2513,13 +2591,14 @@ function writeProjectLayoutYaml(layout) {
     console.log(
       chalk.yellow(
         `  Warning: could not write _bmad-output/project-layout.yaml: ${e.message}\n` +
-        `  The project is left UNBOUND — re-run the installer once the file is writable\n` +
-        `  (a future \`ma-agents bind\` will do this without a full re-install).`
+        `  The project is left UNBOUND — fix the path above, then re-run\n` +
+        `  \`${NAME} bind\` (or \`npx ${NAME} install\`) to write the binding.`
       )
     );
-    return;
+    return { outcome: LAYOUT_WRITE_FAILED_WRITE, error: e };
   }
   console.log(chalk.gray(`  Wrote _bmad-output/project-layout.yaml (system + software requirements stores, sprint management)`));
+  return { outcome: LAYOUT_WRITE_WROTE, error: null };
 }
 
 /**
@@ -4101,8 +4180,8 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     } catch (e) {
       console.log(chalk.yellow(
         `  Warning: could not write _bmad-output/project-layout.yaml: ${e.message}\n` +
-        `  The project is left UNBOUND - re-run the installer once this is corrected\n` +
-        `  (a future \`ma-agents bind\` will do this without a full re-install).`
+        `  The project is left UNBOUND - correct the above, then run\n` +
+        `  \`${NAME} bind\` to write the binding without a full re-install.`
       ));
     }
     // `fallbackLayout` covers only the case where the binding could not be
@@ -4565,6 +4644,455 @@ async function handleConfigLayout(args) {
   console.log(chalk.bold.green('\n  Layout reconfigured!\n'));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Story 31.13 — `ma-agents bind` (FR252) and scope reporting in `status` (FR253)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * AC3's decision procedure, as a PURE function.
+ *
+ * Separated from the prompting so "the offer never runs bind without the user's
+ * choice" is provable rather than promised: this function decides WHETHER to
+ * offer and writes nothing, and `offerBind` below is the only thing that can
+ * run bind — and only on an explicit affirmative answer.
+ *
+ * KEYED ON `resolveProjectTopology` FIRST (the Story 31.3/31.4 contract). The
+ * three outcomes are deliberately distinct, because `absent` and `malformed` are
+ * NOT interchangeable:
+ *   - `unbound`  → OFFER. This is AC3's case: no committed binding at all.
+ *   - `ok`       → do not offer. The project is bound; there is nothing to bind.
+ *   - anything else (`unreadable` / `invalid` / `too-new`) → do NOT offer, and
+ *     say why. A binding this build cannot read is a DIFFERENT FACT from a
+ *     project that has none (Story 31.4's default-deny rule), and offering to
+ *     write a fresh binding over it is the destructive-overwrite shape Story
+ *     31.2's guard exists to refuse. Bind itself refuses the same way.
+ *
+ * @returns {{offer: boolean, reason: string, message: string}}
+ */
+function bindOfferDecision(projectRoot) {
+  const binding = resolveProjectTopology(projectRoot);
+  if (binding.ok) {
+    return {
+      offer: false,
+      reason: 'already-bound',
+      message: 'This project already has a committed knowledge binding.',
+    };
+  }
+  if (binding.reason !== BINDING_UNBOUND) {
+    return {
+      offer: false,
+      reason: binding.reason,
+      message:
+        `_bmad-output/project-layout.yaml is ${binding.reason}: ${binding.message}. ` +
+        `This project IS bound — the binding just cannot be read — so binding it afresh ` +
+        `would overwrite it. Fix it by hand, or delete it and run \`ma-agents bind\`.`,
+    };
+  }
+  return {
+    offer: true,
+    reason: BINDING_UNBOUND,
+    message:
+      'This project has no _bmad-output/project-layout.yaml, so nothing states where its ' +
+      'knowledge stores live.',
+  };
+}
+
+/**
+ * AC3 — the automatic offer, at the CLI. Asks; runs bind ONLY on an explicit yes.
+ *
+ * WHAT THIS IS AND IS NOT. The offer that reaches a globally-installed SKILL at
+ * activation time is TEXT, and it lives in the Story 31.4 preflight embedded in
+ * every shipped skill document (Step P2 — "Run `npx ma-agents install` … or
+ * `ma-agents bind` …"). That block is the surface an agent actually loads when a
+ * skill activates, which is why the offer belongs there and not in a file nothing
+ * is directed to read. This story's contribution to that half is that the command
+ * the text names NOW EXISTS. `test/project-layout-bind.test.js` pins both halves.
+ *
+ * This function is the EXECUTABLE half: the same decision, callable, so the
+ * "never without the user's choice" property is a property of code rather than of
+ * prose. `yes` is honoured as a REFUSAL to offer, not as an acceptance — a
+ * non-interactive run has no user to choose, and auto-accepting would be exactly
+ * the thing AC3 forbids.
+ *
+ * @returns {Promise<{ran: boolean, reason: string}>}
+ */
+async function offerBind({ projectRoot = process.cwd(), yes = false } = {}) {
+  const decision = bindOfferDecision(projectRoot);
+  if (!decision.offer) {
+    return { ran: false, reason: decision.reason };
+  }
+
+  console.log(chalk.cyan(`\n  ${decision.message}`));
+
+  if (yes) {
+    // Non-interactive. State the remedy and STOP. Running bind here would be an
+    // offer that accepted itself.
+    console.log(chalk.gray('  Run `ma-agents bind` in this project to create one. Not doing it for you.'));
+    return { ran: false, reason: 'declined-non-interactive' };
+  }
+
+  const { doBind } = await prompts({
+    type: 'confirm',
+    name: 'doBind',
+    message: 'Bind this project now (answer the knowledge-store and sprint-management questions)?',
+    initial: false,
+  });
+
+  if (doBind !== true) {
+    console.log(chalk.gray('  Not bound. Run `ma-agents bind` whenever you are ready.'));
+    return { ran: false, reason: 'declined' };
+  }
+
+  // N3 - THE ROOT THE OFFER DECIDED ON MUST BE THE ROOT THAT GETS BOUND.
+  //
+  // `bindOfferDecision` above keys on `projectRoot`; `handleBind` re-derives its
+  // own root from `process.cwd()`, and so do `writeProjectLayoutYaml`,
+  // `readExistingLayout` and `collectRepoLayout`. Plumbing `projectRoot` through
+  // would therefore fix one of four and leave the write itself pointed at the cwd
+  // - worse than the disagreement it set out to remove. So the agreement is
+  // CHECKED rather than assumed: deciding to offer for one project and then
+  // binding a different one is a silent wrong-project bind, and until the fix
+  // above it would have reported `Bound.` and exited 0 while doing it.
+  //
+  // Unreachable from today's only caller (`status` passes `process.cwd()`). It is
+  // pinned by a test so that a second caller cannot reintroduce it quietly - a
+  // latent trap with a failing-if-touched test is a decision, not a trap.
+  const cwd = process.cwd();
+  if (path.resolve(projectRoot) !== path.resolve(cwd)) {
+    console.log(chalk.red(
+      `  Not binding: this offer was decided for\n` +
+      `    ${projectRoot}\n` +
+      `  but \`${NAME} bind\` would bind\n` +
+      `    ${cwd}\n` +
+      `  Run \`${NAME} bind\` from inside the project you mean.`
+    ));
+    return { ran: false, reason: 'project-root-mismatch' };
+  }
+
+  const result = await handleBind([]);
+  return { ran: true, reason: 'accepted', result };
+}
+
+/**
+ * `ma-agents bind` — write a project's committed binding WITHOUT installing
+ * anything (FR252).
+ *
+ * AC1: collects exactly the three project-scoped answers, and no others, by
+ * calling `collectRepoLayout` — Story 31.5's and 31.8's collection flow itself,
+ * not a copy of it. The three questions ARE `REPO_LAYOUT_CONCERNS`; a second copy
+ * of the store questions living here is the defect this story is most likely to
+ * introduce, so there is deliberately no question text in this function at all.
+ *
+ * AC2: installs nothing. Nothing below touches `installSkill`, any agent skills
+ * directory, or the BMAD installer. The only thing written under `_bmad/` is the
+ * generated `config.yaml`, which P5-9.3 requires to fire on bind.
+ *
+ * AC4/NFR78: on an already-bound project this REPORTS the bindings and changes
+ * nothing unless the user explicitly says they want to edit an answer.
+ *
+ * AC6: regenerates `config.yaml` from the layout, and touches neither
+ * `_bmad/config.user.toml` nor `_bmad/custom/config.user.toml` (P5-9.4) — it
+ * calls `generateBmmConfig`, whose only write target is `_bmad/bmm/config.yaml`.
+ */
+async function handleBind(args = []) {
+  const { yesFlag } = parseFlags(args);
+  const projectRoot = process.cwd();
+
+  console.log(chalk.bold.cyan(`\n  ${NAME} bind — project knowledge binding\n`));
+
+  // ── Step 1. The Story 31.3 rule: key on `resolveProjectTopology` FIRST.
+  const binding = resolveProjectTopology(projectRoot);
+
+  if (!binding.ok && binding.reason !== BINDING_UNBOUND) {
+    // NOT a bind. The same refusal `writeProjectLayoutYaml` would make, made
+    // BEFORE any question is asked, so the user is not walked through three
+    // prompts whose answers will then be thrown away.
+    console.log(chalk.red(
+      `  Refusing to bind — the existing binding in _bmad-output/project-layout.yaml is ` +
+      `${binding.reason}:\n` +
+      `    ${binding.message}\n` +
+      `  The file has been left UNCHANGED. Fix it by hand, or delete ` +
+      `_bmad-output/project-layout.yaml\n` +
+      `  and run \`${NAME} bind\` again to write a fresh binding.`
+    ));
+    process.exitCode = 1;
+    return { bound: false, reason: binding.reason };
+  }
+
+  // ── Step 2. AC4 — an already-bound project REPORTS and changes nothing unless
+  // the user explicitly asks to edit an answer.
+  let editAnswers = true;
+  if (binding.ok) {
+    console.log(chalk.white('  This project is already bound. Its committed bindings are:'));
+    showCurrentLayout();
+
+    if (yesFlag) {
+      // Non-interactive: there is no user to say "edit". Explicitly NOT an
+      // implicit yes — the default on the interactive prompt below is also `no`,
+      // so both paths agree.
+      editAnswers = false;
+    } else {
+      const { edit } = await prompts({
+        type: 'confirm',
+        name: 'edit',
+        message: 'Change any of these answers?',
+        initial: false,
+      });
+      editAnswers = edit === true;
+    }
+
+    if (!editAnswers) {
+      console.log(chalk.gray('  Bindings left unchanged — no answer was edited.'));
+    }
+  }
+
+  // ── Step 3. Collect, but ONLY when there is something to collect.
+  //
+  // AC4's "changes nothing" is enforced by NOT WRITING, not by writing the same
+  // bytes and hoping they match. `writeProjectLayoutYaml` refreshes the
+  // `generated:` date on every write, so a re-write is byte-identical only while
+  // the two runs fall on the same calendar day — which is a coincidence, not a
+  // guarantee, and is exactly the "prove the negative by byte-identity" trap this
+  // epic keeps falling into. The committed binding is therefore not written at
+  // all on a no-edit re-run.
+  let layoutForContext = null;
+  if (editAnswers) {
+    const existingLayout = readExistingLayout();
+    const newLayout = await collectRepoLayout({ yes: yesFlag }, existingLayout);
+
+    // Same order as install Step 3.6 and `handleConfigLayout`: the authoritative
+    // file first, the derived one after (Story 31.3 AC1/AC2).
+    // THE FIX (Story 31.13 fix round, BLOCKING). `writeProjectLayoutYaml` now
+    // returns a named outcome, so this function can finally tell "wrote it" from
+    // "could not create the directory". Before it did, every exit of that callee
+    // returned `undefined`, it SWALLOWED both I/O failures itself, and the catch
+    // below was therefore DEAD CODE on exactly the paths it was written for.
+    // Steps 4-6 and the `Bound.` line then ran unconditionally: a bind whose
+    // authoritative write had failed printed `Bound.`, exited 0, generated a
+    // `config.yaml` full of `.` defaults, and registered the project.
+    //
+    // The outcome is checked with `projectLayoutWriteIsBound`, which enumerates
+    // the BOUND outcomes and denies everything else - so Story 31.7's
+    // legacy-skip ("nothing moved", the project IS bound by the file already
+    // there) stays a success, and a sixth outcome added later fails closed.
+    let writeOutcome;
+    try {
+      writeOutcome = writeProjectLayoutYaml(newLayout);
+    } catch (e) {
+      // Still reachable, and no longer dead: the serializers throw DELIBERATELY
+      // (the closed backend enum, the confluence identity guard). A throw is a
+      // different fact from a returned failure, but it has the same consequence
+      // - nothing reached disk - so it is mapped onto the same outcome.
+      console.log(chalk.yellow(
+        `  Warning: could not write _bmad-output/project-layout.yaml: ${e.message}`
+      ));
+      writeOutcome = { outcome: LAYOUT_WRITE_FAILED_WRITE, error: e };
+    }
+
+    if (!projectLayoutWriteIsBound(writeOutcome)) {
+      // ABORT. Every step below this line acts on a binding that is not on disk.
+      //
+      // Generating `config.yaml` here is what produced a config with NO
+      // `project-layout.yaml` behind it - precisely the drifted state Story
+      // 31.4's guard exists to catch (verified: that guard HALTS on it with
+      // `halt:binding-missing`) - while this command reported success. And
+      // because `recordBoundProject` replaces an `unreadable` registry
+      // WHOLESALE, registering a never-bound project could also discard the
+      // records of every project that genuinely is bound.
+      const why = (writeOutcome && writeOutcome.outcome) || 'unknown';
+      console.log(chalk.red(
+        `\n  NOT BOUND (${why}). _bmad-output/project-layout.yaml was not written, so\n` +
+        `  nothing else was changed either: _bmad/bmm/config.yaml was NOT regenerated\n` +
+        `  and this project was NOT recorded. Fix the cause reported above, then run\n` +
+        `  \`${NAME} bind\` again.`
+      ));
+      process.exitCode = 1;
+      return { bound: false, reason: why };
+    }
+    layoutForContext = newLayout;
+  } else {
+    layoutForContext = readExistingLayout();
+  }
+
+  // ── Step 4. AC6 — regenerate `config.yaml` from the binding.
+  //
+  // This runs on the no-edit path TOO, and that is load-bearing rather than
+  // sloppy: Story 31.4's staleness HALT tells the user "Run `ma-agents bind` to
+  // regenerate `_bmad/bmm/config.yaml` from the committed binding". A bind that
+  // skipped generation whenever the binding was unchanged would leave that
+  // instruction false in the one situation it is given in — a config that has
+  // drifted from a binding nobody edited.
+  //
+  // It does not break AC4's byte-identity either: `generateBmmConfig` derives
+  // every field from the committed binding and carries no timestamp, so
+  // regenerating from an unchanged binding reproduces the same bytes (NFR81's
+  // determinism). AC4 is proved on that basis, not on a promise that nothing ran.
+  //
+  // `fallbackLayout` is supplied for the unbound-and-unwritable case only; when a
+  // committed binding exists it wins outright inside `generateBmmConfig`.
+  generateBmmConfig({ projectRoot, fallbackLayout: layoutForContext });
+
+  // ── Step 5. AC1/AC5 — project-context.md.
+  //
+  // AC5 is a hard NEVER-OVERWRITE, stronger than the installer's behaviour: the
+  // installer updates an existing file's manifest paths in place, bind does not
+  // touch it at all. "Left untouched" means untouched.
+  const contextPath = path.join(projectRoot, '_bmad-output', 'project-context.md');
+  if (fs.existsSync(contextPath)) {
+    console.log(chalk.gray(
+      '  _bmad-output/project-context.md already exists — left untouched, generation skipped.'
+    ));
+  } else {
+    try {
+      // Agents are DISCOVERED, never installed. `getStatus` reads the manifests
+      // that are already on disk at both scopes; bind installs nothing (AC2).
+      const installedAgents = getStatus([], '', 'all').map((e) => e.agent);
+      const seen = new Set();
+      const uniqueAgents = installedAgents.filter((a) => {
+        if (!a || seen.has(a.id)) return false;
+        seen.add(a.id);
+        return true;
+      });
+      const content = await generateProjectContext(projectRoot, uniqueAgents, layoutForContext);
+      fs.mkdirSync(path.join(projectRoot, '_bmad-output'), { recursive: true });
+      fs.writeFileSync(contextPath, content, 'utf-8');
+      console.log(chalk.gray('  Wrote _bmad-output/project-context.md'));
+    } catch (e) {
+      console.log(chalk.yellow(`  project-context.md generation skipped: ${e.message}`));
+    }
+  }
+
+  // ── Step 6. AC8 — record this project in the PER-MACHINE registry.
+  //
+  // LAST, and non-fatally. The registry is a display cache for `status` and
+  // nothing else reads it; a failure here must never turn a successful bind into
+  // a failed one, and losing the file entirely costs `status` output and nothing
+  // more. See the OQ-1 decision recorded in lib/bound-projects.js.
+  const recorded = recordBoundProject(projectRoot);
+  if (!recorded.ok) {
+    console.log(chalk.gray(
+      `  (could not update the per-machine bound-project record: ${recorded.message} — ` +
+      `this affects \`${NAME} status\` output only)`
+    ));
+  }
+
+  console.log(chalk.bold.green('\n  Bound.\n'));
+  return { bound: true, reason: editAnswers ? 'written' : 'unchanged' };
+}
+
+/**
+ * AC7 — which scope(s) ma-agents is actually installed at on this machine.
+ *
+ * Derived from WHERE a manifest with skills was found, not from what a manifest
+ * says about itself: the path is a fact, a recorded field is a claim. (The claim
+ * is separately kept honest — `ensureManifest` now back-fills `scope` on its
+ * migrate branch, which it previously set only when creating a manifest.)
+ *
+ * @returns {{project: boolean, global: boolean, label: string}}
+ */
+function detectInstallScopes() {
+  let project = false;
+  let global = false;
+  for (const entry of getStatus([], '', 'all')) {
+    if (entry.scope === 'global') global = true;
+    if (entry.scope === 'project') project = true;
+  }
+  let label;
+  if (project && global) label = 'project + global';
+  else if (global) label = 'global';
+  else if (project) label = 'project';
+  else label = 'none detected';
+  return { project, global, label };
+}
+
+/**
+ * AC7 — join the per-machine bound-project record against what is actually on
+ * disk at each recorded root.
+ *
+ * The health of each entry is decided by `resolveProjectTopology` — the SAME
+ * resolver every other consumer uses — so "readable" here means readable to the
+ * thing that will actually read it, not to a private re-implementation. A project
+ * that was bound and has since been moved or deleted therefore shows up as
+ * `missing`/`unreadable` rather than being listed as healthy.
+ *
+ * @returns {Array<{root: string, boundAt: string, ok: boolean, state: string, detail: string}>}
+ */
+function describeBoundProjects() {
+  const registry = readBoundProjects();
+  if (!registry.ok) return [];
+  return registry.projects.map((p) => {
+    if (!fs.existsSync(p.root)) {
+      return {
+        root: p.root,
+        boundAt: p.boundAt,
+        ok: false,
+        state: 'missing',
+        detail: 'the project root no longer exists (moved or deleted)',
+      };
+    }
+    const binding = resolveProjectTopology(p.root);
+    if (binding.ok) {
+      return {
+        root: p.root,
+        boundAt: p.boundAt,
+        ok: true,
+        state: 'bound',
+        detail: 'readable _bmad-output/project-layout.yaml',
+      };
+    }
+    return {
+      root: p.root,
+      boundAt: p.boundAt,
+      ok: false,
+      state: binding.reason,
+      detail: binding.message,
+    };
+  });
+}
+
+/**
+ * AC7's rendering. Split out from `showStatus` so the scope report can be
+ * exercised without driving the whole skills listing.
+ */
+function printScopeReport(scopes) {
+  console.log(chalk.bold(`\n  Install scope: ${scopes.label}`));
+
+  if (!scopes.global) return;
+
+  const registry = readBoundProjects();
+  if (!registry.ok) {
+    // AC8 — a lost or damaged registry is a DISPLAY degradation and says so. It
+    // is never reported as a broken install, and the two reasons are not
+    // conflated: "nothing has been bound on this machine" and "there is a record
+    // here this build cannot read" are different facts.
+    const line = registry.reason === 'absent'
+      ? `  No projects recorded as bound on this machine (${registry.path}).`
+      : `  The per-machine bound-project record could not be read: ${registry.message}`;
+    console.log(chalk.gray(line));
+    console.log(chalk.gray(
+      '  This affects this listing only — every project still resolves its own binding\n' +
+      '  from _bmad-output/project-layout.yaml at its root.'
+    ));
+    return;
+  }
+
+  const entries = describeBoundProjects();
+  if (entries.length === 0) {
+    console.log(chalk.gray(`  No projects recorded as bound on this machine (${registry.path}).`));
+    return;
+  }
+
+  console.log(chalk.white('\n  Bound projects on this machine:'));
+  for (const e of entries) {
+    if (e.ok) {
+      console.log(chalk.green(`    [bound]   ${e.root}`));
+    } else {
+      console.log(chalk.yellow(`    [${e.state}] ${e.root}`));
+      console.log(chalk.gray(`              ${e.detail}`));
+    }
+  }
+}
+
 // --- Profile reconfigure (Story 21.10) ---
 async function handleReconfigure(args) {
   try {
@@ -4615,7 +5143,7 @@ async function interactiveMode() {
   }
 
   if (action === 'status') {
-    showStatus([]);
+    await showStatus([]);
     process.exit(0);
   }
 
@@ -4661,7 +5189,14 @@ async function main() {
       await handleUninstall(args.slice(1));
       break;
     case 'status':
-      showStatus(args.slice(1));
+      await showStatus(args.slice(1));
+      break;
+    // Story 31.13 (FR252). Story 31.4's preflight — embedded in every shipped
+    // skill document — instructs the user to run this command in five separate
+    // HALT messages. Until this case existed, all five named a command that did
+    // not dispatch.
+    case 'bind':
+      await handleBind(args.slice(1));
       break;
     case 'list':
     case 'list-skills':
@@ -4724,6 +5259,14 @@ if (require.main === module) {
 }
 
 module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, reconcileCustomMarketplaceOnUpdate, resolveBaseBmadOk, collectRepoLayout, readExistingLayout, writeRepoLayoutConfig, writeProjectLayoutYaml, writeConfigField, normalizePath, toPortablePath, resolveStoredPath, ciCloneIfNeeded, showCurrentLayout, handleConfigLayout, yamlEscapeValue, yamlUnescapeDoubleQuoted, resolveProjectTopology, parseLayoutYaml, PROJECT_LAYOUT_SCHEMA_VERSION, BINDING_UNBOUND, BINDING_UNREADABLE, BINDING_INVALID, BINDING_TOO_NEW,
+  // Story 31.13 fix round - the outcome of an authoritative write, as a value.
+  // Exported for the same reason the BINDING_* reasons are: a test must branch on
+  // the outcome BY NAME, so "skipped because the layout is legacy" and "failed to
+  // write" can never be collapsed back into one. `projectLayoutWriteIsBound` is
+  // exported so the bound/unbound partition is asserted against the SHIPPED
+  // predicate rather than against a copy of it in a test.
+  LAYOUT_WRITE_WROTE, LAYOUT_WRITE_UNCHANGED_LEGACY, LAYOUT_WRITE_REFUSED,
+  LAYOUT_WRITE_FAILED_MKDIR, LAYOUT_WRITE_FAILED_WRITE, projectLayoutWriteIsBound,
   // Story 31.3 — the config.yaml generator and its stamp. `generateBmmConfig` is
   // the entry point Story 31.13's `ma-agents bind` calls; `computeProjectLayoutStamp`
   // and `readProjectLayoutStamp` are the PAIR Story 31.4's drift guard consumes, so
@@ -4777,4 +5320,13 @@ module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, recon
   // `validateConfluenceIdentity` is exported for the same reason the prompt
   // carries it: it is the policy the serializer enforces, and a test must be able
   // to show the two agree rather than that each exists.
-  collectConfluenceStoreLocation, generatedRootPageTitle, validateConfluenceIdentity };
+  collectConfluenceStoreLocation, generatedRootPageTitle, validateConfluenceIdentity,
+  // Story 31.13 — `ma-agents bind` (FR252) and scope reporting in `status`
+  // (FR253). `bindOfferDecision` is exported separately from `offerBind` because
+  // AC3's "never runs bind without the user's choice" is only checkable if the
+  // DECISION can be exercised without the prompting: a test that had to answer a
+  // prompt to learn what was decided could not distinguish "did not offer" from
+  // "offered and was declined". `describeBoundProjects` and `detectInstallScopes`
+  // are exported so AC7 can be asserted on data rather than on scraped output.
+  handleBind, offerBind, bindOfferDecision, detectInstallScopes, describeBoundProjects,
+  printScopeReport, boundProjectsPath };

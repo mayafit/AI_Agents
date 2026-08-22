@@ -2000,12 +2000,24 @@ test('the refusal message leads with a remedy that EXISTS in this release', () =
       knowledgebase: { mode: 'same', path: '.' },
       sprintManagement: { mode: 'same', path: '.' },
     }));
-    // `ma-agents bind` ships in Story 31.13, so it must not be the instruction a
-    // user of THIS release is given.
-    assert.ok(/delete _bmad-output\/project-layout\.yaml and re-run the installer/.test(output),
-      `the remedy must be actionable today, got: ${output}`);
-    assert.ok(!/ma-agents bind/.test(output),
-      `must not instruct the user to run a command this release does not ship, got: ${output}`);
+    // AMENDED BY STORY 31.13's FIX ROUND. This assertion was INVERTED, and had
+    // become the load-bearing reason the WORSE remedy was still shipping.
+    //
+    // Its comment used to read "`ma-agents bind` ships in Story 31.13, so it must
+    // not be the instruction a user of THIS release is given" — written while bind
+    // was still future work. It is false in this very worktree: `case 'bind':`
+    // dispatches in bin/cli.js, and this suite runs against that file. The AC it
+    // serves is that THE REMEDY EXISTS AND IS ACTIONABLE TODAY; bind now exists, so
+    // naming it satisfies that AC rather than weakening it — and it is the better
+    // remedy, because it rewrites the binding without a full re-install.
+    assert.ok(/ma-agents bind/.test(output),
+      `the refusal must name \`ma-agents bind\`, which this release ships and which fixes ` +
+      `this without a full re-install, got: ${output}`);
+    assert.ok(/delete _bmad-output\/project-layout\.yaml/.test(output),
+      `the remedy must still say which file to delete, got: ${output}`);
+    assert.ok(/re-run the installer/.test(output),
+      `the installer must remain named as the alternative — dropping it would narrow the ` +
+      `remedy rather than widen it, got: ${output}`);
   } finally {
     cleanup();
   }
