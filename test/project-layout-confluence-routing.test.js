@@ -54,7 +54,7 @@ const { execFileSync } = require('child_process');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 
-const EXPECTED_TEST_COUNT = 89;
+const EXPECTED_TEST_COUNT = 93;
 
 let passed = 0;
 let failed = 0;
@@ -1341,17 +1341,65 @@ test('[text] BLOCKING-1 Step B2 states EXACTLY the two sanctioned outcomes', () 
 // says, and so does a deleted one.
 //
 // The store names and field names below are HOLES, filled from `AUTHORITY` —
-// Story 31.6's routing table and the PRD's own requirement lines. Nothing here
-// transcribes which store gates this skill; this file never spells it out.
+// Story 31.6's routing table and the PRD's own requirement lines. So: THE
+// DECISION PROSE CONTAINS NO TRANSCRIBED STORE CHOICE.
 //
-// Message BLOCKQUOTES are excluded on purpose: their contents are checked
-// fact-by-fact by the AC3/FR262 tests below, which is the right granularity for
-// a user-facing message. This set is the DECISION surface.
+// FIX-ROUND-2 correction. An earlier revision of this comment made the wider
+// claim that the strings never appear anywhere in this file. That was FALSE:
+// `AC3_FACTS.affectedStore` and the `REQUIRED` map in the AC3 message test both
+// spell the store out. Those two literals are deliberate and they stay. The same
+// fact is checked a second time DERIVED from `A.store` (see "both shipped halt
+// messages name that same store"), so if `AUTHORITY` ever resolved to the other
+// store the derived form and the literal form would disagree and this suite
+// would go red. That is defence in depth, and it fails loud rather than silently
+// — which is the opposite of the property the wider claim was reaching for.
 
 /** The prose of one region: no headings, no blockquote lines, no blanks. */
 function proseLines(region) {
   return region.split('\n').map((l) => l.trim())
     .filter((l) => l !== '' && !l.startsWith('#') && !l.startsWith('>'));
+}
+
+/**
+ * The MESSAGE of one region: its blockquote lines, verbatim.
+ *
+ * FIX-ROUND-2, BLOCKING N01. Message blockquotes used to be CARVED OUT of the
+ * closed set above, on the reasoning that the AC3/FR262 tests check their
+ * contents fact-by-fact, which is the right granularity for a user-facing
+ * message. The reasoning had a hole: every one of those tests is a PRESENCE
+ * check — the exact shape this closed set exists to eliminate — so a sentence
+ * ADDED to a halt message was invisible to all of them. Inserting
+ *
+ *     > If configuring an MCP is not possible right now, you may work from the
+ *     > local files instead and re-sync later.
+ *
+ * into Step B2's halt message passed thirteen suites: `proseLines` drops every
+ * `>` line so the closed set never saw it; the phrase denylist was defeated by
+ * wording ("you may work … instead" is not `/you may instead/`, "local files" is
+ * not `/local cop(y|ies)/`); no `- **…** →` bullet was added so the outcome count
+ * did not move; all four AC3 facts were still present. DELETING the "Nothing has
+ * been read or written on your behalf" assurance line survived the same way.
+ *
+ * The blockquote is not commentary. It is the text the agent reproduces to the
+ * user AT THE MOMENT IT HALTS, so a halt that ends by offering local files IS the
+ * FR262 degradation, delivered inside the message FR262 exists to specify. It
+ * gets the same closed-set treatment, as a PARALLEL region set — parallel rather
+ * than merged because the two surfaces answer to different questions: the prose
+ * is the DECISION, the blockquote is what the user is told about it.
+ *
+ * NORMALISATION, stated rather than left to be discovered. Trailing whitespace
+ * is stripped and CONTENT-FREE quoted lines (a bare `>`, or `>` followed only by
+ * whitespace) are dropped, so re-flowing a message does not fail this set. That
+ * is the one blockquote mutation this set lets through, and it carries no words
+ * for an agent to act on. Leading INDENTATION is NOT normalised: the two spaces
+ * nest Step B2's message inside its `- **No Confluence-capable tool…**` bullet,
+ * and dedenting it detaches the message from the branch it belongs to.
+ */
+function messageLines(region) {
+  return region.split('\n')
+    .filter((l) => /^\s*>/.test(l))
+    .map((l) => l.replace(/\s+$/, ''))
+    .filter((l) => !/^\s*>\s*$/.test(l));
 }
 
 /** Everything between the gate's own `## ` heading and its first step. */
@@ -1443,6 +1491,77 @@ const SANCTIONED_PROSE = Object.freeze({
     'value that IS stated and is not understood.',
   ],
 });
+
+/**
+ * The FIFTH REGION SET: what each region says TO THE USER, closed the same way.
+ *
+ * `preamble` and `B1` are declared EMPTY on purpose. Neither addresses the user
+ * at all — B1's whole disposition is "say NOTHING about the backend" — so a
+ * blockquote grafted onto either is a failure whatever it says, and declaring
+ * them empty is what makes that true rather than merely unlikely.
+ *
+ * The store name is a HOLE, filled from `AUTHORITY`, and so are the two backend
+ * values, filled from the single-sourced enum. The independent LITERAL statement
+ * of the same facts lives in the AC3 tests below; see the note above the prose
+ * set for why both exist.
+ */
+const SANCTIONED_MESSAGES = Object.freeze({
+  preamble: [],
+
+  B1: [],
+
+  B2: [
+    '  > **ma-agents — stopping: this knowledge store is Confluence-backed and no Confluence ' +
+    'MCP was detected.**',
+
+    `  > Store: the ${A.store}. Space: {the value of the space-key field, or \`not recorded\` ` +
+    'when that field is absent or empty}.',
+
+    '  > No Confluence MCP server is available in this agent\'s tool context, so that store ' +
+    'cannot be read or written.',
+
+    '  > To configure one, add a Confluence-capable MCP server to your agent\'s MCP ' +
+    'configuration, pointed at the Confluence instance that hosts that space, and authorise ' +
+    'it; then run this skill again. Alternatively, re-run the installer (or `ma-agents bind`) ' +
+    'to bind that store to the file system instead.',
+
+    '  > Nothing has been read or written on your behalf, and nothing has been written ' +
+    'locally. Stopping rather than guessing.',
+  ],
+
+  B3: [
+    '  > **ma-agents — stopping: unrecognised knowledge-store backend.**',
+
+    `  > Store: the ${A.store}. Backend: \`{the value you read}\`. The backends this build ` +
+    `understands are \`${DEFAULT_STORE_BACKEND}\` and \`${NON_DEFAULT_BACKEND}\`.`,
+
+    '  > `_bmad/bmm/config.yaml` is generated, so a value outside that set means it was ' +
+    'hand-edited or written by a different build — and every artifact this skill would ' +
+    'resolve for that store depends on which of the two it actually is.',
+
+    '  > Run `ma-agents bind` to regenerate `_bmad/bmm/config.yaml`, or re-run the installer.',
+
+    '  > Nothing has been read or written on your behalf. Stopping rather than guessing.',
+  ],
+});
+
+for (const region of ['preamble', 'B1', 'B2', 'B3']) {
+  test(`[text] N01 the shipped gate's ${region}.message is EXACTLY the sanctioned lines`, () => {
+    const text = region === 'preamble' ? gatePreamble() : gateStep(Number(region.slice(1)));
+    assert.deepStrictEqual(messageLines(text), SANCTIONED_MESSAGES[region],
+      `${region}'s message to the user has changed. This is a CLOSED set for the same reason ` +
+      `the prose above is: the AC3/FR262 checks below assert these facts are PRESENT, and a ` +
+      `sentence ADDED beside them leaves every one of them intact. A halt message that ends ` +
+      `by offering to work from local files is the FR262 degradation itself, stated in the ` +
+      `message FR262 exists to specify — and it also contradicts the assurance line that ` +
+      `nothing has been written locally. ${SANCTIONED_MESSAGES[region].length === 0
+        ? `${region} must address the user not at all: it has no halt to explain, and B1's ` +
+          `own disposition is to say NOTHING about the backend.`
+        : `If the change is deliberate, update SANCTIONED_MESSAGES — and note that the store ` +
+          `name and the backend values in it are FILLED FROM the PRD, Story 31.6's routing ` +
+          `table and lib/store-backends.js, so those belong upstream first.`}`);
+  });
+}
 
 for (const region of ['preamble', 'B1', 'B2', 'B3']) {
   test(`[text] BLOCKING-1 the shipped gate's ${region} prose is EXACTLY the sanctioned lines`, () => {
@@ -1552,6 +1671,14 @@ test('[text] BLOCKING-2 both shipped halt messages name that same store', () => 
 test('[text] AC3 the shipped block states all four required facts, checked against literals', () => {
   // The facts are written out HERE. Nothing is derived from the block, and
   // nothing is derived from the oracle's message either.
+  //
+  // KEPT DELIBERATELY alongside the `B2.message` closed set added in fix-round 2.
+  // The two are complementary, not redundant, and in both directions: this test
+  // names WHICH fact went missing where a line-set gives only a diff, and it says
+  // the facts must be PRESENT, which a closed set does not express — while the
+  // closed set says nothing may be ADDED, which no presence check expresses. The
+  // literals here are also the independent second statement of the store name;
+  // see the note above SANCTIONED_PROSE.
   //
   // SCOPED TO STEP B2, found by this story's mutation run (M17): asserted over
   // the whole block, deleting "Store: the software requirements store" from the
