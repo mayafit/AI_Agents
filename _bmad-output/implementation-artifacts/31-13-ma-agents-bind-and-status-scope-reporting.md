@@ -355,3 +355,118 @@ Repairing the regex immediately found the **fourth** site — `bin/cli.js:1062`,
 `enclosingFunctionName` (`config-generation:669`) was **left alone** — low priority, and its suite is
 green at 32/0. It remains a latent misattribution risk if a `generateBmmConfig` call is ever added
 after `handleBind`'s closing brace.
+
+### 8.5 Testing — the baseline, RUN, with actual counts and actual exit codes
+
+The review verified only `project-layout-bind` (57/0). The rest was unverified, so every suite below
+was run one at a time, quietly, and both its count and its exit code recorded. **Every expected count
+matched exactly.**
+
+| Suite | Result | Expected | |
+| --- | --- | --- | --- |
+| `project-layout-bind` | **73 passed, 0 failed**, exit 0 | 57 → 73 | +16 this round |
+| `project-layout-config-generation` | 32/0, exit 0 | 32 | ✓ |
+| `project-layout-binding-spine` | 69/0, exit 0 | 69 | ✓ |
+| `project-layout-staleness-guard` | 61/0, exit 0 | 61 | ✓ |
+| `project-layout-artifact-routing` | 59/0, exit 0 | 59 | ✓ |
+| `project-layout-two-store-round-trip` | 52/0, exit 0 | 52 | ✓ |
+| `project-layout-legacy-single-store` | 51/0, exit 0 | 51 | ✓ |
+| `project-layout-confluence-configuration` | 38/0, exit 0 | 38 | ✓ |
+| `project-layout-enum-single-source` | 31/0, exit 0 | 31 | ✓ |
+| `project-layout-two-store-wizard` | 19/0, exit 0 | 19 | ✓ |
+| `global-install-scope` | 26/0, exit 0 | 26 | ✓ |
+| `generate-project-context` | 27/0, exit 0 | 27 | ✓ |
+| `bmad-extension` | 29/0, exit 0 | 29 | ✓ |
+| `plugin-manifests` | 29/0, exit 0 | 29 | ✓ |
+| `skill-authoring` | 25/0, exit 0 | 25 | ✓ |
+| `skill-validation` | 21/0, exit 0 | 21 | ✓ |
+| `skill-mandatory` | 12/0, exit 0 | 12 | ✓ |
+| `installer` | 14/0, exit 0 | 14 | ✓ |
+| `cli` | 12/0, exit 0 | 12 | ✓ |
+| `routing-parity` | 9/0, exit 0 | 9 | ✓ |
+| `config-layout` | 6/0, exit 0 | 6 | ✓ |
+| `config-lost-on-update` | 13/0, exit 0 | — | run because it pins the install path |
+| `story-15-5-workflow-skills` | **153 passed, 4 failed**, exit 1 | 153/4 | see below |
+
+**`story-15-5-workflow-skills` verified: the same four, and no fifth.** All four are
+`… preserves original content verbatim`, on `add-sprint`, `add-to-sprint`, `modify-sprint` and
+`sprint-status-view` — each reporting a body longer than the original by roughly the size of the
+Story 31.4 preflight block that was added to it. Pre-existing; untouched by this round.
+
+`test/repo-layout.test.js` was deliberately **not** run: it materialises the gitignored
+`_bmad-output/methodology/`, which then fails `project-layout-artifact-routing`'s guard.
+
+**The 41-copy / one-sha256 preflight invariant, re-verified independently.** Walking **both** shipped
+trees finds **27** documents carrying the Knowledge Store Binding Preflight, and their extracted
+blocks hash to **exactly one** sha256 — byte-identity holds. Note the figure **41 in this document's
+own prose does not match the code**: `project-layout-staleness-guard`'s `GUARDED` list is **28**
+entries, and 27 of those carry this particular block. The invariant is sound; the number quoted
+around it is stale. Flagged, not changed — it is prose in a merged story.
+
+**`npm run build:plugin` not required.** `git diff --name-only 875213c..HEAD` shows no file under
+`lib/bmad-extension/` or `skills/`; this round touched `bin/cli.js` and three test files only.
+
+### 8.6 Mutation testing — 25 applied, 23 killed, 2 survivors NAMED
+
+Three rounds, in a **byte-for-byte lab copy** at `.worktrees/_lab-31-13-mutants` with a uniquely-named
+harness (`mutant-runner-3113fix.js`). Every anchor is re-lined to **its own file's** dominant EOL
+before matching, so an LF-only anchor cannot silently skip a CRLF file. A mutant whose anchor does not
+apply is reported `APPLY-FAILED`, never as killed. A suite TIMEOUT is reported as its own verdict,
+never as a clean kill.
+
+**The lab earned its keep.** A session died mid-round-3 and stranded a live mutant in the lab's
+`bin/cli.js`; the deliverable worktree was untouched. The runner now verifies each revert landed and
+aborts if it did not.
+
+#### The reviewer's three predicted survivors — two predictions were wrong
+
+| | Mutation | Predicted | **Actual** |
+| --- | --- | --- | --- |
+| **R1** | flip `yes: !process.stdin.isTTY` → `process.stdin.isTTY` | survives | **KILLED** (2 failing tests) |
+| **R2** | change a collection prompt's `initial` | survives | **SURVIVED — but EQUIVALENT** (below) |
+| **R2b** | change a collection prompt's `choices` | survives | **KILLED** |
+| **R3** | delete `process.exitCode = 1` at the topology refusal | uncertain | **KILLED** |
+
+#### Round 1 — 17 applied, 14 killed
+
+`M1` mkdir-failure reports WROTE · `M2` write-failure reports WROTE · `M3` legacy-skip collapsed into
+FAILED_WRITE · `M4` success returns void again · `M5` partition inverse-spelled · `M6` gate's
+`exitCode` deleted · `M7` gate warns but falls through · `M8` gate never fires · `M10` N3 check never
+refuses · `M11` refusal loses `ma-agents bind` · `M13` offer stripped from `skills/` — **all KILLED**.
+
+Survivors: **R2**, **M9**, **M12**.
+
+#### Round 2 — 8 applied, 5 killed
+
+`M9` (serializer throw remapped to bound) **KILLED** by the new confluence-identity test · `M12`
+(expired promise reinstated) **KILLED** by the repaired scan · `M14` fourth expired site **KILLED** ·
+`M17` identity guard disabled **KILLED** · `M18` offer stripped from `lib/bmad-extension/skills`
+**KILLED**. `M16` **APPLY-FAILED** (bad anchor) and is reported as such. Survivors: **R2**, **M15**.
+
+#### Round 3 — the LIVE pre-selection defaults, 4 applied, 4 killed
+
+`L1` fresh project pre-selects `confluence` · `L2` fresh project pre-selects `local` for a knowledge
+store · `L3` same for sprint management · `L4` the sprint enum silently loses `jira` — **all KILLED**.
+`L1` and `L4` died on clean assertion failures (67/6 and 72/1); `L2` and `L3` took the suite down
+non-zero without a clean summary, which is a weaker kill and is recorded as such.
+
+#### The two survivors, named plainly — and why they are EQUIVALENT, not untested
+
+**R2** and **M15** both mutate the `: 0` in `initial: initialIndex >= 0 ? initialIndex : 0`. That is a
+**defensive fallback**, reached only when a stored mode or backend is not a legal choice for its
+concern. On the fresh-project path the guarded value is *already* 0:
+
+```js
+const initialIndex = existingMode ? modeChoices.findIndex((c) => c.value === existingMode) : 0;
+//                                                                                          ^ live
+initial: initialIndex >= 0 ? initialIndex : 0,
+//                                          ^ the mutated fallback — unreachable when the above is 0
+```
+
+So the mutant emits a byte-identical prompt and **no test can distinguish it**. That is an equivalent
+mutant, not a coverage hole — and it also means the review's predicted mutant #2, as literally
+specified, was never killable.
+
+The mutation that *does* change behaviour is the `: 0` one line up, which decides the fresh-project
+default. Those are **L1, L2 and L3, and all three are killed** by the new absolute pin. The property
+the review was reaching for is therefore covered; the mutant it named was aimed one line low.
