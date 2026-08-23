@@ -127,6 +127,9 @@ ${chalk.bold('Usage:')}
   ${chalk.cyan(`npx ${NAME} status`)}                       Show install scope, bound projects and installed skills
   ${chalk.cyan(`npx ${NAME} bind`)}                         Bind this project (knowledge stores + sprint management)
                                              — installs nothing
+  ${chalk.cyan(`npx ${NAME} confluence-plan`)}               Show the Confluence page tree a
+                                             Confluence-backed store publishes,
+                                             and the operations it performs
   ${chalk.cyan(`npx ${NAME} list`)}                         List available skills
   ${chalk.cyan(`npx ${NAME} agents`)}                       List supported agents
   ${chalk.cyan(`npx ${NAME} create-skill`)} <name>           Scaffold a new skill directory
@@ -5174,6 +5177,325 @@ async function handleReconfigure(args) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// STORY 31.10 (P5-9.7; completes FR255, FR256, FR260) — THE CONFLUENCE PAGE
+// TREE, AND THE ONE FIELD THIS LAYER LEARNS.
+//
+// The mapping, the closed operation set and the idempotent write live in
+// `lib/confluence-page-tree.js`, which requires nothing — no `fs`, no `net` — so
+// it cannot write a local copy and cannot become the mirror FR266 retired. What
+// lives HERE is the part that needs the project on disk:
+//
+//   - resolving which directory a store's markdown artifacts are read FROM
+//     (Story 31.6's routing table §2, one rule, applied per store);
+//   - enumerating those artifacts and handing their bytes to the planner;
+//   - `ma-agents confluence-plan`, which prints the enumerated operations an
+//     agent must perform through the Confluence MCP — this process cannot
+//     perform them itself, because the MCP lives in the agent's tool context and
+//     not in Node;
+//   - `recordLearnedRootPageId`, the OQ-4 write-back.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const confluencePageTree = require('../lib/confluence-page-tree');
+
+/**
+ * Which `_bmad-output/project-layout.yaml` record backs a publishing store, and
+ * what the user-facing label is. Keyed by the store ids the page-tree module
+ * defines, so a store added there without a record here fails at load rather
+ * than at the moment a user runs the command.
+ */
+const CONFLUENCE_STORE_RECORDS = Object.freeze({
+  [confluencePageTree.SYSTEM_REQUIREMENTS]: Object.freeze({
+    topologyKey: 'systemRequirementsStore',
+    layoutKey: 'systemRequirementsStore',
+    cliName: 'system',
+  }),
+  [confluencePageTree.SOFTWARE_REQUIREMENTS]: Object.freeze({
+    topologyKey: 'softwareRequirementsStore',
+    layoutKey: 'softwareRequirementsStore',
+    cliName: 'software',
+  }),
+});
+
+for (const storeId of confluencePageTree.PUBLISHING_STORES) {
+  if (!CONFLUENCE_STORE_RECORDS[storeId]) {
+    throw new Error(
+      `bin/cli.js: publishing store ${JSON.stringify(storeId)} has no CONFLUENCE_STORE_RECORDS ` +
+      `entry, so its binding record cannot be located.`
+    );
+  }
+}
+
+/**
+ * The artifacts directory a store's markdown is read from.
+ *
+ * ONE rule, stated once, exactly as Story 31.6's routing table §2 states it for
+ * all three destinations: the store's path when it is not `.`; otherwise the
+ * canonical local planning folder. A Confluence-backed store records no path at
+ * all (NFR82 — resolved artifact paths must not move), so it takes the `.` branch
+ * and reads from `_bmad-output/planning-artifacts`, which is where the markdown a
+ * publish PUBLISHES actually sits.
+ *
+ * This is the publish direction and only the publish direction. Nothing is read
+ * back from Confluence into this directory, nothing here is reconciled against
+ * anything there, and no file in it is written by any part of Story 31.10.
+ */
+function storeArtifactsDirectory(store, projectRoot) {
+  const root = path.resolve(projectRoot || process.cwd());
+  const stored = store && typeof store.path === 'string' ? store.path.trim() : '';
+  if (stored && stored !== '.') return resolveStoredPath(stored, root);
+  return path.join(root, '_bmad-output', 'planning-artifacts');
+}
+
+/**
+ * Every `.md` file under `dir`, relative to `dir`, POSIX-separated, with its
+ * bytes. Sorted, so a plan is byte-identical on two machines.
+ *
+ * Reads only. Creates nothing — a missing directory yields an empty list rather
+ * than being created, because creating it would be this story writing locally.
+ */
+function collectStoreArtifactCandidates(dir) {
+  const out = [];
+  const walk = (abs, rel) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(abs, { withFileTypes: true });
+    } catch (e) {
+      return;
+    }
+    for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+      if (entry.name.startsWith('.')) continue;
+      const childAbs = path.join(abs, entry.name);
+      const childRel = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        walk(childAbs, childRel);
+      } else if (/\.md$/i.test(entry.name)) {
+        let body;
+        try {
+          body = fs.readFileSync(childAbs, 'utf-8');
+        } catch (e) {
+          continue;
+        }
+        out.push({ path: childRel, body });
+      }
+    }
+  };
+  if (fs.existsSync(dir)) walk(dir, '');
+  return out;
+}
+
+/** The outcomes of an OQ-4 write-back, as values. Same discipline as LAYOUT_WRITE_*. */
+const ROOT_ID_RECORDED = 'root-id-recorded';
+const ROOT_ID_UNCHANGED = 'root-id-unchanged';
+const ROOT_ID_TITLE_MOVED = 'root-id-title-moved';
+const ROOT_ID_NOT_CONFLUENCE = 'root-id-not-a-confluence-store';
+const ROOT_ID_NO_BINDING = 'root-id-no-binding';
+const ROOT_ID_WRITE_FAILED = 'root-id-write-failed';
+
+/**
+ * OQ-4's write half. Story 31.8 records the root page as a human-readable TITLE
+ * with `id: null`, because turning a title into an id requires asking Confluence
+ * and 31.8 must complete with no network. THIS is the layer that asked, so this
+ * is the layer that fills the id in.
+ *
+ * THE RULE, settled at 31.8 and not re-derived here: a learned id is carried
+ * forward ONLY while the title is unchanged, and dropped on retitle — a
+ * `{title, id}` pair naming two different pages looks resolved and points where
+ * the user did not choose. The read half of that rule lives in
+ * `collectConfluenceStoreLocation`; this is the write half, and it refuses
+ * (ROOT_ID_TITLE_MOVED) rather than stamping an id onto a title it does not
+ * belong to.
+ *
+ * Returns an OUTCOME, never void. Story 31.13's blocking defect was a caller that
+ * printed "Bound." because its callee swallowed a failed write and returned
+ * nothing; a function whose failure is invisible to its caller is the shape, not
+ * the instance.
+ */
+function recordLearnedRootPageId(opts) {
+  const o = opts || {};
+  const projectRoot = path.resolve(o.projectRoot || process.cwd());
+  const storeId = o.storeId;
+  const record = CONFLUENCE_STORE_RECORDS[storeId];
+  if (!record) {
+    throw new Error(
+      `recordLearnedRootPageId: ${JSON.stringify(storeId)} is not a publishing store.`
+    );
+  }
+  const learnedId = String(o.id == null ? '' : o.id).trim();
+  const publishedTitle = String(o.title == null ? '' : o.title).trim();
+  if (!learnedId || !publishedTitle) {
+    throw new Error(
+      `recordLearnedRootPageId: both the page title and the learned id are required; ` +
+      `refusing to record ${JSON.stringify({ title: o.title, id: o.id })}.`
+    );
+  }
+
+  const resolved = resolveProjectTopology(projectRoot);
+  if (!resolved.ok) {
+    return { outcome: ROOT_ID_NO_BINDING, reason: resolved.reason, message: resolved.message };
+  }
+  const store = resolved.topology[record.topologyKey];
+  if (backendOfStore(store) !== 'confluence') {
+    return { outcome: ROOT_ID_NOT_CONFLUENCE, storeId };
+  }
+  const currentTitle = String((store.rootPage && store.rootPage.title) || '').trim();
+  if (currentTitle !== publishedTitle) {
+    // The binding was retitled between the plan and the write-back. Stamping the
+    // id here would produce exactly the record OQ-4 forbids.
+    return { outcome: ROOT_ID_TITLE_MOVED, storeId, recordedTitle: currentTitle, publishedTitle };
+  }
+  const currentId = String((store.rootPage && store.rootPage.id) || '').trim();
+  if (currentId === learnedId) return { outcome: ROOT_ID_UNCHANGED, storeId, id: learnedId };
+
+  const updated = { ...store, rootPage: { title: currentTitle, id: learnedId } };
+  const origCwd = process.cwd();
+  let write;
+  try {
+    process.chdir(projectRoot);
+    write = writeProjectLayoutYaml({ [record.layoutKey]: updated });
+  } finally {
+    process.chdir(origCwd);
+  }
+  // `projectLayoutWriteIsBound` takes the RESULT OBJECT, not the outcome string —
+  // it reads `.outcome` itself. Handing it the string makes every write look
+  // failed, which is the same observability defect Story 31.13 fixed, pointing the
+  // other way. Pinned by test, both directions.
+  if (!projectLayoutWriteIsBound(write)) {
+    return { outcome: ROOT_ID_WRITE_FAILED, storeId, write };
+  }
+  return { outcome: ROOT_ID_RECORDED, storeId, id: learnedId, title: currentTitle, write };
+}
+
+/**
+ * `ma-agents confluence-plan [--store system|software]`
+ *
+ * Prints the page tree a publish would produce and the enumerated operations it
+ * would perform. It performs NONE of them: the Confluence MCP lives in the
+ * agent's tool context, not in this process, so this command's job is to state
+ * the plan exactly and let the agent execute it through the MCP Story 31.9
+ * detects — under Story 31.9's fail-loud gate, which applies to every operation
+ * in this story.
+ *
+ * It writes nothing, anywhere. Not the plan, not a cache, not a report file.
+ */
+async function handleConfluencePlan(args = []) {
+  const projectRoot = process.cwd();
+  const requested = (() => {
+    const i = args.indexOf('--store');
+    return i !== -1 && args[i + 1] ? String(args[i + 1]).trim().toLowerCase() : null;
+  })();
+
+  const resolved = resolveProjectTopology(projectRoot);
+  if (!resolved.ok) {
+    console.error(chalk.red(
+      `  ma-agents — stopping: this project has no readable knowledge binding (${resolved.reason}).\n` +
+      `    ${resolved.message}`
+    ));
+    process.exit(1);
+  }
+
+  const storeIds = confluencePageTree.PUBLISHING_STORES.filter((id) =>
+    !requested || CONFLUENCE_STORE_RECORDS[id].cliName === requested || id === requested);
+  if (storeIds.length === 0) {
+    console.error(chalk.red(
+      `  Unknown store ${JSON.stringify(requested)}. Legal values: ` +
+      confluencePageTree.PUBLISHING_STORES
+        .map((id) => CONFLUENCE_STORE_RECORDS[id].cliName).join(', ') + '.'
+    ));
+    process.exit(1);
+  }
+
+  let planned = 0;
+  for (const storeId of storeIds) {
+    const record = CONFLUENCE_STORE_RECORDS[storeId];
+    const store = resolved.topology[record.topologyKey];
+    const backend = backendOfStore(store);
+    const label = confluencePageTree.labelForStore(storeId);
+
+    // The gateway check, in the position §2.6 defines: before any read, any write
+    // and any enumeration. Same three branches as Story 31.9's shipped block, and
+    // for the same reasons — this is not a second mechanism.
+    if (backend === DEFAULT_STORE_BACKEND) {
+      if (requested) {
+        console.log(chalk.gray(
+          `  The ${label} is ${DEFAULT_STORE_BACKEND}-backed. There is no Confluence page tree ` +
+          `for it, and nothing to publish.`
+        ));
+      }
+      continue;
+    }
+    if (backend !== 'confluence') {
+      console.error(chalk.red(
+        `  ma-agents — stopping: unrecognised knowledge-store backend.\n` +
+        `  Store: the ${label}. Backend: ${JSON.stringify(backend)}. The backends this build ` +
+        `understands are ${legalBackendsForMessage()}.\n` +
+        `  Run \`${NAME} bind\` to regenerate the binding, or re-run the installer.\n` +
+        `  Nothing has been read or written on your behalf. Stopping rather than guessing.`
+      ));
+      process.exit(1);
+    }
+
+    const dir = storeArtifactsDirectory(store, projectRoot);
+    const candidates = collectStoreArtifactCandidates(dir);
+    let selection;
+    let plan;
+    try {
+      selection = confluencePageTree.artifactsForStore(storeId, candidates);
+      plan = confluencePageTree.planStorePublication({
+        storeId,
+        spaceKey: store.spaceKey,
+        rootPage: store.rootPage,
+        artifacts: selection.selected,
+      });
+    } catch (e) {
+      console.error(chalk.red(`  ma-agents — stopping: ${e.message}`));
+      process.exit(1);
+    }
+
+    planned++;
+    const rootNode = plan.nodes[0];
+    console.log(chalk.bold.cyan(`\n  Confluence page tree — ${label}`));
+    console.log(`    Space:      ${plan.spaceKey}`);
+    console.log(`    Root page:  "${rootNode.title}"` +
+      (rootNode.id ? ` (id ${rootNode.id})` : ' (id not yet known — it is resolved, and created if absent, by the first operation below)'));
+    console.log(`    Artifacts:  ${selection.selected.length} selected, ${selection.excluded.length} not this store's`);
+    console.log(chalk.gray(
+      `\n    Operations — the complete set this story performs, and no others:\n` +
+      `      ${confluencePageTree.CONFLUENCE_PAGE_OPERATIONS.join(', ')}\n` +
+      `    Perform them through the Confluence MCP, in the order below, parents first.\n` +
+      `    resolve_page FIRST for every page: found -> update_page, absent -> create_page.\n` +
+      `    That is what makes a re-run update the existing pages instead of duplicating them,\n` +
+      `    so their history and comments survive. If any write does not report success, STOP\n` +
+      `    and report the failure — do not continue and do not report a publish.`
+    ));
+    for (const node of plan.nodes) {
+      const depth = node.key === '' ? 0 : node.key.split('/').length;
+      const parent = node.parentKey === null
+        ? '(space root)'
+        : `"${(plan.nodes.find((n) => n.key === node.parentKey) || {}).title}"`;
+      console.log(
+        `      ${'  '.repeat(depth)}${node.role === confluencePageTree.ROLE_ARTIFACT ? '*' : '+'} ` +
+        `"${node.title}"  under ${parent}` +
+        (node.sourcePath ? chalk.gray(`   <- ${node.sourcePath}`) : chalk.gray('   (container page, no content)'))
+      );
+    }
+    if (selection.excluded.length) {
+      console.log(chalk.gray(`\n    Not published by this store:`));
+      for (const ex of selection.excluded) {
+        console.log(chalk.gray(`      - ${ex.path}  (${ex.reason}${ex.owner ? `: ${confluencePageTree.labelForStore(ex.owner)}` : ''})`));
+      }
+    }
+  }
+
+  if (planned === 0) {
+    console.log(chalk.gray(
+      `  No knowledge store in this project is Confluence-backed, so there is no page tree ` +
+      `to publish.`
+    ));
+  }
+  console.log('');
+}
+
 // --- Interactive mode ---
 
 async function interactiveMode() {
@@ -5252,6 +5574,12 @@ async function main() {
     // not dispatch.
     case 'bind':
       await handleBind(args.slice(1));
+      break;
+    // Story 31.10 (P5-9.7). Prints the page tree and the enumerated operations a
+    // publish performs; performs none of them, because the Confluence MCP lives
+    // in the agent's tool context and not in this process.
+    case 'confluence-plan':
+      await handleConfluencePlan(args.slice(1));
       break;
     case 'list':
     case 'list-skills':
@@ -5384,4 +5712,17 @@ module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, recon
   // "offered and was declined". `describeBoundProjects` and `detectInstallScopes`
   // are exported so AC7 can be asserted on data rather than on scraped output.
   handleBind, offerBind, bindOfferDecision, detectInstallScopes, describeBoundProjects,
-  printScopeReport, boundProjectsPath };
+  printScopeReport, boundProjectsPath,
+  // Story 31.10 (P5-9.7) — the on-disk half of the Confluence page tree. The
+  // mapping itself is `lib/confluence-page-tree.js` and is exported from there;
+  // these three are the parts that need the project on disk.
+  // `storeArtifactsDirectory` is exported so the suite can measure the §2
+  // directory-derivation rule against the SHIPPED function rather than restating
+  // it; `recordLearnedRootPageId` and its outcome constants are exported for the
+  // reason the LAYOUT_WRITE_* reasons are — a test must branch on the outcome BY
+  // NAME so "recorded" and "refused because the title moved" can never collapse
+  // into one.
+  storeArtifactsDirectory, collectStoreArtifactCandidates, recordLearnedRootPageId,
+  handleConfluencePlan, CONFLUENCE_STORE_RECORDS,
+  ROOT_ID_RECORDED, ROOT_ID_UNCHANGED, ROOT_ID_TITLE_MOVED, ROOT_ID_NOT_CONFLUENCE,
+  ROOT_ID_NO_BINDING, ROOT_ID_WRITE_FAILED };
