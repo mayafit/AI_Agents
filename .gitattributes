@@ -24,3 +24,15 @@ lib/templates/instruction-block-*.template.md text eol=lf
 # Without this pin, Windows autocrlf renders the source as CRLF on checkout and the
 # byte-identity assertion fails even though the committed blobs are identical (LF).
 lib/mil498-templates/** text eol=lf
+
+# Story 31.10 — the Confluence page tree. Pinned to LF because Story 31.9 was
+# bitten by exactly this: a suite that passed on the author's checkout and not on
+# a checkout with the other line ending. Nothing here is currently broken (the
+# suite was run against a CRLF copy of both files and still passed), so this is
+# prevention, not a fix — it removes the class rather than the instance. It also
+# keeps these two files consistent with each other: they are authored LF while
+# `bin/cli.js` around them is CRLF, and a multi-line search across the pair
+# silently matching nothing is a real failure mode this story hit while
+# mutation-testing.
+lib/confluence-page-tree.js text eol=lf
+test/project-layout-confluence-page-tree.test.js text eol=lf

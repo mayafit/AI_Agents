@@ -62,7 +62,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 const tree = require(path.join(PROJECT_ROOT, 'lib', 'confluence-page-tree.js'));
 
-const EXPECTED_TEST_COUNT = 147;
+const EXPECTED_TEST_COUNT = 154;
 
 let passed = 0;
 let failed = 0;
@@ -755,6 +755,82 @@ test('[AC6] artifactsForStore REFUSES sprint_management as a store rather than d
   assert.throws(() => tree.artifactsForStore(undefined, []), /is not a knowledge store/,
     'a default store here would be a value indistinguishable from a real answer');
   assert.throws(() => tree.artifactsForStore('', []), /is not a knowledge store/);
+});
+
+test('[AC6] "ux" is a WORD, not a substring — the flux-report.md hazard the code cites', () => {
+  // `lib/confluence-page-tree.js` names this hazard in its own comment and then
+  // nothing measured it: relaxing the word-boundary match to a bare /ux/ left
+  // the suite green, so the guard the code advertises was untested. A
+  // `flux-report.md` misrouted as a UX specification would be published by the
+  // software store as a design document.
+  for (const notUx of ['flux-report.md', 'influx.md', 'auxiliary-notes.md', 'redux-guide.md']) {
+    assert.notStrictEqual(tree.classifyArtifactPath(notUx), 'ux-design-specification',
+      `${notUx} is not a UX specification — "ux" appears inside a word`);
+  }
+  // And the rule still recognises the real thing, in each spelling it must.
+  for (const isUx of ['ux.md', 'ux-design.md', 'design-ux.md', 'ux_spec.md', 'project.ux.md']) {
+    assert.strictEqual(tree.classifyArtifactPath(isUx), 'ux-design-specification',
+      `${isUx} IS a UX specification`);
+  }
+});
+
+test('[AC6] normalizeRelPath converts BACKSLASHES to POSIX — it is exported and load-bearing', () => {
+  // Windows hands paths back with backslashes. Untested until now: dropping the
+  // conversion left the suite green, because every fixture path is already
+  // POSIX. A page key built from `prd\capabilities\a.md` would be ONE segment,
+  // so the tree would flatten and the page title would contain backslashes.
+  assert.strictEqual(tree.normalizeRelPath('prd\\capabilities\\a.md'), 'prd/capabilities/a.md');
+  assert.strictEqual(tree.normalizeRelPath('.\\prd.md'), 'prd.md');
+  assert.strictEqual(tree.normalizeRelPath('\\prd\\a.md'), 'prd/a.md');
+  assert.strictEqual(tree.normalizeRelPath('prd\\a\\'), 'prd/a');
+  assert.strictEqual(tree.normalizeRelPath(null), '');
+  assert.strictEqual(tree.normalizeRelPath(undefined), '');
+  // And the whole way through: a backslash path must produce a NESTED tree.
+  const plan = tree.planStorePublication({
+    storeId: tree.SYSTEM_REQUIREMENTS, spaceKey: 'S', rootPage: { title: 'R', id: null },
+    artifacts: [{ path: 'prd\\capabilities\\a.md', body: 'x' }],
+  });
+  assert.deepStrictEqual(plan.nodes.map((n) => n.key),
+    ['', 'prd', 'prd/capabilities', 'prd/capabilities/a']);
+  for (const n of plan.nodes) {
+    assert.ok(!n.title.includes('\\'), `page title "${n.title}" carries a backslash`);
+  }
+});
+
+test('[AC6] the EXCLUDED list is sorted — a plan must be byte-identical on two machines', () => {
+  // The selected list's ordering is pinned elsewhere; the excluded list's was
+  // not, and `confluence-plan` PRINTS it. Unsorted output makes two runs of the
+  // same command differ for no reason, which is how a diff-based review of a
+  // plan becomes useless.
+  const paths = ['zeta-notes.md', 'alpha-notes.md', 'middle-notes.md', 'beta-notes.md'];
+  const sel = tree.artifactsForStore(tree.SYSTEM_REQUIREMENTS, paths.map((p) => ({ path: p, body: 'x' })));
+  const got = sel.excluded.map((e) => e.path);
+  assert.deepStrictEqual(got, [...got].sort(), `the excluded list is not sorted: ${JSON.stringify(got)}`);
+  assert.deepStrictEqual(got, ['alpha-notes.md', 'beta-notes.md', 'middle-notes.md', 'zeta-notes.md']);
+  // Feeding the same set in a different order must give the same answer.
+  const reordered = tree.artifactsForStore(tree.SYSTEM_REQUIREMENTS,
+    [...paths].reverse().map((p) => ({ path: p, body: 'x' })));
+  assert.deepStrictEqual(reordered.excluded.map((e) => e.path), got,
+    'input order must not reach the output');
+});
+
+test('[AC6] planStorePublication REFUSES a non-store, exactly as artifactsForStore does', () => {
+  // The twin guard. `artifactsForStore`'s version was measured and this one was
+  // not, so deleting it entirely left the suite green — and a plan for
+  // `sprint_management` would have published story files and sprint-status.yaml
+  // to Confluence, which FR267 forbids outright.
+  for (const bad of [tree.SPRINT_MANAGEMENT, 'not_a_store', '', null, undefined]) {
+    assert.throws(() => tree.planStorePublication({
+      storeId: bad, spaceKey: 'S', rootPage: { title: 'R', id: null }, artifacts: [],
+    }), /cannot plan a publication for/,
+    `planStorePublication accepted ${JSON.stringify(bad)} as a store`);
+  }
+  // And it accepts both real stores, so the guard is not simply always-throw.
+  for (const good of tree.PUBLISHING_STORES) {
+    assert.ok(tree.planStorePublication({
+      storeId: good, spaceKey: 'S', rootPage: { title: 'R', id: null }, artifacts: [],
+    }).nodes.length === 1);
+  }
 });
 
 test('[AC6] the classifier decides the REAL repository corpus, not only fixtures', () => {
@@ -1568,6 +1644,24 @@ test('[FR266 negative] only catalogue members ever reach the dispatcher, over ev
     'catalogue would make the set equality above vacuously safe');
 });
 
+test('[AC5] executePlan REFUSES a non-plan rather than publishing nothing successfully', () => {
+  // Untested until now: removing the guard left the suite green, because
+  // `for (const node of [])` over a malformed object simply does nothing and
+  // falls through to THE SUCCESS EXIT. That is defect shape 6 in its purest
+  // form — `{ok: true, published: true}` returned for a publish that never
+  // looked at an artifact, over an input that was never a plan.
+  for (const bad of [null, undefined, {}, { nodes: null }, { nodes: 'lots' },
+    { nodes: {} }, 'a plan', 42]) {
+    assert.throws(() => tree.executePlan(bad, mockConfluence()),
+      /executePlan requires a plan from planStorePublication/,
+      `executePlan accepted ${JSON.stringify(bad)} as a plan`);
+  }
+  // The guard fires BEFORE the no-MCP check, so a non-plan is named as a non-plan
+  // rather than being reported as a missing Confluence MCP.
+  assert.throws(() => tree.executePlan({}, undefined),
+    /executePlan requires a plan from planStorePublication/);
+});
+
 test('[AC5] a plan whose parent page never resolved is a HALT, not a page at the space root', () => {
   // The ordering guard. Reparenting a page to the space root because its parent
   // is unknown is how a tree quietly flattens itself at execution time.
@@ -1812,11 +1906,36 @@ test('[OQ-4] recording the id changes ONLY project-layout.yaml, and only its id 
       'the binding record is the ONLY local file this story writes, and it holds page ' +
       'IDENTITY (NFR79), never artifact content');
     // And within that file, only the id.
+    //
+    // Compared over the UNION of both line counts, not just `beforeText`'s
+    // indices: iterating only the before-side made every APPENDED line
+    // invisible, so a write-back that added a stanza to the end of the file
+    // would have passed this test unnoticed. The line count is asserted
+    // separately so a pure append is named as such.
     const afterText = fs.readFileSync(path.join(root, layoutRel), 'utf-8');
-    const diff = beforeText.split(/\r?\n/).map((l, i) => [l, afterText.split(/\r?\n/)[i]])
-      .filter(([a, b]) => a !== b);
-    assert.strictEqual(diff.length, 1, `more than the id line changed: ${JSON.stringify(diff)}`);
-    assert.ok(/^\s*id:/.test(diff[0][0]) && /^\s*id:/.test(diff[0][1]), JSON.stringify(diff[0]));
+    const beforeLines = beforeText.split(/\r?\n/);
+    const afterLines = afterText.split(/\r?\n/);
+    assert.strictEqual(afterLines.length, beforeLines.length,
+      `the write-back added or removed lines (${beforeLines.length} -> ${afterLines.length}); ` +
+      `it may only change the value on the id line`);
+    const diff = [];
+    for (let i = 0; i < Math.max(beforeLines.length, afterLines.length); i++) {
+      if (beforeLines[i] !== afterLines[i]) diff.push([beforeLines[i], afterLines[i]]);
+    }
+    // `generated: "YYYY-MM-DD"` is rewritten by every layout write, so it
+    // legitimately differs when the two writes fall on opposite sides of
+    // midnight. Tolerated by NAME — and only by name — rather than letting the
+    // whole assertion rest on the run finishing on the day it started.
+    const isGenerated = ([a, b]) => /^generated:/.test(a || '') && /^generated:/.test(b || '');
+    const isId = ([a, b]) => /^\s*id:/.test(a || '') && /^\s*id:/.test(b || '');
+    const unexpected = diff.filter((d) => !isId(d) && !isGenerated(d));
+    assert.deepStrictEqual(unexpected, [],
+      `more than the id line changed: ${JSON.stringify(unexpected)}`);
+    assert.strictEqual(diff.filter(isId).length, 1,
+      `exactly one id line must change: ${JSON.stringify(diff)}`);
+    const idLine = diff.find(isId);
+    assert.ok(/id:\s*null/.test(idLine[0]) && /page-/.test(idLine[1]),
+      `the id must go from null to the learned page id: ${JSON.stringify(idLine)}`);
   });
 });
 
@@ -2024,6 +2143,17 @@ test('[AC4][gate] `confluence-plan` says nothing at all for an all-file-system p
 test('[gate] `confluence-plan` prints the enumerated operation set with the tree', () => {
   withFixtureProject(() => {
     const out = runConfluencePlan([]);
+    // The CATALOGUE LINE itself, not merely the three names somewhere on the
+    // page. Every operation name also appears in the surrounding prose
+    // ("resolve_page FIRST ... found -> update_page, absent -> create_page"), so
+    // an `out.includes(op)` loop stayed green with the catalogue print deleted
+    // entirely — it was satisfied by an unrelated sentence. Anchored to a line
+    // that is the joined list and nothing else.
+    const catalogue = tree.CONFLUENCE_PAGE_OPERATIONS.join(', ');
+    const lines = out.split('\n').map((l) => l.trim());
+    assert.ok(lines.includes(catalogue),
+      `the enumerated operation catalogue "${catalogue}" is not printed as its own line; ` +
+      `the operation names appearing in prose is not the catalogue`);
     for (const op of tree.CONFLUENCE_PAGE_OPERATIONS) {
       assert.ok(out.includes(op), `${op} is missing from the printed catalogue`);
     }
@@ -2031,6 +2161,53 @@ test('[gate] `confluence-plan` prints the enumerated operation set with the tree
     assert.ok(/do not report a publish/.test(out),
       'the agent must be told not to report success over a failed write');
   });
+});
+
+test('[payload] EVERY operation carries the store\'s OWN space key', () => {
+  // The space key was absent from every payload assertion in this suite, so
+  // publishing an entire tree into the WRONG Confluence space was invisible:
+  // replacing `plan.spaceKey` with a literal in either the resolve payload or
+  // the create payload left the suite green. The space is the destination; a
+  // publish that lands in the wrong one is not a lesser failure than a publish
+  // that lands nowhere.
+  withFixtureProject((root) => {
+    const { plan } = systemPlanFor(root);
+    assert.strictEqual(plan.spaceKey, 'PROD');
+    const mcp = mockConfluence();
+    tree.executePlan(plan, mcp);
+    let resolves = 0;
+    let creates = 0;
+    for (const { operation, args } of mcp.calls) {
+      if (operation === 'resolve_page') {
+        resolves++;
+        assert.strictEqual(args.space, 'PROD', `resolve_page went to space ${args.space}`);
+      } else if (operation === 'create_page') {
+        creates++;
+        assert.strictEqual(args.space, 'PROD', `create_page went to space ${args.space}`);
+      } else {
+        // update_page addresses an existing page BY ID, so it carries no space
+        // — and must not, or the id and the space could disagree.
+        assert.strictEqual(args.space, undefined,
+          'update_page addresses a page by id; a space key there could contradict the id');
+        assert.ok(args.id, 'update_page must carry the id it is updating');
+      }
+    }
+    assert.ok(resolves > 0 && creates > 0, 'this fixture must exercise both payload shapes');
+  });
+});
+
+test('[payload] a store bound to a DIFFERENT space publishes there, not to a constant', () => {
+  // The other half of the same gap: proving the space in the payload TRACKS the
+  // binding rather than happening to equal one fixture's value.
+  const plan = tree.planStorePublication({
+    storeId: tree.SOFTWARE_REQUIREMENTS, spaceKey: 'OTHERSPACE',
+    rootPage: { title: 'R', id: null }, artifacts: [{ path: 'architecture.md', body: 'x' }],
+  });
+  const mcp = mockConfluence();
+  tree.executePlan(plan, mcp);
+  const spaces = new Set(mcp.calls.map((c) => c.args.space).filter((s) => s !== undefined));
+  assert.deepStrictEqual([...spaces], ['OTHERSPACE'],
+    'every space-bearing payload must carry the store\'s own space key');
 });
 
 test('[gate] `confluence-plan` names both the published and the not-published artifacts', () => {
@@ -2076,14 +2253,49 @@ function gateBlockOf(rel) {
   return (GATE_HEADING + (end === -1 ? rest : rest.slice(0, end))).trimEnd();
 }
 
+/**
+ * Every shipped skill document that CARRIES the gate heading, DISCOVERED by
+ * walking the three skill trees.
+ *
+ * `GATE_COPIES` above is a hardcoded list, so `GATE_COPIES.length === 9` was a
+ * tautology: it asserted that a nine-element array literal has nine elements,
+ * and would have gone on passing if a tenth document had grown the block or if
+ * one of the nine had lost it. The count has to come from the FILE SYSTEM to
+ * mean anything. The hardcoded list is kept as the expected membership, and the
+ * two are compared.
+ */
+function discoverGateCarriers() {
+  const found = [];
+  const walk = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { walk(p); continue; }
+      if (!/\.md$/.test(e.name)) continue;
+      if (fs.readFileSync(p, 'utf-8').includes(GATE_HEADING)) {
+        found.push(path.relative(PROJECT_ROOT, p).replace(/\\/g, '/'));
+      }
+    }
+  };
+  for (const r of ['skills', path.join('lib', 'bmad-extension', 'skills'),
+    path.join('lib', 'bmad-extension-plugin', 'skills')]) walk(path.join(PROJECT_ROOT, r));
+  return found.sort();
+}
+
 test('[invariant] Story 31.9\'s gate is still NINE copies under ONE sha256', () => {
-  const digests = new Set(GATE_COPIES.map((rel) =>
+  // The count is DISCOVERED, not restated. A tenth carrier, or a lost one, fails
+  // here rather than sailing past a hardcoded array's own length.
+  const discovered = discoverGateCarriers();
+  assert.deepStrictEqual(discovered, [...GATE_COPIES].sort(),
+    'the set of shipped documents carrying the Story 31.9 gate has changed');
+  assert.strictEqual(discovered.length, 9,
+    `${discovered.length} shipped skill documents carry the gate heading, not 9`);
+  const digests = new Set(discovered.map((rel) =>
     crypto.createHash('sha256').update(gateBlockOf(rel)).digest('hex')));
   assert.strictEqual(digests.size, 1,
     `the nine shipped copies of the Story 31.9 gate have diverged (${digests.size} digests). ` +
     `Story 31.10 must not touch that block: its Step B2 message region is a closed set and ` +
     `adding a line to it fails a test, by design.`);
-  assert.strictEqual(GATE_COPIES.length, 9);
 });
 
 test('[invariant] Story 31.10 added NOTHING to the Story 31.9 gate block', () => {
