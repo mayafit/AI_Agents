@@ -263,3 +263,98 @@ this story's boundary): `epics.md:5493` gives Story 31.10's **Size** as `Large` 
 heading, while the same file's Story 31.9 block immediately above it is the one whose ACs the
 sprint-status key describes. No action needed — the ACs at `epics.md:5499-5509` are unambiguous and
 are what was implemented.
+
+---
+
+## 11. FIX ROUND — what the review found, and what was done
+
+Six commits on `feature/epic-31-story-31.10`. The suite went **134 → 157**, exit 0 throughout.
+
+### BLOCKING-1 — the central behaviour had no execution path, three links deep
+
+**(a) The learned root page id was inert.** It was written to `project-layout.yaml`, displayed by
+`ma-agents status` and by `confluence-plan`, and consumed by nothing: forcing `rootId = null`
+inside `planStorePublication` changed no observable behaviour, because `executePlan` never read
+`node.id` and re-resolved the root by title on every run. `executePlan` now **uses** a recorded id
+and skips the resolve; only the root page can carry one, because per-artifact pages are
+deliberately not recorded (NFR79). A stale id fails loudly on the write with a message naming the
+id and telling the user to clear it — falling back to a title lookup would re-create a page they
+may have deleted deliberately. The report gained `reusedIds` as the observable effect.
+
+**(b) `recordLearnedRootPageId` had no production caller.** It is a local `fs` write — product
+behaviour, not executable spec — and its only caller was a test. It now has
+`ma-agents confluence-record-root-page --store <s> --title <t> --id <id>`. This process cannot
+reach the Confluence MCP, so the agent publishes and the agent is the only party that learns the
+root page's id; this command is how it comes back. Every outcome prints by name; every refusal
+exits non-zero. `confluence-plan` prints the exact command, so the plan closes its own loop.
+
+**(c) The protocol had no reader — Story 31.9's gate was RE-SEALED.** Nothing in any shipped skill
+document told an agent to build the page tree, and this suite asserted that absence as a passing
+invariant. Step B2 said *"route this store's reads and writes to it, in the space named by the
+space-key field"* — the **space**, and never the **page**. One prose line is now added inside Step
+B2's available branch, in all nine copies, stating the mapping (with a worked example and the index
+rule), that a title identifies a page within a space, `ma-agents confluence-plan` for this
+project's enumerated operations, resolve-then-update-or-create as an **idempotent write**, the root
+page reported by name, the id write-back command, and STOP-on-failed-write.
+
+`SANCTIONED_PROSE.B2` in `test/project-layout-confluence-routing.test.js` was **extended, not
+relaxed**: the new line is now required in that position, so deleting the protocol fails exactly as
+adding it did. No prohibition was modified.
+
+Gate re-sealed **9 copies, 1 sha256, `5d507bc6eb08` → `cda3d3d99cff`**. Story 31.4's preflight is
+**41 copies, 1 sha256 `ca9bf25ba475`, untouched**. `npm run build:plugin` run, mirror committed, no
+orphan build dir. `story-15-5-workflow-skills` still exactly 153/4, same four names.
+
+**FR266 stays retired.** The write is stated as *"an idempotent write, not a reconciliation — there
+are never two versions to compare"*. Three tests hold the line: one requires that wording, one
+scans this story's own added line for `mirror`, `cache`, `sync`, `reconcile`, `conflict`,
+`local copy`, `download`, `export`, `diff` and *"which version wins"*, and one forbids the text
+naming any operation outside the module's closed set. Instruction text is exactly where a mirror
+would come back with no code changing.
+
+### BLOCKING-2 — the root page was exempt from the collision guard
+
+`resolve_page`'s identity semantics were **never specified**, and the module held two contradictory
+models: the operation catalogue described a parent-scoped lookup while the collision guard
+justified itself by space-scoped uniqueness. A mock cannot arbitrate a protocol question, and the
+double implemented the parent-scoped model, so the disagreement was invisible.
+
+**Decided in the contract: page identity is (space, title). The parent is placement, never
+identity.** That is what Confluence enforces; it makes every clash knowable before the first
+operation (a refusal, not a half-published tree with orphans); and it is what the guard and AC5
+were already built on. Consequently the root page is no longer exempt — with a root titled `prd`
+and an artifact `prd.md` the artifact's body overwrote the root, the page became its own parent,
+and `executePlan` returned `ok: true, published: true` over the corruption. `resolve_page` now
+carries exactly `(space, title)`; the mock is space-scoped and rejects a duplicate title as
+Confluence does.
+
+### NON-BLOCKING-3 — ten cross-store title clashes in this repository
+
+`crossStoreTitleClashes` / `assertNoCrossStoreTitleClashes` refuse a publish when both stores are
+bound to one space and claim a title. Measured against this repository's **real corpus**: ten
+clashes — `changelog`, and nine of the eleven PRD capability shards that share a name with an
+architecture decision record. Two **root** pages sharing a title is *sharing*, not a clash: AC3
+names the root `{project_name}` for both stores, a root carries no body, and both trees hang
+beneath it. An artifact colliding with the other store's root **is** refused.
+
+### Coverage gaps closed
+
+M33/M34 (the space key was absent from every payload assertion), M39 (the `flux-report.md` hazard
+the code itself cites), M46 (`planStorePublication`'s store guard), M16 (`normalizeRelPath`'s
+backslash contract), M43 (`executePlan` accepting a non-plan and reaching the success exit), M18
+(the excluded list's sort), C12 (the catalogue print, previously satisfied by an unrelated prose
+line), NB-6a (union-indexed line diff, explicit line-count assertion, and the `generated:` date
+tolerated by name — the old test **fails** against a simulated day rollover), NB-6b (gate carriers
+now **discovered**, not restated). NB-5: both files pinned `text eol=lf`.
+
+### Residual — reported, not resolved
+
+**No shipped skill's purpose is to publish a knowledge store.** The protocol is now reachable from
+every gated document, which is every document this package ships that resolves a knowledge-store
+artifact. But the skills that author the bulk of the corpus — the PRD, the brief, the architecture,
+the UX specification, the research reports — are **not shipped by this package at all**
+(`skills/` and `lib/bmad-extension/skills/` contain no `bmad-prd`, `bmad-architecture`,
+`bmad-create-epics-and-stories` or `bmad-ux`), so nothing here can instruct them. AC1/AC3/AC5 are
+therefore **reachable and correct, but only exercised when a gated skill writes to a
+Confluence-backed store**. A trigger — a publish command or a publish skill — does not exist
+anywhere in Epic 31. This is flagged for a human, not worked around.
