@@ -130,6 +130,9 @@ ${chalk.bold('Usage:')}
   ${chalk.cyan(`npx ${NAME} confluence-plan`)}               Show the Confluence page tree a
                                              Confluence-backed store publishes,
                                              and the operations it performs
+  ${chalk.cyan(`npx ${NAME} confluence-record-root-page`)}   Record the page id Confluence gave
+                                             a store's root page, after publishing
+                                             (--store, --title, --id)
   ${chalk.cyan(`npx ${NAME} list`)}                         List available skills
   ${chalk.cyan(`npx ${NAME} agents`)}                       List supported agents
   ${chalk.cyan(`npx ${NAME} create-skill`)} <name>           Scaffold a new skill directory
@@ -5486,7 +5489,13 @@ async function handleConfluencePlan(args = []) {
       `    resolve_page FIRST for every page: found -> update_page, absent -> create_page.\n` +
       `    That is what makes a re-run update the existing pages instead of duplicating them,\n` +
       `    so their history and comments survive. If any write does not report success, STOP\n` +
-      `    and report the failure — do not continue and do not report a publish.`
+      `    and report the failure — do not continue and do not report a publish.\n` +
+      (rootNode.id
+        ? `    The root page's id is already recorded, so it is addressed by id and NOT looked up.\n`
+        : `    Afterwards, record the id Confluence gave the root page so later runs address it\n` +
+          `    directly instead of looking it up again:\n` +
+          `      ${NAME} confluence-record-root-page --store ${CONFLUENCE_STORE_RECORDS[storeId].cliName} ` +
+          `--title "${rootNode.title}" --id <the id create_page returned>\n`)
     ));
     for (const node of plan.nodes) {
       const depth = node.key === '' ? 0 : node.key.split('/').length;
@@ -5514,6 +5523,98 @@ async function handleConfluencePlan(args = []) {
     ));
   }
   console.log('');
+}
+
+/**
+ * `ma-agents confluence-record-root-page --store <system|software> --title <t> --id <id>`
+ *
+ * OQ-4's write-back, as a command an agent can actually run — and the reason
+ * `recordLearnedRootPageId` is product behaviour rather than dead code.
+ *
+ * The division of labour this story is built on: this process cannot reach the
+ * Confluence MCP (it lives in the agent's tool context), so `confluence-plan`
+ * states the operations and the AGENT performs them. That leaves one fact
+ * stranded on the agent's side — the id Confluence assigned the root page — and
+ * this command is how it comes back. Without it the id is learned by whoever
+ * published and then forgotten, and every subsequent run re-resolves the root
+ * page by title, which is exactly what OQ-4 recorded the field to avoid.
+ *
+ * Prints the OUTCOME by name, including the refusals. A write-back that quietly
+ * did nothing would be Story 31.13's defect: the caller must be able to tell
+ * "recorded" from "refused because the binding was retitled".
+ */
+async function handleConfluenceRecordRootPage(args = []) {
+  const flag = (name) => {
+    const i = args.indexOf(`--${name}`);
+    return i !== -1 && args[i + 1] ? String(args[i + 1]).trim() : '';
+  };
+  const requested = flag('store').toLowerCase();
+  const title = flag('title');
+  const id = flag('id');
+
+  const storeId = confluencePageTree.PUBLISHING_STORES.find(
+    (s) => CONFLUENCE_STORE_RECORDS[s].cliName === requested || s === requested);
+  if (!storeId) {
+    console.error(chalk.red(
+      `  ma-agents — stopping: --store must name a publishing store. Legal values: ` +
+      confluencePageTree.PUBLISHING_STORES
+        .map((s) => CONFLUENCE_STORE_RECORDS[s].cliName).join(', ') + '.'
+    ));
+    process.exit(1);
+  }
+  if (!title || !id) {
+    console.error(chalk.red(
+      `  ma-agents — stopping: both --title and --id are required.\n` +
+      `  They must be the root page's title and the page id Confluence returned for it. ` +
+      `Recording an id against the wrong title is the record OQ-4 exists to prevent.`
+    ));
+    process.exit(1);
+  }
+
+  let result;
+  try {
+    result = recordLearnedRootPageId({ projectRoot: process.cwd(), storeId, title, id });
+  } catch (e) {
+    console.error(chalk.red(`  ma-agents — stopping: ${e.message}`));
+    process.exit(1);
+  }
+
+  const label = confluencePageTree.labelForStore(storeId);
+  if (result.outcome === ROOT_ID_RECORDED) {
+    console.log(chalk.green(
+      `  Recorded: the ${label}'s root page "${result.title}" is page ${result.id}.\n` +
+      `  Later publishes address it by that id and skip the root-page lookup.`
+    ));
+  } else if (result.outcome === ROOT_ID_UNCHANGED) {
+    console.log(chalk.gray(`  Already recorded: the ${label}'s root page is page ${result.id}. Nothing written.`));
+  } else if (result.outcome === ROOT_ID_TITLE_MOVED) {
+    console.error(chalk.red(
+      `  ma-agents — stopping: the ${label}'s root page is recorded as ` +
+      `"${result.recordedTitle}", but the id offered is for "${result.publishedTitle}".\n` +
+      `  A {title, id} pair naming two different pages looks resolved and points where you did ` +
+      `not choose, so nothing was written. Re-run \`${NAME} confluence-plan\` and publish the ` +
+      `root page the binding actually names.`
+    ));
+    process.exit(1);
+  } else if (result.outcome === ROOT_ID_NOT_CONFLUENCE) {
+    console.error(chalk.red(
+      `  ma-agents — stopping: the ${label} is not Confluence-backed, so it has no page id to record.`
+    ));
+    process.exit(1);
+  } else if (result.outcome === ROOT_ID_NO_BINDING) {
+    console.error(chalk.red(
+      `  ma-agents — stopping: this project has no readable knowledge binding (${result.reason}).\n` +
+      `    ${result.message}`
+    ));
+    process.exit(1);
+  } else {
+    // ROOT_ID_WRITE_FAILED, and anything a later outcome adds. Never silent.
+    console.error(chalk.red(
+      `  ma-agents — stopping: the id was NOT recorded (${result.outcome}). ` +
+      `_bmad-output/project-layout.yaml is unchanged, so a later run will try again.`
+    ));
+    process.exit(1);
+  }
 }
 
 // --- Interactive mode ---
@@ -5600,6 +5701,12 @@ async function main() {
     // in the agent's tool context and not in this process.
     case 'confluence-plan':
       await handleConfluencePlan(args.slice(1));
+      break;
+    // OQ-4's write-back. The agent performs the operations, so the agent is the
+    // only party that learns the root page's id; this is how that id comes back
+    // into the binding instead of being learned and forgotten every run.
+    case 'confluence-record-root-page':
+      await handleConfluenceRecordRootPage(args.slice(1));
       break;
     case 'list':
     case 'list-skills':
@@ -5743,6 +5850,6 @@ module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, recon
   // NAME so "recorded" and "refused because the title moved" can never collapse
   // into one.
   storeArtifactsDirectory, collectStoreArtifactCandidates, recordLearnedRootPageId,
-  handleConfluencePlan, CONFLUENCE_STORE_RECORDS,
+  handleConfluencePlan, handleConfluenceRecordRootPage, CONFLUENCE_STORE_RECORDS,
   ROOT_ID_RECORDED, ROOT_ID_UNCHANGED, ROOT_ID_TITLE_MOVED, ROOT_ID_NOT_CONFLUENCE,
   ROOT_ID_NO_BINDING, ROOT_ID_WRITE_FAILED };

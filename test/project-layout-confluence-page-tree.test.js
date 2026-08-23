@@ -62,7 +62,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 const tree = require(path.join(PROJECT_ROOT, 'lib', 'confluence-page-tree.js'));
 
-const EXPECTED_TEST_COUNT = 142;
+const EXPECTED_TEST_COUNT = 147;
 
 let passed = 0;
 let failed = 0;
@@ -1661,6 +1661,117 @@ test('[AC7] an artifact page with no body is REFUSED, not published empty', () =
 // SECTION 7 — OQ-4: THE ID THIS LAYER LEARNS, AND WHEN IT IS DROPPED
 // ═════════════════════════════════════════════════════════════════════════════
 console.log('\n=== 7. OQ-4 — filling the root page id in, and dropping it on retitle ===\n');
+
+test('[OQ-4] the RECORDED id is CONSUMED: the root page is not looked up again', () => {
+  // The whole purpose of OQ-4, and the thing that was missing. Before this, the
+  // learned id was written to project-layout.yaml, displayed by `ma-agents
+  // status` and by `confluence-plan`, and consumed by NOTHING — forcing
+  // `rootId = null` inside planStorePublication changed no observable
+  // behaviour at all. Measured here end to end.
+  withFixtureProject((root) => {
+    // Run 1 — nothing recorded, so the root page IS resolved by title.
+    const first = systemPlanFor(root);
+    const mcp1 = mockConfluence();
+    const report1 = tree.executePlan(first.plan, mcp1);
+    assert.deepStrictEqual(report1.reusedIds, [], 'nothing is recorded yet, so nothing is reused');
+    assert.ok(mcp1.calls.some((c) => c.operation === 'resolve_page' && c.args.title === 'FixtureProject'),
+      'with no recorded id the root page must be resolved by title');
+
+    // The write-back.
+    quiet(() => cli.recordLearnedRootPageId({
+      projectRoot: root, storeId: tree.SYSTEM_REQUIREMENTS,
+      title: report1.rootPage.title, id: report1.rootPage.id,
+    }));
+
+    // Run 2 — the recorded id reaches the plan and is USED.
+    const second = systemPlanFor(root);
+    assert.strictEqual(second.plan.nodes[0].id, report1.rootPage.id,
+      'the recorded id must reach the plan; if this is null the field is inert');
+    const mcp2 = mockConfluence();
+    const report2 = tree.executePlan(second.plan, mcp2);
+    assert.deepStrictEqual(report2.reusedIds,
+      [{ key: '', title: 'FixtureProject', id: report1.rootPage.id }],
+      'the root page must be addressed by its recorded id');
+    assert.ok(!mcp2.calls.some((c) => c.operation === 'resolve_page' && c.args.title === 'FixtureProject'),
+      'THE POINT: the root page must NOT be resolved by title once its id is known');
+    // And it is still the same page, updated in place.
+    assert.strictEqual(report2.rootPage.id, report1.rootPage.id);
+    assert.strictEqual(report2.rootPage.created, false);
+    // Exactly one resolve fewer than run 1 — no other page changed behaviour.
+    const resolves = (m) => m.operationNames().filter((o) => o === 'resolve_page').length;
+    assert.strictEqual(resolves(mcp2), resolves(mcp1) - 1,
+      'only the ROOT page is addressed by a recorded id; per-artifact pages are not recorded (NFR79)');
+  });
+});
+
+test('[OQ-4] a STALE recorded id fails loudly, and says how to clear it', () => {
+  // The cost of trusting a recorded id: if that page was deleted, the update
+  // fails. It must fail loudly with an actionable message rather than silently
+  // falling back to a title lookup, which would re-create a page the user may
+  // have deleted on purpose.
+  const plan = tree.planStorePublication({
+    storeId: tree.SYSTEM_REQUIREMENTS, spaceKey: 'S',
+    rootPage: { title: 'R', id: 'page-that-no-longer-exists' },
+    artifacts: [{ path: 'prd.md', body: 'x' }],
+  });
+  const mcp = mockConfluence({ failOn: { operation: 'update_page' } });
+  assert.throws(() => tree.executePlan(plan, mcp),
+    (e) => e.reason === 'write-failed' && e.published === false &&
+           /page-that-no-longer-exists/.test(e.message) &&
+           /set it to null/.test(e.message),
+    'a stale recorded id is the one write failure the user can act on directly');
+});
+
+test('[OQ-4] the write-back has a PRODUCTION CALLER — the command an agent runs', () => {
+  // `recordLearnedRootPageId` is a local fs write: product behaviour, not
+  // executable spec. It had no caller but a test, which made the id it wrote
+  // unreachable in a real run. This process cannot reach the Confluence MCP, so
+  // the AGENT publishes and the agent is the only party that learns the root
+  // page's id; this command is how that id comes back.
+  withFixtureProject((root) => {
+    const { plan } = systemPlanFor(root);
+    const report = tree.executePlan(plan, mockConfluence());
+    const out = quiet(() => cli.handleConfluenceRecordRootPage(
+      ['--store', 'system', '--title', report.rootPage.title, '--id', report.rootPage.id])).out;
+    assert.ok(/Recorded/.test(out), out);
+    assert.strictEqual(
+      cli.resolveProjectTopology(root).topology.systemRequirementsStore.rootPage.id,
+      report.rootPage.id, 'the command must actually persist the id');
+    // And a second run reports the no-op by name rather than claiming a write.
+    const again = quiet(() => cli.handleConfluenceRecordRootPage(
+      ['--store', 'system', '--title', report.rootPage.title, '--id', report.rootPage.id])).out;
+    assert.ok(/Already recorded/.test(again), again);
+  });
+});
+
+test('[OQ-4] the write-back command REFUSES a retitle, and exits non-zero', () => {
+  withFixtureProject((root) => {
+    const snap = snapshotTree(root);
+    const origExit = process.exit;
+    let exitCode = null;
+    process.exit = (c) => { exitCode = c; throw new Error('EXIT'); };
+    let out = '';
+    try {
+      const r = quiet(() => cli.handleConfluenceRecordRootPage(
+        ['--store', 'system', '--title', 'Some Other Page', '--id', 'p-99']));
+      out = r.out;
+      if (r.value && typeof r.value.catch === 'function') r.value.catch(() => {});
+    } finally { process.exit = origExit; }
+    assert.strictEqual(exitCode, 1, 'a refused write-back must not exit 0');
+    assert.ok(/stopping/.test(out) && /Some Other Page/.test(out), out);
+    assert.deepStrictEqual(snapshotTree(root), snap, 'and nothing was written');
+  });
+});
+
+test('[OQ-4] `confluence-plan` TELLS the agent to record the id, naming the command', () => {
+  withFixtureProject(() => {
+    const out = runConfluencePlan([]);
+    assert.ok(/confluence-record-root-page/.test(out),
+      'the plan must close its own loop: publishing learns an id that has to come back');
+    assert.ok(/--store system/.test(out) && /--title "FixtureProject"/.test(out),
+      'and it must be a command the agent can run, not a description of one');
+  });
+});
 
 test('[OQ-4] Story 31.8 records a TITLE with id null; this layer fills the id in', () => {
   withFixtureProject((root) => {
