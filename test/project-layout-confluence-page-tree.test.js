@@ -62,7 +62,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 const tree = require(path.join(PROJECT_ROOT, 'lib', 'confluence-page-tree.js'));
 
-const EXPECTED_TEST_COUNT = 134;
+const EXPECTED_TEST_COUNT = 138;
 
 let passed = 0;
 let failed = 0;
@@ -101,8 +101,15 @@ console.log('\n=== 0. The harness proves itself armed ===\n');
  *
  * It is a `dispatch(operation, args)` function with observable state. It touches
  * no file and opens no socket. `pages` is its whole world: a map from
- * `parentId|title` to a page id, which is exactly the identity model the tree
- * mapping resolves against.
+ * `space|title` to a page id — SPACE-SCOPED, which is the identity the module's
+ * PAGE IDENTITY contract states and which is what Confluence itself enforces.
+ *
+ * This mock used to key on `parentId|title`, i.e. parent-scoped, while the
+ * module's collision guard justified itself by space-scoped uniqueness. The two
+ * models disagreed, and because a mock cannot arbitrate a protocol question the
+ * disagreement was invisible: the root-page collision below published happily
+ * here and would have corrupted a real space. The mock now implements the stated
+ * contract, so the guard and the double are answerable to one sentence.
  *
  * `opts.failOn` — `{operation, title}` (or an ordinal `nth`) makes ONE write
  * answer unsuccessfully, so the "a failed write must not report success" claims
@@ -121,7 +128,7 @@ function mockConfluence(opts) {
     calls.push({ operation, args });
     if (operation === 'resolve_page') {
       if (o.resolveResponse) return o.resolveResponse(args, calls.length);
-      const key = `${args.parentId || '-'}|${args.title}`;
+      const key = `${args.space}|${args.title}`;
       if (pages.has(key)) {
         // A poison body rides along on every resolve answer. `executePlan`
         // consumes IDENTITY only, so this string must never appear in any
@@ -139,9 +146,15 @@ function mockConfluence(opts) {
           : { ok: false, error: 'insufficient permissions' };
       }
       if (operation === 'create_page') {
-        const key = `${args.parentId || '-'}|${args.title}`;
+        const key = `${args.space}|${args.title}`;
+        if (pages.has(key) && !o.allowDuplicateTitles) {
+          // What Confluence does: a title is unique within a space, so a second
+          // create of one title is REJECTED rather than quietly making a twin.
+          // A mock that allowed it would let a plan with a title collision look
+          // publishable here and corrupt a real space.
+          return { ok: false, error: `a page titled "${args.title}" already exists in space ${args.space}` };
+        }
         const id = `page-${++seq}`;
-        pages.set(key, { toString: () => id }.toString());
         pages.set(key, id);
         return { ok: true, id };
       }
@@ -968,6 +981,79 @@ test('[AC5-adjacent] two artifacts that would share one page title are REFUSED, 
   'documents into one page\'s history on every run');
 });
 
+test('[identity] the ROOT PAGE is not exempt from the collision guard', () => {
+  // The reviewer's executed case. Root page titled "prd", artifacts `prd.md` and
+  // `prd/capabilities/a.md`. The root page and the `prd` page are ONE page under
+  // (space, title) identity, so the artifact's body lands on the root, the page
+  // becomes its own parent, and the publish reports success over the corruption.
+  // The planner must refuse, before any operation runs.
+  assert.throws(() => tree.planStorePublication({
+    storeId: tree.SYSTEM_REQUIREMENTS, spaceKey: 'S', rootPage: { title: 'prd', id: null },
+    artifacts: [{ path: 'prd.md', body: 'x' }, { path: 'prd/capabilities/a.md', body: 'y' }],
+  }), (e) => /would be titled "prd"/.test(e.message) && /the root page/.test(e.message) &&
+             /root page title that no artifact shares/.test(e.message),
+  'the root page must be named as the other party to the clash, not silently exempted');
+});
+
+test('[identity] the root collision NEVER reaches Confluence — nothing is dispatched', () => {
+  // Refusing at plan time is the whole point: a mid-publish failure would leave
+  // pages already created. Measured, not asserted — the dispatcher counts.
+  const mcp = mockConfluence();
+  assert.throws(() => {
+    const plan = tree.planStorePublication({
+      storeId: tree.SYSTEM_REQUIREMENTS, spaceKey: 'S', rootPage: { title: 'prd', id: null },
+      artifacts: [{ path: 'prd.md', body: 'x' }],
+    });
+    tree.executePlan(plan, mcp);
+  });
+  assert.deepStrictEqual(mcp.operationNames(), [],
+    'the refusal must come BEFORE the first operation, or the space is already half-written');
+});
+
+test('[identity] resolve_page is SPACE-SCOPED: (space, title), with no parent sent', () => {
+  // The protocol detail the story never stated, now stated and measured. A
+  // parent in the resolve payload would tell a bridge implementer that the
+  // lookup is narrowed by parent — the ambiguity that made the outcome of the
+  // central write path depend on which model the bridge happened to pick.
+  withFixtureProject((root) => {
+    const { plan } = systemPlanFor(root);
+    const mcp = mockConfluence();
+    tree.executePlan(plan, mcp);
+    const resolves = mcp.calls.filter((c) => c.operation === 'resolve_page');
+    assert.ok(resolves.length > 1, 'expected a resolve per page');
+    for (const r of resolves) {
+      assert.deepStrictEqual(Object.keys(r.args).sort(), ['space', 'title'],
+        `resolve_page must carry exactly (space, title); got ${JSON.stringify(r.args)}`);
+      assert.strictEqual(r.args.space, 'PROD');
+    }
+  });
+});
+
+test('[identity] a page found under a DIFFERENT parent is still the same page', () => {
+  // The observable consequence of space-scoped identity, and the one that
+  // separates it from the parent-scoped model: re-shard an artifact so its page
+  // moves to a new parent, and the SAME page is updated and re-parented — not
+  // duplicated. Under parent-scoped identity this run would create a twin.
+  const mcp = mockConfluence();
+  const planA = tree.planStorePublication({
+    storeId: tree.SYSTEM_REQUIREMENTS, spaceKey: 'S', rootPage: { title: 'R', id: null },
+    artifacts: [{ path: 'prd/alpha.md', body: 'one' }],
+  });
+  const first = tree.executePlan(planA, mcp);
+  const alphaId = first.pages.find((p) => p.title === 'alpha').id;
+
+  const planB = tree.planStorePublication({
+    storeId: tree.SYSTEM_REQUIREMENTS, spaceKey: 'S', rootPage: { title: 'R', id: null },
+    artifacts: [{ path: 'prd/capabilities/alpha.md', body: 'one' }],
+  });
+  const second = tree.executePlan(planB, mcp);
+  const moved = second.pages.find((p) => p.title === 'alpha');
+  assert.strictEqual(moved.id, alphaId, 'the moved page must be the SAME page, by identity');
+  assert.strictEqual(moved.updated, true, 'and updated, not created');
+  assert.deepStrictEqual(second.created, ['capabilities'],
+    'only the genuinely new container page is created');
+});
+
 test('[AC5-adjacent] two DIFFERENT source files that map to one page key are REFUSED', () => {
   // A distinct hole from the title-collision guard above: `prd.md` and `prd.MD`
   // produce the SAME page key, so only one node exists and the title check never
@@ -1216,9 +1302,16 @@ test('[AC5] the mock would have SHOWN a duplicate — the idempotence claim is f
   // Probe: with a resolver that always answers "not found", the same plan run
   // twice creates twice. If this did not fail, the test above could pass against
   // a mock incapable of reporting duplication.
+  //
+  // `allowDuplicateTitles` switches OFF the mock's space-uniqueness rule, which
+  // otherwise (correctly) rejects the second create. The counterfactual this
+  // probe needs is "a Confluence that would have let the duplicate through", so
+  // the rule has to be lifted deliberately rather than never have existed.
   withFixtureProject((root) => {
     const { plan } = systemPlanFor(root);
-    const blind = mockConfluence({ resolveResponse: () => ({ found: false }) });
+    const blind = mockConfluence({
+      resolveResponse: () => ({ found: false }), allowDuplicateTitles: true,
+    });
     const first = tree.executePlan(plan, blind);
     const second = tree.executePlan(plan, blind);
     assert.ok(second.created.length === first.created.length && second.created.length > 0,
