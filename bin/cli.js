@@ -5405,7 +5405,10 @@ async function handleConfluencePlan(args = []) {
     process.exit(1);
   }
 
-  let planned = 0;
+  // PASS 1 — build every plan before printing any of them, so the cross-store
+  // pre-flight below can see them together. A per-store loop that printed as it
+  // went could only ever check one plan against itself.
+  const built = [];
   for (const storeId of storeIds) {
     const record = CONFLUENCE_STORE_RECORDS[storeId];
     const store = resolved.topology[record.topologyKey];
@@ -5451,7 +5454,24 @@ async function handleConfluencePlan(args = []) {
       console.error(chalk.red(`  ma-agents — stopping: ${e.message}`));
       process.exit(1);
     }
+    built.push({ storeId, label, selection, plan });
+  }
 
+  // THE CROSS-STORE PRE-FLIGHT. Nothing stops both stores from being bound to
+  // one Confluence space, and page identity is (space, title) — a space is not
+  // owned by a store. In this very repository the two plans claim ten titles in
+  // common. Checked here, where both plans exist, and BEFORE a single page is
+  // printed as publishable.
+  try {
+    confluencePageTree.assertNoCrossStoreTitleClashes(built.map((b) => b.plan));
+  } catch (e) {
+    console.error(chalk.red(`  ma-agents — stopping: ${e.message}`));
+    process.exit(1);
+  }
+
+  // PASS 2 — print.
+  let planned = 0;
+  for (const { storeId, label, selection, plan } of built) {
     planned++;
     const rootNode = plan.nodes[0];
     console.log(chalk.bold.cyan(`\n  Confluence page tree — ${label}`));

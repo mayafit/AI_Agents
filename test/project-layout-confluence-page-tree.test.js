@@ -62,7 +62,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 const tree = require(path.join(PROJECT_ROOT, 'lib', 'confluence-page-tree.js'));
 
-const EXPECTED_TEST_COUNT = 138;
+const EXPECTED_TEST_COUNT = 142;
 
 let passed = 0;
 let failed = 0;
@@ -1072,6 +1072,95 @@ test('[AC5-adjacent] two DIFFERENT source files that map to one page key are REF
   assert.strictEqual(plan.nodes.filter((n) => n.role === tree.ROLE_ARTIFACT).length, 1);
 });
 
+test('[identity][cross-store] both stores in ONE space: clashing titles are REFUSED', () => {
+  const mk = (storeId, artifacts) => tree.planStorePublication({
+    storeId, spaceKey: 'ONE', rootPage: { title: 'Proj', id: null }, artifacts,
+  });
+  const sys = mk(tree.SYSTEM_REQUIREMENTS, [{ path: 'prd/changelog.md', body: 'a' }]);
+  const soft = mk(tree.SOFTWARE_REQUIREMENTS, [{ path: 'architecture/changelog.md', body: 'b' }]);
+  const clashes = tree.crossStoreTitleClashes([sys, soft]);
+  assert.strictEqual(clashes.length, 1, JSON.stringify(clashes));
+  assert.strictEqual(clashes[0].title, 'changelog');
+  assert.strictEqual(clashes[0].a.sourcePath, 'prd/changelog.md');
+  assert.strictEqual(clashes[0].b.sourcePath, 'architecture/changelog.md');
+  assert.throws(() => tree.assertNoCrossStoreTitleClashes([sys, soft]),
+    (e) => /same Confluence space/.test(e.message) &&
+           /prd\/changelog\.md/.test(e.message) && /architecture\/changelog\.md/.test(e.message),
+    'both sides must be named, as the within-plan guard names both');
+});
+
+test('[identity][cross-store] DIFFERENT spaces cannot collide, however many titles match', () => {
+  const mk = (storeId, spaceKey, p) => tree.planStorePublication({
+    storeId, spaceKey, rootPage: { title: 'Proj', id: null }, artifacts: [{ path: p, body: 'x' }],
+  });
+  assert.deepStrictEqual(tree.crossStoreTitleClashes([
+    mk(tree.SYSTEM_REQUIREMENTS, 'AAA', 'prd/changelog.md'),
+    mk(tree.SOFTWARE_REQUIREMENTS, 'BBB', 'architecture/changelog.md'),
+  ]), [], 'identity is scoped to a space, so two spaces are two namespaces');
+});
+
+test('[identity][cross-store] two ROOT pages sharing one title is SHARING, not a clash', () => {
+  // AC3 names the root page {project_name} for BOTH stores, so if they share a
+  // space they share a root page by default. That is one page with both trees
+  // beneath it — coherent, and a root page carries no body, so nothing is
+  // overwritten. Refusing it would refuse the likely configuration.
+  const mk = (storeId, p) => tree.planStorePublication({
+    storeId, spaceKey: 'ONE', rootPage: { title: 'Proj', id: null }, artifacts: [{ path: p, body: 'x' }],
+  });
+  assert.deepStrictEqual(
+    tree.crossStoreTitleClashes([mk(tree.SYSTEM_REQUIREMENTS, 'prd.md'),
+      mk(tree.SOFTWARE_REQUIREMENTS, 'architecture.md')]), []);
+  // But an ARTIFACT that collides with the OTHER store's ROOT is a clash: the
+  // root has children, and overwriting it with an artifact's body leaves them
+  // parented to an artifact page. Within ONE plan that pairing is already
+  // refused, so it has to be built across two plans to exist at all.
+  const clashes = tree.crossStoreTitleClashes([
+    tree.planStorePublication({
+      storeId: tree.SYSTEM_REQUIREMENTS, spaceKey: 'ONE',
+      rootPage: { title: 'Proj', id: null }, artifacts: [{ path: 'prd.md', body: 'x' }],
+    }),
+    tree.planStorePublication({
+      storeId: tree.SOFTWARE_REQUIREMENTS, spaceKey: 'ONE',
+      rootPage: { title: 'prd', id: null }, artifacts: [{ path: 'architecture.md', body: 'y' }],
+    }),
+  ]);
+  assert.strictEqual(clashes.length, 1, JSON.stringify(clashes));
+  assert.strictEqual(clashes[0].title, 'prd');
+  assert.strictEqual(clashes[0].a.role, tree.ROLE_ARTIFACT);
+  assert.strictEqual(clashes[0].b.role, tree.ROLE_ROOT);
+});
+
+test('[identity][cross-store] the REAL corpus of this repository collides TEN times', () => {
+  // Not a fixture. The two plans are built from this repository's own
+  // `_bmad-output/planning-artifacts`, which is the corpus a user of this repo
+  // would publish. Naming a capability's requirements shard and its architecture
+  // decision record after the capability is the dominant convention here, so the
+  // clash set is large and stable rather than exotic.
+  const dir = path.join(PROJECT_ROOT, '_bmad-output', 'planning-artifacts');
+  if (!fs.existsSync(dir)) {
+    assert.fail('this repository must carry its own planning corpus for this measurement');
+  }
+  const candidates = cli.collectStoreArtifactCandidates(dir);
+  const plans = tree.PUBLISHING_STORES.map((storeId) => tree.planStorePublication({
+    storeId, spaceKey: 'SHARED', rootPage: { title: 'AI Agents', id: null },
+    artifacts: tree.artifactsForStore(storeId, candidates).selected,
+  }));
+  const clashes = tree.crossStoreTitleClashes(plans);
+  const titles = clashes.map((c) => c.title);
+  assert.ok(titles.includes('changelog'),
+    'prd/changelog.md and architecture/changelog.md both exist in this repository');
+  for (const shard of ['skills-platform', 'quality-assurance', 'knowledge-graph-and-atlas']) {
+    assert.ok(titles.includes(shard),
+      `${shard} is both a PRD capability shard and an architecture decision record here`);
+  }
+  assert.strictEqual(clashes.length, 10,
+    `this repository's two plans collide on ${clashes.length} titles, not 10: ` +
+    JSON.stringify(titles));
+  // The shared ROOT page is deliberately NOT among them.
+  assert.ok(!titles.includes('AI Agents'), 'the shared root page is sharing, not a clash');
+  assert.throws(() => tree.assertNoCrossStoreTitleClashes(plans), /10 page titles are claimed/);
+});
+
 test('[AC6] a hidden path is EXCLUDED by the selector itself, not only by the enumerator', () => {
   // Defence in depth, and it must be depth: `collectStoreArtifactCandidates`
   // skips dotted entries, so a fixture-driven test never feeds one to
@@ -1500,7 +1589,8 @@ test('[FR266 negative] the module\'s public API names no mirror, cache, sync or 
     'EXCLUDED_HIDDEN', 'EXCLUDED_NOT_MARKDOWN', 'EXCLUDED_OTHER_STORE', 'EXCLUDED_UNCLASSIFIED',
     'PUBLISHING_STORES', 'ROLE_ARTIFACT', 'ROLE_INDEX', 'ROLE_ROOT',
     'SOFTWARE_REQUIREMENTS', 'SPRINT_MANAGEMENT', 'SYSTEM_REQUIREMENTS',
-    'artifactsForStore', 'classifyArtifactPath', 'classifyArtifactPaths', 'executePlan',
+    'artifactsForStore', 'assertNoCrossStoreTitleClashes', 'classifyArtifactPath',
+    'classifyArtifactPaths', 'crossStoreTitleClashes', 'executePlan',
     'labelForStore', 'noMcpMessage', 'normalizeRelPath', 'planStorePublication',
   ].sort());
 });
