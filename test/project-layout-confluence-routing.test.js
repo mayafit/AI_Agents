@@ -54,7 +54,7 @@ const { execFileSync } = require('child_process');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 
-const EXPECTED_TEST_COUNT = 93;
+const EXPECTED_TEST_COUNT = 97;
 
 let passed = 0;
 let failed = 0;
@@ -1623,6 +1623,60 @@ for (const region of ['preamble', 'B1', 'B2', 'B3']) {
       `shaped. If the change is deliberate, update SANCTIONED_PROSE — and note that the ` +
       `store names and \`config.yaml\` field names in it are FILLED FROM the PRD and Story ` +
       `31.6's routing table, so a store change belongs in those documents first.`);
+  });
+}
+
+// STORY 31.10 REVIEW, NON-BLOCKING-A — the partition was not TOTAL, and that is
+// the THIRD instance of this class in this mechanism.
+//
+// `proseLines` drops every line starting with `#`; `messageLines` keeps only
+// lines starting with `>`. Between them they were assumed to cover the region —
+// so the closed sets above could claim "an inserted sentence fails whatever it
+// says". They did not cover it: a MARKDOWN HEADING falls through BOTH, and
+// `gateStep` only terminates on `\n### `, so a `####`/`######` line stays inside
+// the region and was examined by nothing.
+//
+// Four permissive payloads were shown to survive in all nine shipped copies,
+// including FR266's MIRROR restored verbatim ("keep an up-to-date copy … and
+// bring the two into agreement on the next run"), an FR262 degradation, and an
+// instruction to use `delete_page`/`archive_page` — operations outside the
+// closed catalogue. The one payload that was caught fell only to the SECONDARY
+// denylist below, and rewording defeated that on the second attempt.
+//
+// The first fix of this class closed it for blockquotes (BLOCKING N01). Closing
+// it again per-shape would leave the next shape open, so this asserts the
+// property instead: every non-blank line in every region is accounted for by
+// exactly one of the two extractors. A shape nobody has thought of fails here
+// rather than shipping unexamined.
+for (const region of ['preamble', 'B1', 'B2', 'B3']) {
+  test(`[text] NON-BLOCKING-A the ${region} partition is TOTAL — no line escapes both extractors`, () => {
+    const text = region === 'preamble' ? gatePreamble() : gateStep(Number(region.slice(1)));
+    const nonBlank = text.split('\n').map((l) => l.trim()).filter((l) => l !== '');
+    // Each region OPENS with its own structural heading — `## Knowledge Store
+    // Backend Routing` for the preamble, `### Step Bn — …` for each step. Those
+    // ARE the region delimiters and are pinned elsewhere (B1's whole-line, and
+    // the step headings by an exact three-element count). Exempting exactly the
+    // FIRST line — and nothing after it — is what makes this a test about
+    // INJECTED heading-shaped content rather than about the block's own shape.
+    assert.ok(nonBlank.length > 0, `${region} is empty — the extractor found no region at all`);
+    assert.ok(nonBlank[0].startsWith('#'),
+      `${region}'s first line is not its heading (${JSON.stringify(nonBlank[0])}), so the ` +
+      `one-line exemption below would silently excuse a content line instead`);
+    const body = nonBlank.slice(1);
+    const accounted = proseLines(text).length + messageLines(text).length;
+    const escaped = body.filter((l) => l.startsWith('#'));
+    assert.deepStrictEqual(escaped, [],
+      `${region} contains ${escaped.length} heading-shaped line(s) BELOW its own heading, which ` +
+      `neither proseLines nor messageLines examines, so the closed sets above do NOT constrain ` +
+      `them: ${JSON.stringify(escaped)}. A markdown heading is the known shape; there may be ` +
+      `others. Bring the shape into one of the two extractors, or remove it from the gate — do ` +
+      `not add a third exemption.`);
+    assert.strictEqual(accounted, body.length,
+      `${region} has ${body.length} non-blank lines below its heading, but the two extractors ` +
+      `account for ${accounted}. Every line in this region must be constrained by exactly one ` +
+      `closed set; an unaccounted line is a place a permissive instruction can be added and no ` +
+      `test will see it. That is how FR266's mirror was restored verbatim to all nine shipped ` +
+      `copies while this suite stayed green.`);
   });
 }
 
