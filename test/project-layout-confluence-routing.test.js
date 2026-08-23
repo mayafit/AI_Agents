@@ -1470,6 +1470,47 @@ const SANCTIONED_PROSE = Object.freeze({
     'Confluence returns. There is no mirror and no cache, so there is nothing to synchronise ' +
     'and nothing to fall out of date.',
 
+    // ── Story 31.10's re-seal ────────────────────────────────────────────────
+    // ADDED DELIBERATELY, and the closed set is EXTENDED rather than relaxed:
+    // this line is now REQUIRED, in this position, so deleting it fails exactly
+    // as adding it did. Nothing about the mechanism is softened.
+    //
+    // Why it belongs inside Step B2's available branch. Step B2 told an agent to
+    // "route this store's reads and writes to it, in the space named by the
+    // space-key field" and then stopped — it named the SPACE and never the PAGE.
+    // An agent holding only that cannot find `epics.md` in order to read it, and
+    // cannot know where to put an artifact in order to write it. Story 31.10
+    // built the mapping, the closed operation set and the idempotent write and
+    // shipped them in `lib/confluence-page-tree.js` and `ma-agents
+    // confluence-plan` — and no skill document referred to them, so nothing
+    // performed them.
+    //
+    // FR266 STAYS RETIRED, and the wording is chosen to keep it that way: the
+    // write is stated as IDEMPOTENT ("update that page when it is already there
+    // and create it when it is not … an idempotent write, not a reconciliation —
+    // there are never two versions to compare"). No mirror, no cache, no sync,
+    // no sync trigger, no authority call, no conflict resolution and no local
+    // copy. The four "Do NOT" prohibitions in the bullet above are unmodified
+    // and still stand.
+    "**Where that store's artifacts live in the space, and how to write one.** ONE page per " +
+    'markdown artifact, nested under the store\'s root page so the pages match the source ' +
+    'folder structure: `epics.md` is the page titled `epics` directly under that root page, ' +
+    'and `prd/capabilities/skills-platform.md` is `skills-platform` under `capabilities` under ' +
+    '`prd`, which is also how a sharded document becomes an index page with its shards as ' +
+    'children. A page title is unique within a space, so the title identifies the page and the ' +
+    'parent only says where it hangs. Run `ma-agents confluence-plan` to print that mapping ' +
+    'for THIS project together with the complete set of operations a publish performs and the ' +
+    'order to perform them in, parents first; it enumerates the plan and performs none of it, ' +
+    'because the Confluence-capable tool is in your context and not in that process. To write, ' +
+    'take the pages in the order it prints and, for each, look its title up in the space: ' +
+    'update that page when it is already there and create it when it is not. That is an ' +
+    'idempotent write, not a reconciliation — there are never two versions to compare, so a ' +
+    'second publish of the same artifacts lands on the same pages and their history and ' +
+    'comments survive. Report the root page by name to the user, and when it was created ' +
+    'rather than found, record the id Confluence gave it by running `ma-agents ' +
+    'confluence-record-root-page` so later runs address it directly. If any write does not ' +
+    'report success, STOP, say which page failed, and report no publish.',
+
     '- **No Confluence-capable tool is available** → **HALT** and report:',
 
     'Then STOP. Do NOT fall back to the file system. Do NOT read, create or offer to create a ' +

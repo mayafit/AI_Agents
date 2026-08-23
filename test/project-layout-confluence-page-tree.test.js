@@ -62,7 +62,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 const tree = require(path.join(PROJECT_ROOT, 'lib', 'confluence-page-tree.js'));
 
-const EXPECTED_TEST_COUNT = 154;
+const EXPECTED_TEST_COUNT = 157;
 
 let passed = 0;
 let failed = 0;
@@ -2298,15 +2298,103 @@ test('[invariant] Story 31.9\'s gate is still NINE copies under ONE sha256', () 
     `adding a line to it fails a test, by design.`);
 });
 
-test('[invariant] Story 31.10 added NOTHING to the Story 31.9 gate block', () => {
-  // The FR262 message this story's library carries is a SEPARATE surface (a JS
-  // error), so the shipped instruction text must be untouched by it. Asserted as
-  // an absence of this story's own vocabulary inside the sealed block.
-  const block = gateBlockOf(GATE_COPIES[0]);
-  for (const word of ['page tree', 'resolve_page', 'create_page', 'update_page',
-    'confluence-plan', 'root page']) {
-    assert.ok(!block.toLowerCase().includes(word.toLowerCase()),
-      `Story 31.10 vocabulary (${word}) has been added to Story 31.9's sealed gate block`);
+test('[reader] the PAGE-TREE PROTOCOL reaches an agent, in every gate copy', () => {
+  // THE REASON THIS STORY'S CENTRAL BEHAVIOUR IS REACHABLE AT ALL.
+  //
+  // This test used to assert the OPPOSITE — that no skill document carried any
+  // of this story's vocabulary — and it passed, which is precisely what was
+  // wrong. Story 31.10 built the mapping, the closed operation set, the
+  // idempotent write and `ma-agents confluence-plan`, and then shipped an
+  // instruction set in which NOTHING told an agent to perform any of it. The
+  // only instruction that reached one was Story 31.9's Step B2: "route this
+  // store's reads and writes to it, in the space named by the space-key field"
+  // — the SPACE, never the PAGE. AC1 ("one page IS created per markdown
+  // artifact"), AC3 ("the created page name IS reported to the user") and AC5
+  // ("re-running updates existing pages") all describe a publish, and an
+  // absence cannot perform one.
+  //
+  // Story 31.9's gate was therefore RE-SEALED at new content, with its own
+  // closed prose set in test/project-layout-confluence-routing.test.js extended
+  // to require the new line in its position — extended, not relaxed, so
+  // deleting the protocol fails there exactly as adding it did.
+  const REQUIRED = [
+    // The mapping: one page per artifact, folder structure, worked example.
+    'ONE page per markdown artifact',
+    'nested under the store\'s root page',
+    '`epics.md` is the page titled `epics`',
+    // The index rule.
+    'index page with its shards as children',
+    // Identity, matching the module's own PAGE IDENTITY contract.
+    'A page title is unique within a space',
+    // The enumerated plan, and why this process cannot perform it.
+    '`ma-agents confluence-plan`',
+    'parents first',
+    // Resolve-then-update-or-create, stated as an IDEMPOTENT WRITE (FR266
+    // stays retired: no mirror, no cache, no sync, nothing to reconcile).
+    'update that page when it is already there and create it when it is not',
+    'idempotent write, not a reconciliation',
+    'there are never two versions to compare',
+    // AC3's "reported to the user", and OQ-4's write-back.
+    'Report the root page by name to the user',
+    '`ma-agents confluence-record-root-page`',
+    // Defect shape 6: no success over a failed write.
+    'STOP, say which page failed, and report no publish',
+  ];
+  for (const rel of discoverGateCarriers()) {
+    const block = gateBlockOf(rel);
+    for (const phrase of REQUIRED) {
+      assert.ok(block.includes(phrase),
+        `${rel}: the shipped gate no longer tells an agent "${phrase}". Without it this ` +
+        `story's central behaviour has no execution path: nothing else instructs an agent to ` +
+        `build the page tree, and AC1/AC3/AC5 describe a publish that nothing performs.`);
+    }
+  }
+});
+
+test('[reader][FR266] the protocol text describes NO mirror, cache, sync or conflict', () => {
+  // The other half of the re-seal, and the one that matters most. P5-9.6 names
+  // an accidental mirror as the single most likely way this epic reacquires the
+  // subsystem it removed, and Story 31.14 AC7 runs a negative traceability
+  // check. Instruction text is exactly where a mirror would come back — an
+  // agent told to "keep the local copy in step" would build one out of the
+  // three operations without any code changing.
+  //
+  // The check is scoped to Story 31.10's own added line, so it measures THIS
+  // story's contribution rather than inheriting the surrounding prohibitions'
+  // credit — the bullet above legitimately contains "cache" and "mirror" inside
+  // its "There is no mirror and no cache" sentence.
+  const MARKER = '**Where that store\'s artifacts live in the space, and how to write one.**';
+  for (const rel of discoverGateCarriers()) {
+    const block = gateBlockOf(rel);
+    const at = block.indexOf(MARKER);
+    assert.notStrictEqual(at, -1, `${rel} has lost Story 31.10's protocol paragraph`);
+    const line = block.slice(at).split('\n')[0];
+    for (const banned of [/\bmirror\b/i, /\bcach(e|ing)\b/i, /\bsynchronis|synchroniz|\bsync\b/i,
+      /\breconcile\b/i, /\bconflict\b/i, /local cop(y|ies)/i, /source of truth for the local/i,
+      /\bdownload\b/i, /\bexport\b/i, /\bdiff\b/i, /which version wins/i]) {
+      assert.ok(!banned.test(line),
+        `${rel}: Story 31.10's protocol line matches ${banned} — FR266 is RETIRED and this ` +
+        `line is instruction text an agent acts on. A publish protocol that mentions any of ` +
+        `these is how the subsystem P5-9.6 removed comes back without a line of code changing.`);
+    }
+    // And the POSITIVE form, so "no sync" is stated rather than merely absent.
+    assert.ok(/idempotent write, not a reconciliation/.test(line),
+      `${rel}: the write must be stated as idempotent, or "update rather than duplicate" ` +
+      `reads as a synchronisation`);
+  }
+});
+
+test('[reader] the protocol names no operation outside the module\'s closed set', () => {
+  // The instruction text and `CONFLUENCE_PAGE_OPERATIONS` must not drift apart.
+  // An agent told to "archive the old page" would perform an operation
+  // `executePlan` refuses to dispatch, and AC7 puts that out of scope.
+  for (const rel of discoverGateCarriers()) {
+    const block = gateBlockOf(rel);
+    for (const forbidden of ['delete_page', 'archive_page', 'get_page_body',
+      'list_children', 'move_page']) {
+      assert.ok(!block.includes(forbidden),
+        `${rel}: the gate names ${forbidden}, which is deliberately NOT in the operation set`);
+    }
   }
 });
 
@@ -2340,11 +2428,17 @@ test('[invariant] Story 31.4\'s preflight is still 41 copies under ONE sha256', 
   assert.strictEqual(total, 41, `${total} copies carry the preflight, not 41`);
 });
 
-test('[invariant] Story 31.10 shipped no change to any skill document', () => {
-  // This story is library + CLI only. Stated as a measurement so a later edit to
-  // a skill document under this story's name is caught here, where the 41-copy
-  // and 9-copy invariants are, rather than in a suite nobody thought to run.
-  const marker = /confluence-plan|resolve_page|page tree/i;
+test('[invariant] Story 31.10 vocabulary appears ONLY inside the sealed gate block', () => {
+  // The replacement for "this story shipped no change to any skill document",
+  // which was true and was the defect: the protocol reached nobody.
+  //
+  // The containment claim survives the re-seal in its useful form. This story's
+  // vocabulary is allowed in exactly ONE place — inside Story 31.9's gate block,
+  // where it is held by that story's closed prose set — and nowhere else in any
+  // shipped skill document. A second, unsealed copy of the protocol would be a
+  // rival definition site that no closed set governs, which is how the epic
+  // acquired two contradictory statements of resolve identity in the first place.
+  const marker = /confluence-plan|confluence-record-root-page|resolve_page|page tree/i;
   const offenders = [];
   const walk = (dir) => {
     if (!fs.existsSync(dir)) return;
@@ -2352,14 +2446,42 @@ test('[invariant] Story 31.10 shipped no change to any skill document', () => {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) { walk(p); continue; }
       if (!/\.md$/.test(e.name)) continue;
-      if (marker.test(fs.readFileSync(p, 'utf-8'))) offenders.push(path.relative(PROJECT_ROOT, p));
+      const rel = path.relative(PROJECT_ROOT, p).replace(/\\/g, '/');
+      const body = fs.readFileSync(p, 'utf-8').replace(/\r\n/g, '\n');
+      if (!marker.test(body)) continue;
+      // Allowed only if every occurrence is inside this file's gate block.
+      const outside = GATE_COPIES.includes(rel)
+        ? body.split(gateBlockOf(rel)).join('')
+        : body;
+      if (marker.test(outside)) offenders.push(rel);
     }
   };
   for (const r of ['skills', path.join('lib', 'bmad-extension', 'skills'),
     path.join('lib', 'bmad-extension-plugin', 'skills')]) walk(path.join(PROJECT_ROOT, r));
   assert.deepStrictEqual(offenders, [],
-    'a skill document now carries Story 31.10 vocabulary; if that is intended, the plugin ' +
-    'bundle must be rebuilt and the skill-conversion suites re-run');
+    'a skill document carries Story 31.10 vocabulary OUTSIDE the sealed gate block. The ' +
+    'protocol has exactly one definition site, governed by Story 31.9\'s closed prose set; ' +
+    'a second copy is a rival statement that nothing seals.');
+});
+
+test('[invariant] the re-sealed gate is carried by BOTH pipelines, and the mirror is current', () => {
+  // Any change to `lib/bmad-extension/skills/` must be followed by
+  // `npm run build:plugin`; the drift guard lives in the plugin suites, and this
+  // is the same claim asserted where this story's own invariants are, so a
+  // forgotten rebuild fails in the suite this story's author actually runs.
+  const carriers = discoverGateCarriers();
+  const authored = carriers.filter((r) => r.startsWith('skills/'));
+  const extension = carriers.filter((r) => r.startsWith('lib/bmad-extension/skills/'));
+  const mirror = carriers.filter((r) => r.startsWith('lib/bmad-extension-plugin/skills/'));
+  assert.strictEqual(authored.length, 3, JSON.stringify(authored));
+  assert.strictEqual(extension.length, 3, JSON.stringify(extension));
+  assert.strictEqual(mirror.length, 3, JSON.stringify(mirror));
+  for (const ext of extension) {
+    const mir = ext.replace('lib/bmad-extension/skills/', 'lib/bmad-extension-plugin/skills/');
+    assert.ok(mirror.includes(mir), `${mir} is missing from the plugin bundle`);
+    assert.strictEqual(gateBlockOf(mir), gateBlockOf(ext),
+      `${mir} has drifted from ${ext} — run npm run build:plugin and commit the result`);
+  }
 });
 
 test('[invariant] the page-tree module cites no unshipped _bmad-output/ path', () => {
