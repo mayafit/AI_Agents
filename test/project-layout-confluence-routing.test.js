@@ -749,7 +749,16 @@ test('[behaviour] AC5 MCP present routes to the MCP, in the configured space', (
 // rather than the whole of it — and the snapshots' own messages below now state
 // what they do and do not establish.
 test('[behaviour] AC4 the oracle is a PURE decision function — pinned, not observed', () => {
-  const src = fs.readFileSync(__filename, 'utf-8');
+  // EOL-NORMALISED BEFORE SEARCHING. `core.autocrlf=true` is set in this repo, so
+  // a fresh Windows checkout delivers this file with CRLF and an LF-only `\n}\n`
+  // delimiter finds nothing — the test then fails with "could not delimit", not
+  // because the oracle is impure but because it could not be located. That is the
+  // CRLF-laundering class this repo has hit before: the suite passed in the
+  // worktree where the file was WRITTEN (LF, never round-tripped through a
+  // checkout) and failed the moment it was checked out anywhere else. Found by
+  // Story 31.10 running this suite in its own worktree; reproduced at the epic
+  // branch (1917 CRLF pairs, 0 bare LF) before fixing.
+  const src = fs.readFileSync(__filename, 'utf-8').replace(/\r\n/g, '\n');
   const start = src.indexOf('function runBackendGate(');
   assert.notStrictEqual(start, -1, 'the oracle is gone — every AC4 claim below rests on it');
   const end = src.indexOf('\n}\n', start);
