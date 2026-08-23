@@ -940,4 +940,92 @@ Per the run's boundaries the PRD, Decision P5-9 and `epics.md` were **not edited
 The interpretation is recorded here and in Story 31.2's completion notes so the reviewer sees the
 reasoning rather than an apparent AC miss. **A future planning pass should tighten AC2's wording.**
 
+---
+
+# WAVES 3–6 — the record from 31.3 through 31.13 (2026-08-12 → 2026-08-22)
+
+## Story states — current
+
+| id | status | merge | rounds | note |
+|---|---|---|---|---|
+| 31.1 | **done** | `b637ab4` | 0 | FR250 spike, verdict FAIL |
+| 31.2 | **done** | `a375386` | 3 | binding spine |
+| 2A | **done** | `bb35cac` | 2 | shared closed-enum source |
+| 2B | **done** | `3f21b1a` | 1 | non-lossy read + backend-aware display |
+| 31.3 | **done** | `a4b8489` | 1 | config.yaml generated one-way |
+| 31.4 | **done** | `38c7f8c` | 1 | staleness fail-loud guard |
+| 31.5 | **done** | `536634b` | 1 | two-store wizard |
+| 31.6 | **done** | `a000167` | 1 | artifact-to-store routing |
+| 31.7 | **done** | `91604f0` | 1 | legacy compat + offered migration |
+| 31.8 | **done** | `bf91a2a` | **0** | Confluence space + root page |
+| 31.11 | **done** | `a717620` | 0 | install scope consequence |
+| 31.12 | **done** | `ee3bd91` | 1 | FR250 degradation path |
+| 31.13 | **done** | `07ef352` | 1 | `ma-agents bind` + scope reporting |
+| **31.9** | **review** | — | 2 (cap spent) | MCP-conditional routing — fix round 2 at `0e5b72b`, re-review in flight |
+| **31.10** | **not started** | — | — | blocked on 31.9. Largest new surface; OQ-4 settled by 31.8 |
+| **31.14** | **not started** | — | — | release gate; blocked on everything |
+
+## The one number that characterises this epic
+
+**Not one implementer's self-reported mutation score survived independent attack, except Story 31.8's.**
+
+| story | implementer claimed | independent reviewer found |
+|---|---|---|
+| 2A | — | 4 survivors, all killed |
+| 31.3 | 23/23 killed | **4 survivors** |
+| 31.4 | 29/29 killed | **15 survivors** |
+| 31.5 | 25/25 killed | **5 survivors** |
+| 31.6 | 39/39 killed | **17 survivors** |
+| 31.8 | 35/35 killed | 3 survivors, all *missing tests* not defects |
+| 31.9 | 35/35 killed | **9 survivors — three the literal FR262 degradation** |
+| 31.13 | 33/33 killed | reviewer ran 0 mutants (session limit); found the blocking defect by **direct execution** instead |
+
+**Nine of thirteen units required a fix round; three required two.** The review is not ceremony here — it is the mechanism that found every blocking defect in this epic.
+
+## The recurring defect, and its six variants
+
+Named in wave 1 as *"validation, or a default, that degrades to permissive instead of failing loud."* Waves 3–6 showed it has a family:
+
+1. **Permissive default** — the wizard default indistinguishable from a real answer (2B / B-1).
+2. **Test proves presence, not effect** — Story 31.11's bind offer, shipped where **0 of 45 `SKILL.md` files** direct an agent to read it.
+3. **Test validates a transcription, not the artifact** — Story 31.4's entire P4 derivation table deletable from all 41 shipped copies with a green suite, because the tests validated `runGuard()`, a hand-written copy.
+4. **Tautological test** — expectation and code drawn from the same source, so both move together. **Six instances**, including one where two identically-worded wizard questions would have shipped green (31.5 M20), and one where `X === X` let the *architecture document* be reassigned to the wrong store (31.6 BLOCKING-1).
+5. **Denylist instead of a closed set** — Story 31.12's tone check walked past by `re-run without` ≠ `run again without`; Story 31.9's B2 message walked past by wording chosen to miss all seven banned phrases.
+6. **Success reported over a failed write** — Story 31.13's bind printed both "left UNBOUND" and "Bound.", exited 0, and registered the project, because `writeProjectLayoutYaml` swallowed the failure and returned void, making the caller's own `try/catch` **dead code**.
+
+The countermeasure that worked repeatedly: **bind the assertion to an outside authority**. Story 31.6's routing coverage is parsed from the PRD shard; Story 31.9's store binding is derived from Story 31.6's routing table *and* the PRD; Story 31.4's P4 table is measured against the real generator. Where an outside authority was impossible, a **closed set** beat a denylist every time.
+
+## Defects filed, not fixed in-epic — 31.14 must disposition all of these
+
+1. **`bug-31-4-preflight-block-breaks-story-15-5-verbatim-invariant.md`** — a merged story broke a suite (`story-15-5-workflow-skills` 157/0 on `main`, **153/4** here), bisected to `38c7f8c`. **Four review rounds never ran that suite.** A genuine contradiction: Story 15.5 requires verbatim content, Story 31.4 requires an embedded gateway block. Three candidate resolutions, none chosen.
+2. **`bug-tests-mutate-the-repository-they-run-in.md`** — `repo-layout` performs a real install into its own worktree (~521 paths); `build-plugin`'s *test* leaks an orphan build dir. This is the mechanism behind the false failures seen all epic (`two-store-round-trip` 30/16, `config-storage` 15/1 under concurrency, both clean when quiet).
+3. **`bug-store-from-raw-open-codes-the-default-backend.md`** — a fourth spelling of a closed enum.
+4. **`bug-knowledgebase-path-has-no-defined-meaning-for-a-confluence-store.md`** — filed by 2B, narrowed by 31.3, handed to 31.6.
+5. **`bug-bmad-knowledge-atlas-renders-a-confluence-backed-store-from-stale-local-files.md`** — **not** an FR262 violation (FR262 is conditioned on MCP-absence; this is unconditional) but the same user harm. **Story 31.9's deferral target was falsified** — 31.10's eight ACs do not cover it, and it needs a code gate in compiled Atlas engine code plus a `build:atlas` rebuild, unlike every other gate in the epic.
+6. **`bug-system-requirements-store-has-no-ma-agents-owned-confluence-gate.md`** — a real AC7-vs-FR262 contradiction. No shipped ma-agents skill resolves a system-requirements artifact; those consumers are upstream BMM workflows the product does not ship. **Lifting AC7 would not fix it.** Four candidate resolutions, none chosen.
+7. **`bug-31-2-ac5-no-rewrite-half-was-never-implemented.md`** — **closed by 31.7.** 31.2 AC5 (`epics.md:5316`) required a pre-F26 layout be read "with no error and no rewrite"; only the read half shipped, and two of 31.2's own tests **pinned the defect**.
+
+## Open questions — final disposition
+
+- **OQ-1** — settled by 31.13: `~/.ma-agents/bound-projects.json`, per-machine, status-only, verified structurally (no resolver dependency, one import site, two display-only consumers).
+- **OQ-2** — settled by 31.3: content-based `sha256:` stamp over a canonical re-serialization of the three location records. **C-6 remains OPEN** — P5-9.3 still specifies mtime; reported, deliberately not resolved, needs a planning pass.
+- **OQ-3** — settled by 31.4 **by falsifying the question's premise**: the 32 `{output_folder}` consumers do **not** inherit from the 7 readers (7 MIL-498 workflows, four personas and `sqa-audit` read `config.yaml` directly). Answer: **27 entry docs / 15 skills**, on the criterion "resolves a field `generateBmmConfig` derives from the binding". `epics.md:5626`'s "39 = 7 + 32" arithmetic no longer matches the tree.
+- **OQ-4** — settled by 31.8: human-readable **title** at configuration time, `id: null`, **forced by AC7** (resolving a title to a page id requires asking Confluence). A learned id is carried forward only while the title is unchanged. **31.10 must honour this.**
+- **OQ-5** — **decided by the user, 2026-08-12: the software requirements store.** Recorded with rationale and rejected alternatives; 31.6 pins it against a real generated config.
+- **OQ-6** — two remote-git stores: sequential single-clone behaviour applied twice, accepted.
+
+## Environment facts for whoever picks this up
+
+- **The Atlassian Rovo MCP is unauthorized and cannot be authorized non-interactively.** Story 31.9's MCP-**absent** path is genuinely tested (it is the default state); the MCP-**present** branch is **mock-verified only**. 31.10 inherits this limit. 31.14 must record it rather than paper over it.
+- **Known pre-existing baseline failures, all verified on `main` @ `9b936ac`:** `bmad-output-policy`; two `custom-marketplace-*`; `migration-validation` (199/3); `build-plugin` (35/1); `bmad-version-bump`, `staging-6-10-0-regression`, `v68-pluginresolver` (bmad-method 6.9.0 vs 6.10.0 in the shared `node_modules`); `knowledge-atlas-smoke`/`-render` (missing `esbuild`/`lunr`).
+- **A defect class now HANGS `npm test` rather than failing it** (31.13's L1/L2/L3): the prompt stub returns `''` forever and the wizard retries empty-path validation unbounded, and the suite has no timeout of its own. Directly relevant to 31.14 AC9.
+- **Agent-infrastructure losses this run:** 6 watchdog kills, 3 API errors, 2 session limits, plus several process exits. **Three agents left live mutants in working trees**; all were caught before commit by a line-by-line diff audit. Standing rules that fixed it: mutate only in a byte-for-byte lab copy (**never `git archive`** — line-ending normalisation produced false survivors three times), validate anchors against each file's own EOL, and commit after every small step.
+- **Two orchestrator sequencing errors, both mine:** I dispatched a fix round while a reviewer was still live on the same worktree, and removed a worktree from under a running agent. No work was lost either time, but the rule now is: confirm every agent on a worktree has terminated before merging or removing it.
+
+## Invariants to preserve
+
+- **Story 31.4's preflight: 41 copies / 1 sha256** (13 `skills/` + 14 `lib/bmad-extension/` + 14 `lib/bmad-extension-plugin/`). Its P4 table is bound three ways to the real generator.
+- **Story 31.9's gate: 9 copies / 1 sha256**, anchored on the exact `## Knowledge Store Backend Routing` heading — a loose `Backend Routing` probe also catches Story 17.22's sprint block.
+- **FR266 has no implementation.** No mirror, cache, sync direction, sync trigger, authority call or conflict resolution. **31.14 AC7's negative check is the last line of defence**, and P5-9.6 names an accidental mirror as the single most likely way this epic reacquires the subsystem it removed.
+
 <!-- updated at every state transition -->
