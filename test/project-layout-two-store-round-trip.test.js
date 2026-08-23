@@ -1207,6 +1207,15 @@ test('writeRepoLayoutConfig on a file-system store emits exactly the generated f
   // there is no binding state to stamp and the generator writes none (AC7 — an
   // invented stamp would be a claim about a file that does not exist). The
   // stamped, bound case is pinned in test/project-layout-config-generation.test.js.
+  //
+  // UPDATED AGAIN BY STORY 31.9, on exactly the same terms. The field set grows
+  // by four more — each store's resolved `backend` and its Confluence
+  // `space_key` — because AC2 requires a skill's Confluence gateway check to
+  // read the backend from the RESOLVED configuration, and Story 31.6 AC5 rule 1
+  // forbids a workflow reading the committed binding instead. The RESOLVED
+  // VALUES are again unchanged: every path below is byte-for-byte what it was,
+  // and the four additions are INERT for a file-system store (`"file-system"`
+  // and the empty space key). That is the NFR82 claim this assertion guards.
   const { tmpDir, cleanup } = withTmpDir();
   try {
     const out = capture(() => writeRepoLayoutConfig({
@@ -1219,6 +1228,10 @@ test('writeRepoLayoutConfig on a file-system store emits exactly the generated f
       'knowledgebase_path: "."',
       'system_requirements_path: "."',
       'software_requirements_path: "."',
+      'system_requirements_backend: "file-system"',
+      'software_requirements_backend: "file-system"',
+      'system_requirements_space_key: ""',
+      'software_requirements_space_key: ""',
       'sprint_backend: "file-system"',
       'sprint_management_path: "."',
       'planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"',

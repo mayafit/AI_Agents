@@ -55,7 +55,13 @@ const os = require('os');
 const crypto = require('crypto');
 
 // A `!==` check — a SURPLUS fails as loudly as a shortfall.
-const EXPECTED_TEST_COUNT = 61;
+// 61 at Story 31.4; +1 in Story 31.9, which closed half of the drift gap this
+// suite pinned (a backend change is now visible to the field table) and added
+// the test that proves it; +2 in Story 31.9's fix round (NB-4), which pinned the
+// two PROSE edits that story made to this sealed block — until then two of its
+// four edits were pinned zero ways, and both a deletion and a restoration of a
+// now-false sentence survived across all 41 shipped copies.
+const EXPECTED_TEST_COUNT = 64;
 
 let passed = 0;
 let failed = 0;
@@ -212,6 +218,25 @@ function derivedFields(topology, projectRoot) {
   derive(WHEN_ALWAYS, 'software_requirements_store', 'planning_artifacts',
     software === '.' ? CANON_PLANNING : software);
   derive(WHEN_ALWAYS, 'system_requirements_store', 'system_requirements_path', system);
+
+  // Story 31.9 — the two stores' backends and Confluence spaces, now carried by
+  // the generated config so a skill's gateway check can read them from the
+  // RESOLVED configuration rather than opening the committed binding a second
+  // time. They are derived from the SAME binding records as the paths above, so
+  // a re-bind that changes only a backend is drift the P4 table can now name;
+  // before, only the opaque stamp could see it.
+  const backendOf = (s) => (s && typeof s.backend === 'string' && s.backend !== '')
+    ? s.backend : 'file-system';
+  const spaceOf = (s) => (backendOf(s) === 'confluence' && typeof s.spaceKey === 'string')
+    ? s.spaceKey : '';
+  derive(WHEN_ALWAYS, 'software_requirements_store', 'software_requirements_backend',
+    backendOf(topology.softwareRequirementsStore));
+  derive(WHEN_ALWAYS, 'software_requirements_store', 'software_requirements_space_key',
+    spaceOf(topology.softwareRequirementsStore));
+  derive(WHEN_ALWAYS, 'system_requirements_store', 'system_requirements_backend',
+    backendOf(topology.systemRequirementsStore));
+  derive(WHEN_ALWAYS, 'system_requirements_store', 'system_requirements_space_key',
+    spaceOf(topology.systemRequirementsStore));
 
   const sprint = topology.sprintManagement || { mode: 'same', path: '.' };
   if (sprint.mode === 'jira') {
@@ -947,23 +972,44 @@ test('[behaviour] AC6 content-based, not mtime: an OLDER moved binding still hal
   });
 });
 
+// ─── STORY 31.9 CLOSED HALF OF THE PINNED GAP ────────────────────────────────
+//
+// These two tests used a BACKEND change (`file-system` → `confluence`, no path
+// change) as their example of a move the field table cannot see, because
+// `config.yaml` recorded `.` for a confluence store exactly as it does for the
+// local default. Story 31.9 made the generated config carry
+// `{system,software}_requirements_backend` and `…_space_key`, because a skill's
+// Confluence gateway check has to read the backend from the RESOLVED
+// configuration. That closed exactly this drift class — as the pinned test below
+// said it must be handled: "If this now HALTs, the gap was closed."
+//
+// So the example is now `root_page`, which `config.yaml` still does not carry
+// and 31.9 deliberately did not add (the gate does not need it). The gap is
+// narrower, not gone, and it is still pinned rather than assumed away.
+const CONFLUENCE_BASE = Object.freeze({
+  systemRequirementsStore: {
+    backend: 'confluence', spaceKey: 'ENG', rootPage: { title: 'Home', id: '42' },
+  },
+  knowledgebase: { mode: 'same', path: '.' },
+  sprintManagement: { mode: 'same', path: '.' },
+});
+const CONFLUENCE_PAGE_MOVED = Object.freeze({
+  systemRequirementsStore: {
+    // SAME backend, SAME space — only the root page was renamed/re-pointed.
+    backend: 'confluence', spaceKey: 'ENG', rootPage: { title: 'Engineering Home', id: '99' },
+  },
+  knowledgebase: { mode: 'same', path: '.' },
+  sprintManagement: { mode: 'same', path: '.' },
+});
+
 test('[behaviour] AC6 the stamp, not the fields, is what catches an invisible move', () => {
   withTmpDir((tmpDir) => {
-    boundProject(tmpDir, SAME);
-    // A store changes BACKEND with no path change. config.yaml records `.` for a
-    // confluence store exactly as it does for the local default, so the
-    // derivation table sees nothing. The stamp covers the backend, so it does.
-    rebind(tmpDir, {
-      systemRequirementsStore: {
-        backend: 'confluence', spaceKey: 'ENG', rootPage: { title: 'Home', id: '42' },
-      },
-      knowledgebase: { mode: 'same', path: '.' },
-      sprintManagement: { mode: 'same', path: '.' },
-    });
+    boundProject(tmpDir, CONFLUENCE_BASE);
+    rebind(tmpDir, CONFLUENCE_PAGE_MOVED);
 
     const withStamp = runGuard(tmpDir, { stampVerifiable: true });
     assert.strictEqual(withStamp.verdict, V.HALT_DRIFT,
-      `a backend change is drift and the stamp must catch it (got ${withStamp.verdict})`);
+      `a root-page change is drift and the stamp must catch it (got ${withStamp.verdict})`);
     assert.strictEqual(withStamp.stampDrift, true,
       'the stamp — not the field table — is what fired here');
     assert.strictEqual(withStamp.moved.length, 0,
@@ -973,26 +1019,40 @@ test('[behaviour] AC6 the stamp, not the fields, is what catches an invisible mo
 
 test('[behaviour] KNOWN GAP, pinned: without stamp verification the field table misses it', () => {
   withTmpDir((tmpDir) => {
-    boundProject(tmpDir, SAME);
-    rebind(tmpDir, {
-      systemRequirementsStore: {
-        backend: 'confluence', spaceKey: 'ENG', rootPage: { title: 'Home', id: '42' },
-      },
-      knowledgebase: { mode: 'same', path: '.' },
-      sprintManagement: { mode: 'same', path: '.' },
-    });
+    boundProject(tmpDir, CONFLUENCE_BASE);
+    rebind(tmpDir, CONFLUENCE_PAGE_MOVED);
 
     // This is NOT an assertion that the guard is complete. It is the opposite:
-    // it pins, in a test, the one thing the guard's always-available path cannot
-    // see, so the limitation is a documented fact rather than an unstated
-    // assumption. An agent with no shell cannot recompute the stamp, and for
-    // this drift class it will PROCEED. Story 31.6 owns the Confluence read
-    // path; if the guard is ever made complete here, this test must be deleted
-    // deliberately — it will start failing, which is the point.
+    // it pins, in a test, what the guard's always-available path cannot see, so
+    // the limitation is a documented fact rather than an unstated assumption. An
+    // agent with no shell cannot recompute the stamp, and for this drift class it
+    // will PROCEED. Story 31.10 owns the root page; if the guard is ever made
+    // complete here, this test must be deleted deliberately — it will start
+    // failing, which is the point.
     const noShell = runGuard(tmpDir, { stampVerifiable: false });
     assert.strictEqual(noShell.verdict, V.PROCEED_MATCHED,
       `pinning the gap: with no stamp verification this drift is invisible to the field ` +
       `table (got ${noShell.verdict}). If this now HALTs, the gap was closed — delete this test.`);
+  });
+});
+
+test('[behaviour] 31.9 a BACKEND change is now caught by the field table, no shell needed', () => {
+  withTmpDir((tmpDir) => {
+    boundProject(tmpDir, SAME);
+    rebind(tmpDir, CONFLUENCE_BASE);
+
+    // The half of the old gap Story 31.9 closed. A skill's Confluence gateway
+    // check reads `system_requirements_backend` out of the generated config; if
+    // that field could go stale unnoticed, the gate would route a
+    // Confluence-backed store to the file system — the precise silent
+    // degradation FR262 forbids. So it must be visible WITHOUT a shell.
+    const noShell = runGuard(tmpDir, { stampVerifiable: false });
+    assert.strictEqual(noShell.verdict, V.HALT_DRIFT,
+      `a store re-bound to Confluence must be drift the field table alone can see ` +
+      `(got ${noShell.verdict})`);
+    assert.ok(noShell.moved.some((m) => m.store === 'system requirements store'),
+      `the drift must NAME the system requirements store, not merely fire: ` +
+      `${JSON.stringify(noShell.moved)}`);
   });
 });
 
@@ -1115,6 +1175,12 @@ const BINDING_DERIVED_FIELDS = Object.freeze([
   'knowledgebase_path', 'system_requirements_path', 'software_requirements_path',
   'sprint_management_path', 'sprint_backend', 'jira_url', 'jira_project_key',
   'planning_artifacts', 'implementation_artifacts',
+  // Story 31.9 — the per-store backend and Confluence space. Binding-derived
+  // like the rest, so a skill that reads one without the preflight is exactly
+  // the OQ-3 hole this list exists to find: a gateway check keyed on a STALE
+  // backend would route a Confluence-backed store to the file system.
+  'system_requirements_backend', 'software_requirements_backend',
+  'system_requirements_space_key', 'software_requirements_space_key',
 ]);
 
 function readGuarded(rel) {
@@ -1557,6 +1623,105 @@ test('[text] F2 each shipped row derives EXACTLY its own fields, measured on the
   }
   assert.ok(exercised >= 8,
     `this test must actually observe generated fields changing; it saw ${exercised}`);
+});
+
+// ─── NB-4 — Story 31.9's two PROSE edits to this sealed block ────────────────
+//
+// Story 31.9 made four edits here: two TABLE CELLS (pinned by the F2 tests
+// above, which killed three mutants) and two SENTENCES, pinned zero ways.
+// Deleting one of them from all 41 shipped copies was green, and restoring the
+// other to its pre-31.9 — now FALSE — wording was green too. Both are checked
+// against the REAL generator rather than merely asserted to exist, so a sentence
+// that survives while becoming untrue still fails.
+
+/** The paragraph of the shipped block that contains a phrase, or null. */
+function blockParagraph(block, needle) {
+  return block.split(/\n\s*\n/).find((p) => p.includes(needle)) || null;
+}
+
+/** Every column-0 field name a real generated config.yaml carries. */
+function generatedFieldNames(layouts) {
+  const names = new Set();
+  for (const layout of layouts) {
+    withTmpDir((tmpDir) => {
+      boundProject(tmpDir, layout);
+      for (const m of readConfig(tmpDir).matchAll(/^([a-z_]+):/gm)) names.add(m[1]);
+    });
+  }
+  return [...names].sort();
+}
+
+test('[text] NB-4/AC1 the block says how a NON-PATH field disagreement is reported', () => {
+  // The P4 halt template speaks only of paths ("was `{path in config.yaml}`, is
+  // now `{path in project-layout.yaml}`"). Story 31.9 put fields in the table
+  // that are NOT paths, so without this sentence an agent has no stated way to
+  // render their disagreement — and deleting it was invisible.
+  const block = extractBlock(readGuarded(GUARDED[0]));
+  const rows = parseDerivationTable(block);
+  const fields = [...new Set(rows.reduce((a, r) => a.concat(r.fields), []))];
+
+  // Which of the table's fields are not paths is MEASURED on a real generated
+  // config, not classified by a name pattern kept here.
+  let nonPath = [];
+  withTmpDir((tmpDir) => {
+    boundProject(tmpDir, CONFLUENCE_BASE);
+    const cfg = readConfig(tmpDir);
+    nonPath = fields.filter((f) => {
+      const v = readConfigField(cfg, f);
+      return v !== null && v !== '' && v !== '.' && !/[\\/]/.test(v);
+    });
+  });
+  assert.ok(nonPath.length > 0,
+    `the P4 table names ${JSON.stringify(fields)} and a real generated config makes every one ` +
+    `of them a path — so this test has stopped covering anything. If the non-path fields were ` +
+    `removed from the table, the sentence below can go too, deliberately.`);
+
+  const concepts = [...new Set(nonPath.map((f) =>
+    f.replace(/^(?:system|software)_requirements_/, '').replace(/^sprint_/, '')))].sort();
+
+  const para = blockParagraph(block, 'the value that disagrees');
+  assert.ok(para,
+    `the block generates ${JSON.stringify(nonPath)}, none of which is a path, and it no ` +
+    `longer tells an agent how to report their disagreement. The halt template's ` +
+    `\`{path in …}\` placeholders are the only rendering it states, and they do not fit a ` +
+    `backend or a space key.`);
+  for (const concept of concepts) {
+    assert.ok(new RegExp('`' + concept + ':`').test(para),
+      `the rendering instruction does not name \`${concept}:\`, which the table derives and a ` +
+      `real generated config carries as a non-path value:\n${para.trim()}`);
+  }
+  assert.ok(/name the two values you actually compared/.test(para),
+    `the instruction must say to name BOTH values, or a halt can report a disagreement ` +
+    `without saying what disagreed:\n${para.trim()}`);
+});
+
+test('[text] NB-4/AC6 the stamp-gap sentence names ONLY things config.yaml really lacks', () => {
+  // The sentence explains why the field table is not the whole check. Before
+  // Story 31.9 its examples were "a store's `backend:`, a Confluence
+  // `space_key:`" — which that story made FALSE by putting both in the generated
+  // config. Restoring the old wording was green, because nothing checked the
+  // claim against the generator. Now it is checked: every example the sentence
+  // gives must be a binding concept no generated field carries.
+  const block = extractBlock(readGuarded(GUARDED[0]));
+  const para = blockParagraph(block, 'The stamp covers binding state that `config.yaml` does not carry');
+  assert.ok(para,
+    'the block no longer explains why the field table alone cannot see every move — that ' +
+    'sentence is what makes the optional stamp check something other than belt-and-braces');
+
+  const claim = para.split('\n')[0];
+  const examples = [...claim.matchAll(/`([A-Za-z_]+):`/g)].map((m) => m[1]);
+  assert.ok(examples.length > 0,
+    `the sentence claims config.yaml omits binding state but gives no example of what:\n${claim}`);
+
+  const generated = generatedFieldNames([CONFLUENCE_BASE, jiraLayout(), SAME]);
+  for (const ex of examples) {
+    const carriers = generated.filter((f) => f.includes(ex));
+    assert.deepStrictEqual(carriers, [],
+      `the sentence offers \`${ex}:\` as binding state that \`config.yaml\` does not carry, ` +
+      `and a real generated config carries ${JSON.stringify(carriers)}. Story 31.9 added ` +
+      `those fields precisely so the gateway check could read them; a sentence that still ` +
+      `says otherwise tells an agent the field table cannot see a drift class it can.`);
+  }
 });
 
 // ─── F3 — AC5's discriminator, pinned in the SHIPPED TEXT ────────────────────

@@ -48,7 +48,7 @@ const { spawnSync } = require('child_process');
 
 // AC1 x4, detection x9, 31.4-agreement x4, AC2 x7, channel-separation x5,
 // AC3 x4, AC4 x5 + 2 preservation-scope, AC5 x4, AC6/NFR82 x7.
-const EXPECTED_TEST_COUNT = 51;
+const EXPECTED_TEST_COUNT = 52; // 51 at Story 31.7; +1 for 31.9's inert-backend-fields pin.
 
 let passed = 0;
 let failed = 0;
@@ -1349,9 +1349,27 @@ test('AC5 — a SECOND real `install --yes` on the same legacy project does not 
 // AC6 / NFR82 — PROVEN WITH A REAL FULL INSTALL ON A PRE-F26 FIXTURE
 // ═══════════════════════════════════════════════════════════════════════════
 
-// AC6(c), as a LITERAL. If cli.js grows a fourth generated field, this fails.
+// AC6(c), as a LITERAL. If cli.js grows a generated field that is not on this
+// list, this fails — which is the point, and which is how Story 31.9 was made to
+// declare itself here rather than slip past.
+//
+// WIDENED BY STORY 31.9, DELIBERATELY. 31.7 AC6(c) enumerates "the generation
+// stamp and the two new per-store fields", and that enumeration had already been
+// corrected once (epics.md, 2026-08-03, when FR264's amendment extended the field
+// set). Story 31.9 AC2 requires the store's backend to be readable "from the
+// resolved configuration", and Story 31.6 AC5 rule 1 forbids a workflow reading
+// the committed binding instead — so the resolved configuration has to carry it,
+// and the enumeration grows by four. This is a CONTRADICTION between two ACs and
+// it is reported to the epic rather than papered over here; `epics.md` is not
+// edited by this story.
+//
+// What 31.7 AC6(c) is actually FOR survives untouched and is asserted separately:
+// the resolved PATHS are unchanged (see AC6(b) above), and the four additions are
+// inert on a legacy project — proven by the 31.9 test below, not assumed.
 const AC6_PERMITTED_NEW_CONFIG_FIELDS = ['project_layout_stamp',
-  'system_requirements_path', 'software_requirements_path'];
+  'system_requirements_path', 'software_requirements_path',
+  'system_requirements_backend', 'software_requirements_backend',
+  'system_requirements_space_key', 'software_requirements_space_key'];
 
 test('AC6 — a pre-F26 fixture completes a real full install cleanly', () => {
   const box = makeInstallBox();
@@ -1468,6 +1486,36 @@ test('AC6(c) — the two new per-store fields BOTH resolve to the one legacy loc
     assert.strictEqual(soft, legacyValue,
       'the software store must resolve to the one legacy location');
     assert.strictEqual(legacyValue, '"../kb"', 'and that location is the one the project already had');
+  } finally { box.cleanup(); }
+});
+
+test('31.9/AC6 — the four backend fields are INERT on a legacy project, not merely permitted', () => {
+  // The honest half of widening AC6_PERMITTED_NEW_CONFIG_FIELDS. Permitting a
+  // field is not the same as proving it changes nothing: a pre-F26 project has no
+  // `backend:` in its binding at all, so the generated values must be exactly the
+  // never-stated default and an EMPTY space key — anything else would mean a
+  // legacy project had silently acquired a Confluence store, and the Story 31.9
+  // gateway check embedded in the epics consumers would then halt an install that
+  // worked yesterday. Compared against LITERALS written here, not against
+  // anything cli.js exports.
+  const box = makeInstallBox();
+  try {
+    writeLegacyLayout(box.projectRoot, { mode: 'local', kbPath: '../kb' });
+    writeLegacyConfig(box.projectRoot, '../kb');
+    const run = runRealInstall(box.projectRoot, box.homeRoot);
+    assert.strictEqual(run.status, 0, `install exited ${run.status}\n${run.output.slice(-2500)}`);
+
+    const after = fs.readFileSync(configPathOf(box.projectRoot), 'utf-8');
+    assert.strictEqual(configFieldValue(after, 'system_requirements_backend'), '"file-system"',
+      'a legacy project states no backend, so it must resolve to file-system');
+    assert.strictEqual(configFieldValue(after, 'software_requirements_backend'), '"file-system"',
+      'a legacy project states no backend, so it must resolve to file-system');
+    assert.strictEqual(configFieldValue(after, 'system_requirements_space_key'), '""',
+      'a legacy project has no Confluence space and must not be given one');
+    assert.strictEqual(configFieldValue(after, 'software_requirements_space_key'), '""',
+      'a legacy project has no Confluence space and must not be given one');
+    assert.ok(!/confluence/i.test(after),
+      `nothing in a legacy project's generated config may mention Confluence:\n${after}`);
   } finally { box.cleanup(); }
 });
 
