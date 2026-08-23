@@ -62,7 +62,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 const tree = require(path.join(PROJECT_ROOT, 'lib', 'confluence-page-tree.js'));
 
-const EXPECTED_TEST_COUNT = 130;
+const EXPECTED_TEST_COUNT = 134;
 
 let passed = 0;
 let failed = 0;
@@ -395,6 +395,10 @@ test('[harness] both AC2 oracles PASS the shipped mapping — they are not alway
  */
 const FIXTURE_FILES = Object.freeze({
   'product-brief-fixture-2026-01-01.md': '# Brief\n\nbrief body\n',
+  // Row 1's SECOND spelling: whatever the brief workflow writes inside its own
+  // `briefs/` folder. Present because a fixture that exercises only the named
+  // file leaves the folder rule untested — a mutation run found exactly that.
+  'briefs/brief-fixture-2026-02-02/brief.md': '# Brief workspace\n',
   'prd.md': '# PRD\n\nindex body\n',
   'prd/vision-and-system-context.md': '# Vision\n',
   'prd/capabilities/alpha-capability.md': '# Alpha\n',
@@ -410,6 +414,7 @@ const FIXTURE_FILES = Object.freeze({
 
 /** Artifacts the system requirements store owns, from FIXTURE_FILES. */
 const FIXTURE_SYSTEM_PATHS = Object.freeze([
+  'briefs/brief-fixture-2026-02-02/brief.md',
   'prd.md',
   'prd/capabilities/alpha-capability.md',
   'prd/capabilities/beta-capability.md',
@@ -963,6 +968,42 @@ test('[AC5-adjacent] two artifacts that would share one page title are REFUSED, 
   'documents into one page\'s history on every run');
 });
 
+test('[AC5-adjacent] two DIFFERENT source files that map to one page key are REFUSED', () => {
+  // A distinct hole from the title-collision guard above: `prd.md` and `prd.MD`
+  // produce the SAME page key, so only one node exists and the title check never
+  // sees a clash. Without this guard the second file silently overwrites the
+  // first's body on every run — one artifact's history quietly becoming another's.
+  assert.throws(() => tree.planStorePublication({
+    storeId: tree.SYSTEM_REQUIREMENTS, spaceKey: 'S', rootPage: { title: 'R', id: null },
+    artifacts: [{ path: 'prd.md', body: 'one' }, { path: 'prd.MD', body: 'two' }],
+  }), (e) => /prd\.md/.test(e.message) && /prd\.MD/.test(e.message) &&
+             /One page per artifact means one artifact per page/.test(e.message));
+  // And the SAME path twice is NOT an error — it is the same artifact.
+  const plan = tree.planStorePublication({
+    storeId: tree.SYSTEM_REQUIREMENTS, spaceKey: 'S', rootPage: { title: 'R', id: null },
+    artifacts: [{ path: 'prd.md', body: 'one' }, { path: './prd.md', body: 'one' }],
+  });
+  assert.strictEqual(plan.nodes.filter((n) => n.role === tree.ROLE_ARTIFACT).length, 1);
+});
+
+test('[AC6] a hidden path is EXCLUDED by the selector itself, not only by the enumerator', () => {
+  // Defence in depth, and it must be depth: `collectStoreArtifactCandidates`
+  // skips dotted entries, so a fixture-driven test never feeds one to
+  // `artifactsForStore`. A mutation run found the selector's own rule uncovered.
+  const sel = tree.artifactsForStore(tree.SYSTEM_REQUIREMENTS, [
+    { path: '.hidden/prd.md', body: 'x' },
+    { path: 'prd/.draft/shard.md', body: 'x' },
+    { path: '.memlog.md', body: 'x' },
+    { path: 'prd.md', body: 'ok' },
+  ]);
+  assert.deepStrictEqual(sel.selected.map((s) => s.path), ['prd.md']);
+  for (const p of ['.hidden/prd.md', 'prd/.draft/shard.md', '.memlog.md']) {
+    const ex = sel.excluded.find((e) => e.path === p);
+    assert.ok(ex, `${p} was neither selected nor reported`);
+    assert.strictEqual(ex.reason, tree.EXCLUDED_HIDDEN, p);
+  }
+});
+
 test('[AC1] planStorePublication REFUSES to invent a root page name', () => {
   assert.throws(() => tree.planStorePublication({
     storeId: tree.SYSTEM_REQUIREMENTS, spaceKey: 'S', rootPage: { title: '', id: null }, artifacts: [],
@@ -1024,8 +1065,11 @@ test('[AC3] `confluence-plan` REPORTS the root page name to the user', () => {
   // directed to read.
   withFixtureProject(() => {
     const out = runConfluencePlan([]);
-    assert.ok(/FixtureProject/.test(out), `the root page name is absent from:\n${out}`);
-    assert.ok(/Root page/.test(out));
+    // The NAME must appear on the ROOT PAGE line specifically. A mutation run
+    // found that a bare `/FixtureProject/` match is satisfied by the tree listing
+    // further down, so blanking the "Root page:" line left this test green.
+    assert.ok(/Root page:\s+"FixtureProject"/.test(out),
+      `the root page line does not report the name:\n${out}`);
     assert.ok(/PROD/.test(out), 'the space must be named too');
   });
 });
@@ -1224,7 +1268,14 @@ for (const [label, response] of [
     });
     assert.throws(
       () => tree.executePlan(plan, mockConfluence({ failOn: { nth: 1, response } })),
-      (e) => e.name === 'ConfluencePublishError' && e.published === false,
+      // `reason` must be `write-failed` SPECIFICALLY. A mutation run found this:
+      // with `|| !newId` removed, `{ok:true}` with no id was believed, the root
+      // page got the id `''`, and the CHILD then died with `parent-unresolved`.
+      // A test that only demanded "some ConfluencePublishError" passed, so the
+      // mutant lived. Naming the reason is what distinguishes "the write was
+      // rejected" from "something else fell over downstream".
+      (e) => e.name === 'ConfluencePublishError' && e.published === false &&
+             e.reason === 'write-failed',
       `${label} was believed`);
   });
 }
@@ -1546,6 +1597,61 @@ test('[OQ-4] the write-back refuses a blank title or a blank id rather than reco
         { projectRoot: root, storeId: tree.SYSTEM_REQUIREMENTS }, bad)),
       /both the page title and the learned id are required/, JSON.stringify(bad));
     }
+  });
+});
+
+test('[OQ-4][shape 6] a write-back whose WRITE FAILED reports failure, not success', () => {
+  // The Story 31.13 defect, aimed at this story's own write-back. The write is
+  // made to fail for real — `writeProjectLayoutYaml` cannot create `_bmad-output/`
+  // with `mkdirSync` poisoned, so it returns LAYOUT_WRITE_FAILED_MKDIR — and the
+  // caller must surface that rather than announce the id was recorded.
+  withFixtureProject((root) => {
+    const { plan } = systemPlanFor(root);
+    const report = tree.executePlan(plan, mockConfluence());
+    const snap = snapshotTree(root);
+    let outcome;
+    withFsWritesPoisoned(() => {
+      outcome = quiet(() => cli.recordLearnedRootPageId({
+        projectRoot: root, storeId: tree.SYSTEM_REQUIREMENTS,
+        title: report.rootPage.title, id: report.rootPage.id,
+      })).value;
+    });
+    assert.strictEqual(outcome.outcome, cli.ROOT_ID_WRITE_FAILED,
+      'a failed write reported as recorded is Story 31.13\'s "Bound." defect, one story on');
+    assert.notStrictEqual(outcome.outcome, cli.ROOT_ID_RECORDED);
+    assert.deepStrictEqual(snapshotTree(root), snap, 'and nothing was written');
+    // The binding still says `id: null`, so a later run will try again.
+    assert.strictEqual(
+      cli.resolveProjectTopology(root).topology.systemRequirementsStore.rootPage.id, null);
+  });
+});
+
+test('[gate] `confluence-plan` HALTS on a binding this build cannot read, and prints no tree', () => {
+  withFixtureProject((root) => {
+    // A backend outside the closed enum. `resolveProjectTopology` refuses it one
+    // layer out (BINDING_INVALID), which is what makes `handleConfluencePlan`'s
+    // own unrecognised-backend branch defence in depth rather than the live path.
+    const layoutPath = path.join(root, '_bmad-output', 'project-layout.yaml');
+    fs.writeFileSync(layoutPath,
+      fs.readFileSync(layoutPath, 'utf-8').replace('backend: confluence', 'backend: notion'));
+    const before = snapshotTree(root);
+    const origExit = process.exit;
+    let exitCode = null;
+    process.exit = (c) => { exitCode = c; throw new Error('EXIT'); };
+    let out = '';
+    try {
+      // `handleConfluencePlan` is `async`, so the throw from the stubbed
+      // `process.exit` surfaces as a REJECTED PROMISE, not a synchronous throw.
+      // Swallow it explicitly: an unhandled rejection kills the run AFTER the
+      // summary has already printed a green line.
+      const r = quiet(() => cli.handleConfluencePlan([]));
+      out = r.out;
+      if (r.value && typeof r.value.catch === 'function') r.value.catch(() => {});
+    } finally { process.exit = origExit; }
+    assert.strictEqual(exitCode, 1, 'a binding this build cannot read must exit non-zero');
+    assert.ok(/stopping/.test(out), out);
+    assert.ok(!/Confluence page tree —/.test(out), 'no tree may be printed');
+    assert.deepStrictEqual(snapshotTree(root), before, 'and nothing was written');
   });
 });
 
