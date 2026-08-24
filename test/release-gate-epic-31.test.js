@@ -1,0 +1,1136 @@
+#!/usr/bin/env node
+/**
+ * Story 31.14 — the Epic 31 release gate.
+ *
+ * This suite is the executable half of the gate. It covers AC2 (backward
+ * compatibility), AC3 (determinism), AC4 (no credentials on disk), AC5
+ * (fail-loud paths, asserting message CONTENT), AC6 (global resolution) and
+ * AC7 (the FR266 negative). AC1 (air-gap) is a CI workflow and AC9 is a run
+ * result; neither can live here. The traceability matrix and the honest record
+ * of what could NOT be verified live in
+ * `_bmad-output/implementation-artifacts/31-14-release-gate.md`.
+ *
+ * ─── HOW THESE ASSERTIONS ARE BUILT, AND WHY ────────────────────────────────
+ *
+ * Epic 31's independent reviews found six recurring defect shapes: a permissive
+ * default; a test proving presence rather than effect; a test validating a
+ * transcription rather than the artifact; a TAUTOLOGICAL test whose expectation
+ * derives from the same source as the code (six instances); a denylist where a
+ * closed set was needed; and success reported over a failed write.
+ *
+ * AC2, AC3, AC4 and AC7 are all negatives or byte-comparisons. A negative
+ * asserted as "X was not called" is worthless — it passes when the call moves,
+ * is renamed, or happens through another path. So every negative here is proved
+ * one of two ways and no other:
+ *
+ *   (a) BY ENUMERATION AGAINST A CLOSED SET. Walk the entire tree, list every
+ *       path that exists, and compare that LIST to an expected list. A file
+ *       written by a route nobody anticipated shows up as an unexpected member,
+ *       which is exactly what a denylist misses.
+ *   (b) BY BYTE IDENTITY. Snapshot every file's bytes before, snapshot after,
+ *       and diff the maps. A mutation anywhere in the tree is caught, not only
+ *       in the files the test thought to name.
+ *
+ * ANTI-TAUTOLOGY. Wherever an expectation could be derived from the same source
+ * as the code under test, it is instead stated literally in this file, or read
+ * from an OUTSIDE authority — the PRD text, the shipped instruction bytes, or
+ * js-yaml (a real parser, and a declared direct dependency). Where a constant IS
+ * imported from cli.js, it is imported because the point of the test is that two
+ * shipped consumers agree, and the comment says so.
+ */
+'use strict';
+
+const assert = require('assert');
+const crypto = require('crypto');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { execFileSync } = require('child_process');
+
+const REPO_ROOT = path.resolve(__dirname, '..');
+
+let passed = 0;
+let failed = 0;
+const errors = [];
+
+// ─── The process-level backstop, REGISTERED FIRST ────────────────────────────
+//
+// Same reasoning as the other project-layout suites: a file that can exit 0
+// without printing its summary loses every assertion it already made, and an
+// `&&`-chained runner keys on the exit code alone. cli.js contains
+// `process.exit(0)` on wizard-cancel paths, and this suite loads cli.js.
+let summaryPrinted = false;
+process.on('exit', (code) => {
+  if (summaryPrinted) return;
+  console.error(
+    `\n  FATAL: release-gate suite exited with code ${code} WITHOUT printing its summary, ` +
+    `so its ${passed + failed} completed test(s) were never reported. Forcing non-zero ` +
+    `so this cannot read as a pass.`
+  );
+  process.exitCode = code === 0 ? 1 : code;
+});
+
+function test(name, fn) {
+  try {
+    fn();
+    console.log(`  \u2713 ${name}`);
+    passed++;
+  } catch (err) {
+    console.error(`  \u2717 ${name}: ${err.message}`);
+    failed++;
+    errors.push({ name, error: err.message });
+  }
+}
+
+// ─── Shared helpers ──────────────────────────────────────────────────────────
+
+const yaml = require('js-yaml');
+const cli = require('../bin/cli.js');
+
+/**
+ * Byte-exact snapshot of every file under `root`, as `relPath -> sha256`.
+ * The AC2 / AC4 / AC7 oracle. Deliberately hashes CONTENT, not just names: a
+ * route that rewrites an existing file in place changes no name at all.
+ */
+function snapshotTree(root) {
+  const out = {};
+  const walk = (dir, rel) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const abs = path.join(dir, e.name);
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(abs, r);
+      else out[r] = crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
+    }
+  };
+  walk(root, '');
+  return out;
+}
+
+function withTmpProject(fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-relgate-'));
+  const realDir = fs.realpathSync(dir);
+  const cwd = process.cwd();
+  try {
+    process.chdir(realDir);
+    return fn(realDir);
+  } finally {
+    process.chdir(cwd);
+    try { fs.rmSync(realDir, { recursive: true, force: true }); } catch (_) { /* best effort */ }
+  }
+}
+
+/** Silence cli.js's console output for the duration of `fn`, returning what it said. */
+function capture(fn) {
+  const lines = [];
+  const origLog = console.log;
+  const origErr = console.error;
+  console.log = (...a) => lines.push(a.join(' '));
+  console.error = (...a) => lines.push(a.join(' '));
+  try { fn(); } finally { console.log = origLog; console.error = origErr; }
+  // eslint-disable-next-line no-control-regex
+  return lines.join('\n').replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+const FS_SAME = { backend: 'file-system', mode: 'same', path: '.' };
+const SPRINT_SAME = { mode: 'same', path: '.' };
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 1 — AC2. Backward compatibility (NFR76, NFR82).
+//
+// The AC, as corrected 2026-08-03: a pre-F26 fixture and a default-answers
+// fixture must both install to a result identical to the POST-31.2 BASELINE —
+// the pre-epic tree PLUS a written `_bmad-output/project-layout.yaml`, and
+// NOTHING ELSE. Plus: resolved artifact paths unchanged for a project that
+// configures no second store.
+//
+// LIMIT, STATED UP FRONT. These tests drive the F26 write path
+// (`writeProjectLayoutYaml` + `generateBmmConfig`) over a fixture tree, not a
+// full `ma-agents install`. A full install is deliberately NOT run here: it
+// spawns bmad-method, takes minutes, and — as
+// `project-layout-two-store-round-trip` demonstrated during this gate — can
+// hang the chain. The end-to-end install proof is AC1's offline harness, which
+// runs the REAL installer under `--network none` in CI. What these tests prove
+// is the narrower and still load-bearing claim: the F26 additions add exactly
+// one file to a project tree and change nothing else in it.
+// ═════════════════════════════════════════════════════════════════════════════
+
+console.log('\n=== SECTION 1 — AC2: backward compatibility (NFR76, NFR82) ===\n');
+
+/**
+ * A "pre-F26" project: some committed artifacts, a `_bmad/bmm/config.yaml`
+ * carrying ONLY the pre-F26 fields, and no `project-layout.yaml`.
+ *
+ * The field list is stated LITERALLY here rather than derived from cli.js. That
+ * is deliberate: if it were derived, a generator that stopped emitting a legacy
+ * field would change the fixture and the assertion together, and the test would
+ * still pass. It is the pre-epic shape, and the pre-epic shape is a historical
+ * fact, not a function of the current code.
+ */
+const PRE_F26_CONFIG =
+  'project_name: "demo"\n' +
+  'output_folder: "{project-root}/_bmad-output"\n' +
+  'planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"\n' +
+  'implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"\n' +
+  'knowledgebase_path: "."\n' +
+  'sprint_management_path: "."\n' +
+  'sprint_backend: "file-system"\n';
+
+function seedPreF26Project(root) {
+  fs.mkdirSync(path.join(root, '_bmad', 'bmm'), { recursive: true });
+  fs.mkdirSync(path.join(root, '_bmad-output', 'planning-artifacts'), { recursive: true });
+  fs.mkdirSync(path.join(root, '_bmad-output', 'implementation-artifacts'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(root, '_bmad', 'bmm', 'config.yaml'), PRE_F26_CONFIG);
+  fs.writeFileSync(path.join(root, '_bmad-output', 'planning-artifacts', 'prd.md'), '# PRD\n');
+  fs.writeFileSync(path.join(root, '_bmad-output', 'planning-artifacts', 'epics.md'), '# Epics\n');
+  fs.writeFileSync(path.join(root, '_bmad-output', 'implementation-artifacts', 'sprint-status.yaml'),
+    'tracking_system: file-system\n');
+  fs.writeFileSync(path.join(root, 'src', 'index.js'), 'module.exports = 1;\n');
+  fs.writeFileSync(path.join(root, 'package.json'), '{ "name": "demo", "version": "0.0.1" }\n');
+}
+
+test('AC2.1 a pre-F26 project gains EXACTLY one path — project-layout.yaml — and nothing else changes', () => {
+  withTmpProject((root) => {
+    seedPreF26Project(root);
+    const before = snapshotTree(root);
+
+    capture(() => cli.writeProjectLayoutYaml({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: SPRINT_SAME,
+    }));
+
+    const after = snapshotTree(root);
+
+    // (a) BY ENUMERATION: the added set is a closed set of exactly one member.
+    const added = Object.keys(after).filter((k) => !(k in before)).sort();
+    assert.deepStrictEqual(
+      added,
+      ['_bmad-output/project-layout.yaml'],
+      `the post-31.2 baseline is "the pre-epic tree plus project-layout.yaml, and nothing ` +
+      `else". Unexpected additions: ${JSON.stringify(added)}`
+    );
+
+    // (b) BY BYTE IDENTITY: nothing that existed before was touched, and nothing
+    // was removed. Both halves asserted separately so a delete cannot pass as a
+    // "no modification".
+    const removed = Object.keys(before).filter((k) => !(k in after)).sort();
+    assert.deepStrictEqual(removed, [], `nothing may be removed; removed: ${JSON.stringify(removed)}`);
+    const modified = Object.keys(before).filter((k) => before[k] !== after[k]).sort();
+    assert.deepStrictEqual(
+      modified, [],
+      `every pre-existing file must be byte-identical; modified: ${JSON.stringify(modified)}`
+    );
+  });
+});
+
+test('AC2.2 a DEFAULT-ANSWERS project (empty tree) gains exactly project-layout.yaml under _bmad-output/', () => {
+  withTmpProject((root) => {
+    const before = snapshotTree(root);
+    assert.deepStrictEqual(Object.keys(before), [], 'the fixture must start genuinely empty');
+
+    capture(() => cli.writeProjectLayoutYaml({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: SPRINT_SAME,
+    }));
+
+    const after = Object.keys(snapshotTree(root)).sort();
+    assert.deepStrictEqual(
+      after,
+      ['_bmad-output/project-layout.yaml'],
+      `default answers must produce exactly one file. Got: ${JSON.stringify(after)}`
+    );
+  });
+});
+
+test('AC2.3 resolved artifact paths are UNCHANGED for a project configuring no second store', () => {
+  withTmpProject((root) => {
+    seedPreF26Project(root);
+    capture(() => cli.writeProjectLayoutYaml({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: SPRINT_SAME,
+    }));
+    const ok = capture(() => cli.generateBmmConfig({ projectRoot: root }));
+    void ok;
+
+    const generated = fs.readFileSync(path.join(root, '_bmad', 'bmm', 'config.yaml'), 'utf-8');
+    const doc = yaml.load(generated); // outside authority: a real parser
+
+    // The four legacy resolution fields, with their PRE-EPIC values stated
+    // literally. FR264: "the legacy fields are retained and resolve to the
+    // software requirements store, so every existing reference keeps working
+    // unchanged." NFR82: "no change to resolved artifact paths."
+    const expected = {
+      planning_artifacts: '{project-root}/_bmad-output/planning-artifacts',
+      implementation_artifacts: '{project-root}/_bmad-output/implementation-artifacts',
+      knowledgebase_path: '.',
+      sprint_management_path: '.',
+    };
+    for (const [field, want] of Object.entries(expected)) {
+      assert.strictEqual(
+        String(doc[field]), want,
+        `NFR82: ${field} must resolve exactly as it did pre-F26 (wanted ${want}, got ${doc[field]})`
+      );
+    }
+  });
+});
+
+test('AC2.4 a single-store project sees BOTH new per-store fields resolve to the same location (FR265)', () => {
+  withTmpProject((root) => {
+    seedPreF26Project(root);
+    capture(() => cli.writeProjectLayoutYaml({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: SPRINT_SAME,
+    }));
+    capture(() => cli.generateBmmConfig({ projectRoot: root }));
+    const doc = yaml.load(fs.readFileSync(path.join(root, '_bmad', 'bmm', 'config.yaml'), 'utf-8'));
+    assert.strictEqual(String(doc.system_requirements_path), '.', 'FR265: system store reads the one location');
+    assert.strictEqual(String(doc.software_requirements_path), '.', 'FR265: software store reads the one location');
+    assert.strictEqual(String(doc.knowledgebase_path), '.', 'FR264: the legacy field still resolves');
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 2 — AC3. Determinism (NFR81).
+//
+// "The same answers produce a byte-identical project-layout.yaml AND a
+// byte-identical generated config.yaml across Linux and Windows; CRLF/LF inputs
+// do not change output."
+//
+// LIMIT, STATED UP FRONT — and this one is a real finding, not a caveat.
+// `writeProjectLayoutYaml` stamps `generated: "<YYYY-MM-DD>"` from the wall
+// clock (bin/cli.js:2626). Two runs of the same answers are therefore byte-
+// identical only while they fall on the same calendar day. cli.js already knows
+// this (see the comment at bin/cli.js:4914, which is why `bind` declines to
+// rewrite on a no-edit re-run). NFR81 says "the same answers produce an
+// identical file"; the date is not an answer. These tests therefore assert
+// byte-identity of every line EXCEPT `generated:`, and assert separately that
+// `generated:` is the ONLY line that can vary and that its format is
+// date-only — so the residual nondeterminism is bounded, named and one line
+// wide, rather than assumed away.
+//
+// The cross-PLATFORM half cannot be executed from a single OS. What is
+// executable here — and what actually carries the platform risk — is that the
+// emitted bytes contain no platform-dependent construct: no `\r`, no `os.EOL`,
+// no backslash separators, and identical output from `\` and `/` inputs. The
+// second half of the cross-platform claim is the AC9 run on both platforms.
+// ═════════════════════════════════════════════════════════════════════════════
+
+console.log('\n=== SECTION 2 — AC3: determinism (NFR81) ===\n');
+
+function stripGenerated(text) {
+  return text.split('\n').filter((l) => !/^generated:/.test(l)).join('\n');
+}
+
+test('AC3.1 the same answers produce byte-identical project-layout.yaml (modulo the dated line)', () => {
+  const answers = {
+    systemRequirementsStore: { backend: 'confluence', spaceKey: 'SYS', rootPage: { title: 'Sys Reqs', id: null } },
+    softwareRequirementsStore: { backend: 'file-system', mode: 'same', path: '.' },
+    sprintManagement: SPRINT_SAME,
+  };
+  const render = () => withTmpProject((root) => {
+    capture(() => cli.writeProjectLayoutYaml(answers));
+    return fs.readFileSync(path.join(root, '_bmad-output', 'project-layout.yaml'), 'utf-8');
+  });
+  const a = render();
+  const b = render();
+  assert.strictEqual(stripGenerated(a), stripGenerated(b),
+    'NFR81: identical answers must produce identical bytes');
+});
+
+test('AC3.2 `generated:` is the ONLY line that may vary, and it is date-only', () => {
+  // Proving the bound matters more than proving the equality: if a SECOND
+  // nondeterministic line were added, AC3.1 above would still pass because it
+  // strips only `generated:`. This test closes that.
+  const answers = {
+    knowledgebase: { mode: 'same', path: '.' },
+    sprintManagement: SPRINT_SAME,
+  };
+  const render = () => withTmpProject((root) => {
+    capture(() => cli.writeProjectLayoutYaml(answers));
+    return fs.readFileSync(path.join(root, '_bmad-output', 'project-layout.yaml'), 'utf-8');
+  });
+  const a = render().split('\n');
+  const b = render().split('\n');
+  assert.strictEqual(a.length, b.length, 'the two renders must have the same line count');
+  const differing = a.map((l, i) => (l === b[i] ? null : i)).filter((i) => i !== null);
+  assert.deepStrictEqual(differing, [], 'within one run of this suite even `generated:` must agree');
+
+  const genLine = a.find((l) => /^generated:/.test(l));
+  assert.ok(genLine, 'the file must carry a `generated:` line (this test bounds it, it does not remove it)');
+  assert.match(
+    genLine, /^generated: "\d{4}-\d{2}-\d{2}"$/,
+    `the residual nondeterminism must be DATE-ONLY — a time or a timestamp would make ` +
+    `byte-identity impossible within a day, not merely across one. Got: ${genLine}`
+  );
+});
+
+test('AC3.3 the emitted binding contains no platform-dependent bytes (LF only, no backslash separators)', () => {
+  withTmpProject((root) => {
+    capture(() => cli.writeProjectLayoutYaml({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: SPRINT_SAME,
+    }));
+    const raw = fs.readFileSync(path.join(root, '_bmad-output', 'project-layout.yaml'), 'utf-8');
+    assert.ok(!raw.includes('\r'), 'no CR: the file must be LF-only regardless of host OS');
+    // A Windows-produced file that embedded `C:\...` would not be readable by a
+    // Linux teammate — and this file is COMMITTED, so that is the whole point.
+    const pathLines = raw.split('\n').filter((l) => /^\s+(path|gitUrl):/.test(l));
+    for (const l of pathLines) {
+      assert.ok(!/\\/.test(l), `a committed binding must not carry backslash separators: ${l}`);
+    }
+  });
+});
+
+test('AC3.4 CRLF vs LF in the EXISTING binding does not change the regenerated output', () => {
+  const answers = { knowledgebase: { mode: 'same', path: '.' }, sprintManagement: SPRINT_SAME };
+  const render = (eol) => withTmpProject((root) => {
+    // Seed a pre-existing binding in the given line-ending style, then rewrite.
+    capture(() => cli.writeProjectLayoutYaml(answers));
+    const p = path.join(root, '_bmad-output', 'project-layout.yaml');
+    const seeded = fs.readFileSync(p, 'utf-8').replace(/\r?\n/g, eol);
+    fs.writeFileSync(p, seeded);
+    capture(() => cli.writeProjectLayoutYaml(answers));
+    return fs.readFileSync(p, 'utf-8');
+  });
+  assert.strictEqual(
+    stripGenerated(render('\n')), stripGenerated(render('\r\n')),
+    'NFR81: a CRLF-checked-out binding must regenerate to the same bytes as an LF one'
+  );
+});
+
+test('AC3.5 the generated config.yaml is byte-identical for identical answers, CRLF input included', () => {
+  const build = (eol) => withTmpProject((root) => {
+    seedPreF26Project(root);
+    const cfg = path.join(root, '_bmad', 'bmm', 'config.yaml');
+    fs.writeFileSync(cfg, PRE_F26_CONFIG.replace(/\n/g, eol));
+    capture(() => cli.writeProjectLayoutYaml({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: SPRINT_SAME,
+    }));
+    capture(() => cli.generateBmmConfig({ projectRoot: root }));
+    return fs.readFileSync(cfg, 'utf-8');
+  });
+  const lf = build('\n');
+  const crlf = build('\r\n');
+  assert.strictEqual(
+    lf.replace(/\r\n/g, '\n'), crlf.replace(/\r\n/g, '\n'),
+    'NFR81: the generated config must not depend on the line-ending style of the file it updates'
+  );
+  // And the same answers twice must be byte-for-byte equal, stamp included: the
+  // stamp is a digest of the binding, so it is deterministic where the date is not.
+  assert.strictEqual(build('\n'), lf, 'two identical generations must be byte-identical');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 3 — AC4. No credentials on disk (NFR79).
+//
+// "A scan of EVERY ma-agents-written artifact after a Confluence-configured
+// install finds no credential-shaped value; project-layout.yaml carries only
+// the space key and root-page identity."
+//
+// Done by enumeration in both directions:
+//   - the set of FILES written is enumerated and compared to a closed set;
+//   - the set of KEYS inside the confluence record is enumerated and compared
+//     to a closed set stated literally here (NOT derived from the serializer,
+//     which would be the tautology);
+//   - every byte of every written file is scanned for credential shapes.
+// ═════════════════════════════════════════════════════════════════════════════
+
+console.log('\n=== SECTION 3 — AC4: no credentials on disk (NFR79) ===\n');
+
+/**
+ * Credential shapes. A DENYLIST is the wrong instrument for "is this a secret",
+ * so it is not the only instrument used: the key-set enumeration below is the
+ * closed-set half, and this is the corroborating sweep. Stated literally.
+ */
+const CREDENTIAL_PATTERNS = [
+  [/\b(password|passwd|pwd)\b\s*[:=]/i, 'a password field'],
+  [/\b(token|api[_-]?key|apikey|secret|credential)\b\s*[:=]/i, 'a token/secret field'],
+  [/\bbearer\s+[A-Za-z0-9._~+/-]{16,}/i, 'a bearer token'],
+  [/\bBasic\s+[A-Za-z0-9+/]{16,}={0,2}/, 'an HTTP Basic blob'],
+  [/\bATATT[A-Za-z0-9._-]{10,}/, 'an Atlassian API token (ATATT prefix)'],
+  [/https?:\/\/[^\s/@"']+:[^\s/@"']+@/, 'a URL carrying inline userinfo'],
+  [/\bcookie\b\s*[:=]/i, 'a cookie'],
+  [/\bauthorization\b\s*[:=]/i, 'an Authorization header'],
+];
+
+test('AC4.0 [harness] the credential sweep actually DETECTS a planted credential', () => {
+  // Without this, "no credential found" is indistinguishable from "the scanner
+  // is broken". This is the control.
+  const poison = [
+    'api_token: ATATT3xFfGF0abcdefghij',
+    'password: hunter2',
+    'url: https://user:pw@confluence.example.com',
+    'Authorization: Bearer abcdefghijklmnopqrstuvwxyz',
+  ];
+  for (const line of poison) {
+    const hit = CREDENTIAL_PATTERNS.some(([re]) => re.test(line));
+    assert.ok(hit, `the sweep must flag: ${line}`);
+  }
+});
+
+const CONFLUENCE_ANSWERS = {
+  systemRequirementsStore: {
+    backend: 'confluence', spaceKey: 'SYSREQ', rootPage: { title: 'System Requirements', id: null },
+  },
+  softwareRequirementsStore: {
+    backend: 'confluence', spaceKey: 'SWREQ', rootPage: { title: 'Software Requirements', id: null },
+  },
+  sprintManagement: SPRINT_SAME,
+};
+
+test('AC4.1 a Confluence-configured binding writes a CLOSED SET of files — nothing else appears', () => {
+  withTmpProject((root) => {
+    seedPreF26Project(root);
+    const before = snapshotTree(root);
+    capture(() => cli.writeProjectLayoutYaml(CONFLUENCE_ANSWERS));
+    capture(() => cli.generateBmmConfig({ projectRoot: root }));
+    const after = snapshotTree(root);
+
+    const added = Object.keys(after).filter((k) => !(k in before)).sort();
+    assert.deepStrictEqual(
+      added, ['_bmad-output/project-layout.yaml'],
+      `configuring Confluence must add exactly the binding. A dotfile cache, a ` +
+      `\`.confluence-auth\`, or an exported page body would show up here. Got: ${JSON.stringify(added)}`
+    );
+    const modified = Object.keys(before).filter((k) => before[k] !== after[k]).sort();
+    assert.deepStrictEqual(
+      modified, ['_bmad/bmm/config.yaml'],
+      `only the generated config may change. Got: ${JSON.stringify(modified)}`
+    );
+  });
+});
+
+test('AC4.2 EVERY ma-agents-written byte is credential-free after a Confluence configuration', () => {
+  withTmpProject((root) => {
+    capture(() => cli.writeProjectLayoutYaml(CONFLUENCE_ANSWERS));
+    capture(() => cli.generateBmmConfig({ projectRoot: root, fallbackLayout: null }));
+    // Enumerate every file that now exists — do not name them.
+    for (const rel of Object.keys(snapshotTree(root))) {
+      const text = fs.readFileSync(path.join(root, rel), 'utf-8');
+      for (const [re, what] of CREDENTIAL_PATTERNS) {
+        assert.ok(!re.test(text), `NFR79: ${rel} appears to contain ${what}`);
+      }
+    }
+  });
+});
+
+test('AC4.3 the confluence record\'s KEY SET is exactly {backend, space_key, root_page{title,id}}', () => {
+  withTmpProject((root) => {
+    capture(() => cli.writeProjectLayoutYaml(CONFLUENCE_ANSWERS));
+    const doc = yaml.load(
+      fs.readFileSync(path.join(root, '_bmad-output', 'project-layout.yaml'), 'utf-8')
+    );
+    for (const rec of ['system_requirements_store', 'software_requirements_store']) {
+      const keys = Object.keys(doc[rec]).sort();
+      // Stated LITERALLY. NFR79: "project-layout.yaml records only the space key
+      // and root page identity." Deriving this from the serializer's own field
+      // list would mean a serializer that started emitting `api_token` would
+      // change both sides at once and pass.
+      assert.deepStrictEqual(
+        keys, ['backend', 'root_page', 'space_key'],
+        `${rec} may carry only backend + space key + root-page identity. Got: ${JSON.stringify(keys)}`
+      );
+      const rootKeys = Object.keys(doc[rec].root_page).sort();
+      assert.deepStrictEqual(
+        rootKeys, ['id', 'title'],
+        `${rec}.root_page is an IDENTITY, not content. Got: ${JSON.stringify(rootKeys)}`
+      );
+    }
+  });
+});
+
+test('AC4.4 the OQ-4 root-page write-back records an ID only — it cannot become a content mirror', () => {
+  withTmpProject((root) => {
+    capture(() => cli.writeProjectLayoutYaml(CONFLUENCE_ANSWERS));
+    const before = snapshotTree(root);
+    let res;
+    capture(() => {
+      res = cli.recordLearnedRootPageId({
+        projectRoot: root,
+        storeId: 'system_requirements',
+        title: 'System Requirements',
+        id: '123456789',
+      });
+    });
+    // Branch on the outcome BY NAME. "recorded" and "refused" must never be
+    // allowed to collapse into "did not throw" — that is the shape that let a
+    // failed write report success elsewhere in this epic.
+    assert.strictEqual(res.outcome, cli.ROOT_ID_RECORDED,
+      `the write-back must actually have RECORDED, or this test proves nothing. Got: ${res.outcome}`);
+    const after = snapshotTree(root);
+    const added = Object.keys(after).filter((k) => !(k in before));
+    assert.deepStrictEqual(
+      added, [],
+      `the write-back may create no file at all. Created: ${JSON.stringify(added)}`
+    );
+    const doc = yaml.load(
+      fs.readFileSync(path.join(root, '_bmad-output', 'project-layout.yaml'), 'utf-8')
+    );
+    assert.deepStrictEqual(
+      Object.keys(doc.system_requirements_store.root_page).sort(), ['id', 'title'],
+      'the write-back must not widen the root_page record beyond its identity'
+    );
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 4 — AC5. Fail-loud paths proven, asserting MESSAGE CONTENT.
+//
+// Two paths: (i) Confluence-without-MCP, (ii) stale-config drift. For each, the
+// AC demands the affected store, the space, the cause and the remedy — not
+// merely a non-zero exit.
+//
+// WHERE THESE PATHS ACTUALLY LIVE, stated plainly, because it bounds what "end
+// to end" can mean. Both are executed by an AGENT reading shipped instruction
+// text, not by a Node function: the runtime for a skill IS its markdown. So each
+// path is proved in two halves —
+//   the TEXT half: the shipped bytes carry the four required elements, asserted
+//     against ALL shipped copies, not one; and
+//   the CODE half: the machinery the text tells the agent to rely on actually
+//     detects the condition, driven end to end here.
+// Neither half alone is the proof, and the code half does not exist for
+// Confluence-without-MCP (the detection is the agent's tool context, which no
+// Node process can observe).
+// ═════════════════════════════════════════════════════════════════════════════
+
+console.log('\n=== SECTION 4 — AC5: fail-loud paths, message CONTENT (FR262, P5-9.3) ===\n');
+
+const SHIPPED_SKILL_ROOTS = [
+  'skills',
+  path.join('lib', 'bmad-extension', 'skills'),
+  path.join('lib', 'bmad-extension-plugin', 'skills'),
+];
+
+/** Every shipped skill markdown file, as absolute paths. Enumerated, not listed. */
+function shippedSkillMarkdown() {
+  const out = [];
+  for (const rootRel of SHIPPED_SKILL_ROOTS) {
+    const root = path.join(REPO_ROOT, rootRel);
+    if (!fs.existsSync(root)) continue;
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const abs = path.join(dir, e.name);
+        if (e.isDirectory()) walk(abs);
+        else if (e.name.endsWith('.md')) out.push(abs);
+      }
+    };
+    walk(root);
+  }
+  return out.sort();
+}
+
+/**
+ * Extract the block introduced by an exact column-0 `## <heading>` line, up to
+ * the next column-0 `## `. Returns [] when the heading is absent.
+ *
+ * The exactness is load-bearing and was learned the hard way: a loose
+ * `Backend Routing` substring probe also matches Story 17.22's sprint-tracking
+ * block, which is present in 60 tracked markdown files against the gate's 9.
+ */
+function extractBlocks(text, heading) {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const blocks = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (lines[i] !== heading) continue;
+    const acc = [lines[i]];
+    for (let j = i + 1; j < lines.length && !/^## /.test(lines[j]); j += 1) acc.push(lines[j]);
+    while (acc.length && acc[acc.length - 1].trim() === '') acc.pop();
+    blocks.push(acc.join('\n'));
+  }
+  return blocks;
+}
+
+const GATE_HEADING = '## Knowledge Store Backend Routing';
+const PREFLIGHT_HEADING = '## Knowledge Store Binding Preflight';
+
+function collectBlocks(heading) {
+  const found = [];
+  for (const abs of shippedSkillMarkdown()) {
+    for (const b of extractBlocks(fs.readFileSync(abs, 'utf-8'), heading)) {
+      found.push({ file: path.relative(REPO_ROOT, abs).replace(/\\/g, '/'), block: b });
+    }
+  }
+  return found;
+}
+
+test('AC5.1 the Confluence-without-MCP HALT names the STORE, the SPACE, the CAUSE and the REMEDY — in every shipped copy', () => {
+  const copies = collectBlocks(GATE_HEADING);
+  assert.ok(copies.length > 0, 'the gate block must exist in the shipped tree at all');
+  // The four required elements, each as an independent assertion so a message
+  // that dropped one cannot pass on the strength of the other three.
+  const REQUIRED = [
+    [/Store: the (system|software) requirements store\./,
+      'the AFFECTED STORE, named'],
+    [/Space: \{the value of the space-key field[^}]*\}/,
+      'the SPACE, resolved from the configured field'],
+    [/no Confluence MCP was detected|No Confluence MCP server is available/,
+      'the CAUSE — no Confluence MCP detected'],
+    [/add a Confluence-capable MCP server to your agent's MCP configuration/,
+      'the REMEDY — how to configure one'],
+    [/re-run the installer \(or `ma-agents bind`\) to bind that store to the file system instead/,
+      'the SECOND remedy — re-bind the store'],
+    [/Nothing has been read or written on your behalf/,
+      'the no-side-effect guarantee'],
+  ];
+  for (const { file, block } of copies) {
+    for (const [re, what] of REQUIRED) {
+      assert.match(block, re, `${file}: the fail-loud message must state ${what}`);
+    }
+  }
+});
+
+test('AC5.2 the Confluence-without-MCP path forbids every degradation, explicitly', () => {
+  // FR262: skills "do not silently degrade and do not fall back to any local
+  // copy". This is the half of the message that is a PROHIBITION rather than an
+  // explanation, and it is what stops the fail-loud path quietly becoming a
+  // fall-back path in a later edit.
+  const FORBIDDEN_DEGRADATIONS = [
+    /Do NOT fall back to the file system\./,
+    /Do NOT read, create or offer to create a local copy of that store's artifacts\./,
+    /Do NOT continue with a partial or empty result as though the store were empty\./,
+    /Do NOT change the configured backend on the user's behalf\./,
+    /has no degraded mode/,
+  ];
+  for (const { file, block } of collectBlocks(GATE_HEADING)) {
+    for (const re of FORBIDDEN_DEGRADATIONS) {
+      assert.match(block, re, `${file}: FR262 requires this prohibition to survive`);
+    }
+  }
+});
+
+test('AC5.3 an unrecognised backend is DEFAULT-DENY, not absorbed by the file-system branch', () => {
+  // The permissive-default shape, which this epic produced once already. The
+  // gate block must send an unknown backend to a HALT, not to Step B1.
+  for (const { file, block } of collectBlocks(GATE_HEADING)) {
+    assert.match(block, /### Step B3 — any other value/, `${file}: a third branch must exist`);
+    assert.match(block, /unrecognised knowledge-store backend/, `${file}: it must halt by name`);
+    assert.match(block, /It is not a catch-all/, `${file}: B1 must be stated NOT to absorb an unknown value`);
+  }
+});
+
+test('AC5.4 the stale-config drift HALT names both stores and both paths, and prescribes `ma-agents bind`', () => {
+  const copies = collectBlocks(PREFLIGHT_HEADING);
+  assert.ok(copies.length > 0, 'the preflight block must exist in the shipped tree at all');
+  const REQUIRED = [
+    [/stopping: `_bmad\/bmm\/config\.yaml` is stale\./, 'the CAUSE — the generated config is stale'],
+    [/\{store name\}: was `\{path in config\.yaml\}`, is now `\{path in project-layout\.yaml\}`/,
+      'BOTH values for EVERY store that moved'],
+    [/naming every store that moved and both of its paths/, 'the instruction to name every affected store'],
+    [/Run `ma-agents bind` to regenerate `_bmad\/bmm\/config\.yaml`/, 'the REMEDY'],
+    [/Nothing has been read or written on your behalf/, 'the no-side-effect guarantee'],
+    [/Compare content, never timestamps/, 'the mtime-unsafe prohibition (OQ-2)'],
+  ];
+  for (const { file, block } of copies) {
+    for (const [re, what] of REQUIRED) {
+      assert.match(block, re, `${file}: the stale-config message must state ${what}`);
+    }
+  }
+});
+
+test('AC5.5 [CODE HALF] drift is actually DETECTED end to end — move a store, the stamp disagrees', () => {
+  withTmpProject((root) => {
+    seedPreF26Project(root);
+    capture(() => cli.writeProjectLayoutYaml({
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: SPRINT_SAME,
+    }));
+    capture(() => cli.generateBmmConfig({ projectRoot: root }));
+
+    const cfgPath = path.join(root, '_bmad', 'bmm', 'config.yaml');
+    const stampBefore = cli.readProjectLayoutStamp(fs.readFileSync(cfgPath, 'utf-8'));
+    assert.ok(stampBefore.ok, `the generated config must carry a readable stamp; got ${stampBefore.reason}`);
+
+    const fresh = cli.resolveProjectTopology(root);
+    assert.ok(fresh.ok, 'the binding must resolve');
+    assert.strictEqual(
+      stampBefore.value, cli.computeProjectLayoutStamp(fresh.topology, root),
+      'a just-generated config must MATCH — otherwise the drift test below proves nothing'
+    );
+
+    // Now MOVE a store, exactly as a `git pull` would.
+    const moved = path.join(root, 'elsewhere');
+    fs.mkdirSync(moved, { recursive: true });
+    capture(() => cli.writeProjectLayoutYaml({
+      systemRequirementsStore: { backend: 'file-system', mode: 'local', path: moved },
+      softwareRequirementsStore: FS_SAME,
+      sprintManagement: SPRINT_SAME,
+    }));
+
+    const after = cli.resolveProjectTopology(root);
+    assert.ok(after.ok, 'the moved binding must still resolve');
+    assert.notStrictEqual(
+      stampBefore.value, cli.computeProjectLayoutStamp(after.topology, root),
+      'FR262 / P5-9.3: a store that moved MUST make the stamp disagree — this is the detection ' +
+      'the shipped preflight tells the agent to rely on'
+    );
+  });
+});
+
+test('AC5.6 [CODE HALF] an unreadable binding is REFUSED — the generator does not fall back to a default', () => {
+  withTmpProject((root) => {
+    seedPreF26Project(root);
+    fs.mkdirSync(path.join(root, '_bmad-output'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, '_bmad-output', 'project-layout.yaml'),
+      '<<<<<<< HEAD\nschema_version: 2\n=======\nschema_version: 2\n>>>>>>> other\n'
+    );
+    const cfgPath = path.join(root, '_bmad', 'bmm', 'config.yaml');
+    const beforeBytes = fs.readFileSync(cfgPath);
+    let out;
+    const rc = (() => { let r; out = capture(() => { r = cli.generateBmmConfig({ projectRoot: root }); }); return r; })();
+    assert.strictEqual(rc, false, 'generation must refuse, not succeed');
+    assert.ok(
+      out.includes('Refusing to regenerate') && out.includes('_bmad-output/project-layout.yaml'),
+      `the refusal must name the file it refused over. Said: ${out}`
+    );
+    assert.ok(
+      fs.readFileSync(cfgPath).equals(beforeBytes),
+      'the existing config must be left byte-identical — "success reported over a failed write" is ' +
+      'one of the six defect shapes this epic produced'
+    );
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 5 — AC6. Global resolution (NFR83).
+//
+// "A globally-installed skill, on a machine with no per-machine install state
+// for the project, resolves a bound project's topology FROM THE PROJECT ROOT
+// ALONE."
+//
+// The negative here is "does not depend on per-machine state". Asserted by
+// REMOVAL, not by inspection: redirect HOME/USERPROFILE into an empty sandbox,
+// delete the bound-projects registry, and require the resolved topology to be
+// deep-equal to the one resolved with all of it present.
+// ═════════════════════════════════════════════════════════════════════════════
+
+console.log('\n=== SECTION 5 — AC6: global resolution (NFR83) ===\n');
+
+test('AC6.1 topology resolves identically with the per-machine registry PRESENT and DELETED', () => {
+  const savedHome = process.env.HOME;
+  const savedProfile = process.env.USERPROFILE;
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-relgate-home-'));
+  try {
+    withTmpProject((root) => {
+      capture(() => cli.writeProjectLayoutYaml({
+        systemRequirementsStore: { backend: 'confluence', spaceKey: 'SYSREQ', rootPage: { title: 'R', id: null } },
+        softwareRequirementsStore: FS_SAME,
+        sprintManagement: SPRINT_SAME,
+      }));
+
+      // (1) With a populated per-machine home.
+      process.env.HOME = sandbox;
+      process.env.USERPROFILE = sandbox;
+      const regPath = cli.boundProjectsPath();
+      fs.mkdirSync(path.dirname(regPath), { recursive: true });
+      fs.writeFileSync(regPath, JSON.stringify({ projects: [{ root, boundAt: '2026-01-01' }] }, null, 2));
+      const withState = cli.resolveProjectTopology(root);
+      assert.ok(withState.ok, 'the binding must resolve with per-machine state present');
+      assert.ok(fs.existsSync(regPath), 'the fixture registry must actually have been written');
+
+      // (2) With the per-machine home wiped entirely.
+      fs.rmSync(regPath, { force: true });
+      const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-relgate-nohome-'));
+      process.env.HOME = emptyHome;
+      process.env.USERPROFILE = emptyHome;
+      const withoutState = cli.resolveProjectTopology(root);
+      assert.ok(withoutState.ok, 'NFR83: resolution must not require per-machine state');
+
+      assert.deepStrictEqual(
+        withoutState.topology, withState.topology,
+        'NFR83: the resolved topology must be identical with and without per-machine install state'
+      );
+      try { fs.rmSync(emptyHome, { recursive: true, force: true }); } catch (_) { /* best effort */ }
+    });
+  } finally {
+    if (savedHome === undefined) delete process.env.HOME; else process.env.HOME = savedHome;
+    if (savedProfile === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = savedProfile;
+    try { fs.rmSync(sandbox, { recursive: true, force: true }); } catch (_) { /* best effort */ }
+  }
+});
+
+test('AC6.2 resolution reads ONLY the project root — a second project resolves to its OWN binding', () => {
+  // The failure this catches is a resolver that consults an ambient
+  // "current project" from per-machine state instead of its argument.
+  const a = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-relgate-a-'));
+  const b = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-relgate-b-'));
+  const cwd = process.cwd();
+  try {
+    process.chdir(a);
+    capture(() => cli.writeProjectLayoutYaml({
+      systemRequirementsStore: { backend: 'confluence', spaceKey: 'AAA', rootPage: { title: 'A', id: null } },
+      softwareRequirementsStore: FS_SAME,
+      sprintManagement: SPRINT_SAME,
+    }));
+    process.chdir(b);
+    capture(() => cli.writeProjectLayoutYaml({
+      systemRequirementsStore: { backend: 'confluence', spaceKey: 'BBB', rootPage: { title: 'B', id: null } },
+      softwareRequirementsStore: FS_SAME,
+      sprintManagement: SPRINT_SAME,
+    }));
+    // Resolve A while cwd is B: the answer must come from the ARGUMENT.
+    const ra = cli.resolveProjectTopology(fs.realpathSync(a));
+    const rb = cli.resolveProjectTopology(fs.realpathSync(b));
+    assert.ok(ra.ok && rb.ok, 'both bindings must resolve');
+    assert.strictEqual(ra.topology.systemRequirementsStore.spaceKey, 'AAA',
+      'NFR83: resolution must follow the project root it was given, not the cwd');
+    assert.strictEqual(rb.topology.systemRequirementsStore.spaceKey, 'BBB');
+  } finally {
+    process.chdir(cwd);
+    for (const d of [a, b]) { try { fs.rmSync(d, { recursive: true, force: true }); } catch (_) { /* best effort */ } }
+  }
+});
+
+test('AC6.3 an UNBOUND project is reported by NAME, not defaulted (NFR83 has no permissive fallback)', () => {
+  withTmpProject((root) => {
+    const r = cli.resolveProjectTopology(root);
+    assert.strictEqual(r.ok, false, 'an unbound project must not resolve');
+    assert.strictEqual(
+      r.reason, cli.BINDING_UNBOUND,
+      'the reason must be the NAMED unbound constant — "unbound" and "unreadable" must never collapse'
+    );
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION 6 — AC7. The FR266 negative, and the two shipped-text invariants.
+//
+// FR266 (a local mirror of every confluence-backed store) was RETIRED BEFORE
+// IMPLEMENTATION. P5-9.6 names an accidental mirror as the single most likely
+// way this epic reacquires the subsystem it removed — and a mirror can return
+// with NO CODE CHANGING AT ALL, as shipped instruction text telling an agent to
+// keep a local copy.
+//
+// So the negative is enforced as a CLOSED SET over shipped instruction bytes:
+// every occurrence of mirror vocabulary in shipped skill markdown must fall
+// INSIDE one of the two digest-pinned blocks. A mirror instruction added to any
+// other part of any shipped skill fails here. A mirror instruction added INSIDE
+// a pinned block changes its digest and fails the pin. Both doors are shut.
+// ═════════════════════════════════════════════════════════════════════════════
+
+console.log('\n=== SECTION 6 — AC7: FR266 has no implementation, and the block invariants ===\n');
+
+const sha = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
+
+test('AC7.1 the Story 31.4 preflight is 41 copies at ONE digest, distributed 13/14/14', () => {
+  const copies = collectBlocks(PREFLIGHT_HEADING);
+  assert.strictEqual(copies.length, 41,
+    `expected 41 shipped copies of the preflight, found ${copies.length}`);
+  const digests = new Set(copies.map((c) => sha(c.block)));
+  assert.strictEqual(digests.size, 1,
+    `all 41 copies must be byte-identical; found ${digests.size} distinct digests`);
+  assert.strictEqual(
+    [...digests][0],
+    'ca9bf25ba475f11ac760e8c92a2d41f92a21298d9f11df55881527673e67051f',
+    'the preflight digest changed — re-adjudicate the block before re-pinning it'
+  );
+  const dist = { 'skills/': 0, 'lib/bmad-extension/': 0, 'lib/bmad-extension-plugin/': 0 };
+  for (const c of copies) {
+    if (c.file.startsWith('lib/bmad-extension-plugin/')) dist['lib/bmad-extension-plugin/']++;
+    else if (c.file.startsWith('lib/bmad-extension/')) dist['lib/bmad-extension/']++;
+    else if (c.file.startsWith('skills/')) dist['skills/']++;
+  }
+  assert.deepStrictEqual(
+    dist,
+    { 'skills/': 13, 'lib/bmad-extension/': 14, 'lib/bmad-extension-plugin/': 14 },
+    `both deploy pipelines must carry the block: ${JSON.stringify(dist)}`
+  );
+});
+
+test('AC7.2 the Story 31.9 gate is 9 copies at ONE digest, distributed 3/3/3', () => {
+  const copies = collectBlocks(GATE_HEADING);
+  assert.strictEqual(copies.length, 9, `expected 9 shipped copies of the gate, found ${copies.length}`);
+  const digests = new Set(copies.map((c) => sha(c.block)));
+  assert.strictEqual(digests.size, 1, `all 9 copies must be byte-identical; found ${digests.size}`);
+  assert.strictEqual(
+    [...digests][0],
+    'cda3d3d99cff06edb3b7bbb00bc1399d6a060fc153829fba7108cdfb91b09cfb',
+    'the gate digest changed — re-adjudicate the block before re-pinning it'
+  );
+  const dist = { 'skills/': 0, 'lib/bmad-extension/': 0, 'lib/bmad-extension-plugin/': 0 };
+  for (const c of copies) {
+    if (c.file.startsWith('lib/bmad-extension-plugin/')) dist['lib/bmad-extension-plugin/']++;
+    else if (c.file.startsWith('lib/bmad-extension/')) dist['lib/bmad-extension/']++;
+    else if (c.file.startsWith('skills/')) dist['skills/']++;
+  }
+  assert.deepStrictEqual(dist, { 'skills/': 3, 'lib/bmad-extension/': 3, 'lib/bmad-extension-plugin/': 3 },
+    `both deploy pipelines must carry the gate: ${JSON.stringify(dist)}`);
+});
+
+test('AC7.3 [control] a LOOSE `Backend Routing` probe matches far more than 9 files — the anchor is load-bearing', () => {
+  // Without this control, AC7.2's "9" looks like a number someone chose. It is
+  // not: a loose probe also matches Story 17.22's sprint-tracking `## Backend
+  // Routing` block, and would return nonsense.
+  const loose = shippedSkillMarkdown()
+    .filter((f) => fs.readFileSync(f, 'utf-8').includes('Backend Routing'));
+  assert.ok(
+    loose.length > 9,
+    `the control is meaningless unless the loose probe genuinely over-matches; it matched ${loose.length}`
+  );
+});
+
+/**
+ * FR266's four named machineries: a local MIRROR, its SYNC direction, its
+ * TRIGGER, and CONFLICT RESOLUTION. Deliberately over-broad — the scan is meant
+ * to over-report and be narrowed by the closed set, not to be tuned until it is
+ * silent.
+ */
+const MIRROR_VOCABULARY = [
+  /\bmirror(s|ed|ing)?\b/i,
+  /\bsync(s|ed|ing|hronis\w*|hroniz\w*)?\b/i,
+  /\bcach(e|es|ed|ing)\b/i,
+  /\breconcil\w+\b/i,
+  /\breplicat\w+\b/i,
+  /\blocal (copy|copies)\b/i,
+  /\boffline (copy|copies|mirror|cache)\b/i,
+  /\bwrite[- ](through|back|behind)\b/i,
+  /\b(two[- ]way|bi[- ]?directional)\b/i,
+];
+
+test('AC7.4 [harness] the mirror vocabulary DETECTS a restored FR266 instruction', () => {
+  // The control for AC7.5. FR266's own wording, as it would return.
+  const restored = 'Every `confluence`-backed store has a local mirror kept in sync on each read.';
+  assert.ok(MIRROR_VOCABULARY.some((re) => re.test(restored)),
+    'the vocabulary must flag FR266 restored verbatim');
+});
+
+/**
+ * The F26 SUBJECT. A mirror of a Confluence-backed knowledge store has to be a
+ * mirror OF SOMETHING, and in this product that something is named. Restricting
+ * the closed set to F26-subject lines is what keeps it a real gate rather than
+ * a lint over every `docker build --no-cache` line in the shipped skill library:
+ * scoping by subject narrows WHAT is examined without narrowing WHERE, so a
+ * mirror instruction dropped into any shipped skill is still caught.
+ */
+const F26_SUBJECT = /confluence|knowledge[- ]store|requirements store|space[_ -]?key|root[_ -]?page/i;
+
+test('AC7.4b [harness] the subject filter admits a restored FR266 line and rejects unrelated cache advice', () => {
+  const restored = 'Every `confluence`-backed store has a local mirror kept in sync on each read.';
+  assert.ok(F26_SUBJECT.test(restored), 'the subject filter must admit an FR266 restoration');
+  assert.ok(!F26_SUBJECT.test('npm cache clean --force'), 'and must not admit unrelated cache advice');
+});
+
+test('AC7.5 every F26-subject mirror-vocabulary line in shipped skill markdown lies INSIDE a digest-pinned block', () => {
+  // THE CLOSED SET. Not "no line matches" — that would be a denylist, and this
+  // epic already shipped one where a closed set was needed. The set of PLACES an
+  // F26-subject mirror word may appear is closed to the two pinned blocks;
+  // everywhere else in every shipped skill is out of bounds.
+  const pinned = new Set();
+  for (const heading of [PREFLIGHT_HEADING, GATE_HEADING]) {
+    for (const { block } of collectBlocks(heading)) {
+      for (const line of block.split('\n')) pinned.add(line);
+    }
+  }
+  const strays = [];
+  for (const abs of shippedSkillMarkdown()) {
+    const rel = path.relative(REPO_ROOT, abs).replace(/\\/g, '/');
+    const lines = fs.readFileSync(abs, 'utf-8').replace(/\r\n/g, '\n').split('\n');
+    for (const line of lines) {
+      if (!F26_SUBJECT.test(line)) continue;
+      if (!MIRROR_VOCABULARY.some((re) => re.test(line))) continue;
+      if (pinned.has(line)) continue;
+      strays.push(`${rel}: ${line.trim().slice(0, 160)}`);
+    }
+  }
+  assert.deepStrictEqual(
+    strays, [],
+    `P5-9.6: a mirror can return as shipped instruction text with no code changing. Every ` +
+    `F26-subject mirror-vocabulary line outside the two adjudicated blocks must be reviewed. Found:\n` +
+    strays.join('\n')
+  );
+});
+
+test('AC7.6 the gate block\'s mirror lines are PROHIBITIONS — the pin cannot be satisfied by a permissive rewrite', () => {
+  // The digest pin alone would let a REVIEWED digest change quietly invert the
+  // meaning. These are the sentences that make the mirror words prohibitions.
+  for (const { file, block } of collectBlocks(GATE_HEADING)) {
+    assert.match(block,
+      /do NOT write, copy, cache, export or reconcile a local copy of anything Confluence returns/,
+      `${file}: FR266's retirement must remain an explicit prohibition`);
+    assert.match(block,
+      /There is no mirror and no cache, so there is nothing to synchronise and nothing to fall out of date\./,
+      `${file}: the "no sync direction / no trigger" half of FR266's retirement must remain stated`);
+  }
+});
+
+test('AC7.7 the Confluence page-tree module names FR266 retired and reads no page body', () => {
+  // The CODE half of the negative. `lib/confluence-page-tree.js` is the only
+  // module in this epic that could plausibly acquire a mirror, because it is the
+  // one that talks about pages at all.
+  const src = fs.readFileSync(path.join(REPO_ROOT, 'lib', 'confluence-page-tree.js'), 'utf-8');
+  assert.match(src, /FR266[^\n]*RETIRED/i, 'the module must state the retirement it is bound by');
+  assert.match(src, /no sync direction, no sync trigger/,
+    'the module must state that FR266\'s machinery is absent');
+  // And it must not require anything that could fetch or persist: no http, no
+  // fs write. Enumerated against what the module actually requires, with
+  // comments STRIPPED FIRST — the module's own header documents the prohibition
+  // by naming `require('http')`, and a scan that counted its own documentation
+  // as a violation would be measuring the wrong artifact.
+  const code = src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((l) => !/^\s*\/\//.test(l))
+    .join('\n');
+  const requires = [...code.matchAll(/require\(['"]([^'"]+)['"]\)/g)].map((m) => m[1]).sort();
+  const forbidden = requires.filter((r) => /^(https?|net|tls|dgram|child_process|axios|node-fetch|undici)$/.test(r));
+  assert.deepStrictEqual(forbidden, [],
+    `the page-tree module must not be able to reach a network: ${JSON.stringify(forbidden)}`);
+  const writers = ['writeFileSync', 'appendFileSync', 'mkdirSync', 'createWriteStream', 'copyFileSync']
+    .filter((w) => code.includes(w));
+  assert.deepStrictEqual(writers, [],
+    `the page-tree module must not be able to write to disk — that is how it would become a ` +
+    `mirror. Found: ${JSON.stringify(writers)}`);
+});
+
+test('AC7.8 no shipped file path suggests a mirror store (no mirror/cache dir is created anywhere)', () => {
+  // Enumeration over the SHIPPED tree, by name. A `confluence-cache/` or
+  // `.confluence-mirror/` directory would be caught here even if no code
+  // referenced it in a way the vocabulary scan saw.
+  const suspicious = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === 'node_modules' || e.name === '.git') continue;
+      const abs = path.join(dir, e.name);
+      if (/(mirror|confluence[-_]?cache|page[-_]?cache)/i.test(e.name)) {
+        suspicious.push(path.relative(REPO_ROOT, abs).replace(/\\/g, '/'));
+      }
+      if (e.isDirectory()) walk(abs);
+    }
+  };
+  for (const rel of ['bin', 'lib', 'skills', 'scripts']) {
+    const d = path.join(REPO_ROOT, rel);
+    if (fs.existsSync(d)) walk(d);
+  }
+  assert.deepStrictEqual(suspicious, [],
+    `no shipped path may be named for a mirror or a page cache: ${JSON.stringify(suspicious)}`);
+});
+
+test('AC7.9 FR266 is recorded as RETIRED in the PRD, and no story claims to implement it', () => {
+  // The outside authority. If FR266 were ever un-retired, this gate should stop
+  // asserting its absence — so the absence check is bound to the PRD saying it
+  // is retired, not merely to nobody having implemented it.
+  const prd = fs.readFileSync(
+    path.join(REPO_ROOT, '_bmad-output', 'planning-artifacts', 'prd', 'capabilities',
+      'project-knowledge-and-repository-layout.md'),
+    'utf-8'
+  );
+  assert.match(prd, /FR266:.*\[RETIRED 2026-08-01, before implementation\]/,
+    'FR266 must still be recorded as retired in the PRD');
+  assert.match(prd, /ID retired, never reused\./, 'and the ID must still be reserved');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SUMMARY
+// ═════════════════════════════════════════════════════════════════════════════
+
+console.log('\n' + '='.repeat(60));
+console.log(`Story 31.14 release gate: ${passed} passed, ${failed} failed`);
+if (failed > 0) {
+  console.log('Failures:');
+  for (const e of errors) console.log(`  ${e.name}:\n    ${e.error}`);
+}
+summaryPrinted = true;
+process.exit(failed > 0 ? 1 : 0);
