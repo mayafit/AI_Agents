@@ -604,6 +604,53 @@ const SHIPPED_SKILL_ROOTS = [
   path.join('lib', 'bmad-extension-plugin', 'skills'),
 ];
 
+/**
+ * Every markdown file that ACTUALLY SHIPS ON NPM, as absolute paths.
+ *
+ * Story 31.14 fix round, FIX-2 attack 2. The previous scope for the FR266 closed
+ * set was `SHIPPED_SKILL_ROOTS` — the three `skills/` trees — and that is a
+ * strictly smaller set than "shipped agent instruction text". A blatant
+ * single-line mirror appended to `lib/bmad-extension/workflows/add-sprint/
+ * workflow.md` was NOT scanned and did not fail anything, even though that file
+ * ships (`lib/` is in `package.json`'s `files`) and is this repository's own
+ * authored agent instruction text.
+ *
+ * The population is therefore derived from `package.json`'s `files` field — the
+ * actual authority on what npm puts in the tarball — rather than from a list
+ * maintained here. This is deliberately NOT tautological: `files` is not the
+ * thing under test, it is the outside authority that DECIDES the thing under
+ * test, and a future `files` entry automatically widens the scan instead of
+ * silently escaping it.
+ *
+ * The enumeration is `git ls-files` intersected with `files`, NOT a filesystem
+ * walk and NOT `npm pack`. Two reasons, both learned here:
+ *
+ *   - a raw filesystem walk picks up untracked and gitignored droppings (this
+ *     repository's own suites materialise `.agents/`, `_bmad/` and plugin build
+ *     dirs mid-run), so the population would depend on WHEN the suite ran;
+ *   - `npm pack --dry-run` is the exact tarball but costs an npm subprocess in
+ *     a suite that must stay hermetic.
+ *
+ * So this is a deliberate SUPERSET of the tarball: 2,332 tracked `.md` under
+ * the `files` roots, of which 1,049 actually reach the tarball (npm additionally
+ * honours the nested ignore files inside the vendored `lib/bmad-cache/**`
+ * packages). A superset is the correct side to err on for a NEGATIVE — it can
+ * over-report, which a human then adjudicates, but it cannot let a shipped file
+ * go unscanned. Both figures are asserted in AC7.5c.
+ */
+function shippedMarkdown() {
+  const pkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf-8'));
+  const roots = pkg.files || [];
+  const tracked = execFileSync('git', ['ls-files', '-z'], {
+    cwd: REPO_ROOT, maxBuffer: 1 << 28,
+  }).toString('utf8').split('\0').filter(Boolean);
+  const out = tracked
+    .filter((f) => f.toLowerCase().endsWith('.md'))
+    .filter((f) => roots.some((e) => (e.endsWith('/') ? f.startsWith(e) : f === e)))
+    .map((f) => path.join(REPO_ROOT, f));
+  return [...new Set(out)].sort();
+}
+
 /** Every shipped skill markdown file, as absolute paths. Enumerated, not listed. */
 function shippedSkillMarkdown() {
   const out = [];
@@ -628,7 +675,7 @@ function shippedSkillMarkdown() {
  *
  * The exactness is load-bearing and was learned the hard way: a loose
  * `Backend Routing` substring probe also matches Story 17.22's sprint-tracking
- * block, which is present in 60 tracked markdown files against the gate's 9.
+ * block, which is present in 61 tracked markdown files against the gate's 9.
  */
 function extractBlocks(text, heading) {
   const lines = text.replace(/\r\n/g, '\n').split('\n');
@@ -641,6 +688,27 @@ function extractBlocks(text, heading) {
     blocks.push(acc.join('\n'));
   }
   return blocks;
+}
+
+/**
+ * The same extraction, but returning INCLUSIVE LINE RANGES rather than text.
+ *
+ * Story 31.14 fix round, FIX-2 attack 1. The closed set now scans a multi-line
+ * WINDOW, so it can no longer ask "is this exact line one of the pinned block's
+ * lines?" — it has to know which REGIONS of each file are pinned, and slide the
+ * window only through the regions that are not. Deriving both from the same
+ * `## heading` → next column-0 `## ` rule keeps the pin and the scan describing
+ * the same boundary.
+ */
+function extractBlockRanges(lines, heading) {
+  const ranges = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (lines[i] !== heading) continue;
+    let j = i + 1;
+    while (j < lines.length && !/^## /.test(lines[j])) j += 1;
+    ranges.push([i, j - 1]);
+  }
+  return ranges;
 }
 
 const GATE_HEADING = '## Knowledge Store Backend Routing';
@@ -960,16 +1028,35 @@ test('AC7.2 the Story 31.9 gate is 9 copies at ONE digest, distributed 3/3/3', (
     `both deploy pipelines must carry the gate: ${JSON.stringify(dist)}`);
 });
 
-test('AC7.3 [control] a LOOSE `Backend Routing` probe matches far more than 9 files — the anchor is load-bearing', () => {
+test('AC7.3 [control] a LOOSE `Backend Routing` probe matches 36 shipped skill files against the gate\'s 9', () => {
   // Without this control, AC7.2's "9" looks like a number someone chose. It is
   // not: a loose probe also matches Story 17.22's sprint-tracking `## Backend
   // Routing` block, and would return nonsense.
+  //
+  // Story 31.14 fix round, FIX-4. This previously asserted `> 9`, which pins
+  // nothing — the record's prose claimed the control was "pinned so nobody can
+  // quietly loosen it", and `> 9` does not do that. It also cited "60 tracked
+  // markdown files", which is a DIFFERENT POPULATION from the one this
+  // assertion walks (and is 61, not 60, at HEAD). Both numbers are now stated
+  // for what they actually measure:
+  //
+  //   - over SHIPPED SKILL MARKDOWN (this assertion's population, 316 files):
+  //     36 loose matches against the gate's 9 — a 4x over-match;
+  //   - over ALL TRACKED MARKDOWN (`git grep -l 'Backend Routing' -- '*.md'`,
+  //     which is what the record's prose cites): 61 files.
+  //
+  // The exact pin is intentional and matches how AC7.1/AC7.2 pin 41 and 9: if a
+  // skill gains or loses the Story 17.22 sprint-tracking block, this number
+  // moves and the control must be re-adjudicated rather than quietly widened.
   const loose = shippedSkillMarkdown()
     .filter((f) => fs.readFileSync(f, 'utf-8').includes('Backend Routing'));
-  assert.ok(
-    loose.length > 9,
-    `the control is meaningless unless the loose probe genuinely over-matches; it matched ${loose.length}`
+  assert.strictEqual(
+    loose.length, 36,
+    `the loose probe must genuinely over-match the anchored 9; it matched ${loose.length}. ` +
+    `If this moved because skills were added or removed, re-adjudicate and re-pin — do NOT ` +
+    `relax it back to a '> 9' inequality, which pins nothing.`
   );
+  assert.ok(loose.length > 9, 'and the over-match is what makes the exact heading anchor load-bearing');
 });
 
 /**
@@ -1013,34 +1100,216 @@ test('AC7.4b [harness] the subject filter admits a restored FR266 line and rejec
   assert.ok(!F26_SUBJECT.test('npm cache clean --force'), 'and must not admit unrelated cache advice');
 });
 
-test('AC7.5 every F26-subject mirror-vocabulary line in shipped skill markdown lies INSIDE a digest-pinned block', () => {
-  // THE CLOSED SET. Not "no line matches" — that would be a denylist, and this
-  // epic already shipped one where a closed set was needed. The set of PLACES an
-  // F26-subject mirror word may appear is closed to the two pinned blocks;
-  // everywhere else in every shipped skill is out of bounds.
-  const pinned = new Set();
-  for (const heading of [PREFLIGHT_HEADING, GATE_HEADING]) {
-    for (const { block } of collectBlocks(heading)) {
-      for (const line of block.split('\n')) pinned.add(line);
+/**
+ * ─── THE MULTI-LINE WINDOW (Story 31.14 fix round, FIX-2 attack 1) ──────────
+ *
+ * The previous closed set filtered LINE BY LINE, requiring one line to carry
+ * BOTH the F26 subject AND a mirror word. That is not an exotic bypass — it is
+ * the DEFAULT failure, because this repository hard-wraps markdown prose at ~80
+ * columns, so a multi-line instruction is the norm and a single-line one is the
+ * exception. A restored FR266, written the way this codebase actually writes
+ * prose:
+ *
+ *     When the software requirements store is Confluence-backed, keep a
+ *     local copy of every page you read and sync it back on the next run.
+ *
+ * evaded the line-by-line set entirely: line 1 has the subject and no mirror
+ * word, line 2 has `local copy` and `sync` and no subject. The scan now slides
+ * a WINDOW over the lines and joins them before matching, so a sentence split
+ * across a wrap is seen as one sentence.
+ *
+ * Four lines is chosen against the wrap width: at ~80 columns a four-line
+ * window spans ~320 characters, comfortably more than one hard-wrapped
+ * instruction sentence and short enough that unrelated neighbouring paragraphs
+ * are not routinely joined into a false positive. It is a bound, not a proof:
+ * an instruction deliberately spread across five or more lines, or split by an
+ * intervening block, still evades — that limit is stated in §3 of the record
+ * rather than papered over.
+ */
+const MIRROR_WINDOW_LINES = 4;
+
+/** Normalised text of a window, so a re-wrap of the SAME sentence digests the same. */
+const normaliseWindow = (s) => s.replace(/\s+/g, ' ').trim();
+
+/**
+ * Every F26-subject mirror-vocabulary WINDOW in `absPath` that falls OUTSIDE
+ * every digest-pinned block. Windows never straddle a pinned region: the file
+ * is split into unpinned segments first and the window slides within a segment.
+ */
+function mirrorWindowsOutsidePinnedBlocks(absPath) {
+  const lines = fs.readFileSync(absPath, 'utf-8').replace(/\r\n/g, '\n').split('\n');
+  const pinned = [
+    ...extractBlockRanges(lines, PREFLIGHT_HEADING),
+    ...extractBlockRanges(lines, GATE_HEADING),
+  ];
+  const isPinned = (i) => pinned.some(([a, b]) => i >= a && i <= b);
+  const segments = [];
+  let seg = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (isPinned(i)) { if (seg.length) { segments.push(seg); seg = []; } }
+    else seg.push(i);
+  }
+  if (seg.length) segments.push(seg);
+
+  const found = [];
+  for (const s of segments) {
+    for (let k = 0; k < s.length; k += 1) {
+      const idx = s.slice(k, k + MIRROR_WINDOW_LINES);
+      const win = normaliseWindow(idx.map((i) => lines[i]).join(' '));
+      if (!F26_SUBJECT.test(win)) continue;
+      if (!MIRROR_VOCABULARY.some((re) => re.test(win))) continue;
+      found.push({ line: s[k] + 1, text: win });
+      k += MIRROR_WINDOW_LINES - 1; // one report per neighbourhood, not four
     }
   }
+  return found;
+}
+
+/**
+ * ─── THE SECOND HALF OF THE CLOSED SET ──────────────────────────────────────
+ *
+ * Widening the scan from the three `skills/` roots to ALL 1,049 shipped
+ * markdown files brings in the human documentation that legitimately DISCUSSES
+ * the retirement — README.md says "There is no local mirror and no cache", and
+ * `docs/architecture.md` discusses the unrelated bmad-org registry cache. Those
+ * cannot be excluded by path (that reopens exactly the scope hole attack 2
+ * walked through) and they are not inside a pinned block.
+ *
+ * So they are admitted the only way that keeps this a CLOSED SET rather than a
+ * denylist: by the sha256 of the ADJUDICATED PASSAGE ITSELF. Every entry below
+ * was read and adjudicated by hand. If any of these passages is edited, its
+ * digest changes and it must be re-adjudicated; if a new mirror passage appears
+ * anywhere in any shipped markdown, it has no digest here and fails. The
+ * exception is over the BYTES, not over the file.
+ *
+ * AC7.5d asserts in the other direction — every digest here must still MATCH
+ * something — so a stale exception cannot linger and silently widen the set.
+ */
+const ADJUDICATED_MIRROR_PASSAGES = Object.freeze({
+  // README.md — the shipped user documentation of FR266's retirement. All three
+  // are NEGATIONS, or describe the page TREE's shape rather than a content
+  // mirror. These are the passages §3 of the gate record adjudicated by hand.
+  '22df684a': 'README.md:213 — "**There is no local mirror and no cache.**" A PROHIBITION.',
+  '2f7c9a2d': 'README.md:217 — "nothing is copied down … nothing to synchronise and nothing '
+    + 'to fall out of date". A PROHIBITION.',
+  '1000f5f8': 'README.md:221 — "one page per markdown artifact, nested to mirror the source '
+    + 'folders". Describes the page TREE\'S SHAPE, which is FR255/FR256\'s actual '
+    + 'requirement — not a mirror of page CONTENT.',
+  // docs/architecture.md — unrelated pre-existing vocabulary. Neither passage is
+  // about a Confluence store; both are pulled in by the window straddling a
+  // nearby F26 sentence.
+  '054b10ab': 'docs/architecture.md:213 — the bmad-org REGISTRY cache builder (lib/bmad-cache), '
+    + 'a pre-existing subsystem unrelated to any knowledge store.',
+  '425df87a': 'docs/architecture.md:219 — "Installation and skill loading require no network at '
+    + 'all … Neither reads a knowledge store". A NEGATION, and the air-gap posture NFR80 '
+    + 'requires this file to state.',
+});
+
+test('AC7.5 every F26-subject mirror-vocabulary WINDOW in ALL shipped markdown is inside a pinned block or an adjudicated passage', () => {
+  // THE CLOSED SET. Not "no line matches" — that would be a denylist, and this
+  // epic already shipped one where a closed set was needed. The set of PLACES an
+  // F26-subject mirror sentence may appear is closed to the two pinned blocks
+  // plus a hand-adjudicated, digest-pinned list; everywhere else in everything
+  // this package ships is out of bounds.
+  //
+  // Two things changed in the 31.14 fix round, and both were live bypasses:
+  //   attack 1 — the match is now over a multi-line WINDOW, not a single line;
+  //   attack 2 — the scope is now ALL shipped markdown, not the three `skills/`
+  //              roots. `lib/bmad-extension/workflows/**` is this repository's
+  //              own authored agent instruction text, it ships, and it was not
+  //              scanned at all.
   const strays = [];
-  for (const abs of shippedSkillMarkdown()) {
+  const seen = new Set();
+  for (const abs of shippedMarkdown()) {
     const rel = path.relative(REPO_ROOT, abs).replace(/\\/g, '/');
-    const lines = fs.readFileSync(abs, 'utf-8').replace(/\r\n/g, '\n').split('\n');
-    for (const line of lines) {
-      if (!F26_SUBJECT.test(line)) continue;
-      if (!MIRROR_VOCABULARY.some((re) => re.test(line))) continue;
-      if (pinned.has(line)) continue;
-      strays.push(`${rel}: ${line.trim().slice(0, 160)}`);
+    for (const hit of mirrorWindowsOutsidePinnedBlocks(abs)) {
+      const digest = sha(hit.text).slice(0, 8);
+      if (ADJUDICATED_MIRROR_PASSAGES[digest]) { seen.add(digest); continue; }
+      strays.push(`${rel}:${hit.line}  [${digest}]  ${hit.text.slice(0, 200)}`);
     }
   }
   assert.deepStrictEqual(
     strays, [],
     `P5-9.6: a mirror can return as shipped instruction text with no code changing. Every ` +
-    `F26-subject mirror-vocabulary line outside the two adjudicated blocks must be reviewed. Found:\n` +
-    strays.join('\n')
+    `F26-subject mirror-vocabulary passage outside the pinned blocks and the adjudicated list ` +
+    `must be reviewed BY HAND before its digest is added. Found:\n` + strays.join('\n')
   );
+});
+
+test('AC7.5b [harness] a LINE-SPLIT mirror instruction — the default prose shape here — is CAUGHT', () => {
+  // The control for attack 1. This exact text was planted in
+  // `skills/code-review/SKILL.md` by the Story 31.14 reviewer and the previous
+  // line-by-line closed set returned 33/0 with it in place. Subject on line 1,
+  // mirror vocabulary on line 2 — which is what an ~80-column hard wrap does to
+  // any sentence long enough to be a real instruction.
+  const planted = [
+    'When the software requirements store is Confluence-backed, keep a',
+    'local copy of every page you read and sync it back on the next run.',
+  ];
+  // The bypass, demonstrated: NEITHER line satisfies the old single-line test.
+  for (const line of planted) {
+    const bothOnOneLine = F26_SUBJECT.test(line) && MIRROR_VOCABULARY.some((re) => re.test(line));
+    assert.ok(!bothOnOneLine,
+      `the harness is pointless unless this line genuinely evades a per-line filter: ${line}`);
+  }
+  // The fix: joined by the window, it matches both filters.
+  const win = normaliseWindow(planted.join(' '));
+  assert.ok(F26_SUBJECT.test(win), 'the window must carry the F26 subject');
+  assert.ok(MIRROR_VOCABULARY.some((re) => re.test(win)), 'and the mirror vocabulary');
+  assert.ok(!ADJUDICATED_MIRROR_PASSAGES[sha(win).slice(0, 8)],
+    'and it must NOT be pre-adjudicated — a planted mirror is a stray, not an exception');
+});
+
+test('AC7.5c [harness] the scan reaches shipped instruction text OUTSIDE the three skills/ roots', () => {
+  // The control for attack 2. `lib/bmad-extension/workflows/add-sprint/
+  // workflow.md` ships (`lib/` is in `package.json`'s `files`) and carries
+  // authored agent instructions, and the previous scope did not scan it. This
+  // asserts the POPULATION, not the absence — the absence is AC7.5's job.
+  const shipped = shippedMarkdown().map((f) => path.relative(REPO_ROOT, f).replace(/\\/g, '/'));
+  const skillRootFiles = shippedSkillMarkdown().map((f) => path.relative(REPO_ROOT, f).replace(/\\/g, '/'));
+  assert.ok(
+    shipped.includes('lib/bmad-extension/workflows/add-sprint/workflow.md'),
+    'attack 2\'s exact target must now be in the scanned population'
+  );
+  assert.ok(
+    !skillRootFiles.includes('lib/bmad-extension/workflows/add-sprint/workflow.md'),
+    'and it must genuinely be OUTSIDE the old skills/-roots scope, or this control proves nothing'
+  );
+  const inSkillRoots = new Set(skillRootFiles);
+  const outside = shipped.filter((f) => !inSkillRoots.has(f));
+  // The two populations, both pinned so neither can drift silently.
+  //   2,332 = tracked .md under package.json's `files` roots (what this scans);
+  //     316 = the three skills/ roots (all the old scope covered);
+  //   2,016 = the widening — every one of these was previously UNSCANNED.
+  // Of the 2,332, 1,049 reach the npm tarball (`npm pack --dry-run` = 1,929
+  // entries, 1,049 of them .md), and 733 of those 1,049 are outside the skills/
+  // roots. This suite scans the tracked SUPERSET, so the tarball figures are
+  // recorded in the gate record rather than asserted here.
+  assert.strictEqual(inSkillRoots.size, 316,
+    `the OLD scope must be what it was: found ${inSkillRoots.size} skill-root .md`);
+  assert.strictEqual(outside.length, 2016,
+    `the widening must actually widen: ${outside.length} tracked shipped .md now scanned that ` +
+    `the skills/-roots scope missed (expected 2016, of which 733 reach the npm tarball — ` +
+    `666 lib/bmad-cache, 26 lib/bmad-workflows, 8 lib/mil498-templates, ` +
+    `7 lib/bmad-extension/workflows, 6 lib/templates, and the root/docs/mil498 documentation)`
+  );
+  assert.strictEqual(shipped.length, 2332,
+    `and the total scanned markdown population is pinned: found ${shipped.length}`);
+});
+
+test('AC7.5d [closed-set hygiene] every adjudicated-passage digest still matches a real passage', () => {
+  // The closed set has to be closed in BOTH directions. An exception whose text
+  // has since been deleted or rewritten is a hole that silently admits whatever
+  // later happens to hash to it — and, more practically, it is a claim in this
+  // file that no longer describes the shipped bytes.
+  const live = new Set();
+  for (const abs of shippedMarkdown()) {
+    for (const hit of mirrorWindowsOutsidePinnedBlocks(abs)) live.add(sha(hit.text).slice(0, 8));
+  }
+  const stale = Object.keys(ADJUDICATED_MIRROR_PASSAGES).filter((d) => !live.has(d));
+  assert.deepStrictEqual(stale, [],
+    `these adjudicated-passage digests match nothing in the shipped tree any more and must be ` +
+    `removed: ${stale.map((d) => `${d} (${ADJUDICATED_MIRROR_PASSAGES[d]})`).join(', ')}`);
 });
 
 test('AC7.6 the gate block\'s mirror lines are PROHIBITIONS — the pin cannot be satisfied by a permissive rewrite', () => {
