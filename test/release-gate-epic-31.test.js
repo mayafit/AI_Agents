@@ -1142,6 +1142,41 @@ test('AC7.3 [control] a LOOSE `Backend Routing` probe matches 36 shipped skill f
  * the closed set genuinely closes is the PLACE (every tracked shipped markdown
  * file, exceptions pinned by digest) and the SUBJECT (an F26 store must be
  * named). The predicate is a heuristic and is documented as one.
+ *
+ * ─── THE THIRD HALF, AND THE ONLY PART OF THE PREDICATE THAT IS CLOSED ──────
+ * (Story 31.14 fix round 3, FIX-1 — attack 5)
+ *
+ * Round 2's extension was still a LIST, chosen by the author of the check. The
+ * Story 31.14 verifier then found the fifth bypass in the most embarrassing
+ * place available: THE PRODUCT'S OWN PROHIBITION. The shipped gate block, in
+ * all nine copies, says
+ *
+ *     do NOT write, copy, cache, export or reconcile a local copy of anything
+ *     Confluence returns
+ *
+ * and of those FIVE enumerated verbs the detector covered only three. `cache`,
+ * `export` and `reconcile` were on the list; bare `copy` was not (only
+ * `local copy|copies` and `offline copy`) and bare `write` was not (only
+ * `writ… to disk` and `write-through|back|behind`). So an instruction using the
+ * exact verb the shipped text forbids by name walked past the detector that
+ * enforces it — verified live, 38 passed / 0 failed / exit 0, in both forms.
+ *
+ * The fix is NOT "append two more words and hope". A third undisciplined list
+ * extension teaches a reader nothing and would be worse than an honest limit.
+ * The fix is that the five verbs are a CLOSED, AUTHORED SET that already exists
+ * OUTSIDE this file — in the shipped bytes — so the detector can be BOUND to it
+ * the same way AC7.9 is bound to the PRD and AC5.1 to the shipped message.
+ * `prohibitedMirrorVerbs()` below extracts the verb list FROM THE SHIPPED GATE
+ * BLOCK, and AC7.5f asserts this vocabulary covers every verb it finds. The
+ * forward property that buys: if anyone ever edits the prohibition to forbid a
+ * sixth verb, AC7.5f goes red until the detector catches up. That axis of the
+ * predicate is now closed against an outside authority; the rest of it is still
+ * a heuristic and §9 item 9 still says so.
+ *
+ * `local (copy|copies)`, `offline copy`, `write-(through|back|behind)` and
+ * `writ… to disk` are gone from the list below, not because they were wrong but
+ * because the two bare verbs strictly SUBSUME them. A list that keeps dead
+ * entries reads as broader than it is, which is this epic's signature defect.
  */
 const MIRROR_VOCABULARY = [
   // ─── The nouns of art: how an architecture document says "mirror". ───────
@@ -1150,9 +1185,7 @@ const MIRROR_VOCABULARY = [
   /\bcach(e|es|ed|ing)\b/i,
   /\breconcil\w+\b/i,
   /\breplicat\w+\b/i,
-  /\blocal (copy|copies)\b/i,
-  /\boffline (copy|copies|mirror|cache)\b/i,
-  /\bwrite[- ](through|back|behind)\b/i,
+  /\boffline (mirror|cache)\b/i,
   /\b(two[- ]way|bi[- ]?directional)\b/i,
   // ─── The verbs: how a person actually writes the instruction. ────────────
   /\bdownload(s|ed|ing)?\b/i,
@@ -1165,8 +1198,40 @@ const MIRROR_VOCABULARY = [
   /\bshadow(s|ed|ing)?\b/i,
   /\bstash(es|ed|ing)?\b/i,
   /\bstor(e|es|ed|ing) (it |them |everything |the \w+ )?locally\b/i,
-  /\bwrit(e|es|ing|ten)\b[^.\n]{0,60}\bto disk\b/i,
+  // ─── The two the SHIPPED PROHIBITION names and the list had missed. ──────
+  // Bound to the shipped text by AC7.5f; do not remove without removing them
+  // from the prohibition first, and that would fail AC7.6.
+  /\bcop(y|ies|ied|ying)\b/i,
+  /\bwrit(e|es|ing|ten)\b/i,
 ];
+
+/**
+ * ─── THE OUTSIDE AUTHORITY FOR THE VERB HALF ────────────────────────────────
+ *
+ * The five verbs the SHIPPED gate block prohibits by name, read out of the
+ * shipped bytes rather than restated here. Restating them would make AC7.5f
+ * tautological — the same defect shape this epic found six times — so the list
+ * is parsed from the product text and the test asserts coverage of whatever it
+ * finds.
+ *
+ * The sentence is pinned independently by AC7.6 across all nine copies, so this
+ * parse cannot silently start reading a different sentence; and the extraction
+ * is asserted non-empty and 9-copy-consistent in AC7.5f, so it cannot silently
+ * start reading NOTHING (an empty set would make the coverage loop vacuous,
+ * which is FIX-4's defect and must not be reintroduced here).
+ */
+function prohibitedMirrorVerbs() {
+  const perCopy = [];
+  for (const { file, block } of collectBlocks(GATE_HEADING)) {
+    const m = block.match(
+      /do NOT ([a-z]+(?:, [a-z]+)*(?:,)? or [a-z]+) a local copy of anything Confluence returns/
+    );
+    if (!m) { perCopy.push({ file, verbs: null }); continue; }
+    const verbs = m[1].split(/,\s*|\s+or\s+/).map((v) => v.trim().toLowerCase()).filter(Boolean);
+    perCopy.push({ file, verbs: [...new Set(verbs)].sort() });
+  }
+  return perCopy;
+}
 
 test('AC7.4 [harness] the mirror vocabulary DETECTS a restored FR266 instruction', () => {
   // The control for AC7.5. FR266's own wording, as it would return.
@@ -1302,9 +1367,25 @@ const ADJUDICATED_MIRROR_PASSAGES = Object.freeze({
   // nearby F26 sentence.
   '054b10ab': 'docs/architecture.md:213 — the bmad-org REGISTRY cache builder (lib/bmad-cache), '
     + 'a pre-existing subsystem unrelated to any knowledge store.',
-  '425df87a': 'docs/architecture.md:219 — "Installation and skill loading require no network at '
-    + 'all … Neither reads a knowledge store". A NEGATION, and the air-gap posture NFR80 '
-    + 'requires this file to state.',
+  // ─── §3.6.1, the NFR80 air-gap posture (re-cut in fix round 3, FIX-1) ─────
+  //
+  // These two SUPERSEDE the single entry `425df87a` ("docs/architecture.md:219
+  // — Installation and skill loading require no network at all … Neither reads
+  // a knowledge store"), which is now stale and removed. Nothing about that
+  // passage changed and no adjudication was revised: adding the bare `write`
+  // verb made line 219's "the installer **writes** the binding" match from a
+  // window starting two lines EARLIER, and because the scan reports one window
+  // per neighbourhood and then strides, the same prose is now reported at :217
+  // and :221 instead of at :219. AC7.5d caught the stale digest, which is the
+  // direction it exists for.
+  'fd970458': 'docs/architecture.md:217 — §3.6.1 "Air-gap posture with a Confluence-backed '
+    + 'knowledge store (NFR80)", opening through "Neither reads a knowledge store: the '
+    + 'installer writes the binding and generates `_bmad/bmm/config.yaml` from it, and both '
+    + 'are local files." Matched by the bare `write` verb, on a sentence about the '
+    + 'INSTALLER\'S OWN local binding file — not page content — inside a NEGATION.',
+  '59781ed9': 'docs/architecture.md:221 — the same §3.6.1 posture list, through "There is no '
+    + 'local mirror, no cache and therefore no sync (P5-9.6)." A PROHIBITION, and the '
+    + 'air-gap posture NFR80 requires this file to state it.',
 
   // ─── Admitted by the VERB half of the vocabulary (fix round 2, FIX-A) ─────
   //
@@ -1446,15 +1527,170 @@ test('AC7.5e [harness] a PLAIN-ENGLISH mirror using no architecture noun is CAUG
   assert.ok(!OLD_VOCABULARY.some((re) => re.test(win)),
     'the harness is pointless unless the OLD noun-only vocabulary genuinely missed this');
 
-  // THE FIX: the verb family matches it, and names which verbs did.
-  const why = MIRROR_VOCABULARY.filter((re) => re.test(win)).map(String);
-  assert.ok(why.length > 0, 'the extended vocabulary must flag the plain-English mirror');
-  assert.ok(/download/.test(why.join(' ')) && /upload/.test(why.join(' ')) && /sav/.test(why.join(' ')),
-    `all three of the plant's verbs must be covered, not just one: ${why.join(', ')}`);
+  // ─── THE FIX, AND THE CORRECTION TO HOW IT WAS ASSERTED ──────────────────
+  //
+  // Fix round 3, FIX-4. What stood here asserted over the SOURCE TEXT of the
+  // matching regexes — `why.join(' ')` — which is this epic's signature defect
+  // in its purest form: it measures the LIST, not the MATCH. Proven vacuous in
+  // principle, not in theory: replace the three real patterns with the single
+  // degenerate `/\bdownload\b|\bzzupload\b|\bzzsave\b/i`, in which only
+  // `download` can ever match anything, and the old assertion still PASSED —
+  // because the strings `upload` and `sav` appear in that one regex's source.
+  //
+  // The property that was meant is that THREE DISTINCT PATTERNS ACTUALLY FIRE,
+  // one per verb. So each verb is probed in a carrier that contains no other
+  // vocabulary word, and the patterns that fire are collected by IDENTITY.
+  const perVerb = new Map();
+  for (const [verb, probe] of [
+    ['download', 'download every Confluence page in the requirements store'],
+    ['upload', 'upload your edits to the requirements store when you finish'],
+    ['save', 'save the Confluence page under the local artifacts folder'],
+  ]) {
+    const hits = MIRROR_VOCABULARY.filter((re) => re.test(probe));
+    assert.ok(hits.length > 0,
+      `no pattern in the vocabulary actually fires on the plant's "${verb}": ${probe}`);
+    perVerb.set(verb, hits);
+  }
+  const distinct = new Set([...perVerb.values()].flat());
+  assert.strictEqual(distinct.size, 3,
+    `the plant's three verbs must be covered by three DISTINCT patterns that each really ` +
+    `matched — not by one pattern whose SOURCE TEXT happens to mention all three. Fired: ` +
+    `${[...distinct].map(String).join(', ')}`);
+  // …and every one of those three must also fire on the joined window itself,
+  // which is the text the scan actually sees.
+  const firedOnWindow = MIRROR_VOCABULARY.filter((re) => re.test(win));
+  for (const re of distinct) {
+    assert.ok(firedOnWindow.includes(re),
+      `${re} covers one of the plant's verbs in isolation but does not fire on the window`);
+  }
 
   // And it must NOT be pre-adjudicated — a planted mirror is a stray.
   assert.ok(!ADJUDICATED_MIRROR_PASSAGES[sha(win).slice(0, 8)],
     'a planted mirror is a stray, not an exception');
+});
+
+test('AC7.5g [end-to-end] the REAL scan path reports attack 4a and both attack-5 forms as strays', () => {
+  // Fix round 3, FIX-4, second gap. AC7.5b and AC7.5e test the PREDICATE in
+  // isolation — subject filter, window length, vocabulary — and never call
+  // `mirrorWindowsOutsidePinnedBlocks`. So the end-to-end proof that a planted
+  // mirror in a real file comes back as a stray existed only as a manual
+  // replant recorded in the gate document, in no assertion at all. A manual
+  // replant is not a regression test; it does not run again tomorrow.
+  //
+  // This runs the real function over a real file on disk, containing a real
+  // pinned block, and asserts BOTH directions: the plants outside the block are
+  // reported, and the identical vocabulary inside the pinned block is not.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ac75g-'));
+  try {
+    const PLANTS = {
+      // Attack 4a — the round-2 plain-English plant.
+      '4a': [
+        'Before you begin, download every Confluence page in the software requirements',
+        'store and save it under `_bmad-output/pages/`. Read from there for the rest of',
+        'the session, and upload your edits back when you finish.',
+      ],
+      // Attack 5, `copy` form — the verifier's fifth bypass, verbatim. Verified
+      // live against the round-2 suite: 38 passed, 0 failed, exit 0.
+      '5-copy': [
+        'Before you begin, copy each page you read into `_bmad-output/confluence/`',
+        'and re-read it from there on every later run.',
+      ],
+      // Attack 5, `write` form — the same bypass through the other uncovered
+      // verb of the five the shipped prohibition names.
+      '5-write': [
+        'Before you begin, write every Confluence page in the software requirements',
+        'store into `_bmad-output/pages/`, and read from there for the rest of the',
+        'session.',
+      ],
+    };
+    // The pinned block, taken from the SHIPPED bytes rather than retyped, so
+    // the "inside a pinned block is exempt" half is proved against the real
+    // thing and cannot drift from it.
+    const shippedBlock = collectBlocks(GATE_HEADING)[0];
+    assert.ok(shippedBlock, 'the gate block must exist to build this fixture from');
+
+    for (const [name, planted] of Object.entries(PLANTS)) {
+      const abs = path.join(dir, `${name}.md`);
+      const lines = ['# Fixture', '', ...planted, '', shippedBlock.block, ''];
+      fs.writeFileSync(abs, lines.join('\n'), 'utf-8');
+
+      const hits = mirrorWindowsOutsidePinnedBlocks(abs);
+      assert.ok(hits.length > 0,
+        `attack ${name} must be REPORTED by the real scan path, not merely by the predicate`);
+      // The reported window must be the plant, and it must be a stray — no
+      // adjudicated digest may absolve it.
+      const plantWin = normaliseWindow(planted.join(' '));
+      assert.ok(hits.some((h) => h.text.includes(planted[0].trim())),
+        `attack ${name}: the reported window must be the plant itself, not a neighbour. ` +
+        `Got: ${hits.map((h) => `${h.line}:${h.text.slice(0, 80)}`).join(' | ')}`);
+      for (const h of hits) {
+        assert.ok(!ADJUDICATED_MIRROR_PASSAGES[sha(h.text).slice(0, 8)],
+          `attack ${name}: a planted mirror must be a stray, not an adjudicated exception`);
+      }
+      // The other direction: the pinned block is FULL of this vocabulary
+      // ("do NOT write, copy, cache, export or reconcile a local copy…") and
+      // must contribute nothing, or the exemption is what is being measured
+      // rather than the plant.
+      assert.ok(hits.every((h) => h.line < lines.indexOf(shippedBlock.block) + 1),
+        `attack ${name}: no hit may come from inside the pinned block`);
+      assert.strictEqual(sha(plantWin).length, 64, 'sanity: the digest function is live');
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('AC7.5f [outside authority] the vocabulary covers EVERY verb the SHIPPED prohibition names', () => {
+  // Fix round 3, FIX-1 — attack 5, and the reason it is not just two more words
+  // on the list. The shipped gate block enumerates five prohibited verbs:
+  //
+  //   "do NOT write, copy, cache, export or reconcile a local copy of anything
+  //    Confluence returns"
+  //
+  // and until this round the detector that ENFORCES that sentence covered only
+  // three of them. Both uncovered verbs were then used to plant a live mirror
+  // in `skills/code-review/SKILL.md` and the suite returned 38 passed, 0
+  // failed, exit 0 for each.
+  //
+  // Appending `copy` and `write` to the list would close those two plants and
+  // nothing else — the same one-attack-at-a-time patch that has now been
+  // applied three times. This asserts the GENERAL property instead: the
+  // detector must cover whatever the product prohibits, and the product's
+  // prohibition is the authority. Add a sixth verb to the shipped sentence and
+  // this test goes red until the vocabulary catches up.
+  const perCopy = prohibitedMirrorVerbs();
+
+  // ANTI-VACUITY, first. A parse that silently returns nothing would make the
+  // coverage loop below pass over an empty set — FIX-4's exact defect.
+  assert.strictEqual(perCopy.length, 9,
+    `the prohibition must be read from all 9 shipped gate blocks; read ${perCopy.length}`);
+  const unparsed = perCopy.filter((c) => c.verbs === null).map((c) => c.file);
+  assert.deepStrictEqual(unparsed, [],
+    `the prohibition sentence must parse in every shipped copy, or this test is vacuous ` +
+    `and the vocabulary is unbound: ${unparsed.join(', ')}`);
+  const shapes = new Set(perCopy.map((c) => c.verbs.join(',')));
+  assert.strictEqual(shapes.size, 1,
+    `all 9 copies must prohibit the SAME verbs: ${[...shapes].join(' / ')}`);
+
+  const verbs = perCopy[0].verbs;
+  assert.ok(verbs.length >= 5,
+    `the parse must find the whole enumerated list, not its tail: ${verbs.join(', ')}`);
+
+  // THE ASSERTION. Every prohibited verb must be detectable, probed in a
+  // carrier that contains no OTHER vocabulary word — so a verb passes on its
+  // own coverage and never on a neighbour's.
+  const uncovered = [];
+  for (const verb of verbs) {
+    const probe = `Then ${verb} it under the project folder and read from there.`;
+    // The carrier alone must be inert, or the probe proves nothing.
+    assert.ok(!MIRROR_VOCABULARY.some((re) => re.test('Then it under the project folder and read from there.')),
+      'the probe carrier must contain no vocabulary word of its own');
+    if (!MIRROR_VOCABULARY.some((re) => re.test(probe))) uncovered.push(verb);
+  }
+  assert.deepStrictEqual(uncovered, [],
+    `the shipped gate block prohibits these verbs by name and MIRROR_VOCABULARY cannot see ` +
+    `them, so an instruction using the exact word the product forbids walks past the check ` +
+    `that enforces it (this is attack 5, verified live): ${uncovered.join(', ')}`);
 });
 
 test('AC7.5c [harness] the scan reaches shipped instruction text OUTSIDE the three skills/ roots', () => {
@@ -1681,7 +1917,7 @@ summaryPrinted = true;
 // catches an assertion lost to a rename, a merge or an early return; a SURPLUS
 // catches one added without being recorded in the gate document, which is the
 // artifact these assertions exist to support.
-const EXPECTED_TEST_COUNT = 38;
+const EXPECTED_TEST_COUNT = 40;
 const total = passed + failed;
 if (total !== EXPECTED_TEST_COUNT) {
   console.error(`\n  FATAL: ran ${total} tests, expected exactly ${EXPECTED_TEST_COUNT}. ` +
