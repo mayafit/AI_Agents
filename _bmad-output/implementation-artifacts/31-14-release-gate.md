@@ -753,11 +753,26 @@ sha256 over the result.
 Both are now pinned as tests (AC7.1, AC7.2), including the distribution, so a block that
 lands in one deploy pipeline and not the other fails.
 
-**The loose-probe control, confirmed.** A naive `Backend Routing` substring probe matches
-**60** tracked markdown files against the gate's 9 — 6.7× over-match, because it also hits
-Story 17.22's sprint-tracking `## Backend Routing` block, which is a different block
-present in every sprint skill. The exact-heading anchor is load-bearing, and AC7.3 pins
-the control so nobody can quietly loosen it.
+**The loose-probe control, confirmed — and both numbers here were wrong.** A naive
+`Backend Routing` substring probe over-matches, because it also hits Story 17.22's
+sprint-tracking `## Backend Routing` block, which is a different block present in every
+sprint skill. The exact-heading anchor is load-bearing. But the figures:
+
+- **It is 61 tracked markdown files, not 60.** `git grep -l "Backend Routing" HEAD --
+  "*.md"` returns 61 at `HEAD`, and 61 in the working tree. The record's own gate-record
+  commit is one of the matches — this document quotes the heading, so writing the "60"
+  claim made it 61.
+- **AC7.3 does not measure that population.** It walks *shipped skill markdown* (316
+  files), not tracked markdown, and the loose probe there matches **36**, not 61 — a 4×
+  over-match against the gate's 9, not 6.7×. Citing the tracked-markdown figure as if
+  AC7.3 pinned it conflated two different measurements.
+- **And AC7.3 previously pinned no number at all.** It asserted `loose.length > 9`, which
+  is satisfied by 10 and by 10,000. The claim that it was "pinned so nobody can quietly
+  loosen it" was not true: an inequality with a floor of 9 is not a pin. It now asserts
+  **exactly 36** over its own population, the same way AC7.1 and AC7.2 pin 41 and 9, with
+  a failure message that says re-adjudicate rather than relax. Both figures — 36 shipped
+  skill files, 61 tracked files — are recorded in the test's comment so the two are not
+  conflated again.
 
 **Quotations correctly do not count.** The run-ledger, `epics.md` and the Story 31.6
 routing table all *quote* these blocks. They are indented or fenced, so none produces a
@@ -819,6 +834,20 @@ but a reviewer should weigh them rather than take my word:
    by design: the per-developer TOML overrides are never touched, and the generator
    *refuses* rather than overwriting when the binding is unreadable (AC5.6). But a
    hand-edited generated file is a real-world thing.
+
+   > **Correction — this argument is weaker than I claimed, which strengthens MINOR.**
+   > `config.yaml` was **already** written and field-overwritten before this epic.
+   > `9b936ac:bin/cli.js:596` — that is, the pre-F26 code on `main` — does
+   > `content = writeConfigField(content, 'planning_artifacts', planningArtifacts)` and
+   > several sibling calls, then `fs.writeFileSync(configPath, content, 'utf-8')`. A user
+   > who hand-edited `knowledgebase_path`, `sprint_management_path`, `planning_artifacts`
+   > or `implementation_artifacts` **already lost those edits on the next install**, before
+   > F26 existed. What F26 changes is *where the values come from* (the committed binding
+   > rather than the install answers), not *whether the file is rewritten*. So this is not
+   > a new hazard, and it is materially weaker as an argument against MINOR than the draft
+   > above presented it. **Accuracy runs both ways: this correction is in the direction
+   > that favours the recommendation, and it is recorded for the same reason as the ones
+   > that do not.**
 3. **A global install no longer installs BMAD agents *and no longer tells you to re-run
    without `--global`*.** The old message framed a working mode as a failure, so this is a
    strict improvement — but scripts that grepped for that message will not find it.
@@ -853,9 +882,42 @@ carrying two sections the prior cuts did not need:
 
 - **"Deliberately not implemented"** records FR266's retirement and *why* — so a future
   maintainer who finds no mirror does not helpfully add one.
-- **"Known limitations"** puts the mock-verification bound, the missing publish path, the
-  `generated:` date residual and the Windows `npm test` state **in the shipped changelog**,
-  not only in an internal artifact.
+- **"Known limitations"** records the mock-verification bound, the missing publish path,
+  the `generated:` date residual and the Windows `npm test` state.
+
+> ### 🔴 `CHANGELOG.md` does not ship on npm, and this section claimed it did
+>
+> **Verified:** `npm pack --dry-run --ignore-scripts` yields **1,929 files** and
+> `CHANGELOG.md` is **not among them**. `README.md` is. The cause is plain —
+> `package.json`'s `files` list names `README.md`, `SKILLS_STRUCTURE.md`,
+> `CONTRIBUTING.md`, `QUICK_START.md` and `LICENSE`, and not `CHANGELOG.md`.
+>
+> This falsifies the sentence above ("in the shipped changelog") and the FR266 boundary
+> statement in §3 that asserted both `README.md` and `CHANGELOG.md` ship. Both are
+> corrected.
+>
+> **The decision, stated rather than silently dropped.** GitHub visibility is **not**
+> sufficient for these two sections. Both exist to reach a future *maintainer or user of
+> the package* — "do not helpfully add the mirror we deliberately did not build", and "the
+> MCP-present paths are mock-verified, so do not trust them as tested". A reader who
+> installs from npm and never visits the repository is exactly the reader they are written
+> for, and that reader was never going to see them.
+>
+> So they are **reproduced in `README.md`**, which does ship, under "Deliberately not
+> implemented" and "Known limitations of v3.18.0". `CHANGELOG.md` keeps its copy for
+> GitHub readers and now carries a blockquote saying it does not ship and asking that the
+> two be kept in step.
+>
+> **The shipped copy is deliberately the stronger of the two.** The changelog copy omitted
+> the two FR262 coverage gaps this gate found (the Knowledge Atlas rendering a
+> Confluence-backed store from stale local files; a Confluence-backed *system* requirements
+> store having no ma-agents-owned fail-loud gate) and the Windows test-suite state. The
+> README copy carries all of them, so a user reading the package does not get a
+> sanitised list.
+>
+> **This is a duplication and duplications drift.** The note in `CHANGELOG.md` is the only
+> thing holding them together, and it is a request, not a check. A follow-up could assert
+> the two in step; nothing does today.
 
 **`docs/architecture.md`** §3.6.1 (landed with Story 31.9) already states the air-gap
 posture with a Confluence-backed store; not re-edited.
