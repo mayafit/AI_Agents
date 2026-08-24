@@ -532,12 +532,18 @@ verified-clean tree, measuring **install residue only** (`.agents/`, `_bmad/`,
 `customizations-translation`, `bmad-extension`, `routing-parity`. **All seventeen came
 back clean.** So I instrumented the **whole chain**, restoring between every suite.
 
-**The mutator is `test/yes-flag.test.js` — position 1 in the chain. Residue 0 → 520.**
+**The mutator is `test/yes-flag.test.js` — position 1 in the chain. Residue 0 → 520, and
+it is the ONLY one:** the instrumented run completed all 103 suites and reported exactly
+one `MUTATES` line. Confirmed directly afterwards by running it alone from a
+verified-clean tree — **`node test/yes-flag.test.js` → exit 0, 522 dirty paths**, the
+regenerated `.agents/` tree plus `.ma-agents.json`, an `AGENTS.md.backup-*`, `_bmad/`,
+`.ma-agents-plugin-stage/`, `_bmad-output/methodology/` **and a written
+`_bmad-output/project-layout.yaml`.**
 
 That is a materially worse fact than the filed bug describes, and it is worth stating
 plainly:
 
-- `bug-tests-mutate-the-repository-they-run-in` names `repo-layout` (position 20) and
+-  `bug-tests-mutate-the-repository-they-run-in` names `repo-layout` (position 20) and
   `build-plugin` (position 65). It does not name `yes-flag`, so its stated scope is
   **incomplete**.
 - Because `yes-flag` runs **first**, **every `npm test` invocation begins by dirtying
@@ -545,10 +551,20 @@ plainly:
   working tree — including the `_bmad-output/methodology/` materialisation that produced
   `project-layout-artifact-routing`'s false 58/1 above. The bug's "concurrency" framing
   understates it: no concurrency is required, only ordering.
+- One of the paths it writes is `_bmad-output/project-layout.yaml` — **this repository's
+  own committed knowledge binding.** It happens to write the same single-repo default the
+  repository already has, so no harm has occurred; but a suite writing an authoritative,
+  committed binding into the repository it runs in is a sharper edge than "regenerates
+  `.agents/`", and it is new information relative to the filed bug.
 - This is **not** an Epic 31 defect. `yes-flag` is a pre-existing suite and its
   real-install behaviour predates F26. But it is the mechanism behind the false failure
   this gate had to chase, and the follow-up story that adopts that bug should add
   `yes-flag` to its scope.
+
+**Two files show as modified throughout and are byte-identical to `HEAD`:**
+`skills/git-workflow-skill/skill.json` (verified, sha256 `872ba9a1…`) and
+`_bmad-output/project-context.md` (`git diff` is empty). Both are git's CRLF filter, not
+changes. Left alone.
 
 **Cleanup used throughout:** `git checkout -- .agents AGENTS.md _bmad-output`, `rm` the
 root artifacts, `git clean -fdq .agents _bmad-output` — never `-x`, which would delete the
@@ -725,7 +741,7 @@ own header still says OPEN but the code says otherwise, I checked the code and s
 | Bug | Disposition |
 |---|---|
 | `bug-31-4-preflight-block-breaks-story-15-5-verbatim-invariant` | **OPEN — blocks AC9, and it is the gate's headline finding.** Independently re-confirmed here: 157/0 on `main`, 153/4 on this branch. A genuine contradiction between two delivered requirements, with three candidate resolutions and none chosen. **Needs a human adjudication.** Deliberately not patched — resolving it by weakening either test is exactly what its own report forbids |
-| `bug-tests-mutate-the-repository-they-run-in` | **OPEN, and it bit this gate twice**: it produced `project-layout-artifact-routing`'s false 58/1, and it left 524 dirty paths in a run with `repo-layout` excluded — which means **its stated scope is incomplete** (see §4). Not an Epic 31 defect; both named suites predate it |
+|  `bug-tests-mutate-the-repository-they-run-in` | **OPEN, and it bit this gate twice**: it produced `project-layout-artifact-routing`'s false 58/1, and it left 524 dirty paths in a run with `repo-layout` excluded — which means **its stated scope is incomplete** (see §4). Not an Epic 31 defect; both named suites predate it |
 | `bug-npm-test-windows-suite-health-chain` | **OPEN, partly stale.** Its headline claim — `reconfigure.test.js` test 8.8 fails standalone on Windows — **did not reproduce**: `reconfigure` exits 0 on this branch, both in-chain and standalone. The structural claim (the `&&` chain masks downstream failures) is entirely correct and is why this gate ran all 103 suites individually. The chain now halts at **position 11** (`bmad-version-bump`), not position 32 |
 | `bug-bmad-knowledge-atlas-renders-a-confluence-backed-store-from-stale-local-files` | **OPEN — a real FR262 coverage gap.** `bmad-knowledge` renders a Confluence-backed store's section from local files, silently. The AC7 negative and the AC5 gate cover the *routing* skills; the Atlas is a separate consumer that no story in this epic owns. Epic 31's cross-epic notes said the Atlas interaction "should be confirmed at the Story 31.14 gate" — **this is that confirmation, and the answer is that it is not covered.** Needs a follow-up story |
 | `bug-system-requirements-store-has-no-ma-agents-owned-confluence-gate` | **OPEN — the second FR262 coverage gap, and it is structural.** The gate block is in 9 shipped skills, all of which resolve *software* requirements. A Confluence-backed **system** requirements store's only consumers are upstream BMM workflows this package does not ship, so ma-agents owns no gate for it. Directly related to the Story 31.10 AC1/AC3/AC5 escalation: the same missing-shipped-skill fact underlies both |
@@ -781,10 +797,10 @@ failed.
 5. **The AC5 text half proves message content, not obedience.** The shipped bytes are
    correct and identical in all nine copies. Whether an LLM actually halts when it reads
    them is not something this repository can establish.
-6. **The mutation source is now attributed** — `test/yes-flag.test.js`, chain position 1,
-   residue 0 → 520 (§4). What I have **not** established is whether it is the *only* one:
-   the instrumented chain run was still in progress when this document was written, so
-   later suites may also mutate. See the addendum below for the completed result.
+6. ~~The mutation source is unattributed.~~ **RESOLVED** — `test/yes-flag.test.js`, chain
+   position 1, and it is the only one of the 103 (§4). What remains unverified is
+   `test/repo-layout.test.js`, which was excluded from the instrumented run because it is
+   the already-known mutator; I did not re-measure it.
 7. **AC2 does not re-prove the whole installer**, only that the F26 write path adds
    exactly one file and changes nothing else. The installer's own end-to-end proof is
    AC1, which is item 1 on this list.
@@ -807,13 +823,17 @@ failed.
     contradiction rather than editing the files. If a reviewer trusts the headers over this
     document, they will over-count the open defects by four.
 
-### Addendum — full-chain residue attribution
+### Addendum — full-chain residue attribution (completed)
 
-*(Populated by the instrumented re-run described in §4 item 6. If this section is empty
-or says "did not complete", item 6 stands unresolved.)*
+The instrumented run finished all **103** chain suites (`repo-layout` excluded as the
+already-known mutator), restoring the tree between every one and measuring install
+residue only.
 
-**Result: did not complete before this document was finalised.** Treat §4's mutation
-finding as unattributed.
+**Exactly one `MUTATES` line: `test/yes-flag.test.js`, position 1, residue 0 → 520.**
+
+Confirmed independently by running it alone from a verified-clean tree: exit 0, **522
+dirty paths**, including a written `_bmad-output/project-layout.yaml`. §4 is updated with
+the full consequence. Item 6 above is resolved.
 
 ---
 
