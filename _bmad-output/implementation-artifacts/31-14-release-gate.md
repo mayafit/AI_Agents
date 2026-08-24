@@ -778,6 +778,18 @@ options list does not draw out:
 SOURCE as well.** Add the preflight to `lib/bmad-extension/workflows/<name>/`'s authored
 content, at the same gateway position, so the skill body and the source *both* carry it.
 
+**The insight, stated plainly, because it is the whole reason this beats options 1–3: the
+contradiction was never between the two delivered requirements. It was between the
+requirement and the CONVERTER.** Story 31.4 says the block must be the first `##` section
+of the shipped `SKILL.md`. Story 15.5 says the converter must not add bytes. Neither
+statement contradicts the other — what contradicts is the *implementation choice* that the
+converter is where the block gets added. **Move the addition upstream of the converter and
+both invariants hold strictly, at full strength, with nothing weakened.** Options 1, 2 and
+3 each concede something: option 1 concedes strict equality across every converted skill
+forever, option 2 concedes the staleness guard, option 3 concedes the block's position in
+the body. **This concedes nothing.** That is not a preference between four trade-offs; it
+is the observation that the trade-off was an artefact of where the code put the work.
+
 Why I prefer it:
 
 - **It weakens neither delivered requirement, and unlike option 3 it does not have to
@@ -797,16 +809,53 @@ Why I prefer it:
   for everything else. **Option 2 the bug already rates weakest**, and I agree — it trades
   a real staleness hole for a green suite.
 
-**What I did not verify, and a human must before adopting this.** I have not run it. Three
-things need checking: (a) whether `lib/bmad.js`'s deploy path would then emit the block
-*twice* into some pipeline; (b) whether Story 31.4's completeness test, which fails when a
-skill resolving a binding-derived field lacks the guard, is satisfied by a source-carried
-block; (c) the 41-copy preflight invariant. On (c) I can say something concrete now:
-`collectBlocks` walks `skills/`, `lib/bmad-extension/skills/` and
-`lib/bmad-extension-plugin/skills/`, and `lib/bmad-extension/workflows/` is under **none**
-of them, so a source-carried block would **not** move the 41 — but that also means the
-41-copy invariant would stop covering the copy this resolution relies on, and AC7.1 would
-need extending to match.
+**A live trap, and the recommendation should cover it.** `remove-from-sprint` **has** a
+workflow source (`lib/bmad-extension/workflows/remove-from-sprint/workflow.md`) **and** its
+converted `lib/bmad-extension/skills/remove-from-sprint/SKILL.md` carries the preflight
+block — but it is **absent from `extFiles`**, the six-entry list at
+`test/story-15-5-workflow-skills.test.js:276` that drives `verifyContentPreserved`. So it
+is in exactly the state the four failing skills are in, and the only reason it is not a
+fifth failure is that nobody listed it. **The day anyone adds it for completeness, the
+suite breaks the same way.** *(Verified: five workflow-sourced skills carry the block in
+their converted `SKILL.md` — `add-sprint`, `add-to-sprint`, `modify-sprint`,
+`sprint-status-view`, `remove-from-sprint` — and none of the five carries it in its
+source. `create-bug-story` and `project-context-expansion` carry it in neither, which is
+why they pass.)*
+
+**So the recommendation is: add the block to `remove-from-sprint`'s source too**, not only
+to the four that happen to fail today. The invariant worth holding is *"every
+workflow-sourced skill carrying the preflight block has it in its source"* — which holds
+uniformly, survives someone completing `extFiles`, and does not depend on which subset a
+test currently enumerates. Fixing only the four leaves a latent fifth failure armed.
+
+**What I did not verify, and a human must before adopting this.** I have not run it. Two
+things still need checking: (a) whether `lib/bmad.js`'s deploy path would then emit the
+block *twice* into some pipeline; (b) whether Story 31.4's completeness test, which fails
+when a skill resolving a binding-derived field lacks the guard, is satisfied by a
+source-carried block.
+
+**On (c) — the 41-copy preflight invariant — my earlier caveat was too pessimistic, and it
+is corrected here in my own favour.** It said the 41-copy invariant "would stop covering
+the copy this resolution relies on". It would not, because **the source copy is pinned
+TRANSITIVELY**:
+
+- Story 15.5's `verifyContentPreserved` does `assert.strictEqual(body, original)` — strict
+  equality, so it binds **source ≡ converted**, byte for byte, in both directions;
+- AC7.1 digest-pins the **converted** copy, and its 41 contains
+  `lib/bmad-extension/skills/<name>/SKILL.md` for **all four** of `add-sprint`,
+  `add-to-sprint`, `modify-sprint` and `sprint-status-view` *(verified by enumeration —
+  each appears three times in the 41: once under `skills/`, once under
+  `lib/bmad-extension/skills/`, once under `lib/bmad-extension-plugin/skills/`)*.
+
+**The chain closes both ways.** Edit the source and 15.5 fails; edit the converted copy and
+AC7.1 fails. Nothing drifts silently.
+
+**The genuine residual is narrower than I first stated.** It is this: **no test digests the
+source file directly.** The pin is transitive, so it depends entirely on those four staying
+in `extFiles` — remove one and that source block goes **unpinned in both directions at
+once**, because the only thing binding it to the digested copy was the strict-equality
+assertion that entry drives. That is a real fragility and worth an assertion of its own,
+but it is a much smaller one than "AC7.1 would need extending".
 
 **This remains a recommendation. AC9 stays NOT MET, nothing here is implemented, neither
 test is weakened, and the orchestrator's halt on this item is correct.**
@@ -1329,7 +1378,13 @@ that reported green, described as though the green meant more than it did.
     rather than reverse-engineered into a tidy number.
 22. **The 31.4/15.5 recommendation in §4 is a recommendation, and I have not run it.**
     Three specific things need checking before anyone adopts it, and they are named there.
-    A gate that recommends is still not a gate that decides.
+    A gate that recommends is still not a gate that decides. *(Round 2: an independent
+    reviewer verified the proposal mechanically and endorsed it, and it now carries a
+    fourth element — `remove-from-sprint`, a latent fifth failure the four-skill fix would
+    have left armed. Two of the three unverified items stand; the third — the 41-copy
+    invariant — was **my own caveat being too pessimistic**, and §4 now shows the source
+    copy is pinned transitively in both directions. **An endorsement is still not a run,
+    and the remaining two items are still unrun.**)*
 23. **The gate suite could have lost assertions without saying so, and this document was
     citing its count.** Six sibling suites in this epic pin their own test count
     (`global-install-scope`, `project-layout-artifact-routing`, `project-layout-bind` and
@@ -1404,11 +1459,19 @@ the full consequence. Item 6 above is resolved.
 | `c06b765` | **FIX-3/FIX-4, record half.** The shipping claim, the 61/36 loose-probe figures, and semver argument 2 corrected |
 | `6900193` | **FIX-5.** The 31.4/15.5 recommendation; the 104/103/102 count reconciliation |
 
-**Verification run for the fix round, on a clean tree:**
+**Fix round 2 (the cap):**
+
+| Commit | Change |
+|---|---|
+| `7b9621a` | **FIX-A steps 1–2.** `MIRROR_VOCABULARY` extended with the verb family (`download`, `upload`, `export`, `import`, `save`, `persist`, `snapshot`, `shadow`, `stash`, `store locally`, `write … to disk`); new AC7.5e pins the reviewer's plain-English plant as a permanent control; the verb-extended re-scan's 8 new hits adjudicated and digest-pinned (16 total); `EXPECTED_TEST_COUNT` 37 → 38 |
+| `f222fd0` | **FIX-A step 3 and FIX-B.** §9 item 9 rewritten to the honest form; items 14, 23 corrected in place; new items 24–25; §3 gains the verb-extended re-scan and its adjudications; the "five hits / all five pinned" stale count corrected to eight, then re-counted to sixteen |
+| *(this commit)* | **FIX-C.** The 31.4/15.5 recommendation strengthened: the requirement-vs-converter insight stated plainly; the AC7.1 caveat corrected in my own favour (the source copy is pinned transitively); the `remove-from-sprint` latent fifth failure recorded |
+
+**Verification run for fix round 1, on a clean tree:**
 
 | Suite | Result | Exit |
 |---|---|---|
-| `release-gate-epic-31` | **37 / 0** (was 33/0; +4 assertions) | 0 |
+| `release-gate-epic-31` | **37 / 0** (was 33/0; +4 assertions) — **38 / 0 after round 2 added AC7.5e** | 0 |
 | `project-layout-confluence-routing` | 97 / 0 | 0 |
 | `project-layout-confluence-page-tree` | 157 / 0 | 0 |
 | `project-layout-staleness-guard` | 64 / 0 | 0 |
