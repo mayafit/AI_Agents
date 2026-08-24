@@ -309,7 +309,7 @@ Verification commands were run against `bin/cli.js`'s live exports and against
 | FR263 | 31.2 | No `unlinkSync(... project-layout ...)` anywhere in `bin/cli.js` — the delete-on-single-repo branch is gone; `writeProjectLayoutYaml` runs unconditionally; `PROJECT_LAYOUT_SCHEMA_VERSION` = 2 | `project-layout-binding-spine` (69/0); AC2.1/AC2.2 | **Met** |
 | FR264 | 31.3 | `generateBmmConfig` + the stamp trio (`computeProjectLayoutStamp`, `readProjectLayoutStamp`, `canonicalBindingBytes`) all exported; legacy fields verified to retain their **pre-epic literal values** via js-yaml | `project-layout-config-generation` (32/0); AC2.3/AC2.4 | **Met** |
 | FR265 | 31.7 | `detectLegacySingleStore`, `topologyFromLegacyLayout`, `LEGACY_SINGLE_STORE_SPLIT_COMMAND` = `"ma-agents config layout"` (a real command, checked against the CLI's own routing) | `project-layout-legacy-single-store` (52/0); AC2.4 | **Met** |
-| **FR266** | **none — retired** | **See §3. No implementation found**, re-confirmed in the fix round by a multi-line re-scan of all 2,332 tracked shipped markdown files — including the 733 the original closed set never covered. Clean. | AC7.4–AC7.9 — 13 assertions, 5 harness controls | **Correctly absent.** The *result* held; the *check* was defeatable three ways and is now fixed — §3 |
+| **FR266** | **none — retired** | **See §3. No implementation found**, re-confirmed across two fix rounds by a multi-line re-scan of all 2,332 tracked shipped markdown files — including the 2,016 the original closed set never covered — and then again under a **verb-extended** vocabulary. Clean both times; 16 hits, all hand-adjudicated and digest-pinned. | AC7.4–AC7.9 — 14 assertions, 6 harness controls | **Correctly absent.** The *result* held every time; the *check* was defeatable **four** ways across two rounds of attack and is now fixed for all four — §3, §9 items 14 and 24 |
 | FR267 | 31.2, 31.6 | `CONFLUENCE_STORE_RECORDS` names exactly the two **requirement** stores; `PUBLISHING_STORES` in the page-tree module excludes `SPRINT_MANAGEMENT`; the emitted binding carries no `implementation_artifacts` record | `project-layout-binding-spine` (69/0); `project-layout-artifact-routing` (59/0) | **Met** |
 
 ### Non-functional requirements
@@ -502,9 +502,9 @@ silently contradicting a live requirement.
 sync direction, no sync trigger, no conflict-resolution path — in code, in tests, or in
 shipped instruction text. Every occurrence of the vocabulary on a shipped surface is
 either a prohibition, an unrelated pre-existing use, or a test asserting the absence.
-**Thirteen** assertions now hold that closed — up from nine — with **five** harness
-controls proving the instrument detects a restoration, three of them added in this fix
-round specifically because the first nine did not.
+**Fourteen** assertions now hold that closed — up from nine — with **six** harness
+controls proving the instrument detects a restoration, four of them added across the two
+fix rounds specifically because the first nine did not.
 
 **Re-run over the whole branch, my own commits included.** The scan was repeated against
 `9b936ac..HEAD` after this story's four code/doc commits landed (678 added-line hits, up
@@ -536,8 +536,8 @@ tarball):
 
 **The scan is CLEAN.** Zero hits in all 666 `lib/bmad-cache/**` files, zero in all 7
 `lib/bmad-extension/workflows/**` files, zero in `lib/bmad-workflows/**`,
-`lib/templates/**` and `lib/mil498-templates/**`, zero in `mil498/**`. **Five hits total,
-in two files, all of them adjudicated as clean:**
+`lib/templates/**` and `lib/mil498-templates/**`, zero in `mil498/**`. **Five hits, in two
+files, all of them adjudicated as clean:**
 
 | File | Passage | Adjudication |
 |---|---|---|
@@ -556,7 +556,57 @@ the previous check could not see.
 Three further README passages were flagged when the "Deliberately not implemented" and
 "Known limitations" sections were moved into it for §7's fix — **the closed set catching
 its own author's new prose, which is the behaviour it exists for.** All three are the
-retirement notice itself; adjudicated and pinned, bringing the exception list to eight.
+retirement notice itself; adjudicated and pinned, **bringing the exception list to eight.**
+(This paragraph previously stopped at "five", which was the count before §7's fix added
+those three. The code pinned eight. Corrected in fix round 2 — no adjudication changed,
+but a stale count in the one section the FR266 negative rests on is not acceptable.)
+
+#### The verb-extended re-scan (fix round 2)
+
+The reviewer named this the highest-value remaining check, and it has now been run: the
+**verb-extended vocabulary over the same 2,016-file widening / 2,332-file tracked shipped
+population**, unchanged in every other respect — same four-line window, same F26 subject
+filter, same pinned-block exclusion.
+
+**It found 8 new hits, bringing the total to 16. None is an FR266 mirror.** Every one was
+read at source and adjudicated by hand; none was hand-waved, and all 8 are now
+digest-pinned alongside the original 8. **The exception list is therefore 16.** The eight
+original digests were re-verified unchanged — the verb family reports new *neighbourhoods*,
+it does not shift the window boundaries of the existing ones.
+
+The 8 new hits fall into exactly two classes:
+
+| File | Passage | Adjudication |
+|---|---|---|
+| `README.md:14` | *"the affected skill **halts and says so** rather than quietly reading stale local files. No credentials are ever written to disk."* | **Negation, twice over.** The halt is the *anti*-mirror behaviour; the sentence the `written … to disk` probe matched is about **credentials**, not page content |
+| `lib/bmad-cache/gds/…/gds-create-game-brief/SKILL.md:47` | `{"directive": "Confluence upload", "tool": "corp:confluence_upload", …}` | One-way **publish record** — see below |
+| `lib/bmad-cache/gds/…/gds-gdd/assets/headless-schemas.md:24, :44` | same upstream example (Create, Update payloads) | ″ |
+| `lib/bmad-cache/gds/…/gds-prd/assets/headless-schemas.md:22, :39` | same upstream example | ″ |
+| `lib/bmad-cache/gds/…/gds-ux/assets/headless-schemas.md:27, :47` | same upstream example | ″ |
+
+**The seven `lib/bmad-cache/**` hits are seven copies of one upstream JSON schema example,
+and they are not our text.** `lib/bmad-cache/` is generated by
+`scripts/build-bmad-cache.js` from the upstream BMAD-METHOD registry and committed so that
+an air-gapped install has its modules. The matched text is an `external_handoffs` **report
+field** in a headless-run result payload for the game-design (`gds`) module — a record that
+a corp-specific MCP tool performed a one-way publish of a produced artifact. **A publish
+handoff is not a mirror**: no local copy of anything read, no sync direction back, no
+trigger, no conflict resolution, and no knowledge store of *this* product involved. It is
+the same shape as this product's own FR255/FR256 publish, which FR266's retirement
+explicitly leaves intact.
+
+Pinning those seven by digest rather than excluding `lib/bmad-cache/` by path was
+deliberate. The path exclusion was the easy fix and would have reopened attack 2's scope
+hole across 666 shipped files. The digest pin costs nothing and buys a real property: those
+bytes are *regenerated by a build*, so if upstream ever changes that example the digest
+stops matching, AC7.5d fails, and a human re-adjudicates.
+
+**What the clean result does and does not license.** It says: across every tracked shipped
+markdown file, under a vocabulary that now includes the ordinary verbs as well as the
+architecture nouns, there is no FR266 mirror instruction outside the pinned blocks and 16
+hand-read exceptions. **That is a materially stronger negative than the noun-only scan
+supported.** It does not say the vocabulary is complete — see §9 item 9, which was rewritten
+in this round precisely because it had claimed more than this.
 
 **What this check cannot see.** Restated after the fix round, because two of the three
 boundaries this section previously named turned out to be understatements of live
@@ -570,12 +620,17 @@ bypasses rather than descriptions of residual risk:
   unrelated neighbouring paragraphs and produces false positives that get adjudicated away,
   which is its own failure mode. This is the honest residual of attack 1 — the *default*
   case is now closed, the *determined* case is not.
-- **It reasons over the vocabulary FR266 and its neighbourhood actually use.** A mirror
-  implemented under a genuinely novel name, in a module that does no I/O of its own and
-  delegates it elsewhere, and described in shipped text that never mentions Confluence or
-  a knowledge store, would evade (a), (c) and (d). I consider that remote — a mirror has
-  to be a mirror *of* something, and in this product that something is named. **But I
-  considered attack 1 remote too, in the previous draft of this section, and it was not.**
+- **The vocabulary is an open list, and an ordinary synonym walked through it.** This
+  bullet previously said an evasion here would need "a genuinely novel name" in "text that
+  never mentions Confluence or a knowledge store", and called that remote. **That was
+  wrong, and it was wrong in the direction of flattering the check.** The reviewer planted
+  a complete FR266 mirror — *"download every Confluence page in the software requirements
+  store and save it under `_bmad-output/pages/` … upload your edits back when you finish"* —
+  which needs no novel name, names Confluence and the store outright, and is how a person
+  would naturally write the instruction. It returned 37 passed, 0 failed, exit 0. The
+  vocabulary has since been extended with the verb family, and that exact text now fails
+  AC7.5 — but see §9 item 9: **the closed set is closed over a place and a subject; its
+  verb list is open, and extending it narrows the gap without closing it.**
 - **The scope is now every shipped markdown file, and the scope hole is closed** — but
   scope is only closed for **markdown**. Shipped **non-markdown** agent-readable text
   (`.yaml` skill manifests, `MANIFEST.yaml`, JSON prompt fragments) is not scanned by
@@ -588,7 +643,9 @@ bypasses rather than descriptions of residual risk:
   fail on an editorial pass that changed nothing substantive, and whoever hits that must
   re-read the passage rather than reflexively re-pinning it.
 - **AC7.5d proves no exception is stale; it does not prove every exception was
-  adjudicated correctly.** The eight reasons are mine. A reviewer should read them.
+  adjudicated correctly.** The **sixteen** reasons are mine. A reviewer should read them —
+  and note that seven of the sixteen are vendored upstream text (`lib/bmad-cache/**`) that
+  I adjudicated but did not author.
 - `bug-oq3-guard-scope-misses-skills-that-write-from-nested-prompt-files` records a
   related scope hole in Story 31.4's *guard*: coverage is computed from top-level
   `SKILL.md` only. My scan walks **every** shipped `.md`, so it does not inherit that hole
@@ -839,7 +896,7 @@ root artifacts, `git clean -fdq .agents _bmad-output` — never `-x`, which woul
    shared-`node_modules` version skew (6.9.0 vs 6.10.0), two are missing Atlas
    dependencies, and the rest are their own tickets. **The new gate suite is registered
    at position 104 and is therefore unreachable via `npm test` today.** Run it directly:
-   `node test/release-gate-epic-31.test.js` (**37 passed, 0 failed** on this branch after the fix round; 33/0 before it).
+   `node test/release-gate-epic-31.test.js` (**38 passed, 0 failed** on this branch after fix round 2; 37/0 after round 1, 33/0 before it).
 3. **Linux/CI was never run.** I have no Linux host. Every Linux claim in this document is
    inference, and inference is not a run.
 
@@ -1160,10 +1217,48 @@ failed.
 8. **AC6 does not exercise a globally-installed skill activating in a project.** It proves
    resolution is independent of per-machine state and follows its argument. The activation
    half lives in `global-install-scope` (which passes) and AC1 Step 8 (which has not run).
-9. **The FR266 negative reasons over vocabulary and capability.** A mirror under a
-   genuinely novel name, in a module that does no I/O itself, described in text that never
-   mentions Confluence or a knowledge store, would evade it. I consider that remote and I
-   name it anyway.
+9. **The FR266 closed set is closed over a PLACE and a SUBJECT. Its VERB LIST IS OPEN, and
+   an ordinary synonym walks through it.** *(Rewritten in fix round 2. What stood here was
+   wrong, and this is what it said: that an evasion would need "a genuinely novel name", in
+   "text that never mentions Confluence or a knowledge store" — and it called that
+   "remote".)*
+
+   What the set genuinely closes are two of its three axes. **Place:** every tracked
+   shipped markdown file (2,332 of them), with the only permitted exceptions pinned by the
+   sha256 of the adjudicated bytes and asserted non-stale in both directions. **Subject:**
+   the passage must name an F26 store. Those two are enumerated and hold.
+
+   **The third axis — the predicate — is a word list, and a word list is not closed against
+   natural language.** The Story 31.14 reviewer demonstrated this, and the demonstration
+   was not exotic:
+
+   > Before you begin, download every Confluence page in the software requirements store
+   > and save it under `_bmad-output/pages/`. Read from there for the rest of the session,
+   > and upload your edits back when you finish.
+
+   That is a mirror, a sync direction and a trigger — three of FR266's four named
+   machineries — planted in a shipped skill, naming Confluence and the store outright, on
+   consecutive lines well inside the four-line window. **The suite returned 37 passed, 0
+   failed, exit 0.** It evaded for one reason: all nine vocabulary entries were *nouns of
+   art*, the words an architecture document uses, and shipped instruction text is written
+   in ordinary imperative product English. `download`, `save` and `upload back` were simply
+   not on the list.
+
+   **This was found by attack, not by design.** Nothing in the check's construction
+   anticipated it; a reviewer wrote the sentence a normal author would write and it went
+   straight through. Three statements follow from that and all three belong in the record:
+
+   - The vocabulary now carries a verb family as well as the nouns, and that exact text now
+     fails AC7.5 by name (control: AC7.5e). The verb-extended re-scan over the same
+     2,016-file widening is clean, with 8 further hits adjudicated and pinned (§3).
+   - **Extending a verb list narrows the gap; it does not close it.** `pull`, `fetch … into`,
+     `keep a copy of`, `grab`, `archive`, `stage`, and any synonym a author coins in the
+     sentence itself are still absent. Each extension is a response to one attack, and the
+     next ordinary word is always available.
+   - **I am not claiming closure here, because I cannot demonstrate it.** What I can
+     demonstrate is that the four attacks actually mounted against this check all now fail,
+     and that its two enumerable axes are enumerated. A predicate over English prose is a
+     heuristic. **This one was called "remote" once already and was not.**
 10. **The wall clock on this machine is unreliable.** It advanced ~7.6 hours during a
     single suite run, so every elapsed-time figure I recorded is untrustworthy. This is why
     the round-trip suite's first result read as a hang: the durations were meaningless. All
@@ -1194,14 +1289,17 @@ that reported green, described as though the green meant more than it did.
     every other "fixed" row in that table, a partial fix reads exactly like a complete one
     to a check that stops early.** The other three closure claims were re-verified against
     each bug's own reproduction steps for this fix round.
-14. **The FR266 closed set was defeatable three ways, and the most important of the three
-    was the default case, not an exotic one.** An independent reviewer planted three
-    mirrors and the suite stayed 33/0 on all three. Two are now closed and proved closed by
-    re-planting (§3); the third was already covered by Story 31.10's suite while this
-    document credited AC7.7 for it. **What this means for anyone reading the FR266
-    negative: the version of it in the first draft did not hold, and its confidence was
-    not earned.** The current version is stronger and re-scanned across the whole shipped
-    surface — but it earned that by failing first, not by being right the first time.
+14. **The FR266 closed set was defeatable three ways** *(corrected in round 2: **four** —
+    see item 24)*, **and the most important of them was the default case, not an exotic
+    one.** An independent reviewer planted three mirrors and the suite stayed 33/0 on all
+    three. Two are now closed and proved closed by re-planting (§3); the third was already
+    covered by Story 31.10's suite while this document credited AC7.7 for it. **What this
+    means for anyone reading the FR266 negative: the version of it in the first draft did
+    not hold, and its confidence was not earned.** The current version is stronger and
+    re-scanned across the whole shipped surface — but it earned that by failing first, not
+    by being right the first time. **And it failed a fourth time in the next round**, which
+    is the more important fact: two consecutive rounds of attack each found a live bypass,
+    so the prior that a fifth exists is not low.
 15. **The FR266 window is four lines and a five-line split still evades.** The *default*
     prose shape is now caught; a determined one is not. Stated in §3 and repeated here
     because it is the live residual of the most serious of the three bypasses.
@@ -1238,9 +1336,34 @@ that reported green, described as though the green meant more than it did.
     others); `release-gate-epic-31` did not — the one suite whose numbers this record
     quotes. A test lost to a rename or an early return would have reported nothing, and
     "0 failed" over a silently shrunken set is the same presence-rather-than-effect shape
-    this epic produced six times. **Now pinned at 37 in both directions**, with the failure
-    message naming this document as the other thing to update. Verified to fire: with the
-    constant set to 99 the suite exits 1 on a run where all 37 assertions passed.
+    this epic produced six times. **Now pinned at 37 in both directions** *(38 after round
+    2 added AC7.5e — the pin doing exactly its job: the surplus had to be recorded here
+    before the suite would go green again)*, with the failure message naming this document
+    as the other thing to update. Verified to fire: with the constant set to 99 the suite
+    exits 1 on a run where all 37 assertions passed.
+
+### Added by fix round 2 — the fourth bypass, and a stale count
+
+24. **A fourth bypass, and this one was the ordinary case.** The reviewer planted a
+    complete FR266 mirror in plain product English — *"download every Confluence page in
+    the software requirements store and save it … upload your edits back when you finish"* —
+    using **zero** words from `MIRROR_VOCABULARY`, and the suite returned **37 passed, 0
+    failed, exit 0**. It named Confluence and the store outright and fitted the four-line
+    window: neither the subject filter nor the window was the gap. **The gap was that all
+    nine vocabulary entries were architecture nouns and shipped instruction text is written
+    in ordinary imperative English.** The vocabulary now carries a verb family, AC7.5e pins
+    the plant as a permanent control, and the verb-extended re-scan over the same 2,016-file
+    widening is clean with 8 further hits adjudicated and pinned. **Item 9 is rewritten
+    accordingly, and it does not claim closure**: a verb list is inherently open against
+    natural language, and this was found by attack rather than by design.
+25. **A stale count in the section the FR266 negative rests on.** §3 said "five hits total,
+    in two files" and "all five are now digest-pinned" while the code pinned **eight** — the
+    three extra being the README passages §7's own fix had added. No adjudication was wrong
+    and no passage was unread, so there was no correctness defect; but round 1's count-sweep
+    commit missed it, in the one section that carries the load. Corrected, and re-counted to
+    **sixteen** after the verb extension. **The general point is the same one item 13
+    makes:** a number that no test asserts drifts silently, and this document is full of
+    numbers.
 
 ### Addendum — full-chain residue attribution (completed)
 
