@@ -1343,15 +1343,85 @@ test('AC7.7 the Confluence page-tree module names FR266 retired and reads no pag
     .split('\n')
     .filter((l) => !/^\s*\/\//.test(l))
     .join('\n');
-  const requires = [...code.matchAll(/require\(['"]([^'"]+)['"]\)/g)].map((m) => m[1]).sort();
-  const forbidden = requires.filter((r) => /^(https?|net|tls|dgram|child_process|axios|node-fetch|undici)$/.test(r));
+  // ─── Story 31.14 fix round, FIX-2 attack 3 ────────────────────────────────
+  //
+  // The previous guard here was defeatable and the reviewer defeated it. Its
+  // forbidden-module regex was `/^(https?|net|tls|...)$/`, which does NOT match
+  // a `node:` PREFIX, and its writer list was five SYNC names. So
+  // `require('node:https')` plus `fs.promises.writeFile` walked straight past a
+  // green suite. (The code half was never actually undefended: Story 31.10's
+  // suite bans `require(` in this module outright, and THAT is what caught the
+  // planted attack. This assertion was simply the weaker of the two guards.)
+  //
+  // The primary assertion is therefore now the strong one — this module
+  // requires NOTHING — with the enumerated lists kept behind it as the
+  // diagnostic that names WHAT was added, and both holes closed.
+  const requires = [...code.matchAll(/require\s*\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]).sort();
+  assert.deepStrictEqual(requires, [],
+    `lib/confluence-page-tree.js is a pure data module and must require NOTHING — it cannot ` +
+    `acquire a capability it never imports. Found: ${JSON.stringify(requires)}`);
+
+  // Network, with the `node:` prefix stripped before matching. A bare
+  // `require('https')` and `require('node:https')` are the SAME MODULE and must
+  // be the same finding.
+  const NETWORK_MODULES = /^(https?|http2|net|tls|dgram|dns|child_process|worker_threads|inspector|axios|node-fetch|undici|got|superagent|request)$/;
+  const forbidden = requires
+    .map((r) => r.replace(/^node:/, ''))
+    .filter((r) => NETWORK_MODULES.test(r));
   assert.deepStrictEqual(forbidden, [],
     `the page-tree module must not be able to reach a network: ${JSON.stringify(forbidden)}`);
-  const writers = ['writeFileSync', 'appendFileSync', 'mkdirSync', 'createWriteStream', 'copyFileSync']
-    .filter((w) => code.includes(w));
+
+  // Dynamic acquisition, which no enumeration of require ARGUMENTS can see.
+  for (const [re, what] of [
+    [/\bimport\s*\(/, 'a dynamic import()'],
+    [/\bcreateRequire\b/, 'module.createRequire'],
+    [/\bprocess\.binding\b/, 'process.binding'],
+    [/\beval\s*\(|new\s+Function\s*\(/, 'eval / new Function'],
+  ]) {
+    assert.ok(!re.test(code),
+      `the page-tree module must not be able to acquire a capability dynamically: found ${what}`);
+  }
+
+  // Disk writes. The previous list was SYNC-ONLY, so every `fs.promises` and
+  // callback-style writer was invisible to it.
+  const writers = [
+    'writeFileSync', 'appendFileSync', 'mkdirSync', 'createWriteStream', 'copyFileSync',
+    'writeSync', 'rmSync', 'renameSync', 'openSync', 'truncateSync', 'cpSync',
+    // …and the async half of every one of them, plus the promises namespace.
+    'writeFile', 'appendFile', 'mkdtemp', 'copyFile', 'fs.promises', 'promises.write',
+    'fsPromises', 'fs/promises',
+  ].filter((w) => code.includes(w));
   assert.deepStrictEqual(writers, [],
     `the page-tree module must not be able to write to disk — that is how it would become a ` +
     `mirror. Found: ${JSON.stringify(writers)}`);
+});
+
+test('AC7.7b [harness] the widened capability guard CATCHES the node:-prefix + async-fs bypass', () => {
+  // The control for attack 3. This is the exact shape the reviewer planted and
+  // the old guard passed: a `node:`-prefixed network require, which its
+  // unanchored-to-prefix regex did not match, and an async write, which its
+  // five sync writer names did not name.
+  const planted = "const https = require('node:https');\nawait fs.promises.writeFile(dest, body);\n";
+
+  // The BYPASS, demonstrated against the old assertions.
+  const oldNetwork = /^(https?|net|tls|dgram|child_process|axios|node-fetch|undici)$/;
+  const plantedRequires = [...planted.matchAll(/require\s*\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]);
+  assert.ok(plantedRequires.includes('node:https'), 'the plant must actually require a network module');
+  assert.ok(!plantedRequires.some((r) => oldNetwork.test(r)),
+    'the harness is pointless unless the OLD regex genuinely missed the node: prefix');
+  const oldWriters = ['writeFileSync', 'appendFileSync', 'mkdirSync', 'createWriteStream', 'copyFileSync'];
+  assert.ok(!oldWriters.some((w) => planted.includes(w)),
+    'and unless the OLD writer list genuinely missed the async write');
+
+  // The FIX: both halves are now findings.
+  const NETWORK_MODULES = /^(https?|http2|net|tls|dgram|dns|child_process|worker_threads|inspector|axios|node-fetch|undici|got|superagent|request)$/;
+  assert.ok(plantedRequires.map((r) => r.replace(/^node:/, '')).some((r) => NETWORK_MODULES.test(r)),
+    'the widened network list must match node:https');
+  assert.ok(['writeFile', 'fs.promises'].some((w) => planted.includes(w)),
+    'and the widened writer list must match fs.promises.writeFile');
+  // And the primary assertion — require NOTHING — catches it regardless of any list.
+  assert.ok(plantedRequires.length > 0,
+    'the require-nothing assertion catches this without needing either list to be complete');
 });
 
 test('AC7.8 no shipped file path suggests a mirror store (no mirror/cache dir is created anywhere)', () => {
