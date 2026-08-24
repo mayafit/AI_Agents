@@ -720,7 +720,7 @@ posture with a Confluence-backed store; not re-edited.
 `_bmad-output/implementation-artifacts/bug-*.md`. Every one categorised. Where a bug's
 own header still says OPEN but the code says otherwise, I checked the code and say so.
 
-### Closed by this epic (5)
+### Closed by this epic (4)
 
 | Bug | Evidence |
 |---|---|
@@ -728,13 +728,34 @@ own header still says OPEN but the code says otherwise, I checked the code and s
 | `bug-read-existing-layout-collapses-two-stores-onto-software-store` | Header still says "OPEN — blocks Story 31.5". **The code disagrees and the code is right.** `readExistingLayout` now returns the full three-record `topology` additively, with `knowledge base` kept only as a back-compat alias onto the software store. Pinned by `project-layout-two-store-round-trip` 52/0 |
 | `bug-serialize-sprint-management-passes-store-modes-enum` | Header says OPEN. **Fixed.** `serializeSprintManagement` now passes `SPRINT_MODES` to `assertWritableMode`; `STORE_MODES` survives only in the explanatory comment. Pinned by `project-layout-enum-single-source` 31/0 |
 | `bug-show-current-layout-prints-undefined-for-confluence-store` | Header says OPEN. **Fixed.** `showCurrentLayout` renders through the per-backend identity view (`summarizeStoreIdentity` / `storeIdentityFields` / `renderIdentityValue`), which throws rather than degrading for a backend with no view |
-| `bug-store-from-raw-open-codes-the-default-backend` | Header says OPEN. **Fixed.** `storeFromRaw` now reads `DEFAULT_STORE_BACKEND`; **zero** literal `'file-system'` occurrences remain in it |
 
-> **Four bug files carry a stale `Status:` header.** They say OPEN (three of them "blocks
-> Story 31.5") when the code shows them fixed. That is a records-hygiene problem, not a
-> code problem — but a reader trusting the headers would over-count this epic's open
-> defects by four. Left unedited, per this epic's standing rule that a gate reports
+> **Three bug files carry a stale `Status:` header.** The three above say OPEN (all three
+> "blocks Story 31.5") when the code shows them fixed. That is a records-hygiene problem,
+> not a code problem — but a reader trusting those headers would over-count this epic's
+> open defects by three. Left unedited, per this epic's standing rule that a gate reports
 > contradictions rather than resolving them.
+>
+> **This count was four in the first draft of this record, and the fourth was wrong.**
+> The reviewer checked `bug-store-from-raw-open-codes-the-default-backend` against the
+> source and found the file's OPEN header is **right and this record was wrong**; it is
+> now dispositioned as open, below. Because that claim was falsifiable and false, the
+> other three were **re-verified against `git show HEAD:bin/cli.js`** for this fix round
+> rather than restated:
+>
+> - `read-existing-layout-collapses…` — its repro's *Actual* was "the system store is
+>   rewritten as a `file-system` store pointing at the software store's location". The
+>   pre-population path is `existingRecordForConcern` (`bin/cli.js:3008`), which now reads
+>   `topology[concern.key]` **first** and falls back to the collapsed `knowledgebase` view
+>   only when there is no topology. Each store pre-populates from its own record.
+>   **Genuinely fixed.**
+> - `serialize-sprint-management-passes-store-modes-enum` — `serializeSprintManagement`
+>   (`bin/cli.js:2377`) reads `assertWritableMode(…, SPRINT_MODES, 'sprint_management')`.
+>   `STORE_MODES` survives only in the explanatory comment above it. **Genuinely fixed.**
+> - `show-current-layout-prints-undefined-for-confluence-store` — its repro's *Actual* was
+>   `Mode: undefined / Path: undefined`. `showCurrentLayout` (`bin/cli.js:4600`) now
+>   renders every store through `storeIdentityFields`, which **throws** for a backend with
+>   no registered view rather than falling through to the file-system field names — the
+>   exact substitution that produced the `undefined`s. **Genuinely fixed.**
 
 ### Open, owned by a named follow-up, and bearing directly on this gate (5)
 
@@ -746,10 +767,11 @@ own header still says OPEN but the code says otherwise, I checked the code and s
 | `bug-bmad-knowledge-atlas-renders-a-confluence-backed-store-from-stale-local-files` | **OPEN — a real FR262 coverage gap.** `bmad-knowledge` renders a Confluence-backed store's section from local files, silently. The AC7 negative and the AC5 gate cover the *routing* skills; the Atlas is a separate consumer that no story in this epic owns. Epic 31's cross-epic notes said the Atlas interaction "should be confirmed at the Story 31.14 gate" — **this is that confirmation, and the answer is that it is not covered.** Needs a follow-up story |
 | `bug-system-requirements-store-has-no-ma-agents-owned-confluence-gate` | **OPEN — the second FR262 coverage gap, and it is structural.** The gate block is in 9 shipped skills, all of which resolve *software* requirements. A Confluence-backed **system** requirements store's only consumers are upstream BMM workflows this package does not ship, so ma-agents owns no gate for it. Directly related to the Story 31.10 AC1/AC3/AC5 escalation: the same missing-shipped-skill fact underlies both |
 
-### Open, owned by a named follow-up, not blocking this gate (7)
+### Open, owned by a named follow-up, not blocking this gate (8)
 
 | Bug | Disposition |
 |---|---|
+| `bug-store-from-raw-open-codes-the-default-backend` | **OPEN — needs an owner. This record previously listed it as CLOSED and that was false**, on evidence — *"zero literal `'file-system'` occurrences remain in it"* — that is checkable and does not hold. `git show HEAD:bin/cli.js`, `storeFromRaw`, **line 1830**: `const entry = { backend: 'file-system', mode, path: resolvedPath };`. The bug file's own **Reproduction step 3** is *"Observe the `backend: 'file-system'` literal in the file-system branch's returned record"*, so the literal that is still there is precisely the one the bug is named for. **Half the fix landed**: the read at the top of the function does use `DEFAULT_STORE_BACKEND`, which is why a partial check read as a complete one. The returned record still open-codes the default. Not a live defect today — `DEFAULT_STORE_BACKEND` *is* `'file-system'`, so the value is correct by coincidence — and it is the same latent-divergence class as the sprint-modes enum bug above: it becomes wrong the moment the default changes. **Severity low, but the disposition is what matters here: the file's OPEN header is right and this gate's first draft was wrong.** |
 | `bug-oq3-guard-scope-misses-skills-that-write-from-nested-prompt-files` | OPEN, filed 2026-08-23. A scope hole in Story 31.4's merged guard: coverage is computed from top-level `SKILL.md` only, so a skill writing planning artifacts from a nested `prompts/` file escapes both the preflight and its own completeness check. Not a live data-loss path. **Note:** the 41-copy invariant is unaffected — it counts copies of the block, not the skills that should have one |
 | `bug-dev-epic-pipeline-does-not-own-the-story-status-field` | OPEN, high, **process defect not product defect** — story subagents write `done` on self-report, inverting the review gate. Out of scope for a release gate but worth a maintainer's attention, since it is the mechanism by which an unreviewed story can look finished |
 | `bug-knowledgebase-path-has-no-defined-meaning-for-a-confluence-store` | OPEN, explicitly filed as **a question, not a defect**. `knowledgebase_path` is written as `.` for a Confluence store because that is what the old code fell through to. Nothing is broken today; AC2.3 pins the value at `.` precisely because changing it would move resolved artifact paths and violate NFR82. Deciding it later is the correct sequencing |
@@ -766,10 +788,19 @@ own header still says OPEN but the code says otherwise, I checked the code and s
 | `bug-wds-installed-by-default-creates-design-artifacts` | `ready-for-dev` — the PRD amendment landed 2026-08-02. Epic 30 territory, has its own path forward |
 | `bug-docs-dir-created-empty-by-default-on-every-install` | **WON'T FIX**, closed 2026-08-02. No action |
 
-**Totals: 5 closed by this epic, 12 open with a named owner or follow-up, 3 out of scope
-(one of them already closed as WON'T FIX).** Of the 12 open, **one blocks AC9**
+**Totals: 4 closed by this epic, 13 open with a named owner or follow-up, 3 out of scope
+(one of them already closed as WON'T FIX).** Of the 13 open, **one blocks AC9**
 (31.4/15.5) and **two are genuine FR262 coverage gaps** (Atlas staleness; the system
 requirements store having no ma-agents-owned gate).
+
+> **These totals were 5 / 12 / 3 in the first draft.** One bug moved from closed to open
+> because its closure evidence was false — see `store-from-raw` above. The correction is
+> recorded rather than applied silently, because a gate that quietly restates its own
+> numbers is worth nothing. The general lesson, which applies to every "fixed" row in this
+> section: **a partial fix reads exactly like a complete one to a check that stops at the
+> first piece of confirming evidence.** The three surviving closure claims were each
+> re-verified against the bug file's own reproduction steps for this fix round, not
+> against the fix's own description.
 
 ---
 
