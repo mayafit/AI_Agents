@@ -841,10 +841,31 @@ the full consequence. Item 6 above is resolved.
 
 | Commit | Change |
 |---|---|
-| `e4acea4` | `test/release-gate-epic-31.test.js` (33 assertions, 33/0) + registration at chain position 104 |
+| `e4acea4` | `test/release-gate-epic-31.test.js` (33 assertions) + registration at chain position 104 |
 | `4c10ffd` | `.github/scripts/offline-install-verify.sh` steps 7–8; `.github/workflows/offline-install.yml` cap and summary |
 | `ec097ad` | `3.17.1` → `3.18.0`; `CHANGELOG.md`; `README.md`; rebuilt plugin `marketplace.json` |
-| *(this)* | This gate record |
+| `a8833b5` | This gate record |
+| `8df081b` | `sprint-status.yaml`: 31.14 → `review`, findings on its key |
+| `9d2d265` | Two latent `pipefail` aborts in the new air-gap phases; `read_field` anchored and verified against real generated output |
+| `f78584a`, `69a3660`, `73d6836` | FR266 scan re-run over the whole branch and its scope limits stated; the `yes-flag` attribution |
+
+**Final verification run, on a clean tree, after every change above:**
+
+| Suite | Result |
+|---|---|
+| `release-gate-epic-31` (new) | **33 / 0**, exit 0 |
+| `project-layout-artifact-routing` | 59 / 0 |
+| `project-layout-binding-spine` | 69 / 0 |
+| `project-layout-config-generation` | 32 / 0 |
+| `project-layout-enum-single-source` | 31 / 0 |
+| `project-layout-confluence-routing` | 97 / 0 |
+| `project-layout-confluence-page-tree` | 157 / 0 |
+| `plugin-manifests` (bundle drift, after the rebuild) | 29 / 0 |
+
+The worktree is clean afterwards apart from `skills/git-workflow-skill/skill.json`, which
+is byte-identical to `HEAD` (git's CRLF filter) and was left alone as instructed. **The
+new gate suite writes nothing into the repository it runs in** — verified by running it
+and re-checking `git status`.
 
 **Not done, deliberately:** no push, no PR, no npm publish — those are human gates. No
 edit to the PRD, to Decision P5-9, or to `epics.md`. No filed defect fixed. Bug B3 (root
