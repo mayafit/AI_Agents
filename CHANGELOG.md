@@ -149,6 +149,12 @@ close.
 
 ### Known limitations
 
+> **This file does not ship on npm.** `CHANGELOG.md` is not in `package.json`'s
+> `files` list, so it reaches readers on GitHub only. The two sections above are
+> therefore reproduced in `README.md` — under "Deliberately not implemented" and
+> "Known limitations of v3.18.0" — which **is** in the published tarball. Keep
+> the two in step.
+
 - **Every claim in this release about behaviour with a Confluence MCP *present*
   is mock-verified, not live.** No authorised Confluence MCP was available to
   the implementation or to any review, so the MCP-present branches were

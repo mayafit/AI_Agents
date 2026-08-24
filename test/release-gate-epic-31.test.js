@@ -1195,6 +1195,17 @@ const ADJUDICATED_MIRROR_PASSAGES = Object.freeze({
   '1000f5f8': 'README.md:221 — "one page per markdown artifact, nested to mirror the source '
     + 'folders". Describes the page TREE\'S SHAPE, which is FR255/FR256\'s actual '
     + 'requirement — not a mirror of page CONTENT.',
+  // README.md — the "Deliberately not implemented" section, moved here in the
+  // Story 31.14 fix round because CHANGELOG.md does NOT ship on npm (verified:
+  // `npm pack --dry-run` = 1,929 entries, CHANGELOG.md not among them) and the
+  // record had claimed these limitations were "in the shipped changelog". The
+  // whole passage is a statement that FR266 is ABSENT.
+  'c85de5ef': 'README.md — "### Deliberately not implemented … a local mirror … was RETIRED '
+    + 'before implementation". A RETIREMENT NOTICE.',
+  '57c46009': 'README.md — "has no code, no cache, no sync direction, no sync trigger and no '
+    + 'conflict-resolution path". An enumeration of what is ABSENT.',
+  'd2204218': 'README.md — "removes the need for a mirror entirely … asserts the absence as a '
+    + 'closed set". The RATIONALE for the absence.',
   // docs/architecture.md — unrelated pre-existing vocabulary. Neither passage is
   // about a Confluence store; both are pulled in by the window straddling a
   // nearby F26 sentence.

@@ -259,6 +259,55 @@ Two failure modes are deliberately loud:
 
 Both messages end by stating that nothing was read or written on your behalf.
 
+### Deliberately not implemented
+
+- **A local mirror of every Confluence-backed store (FR266) was RETIRED before
+  implementation** and has no code, no cache, no sync direction, no sync trigger
+  and no conflict-resolution path. It had been justified on air-gap grounds, but
+  this product's air-gap requirement means *no internet* — no npm, git or CDN
+  access — not *no network*: an enterprise Confluence inside the perimeter is
+  reachable on an air-gapped network. With Confluence unreachability
+  reclassified as a misconfiguration rather than a working mode, the fail-loud
+  behaviour above removes the need for a mirror entirely. The release gate
+  asserts the absence as a closed set rather than as a denylist. If you find no
+  mirror here, that is the design — please do not helpfully add one. (P5-9.6)
+
+### Known limitations of v3.18.0
+
+These are stated here, in the shipped documentation, rather than only in the
+repository's changelog — which is **not** part of the npm package.
+
+- **Every claim in this release about behaviour with a Confluence MCP *present*
+  is mock-verified, not live.** No authorised Confluence MCP was available to
+  the implementation or to any review, so the MCP-present branches were
+  exercised against a stubbed tool context. The MCP-*absent* branch — the
+  fail-loud path described above — is the default state and was exercised for
+  real.
+- **No shipped skill's purpose is to publish a knowledge store to Confluence.**
+  `confluence-plan` enumerates what a publish would do, and the shipped routing
+  block tells an agent how to perform one, but the skills that would author the
+  artifacts (`bmad-prd`, `bmad-architecture`, `bmad-create-epics-and-stories`,
+  `bmad-ux`, `bmad-product-brief`) are not shipped by this package, and there is
+  no publish command. Page *creation* is therefore not demonstrable from this
+  package alone.
+- **`_bmad-output/project-layout.yaml` carries a `generated:` date**, so two
+  runs of the same answers are byte-identical only within the same calendar day.
+  `ma-agents bind` declines to rewrite the file on a no-edit re-run precisely so
+  that this cannot present as a spurious change.
+- **`bmad-knowledge` (the Knowledge Atlas) does not honour a Confluence-backed
+  store.** It renders that store's section from whatever local files it finds,
+  without saying so. It is a separate consumer from the routing-gated skills
+  above and is tracked as a known defect.
+- **A Confluence-backed *system* requirements store has no ma-agents-owned
+  fail-loud gate.** The routing block ships in the skills that resolve
+  *software* requirements; a system requirements store's consumers are upstream
+  BMM workflows this package does not ship.
+- **The repository's own test suite is not green on Windows**, and one failure
+  is this release's: a conflict between the staleness-guard block embedded in
+  the sprint workflow skills and an older lossless-conversion invariant. It is
+  recorded and awaiting adjudication rather than patched. The suite was never
+  run on Linux.
+
 ---
 
 ## Project Context
