@@ -1,0 +1,792 @@
+# Story 31.14 — Epic 31 Release Gate
+
+**Status:** review
+**Branch:** `feature/epic-31-story-31.14`, based on `6bc1877` (`feature/epic-31`)
+**Diff under gate:** `9b936ac..HEAD` — 89 files, +38,048 / −239 at the point of assessment
+**Prepared by:** the story implementer. **No verdict is claimed here.** An independent
+reviewer decides whether this epic ships.
+
+---
+
+## 0. Read this part first
+
+Thirteen stories and two prerequisites merged into Epic 31. Nine of them needed a fix
+round. This epic's character is that its independent reviews found real defects, and
+several are still open **by design**. A gate that reported everything green would be
+wrong, so this one does not.
+
+The three things a reader should take away before anything else:
+
+1. **`npm test` is NOT green, on either platform, and one of the failures is this
+   epic's.** `test/story-15-5-workflow-skills.test.js` passes on `main` (157/0) and
+   fails on this branch (153/4). I re-derived that independently — see §4. Nine other
+   failures are genuinely pre-existing and I baselined every one of them against
+   `main @ 9b936ac` rather than accepting the claim.
+2. **Every claim in this epic about behaviour with a Confluence MCP *present* is
+   mock-verified, not live.** The `claude.ai Atlassian Rovo` connector is unauthorised
+   and cannot be authorised from a non-interactive session. The MCP-*absent* branch —
+   which is what AC5's fail-loud proof rests on — is the default state here and was
+   exercised for real.
+3. **Story 31.10's AC1/AC3/AC5 are PARTIALLY MET and escalated to a human.** They
+   assert Confluence pages *are created*. No shipped skill's purpose is to publish a
+   store, and there is no publish command. Recorded, not resolved, and `epics.md` is
+   deliberately unedited.
+
+---
+
+## 1. AC-by-AC results
+
+Each entry states the method and, separately, **what the method cannot see.** The
+limits are the point: this epic's record shows the confident claims are the ones that
+failed.
+
+### AC1 — Air-gap gate (NFR77, NFR80) · **Implemented, NOT executed here**
+
+**What was done.** `.github/scripts/offline-install-verify.sh` gains two phases inside
+the same `--network none` container the Epic 22 / NFR50 gate already used, and
+`.github/workflows/offline-install.yml` is updated to match (job cap 8 → 14 minutes for
+the two extra installs; the summary block names both new phases).
+
+- **Step 7 — two-store, fully `file-system` install.** A two-store binding is committed
+  into a fresh project *before* the install, and the install is run `--yes`, because
+  FR263 makes `project-layout.yaml` authoritative: the install must **read** it rather
+  than re-ask, and that is also what makes the phase runnable non-interactively. The two
+  stores are **divergent on purpose** — pointing them at one directory would pass even if
+  the reader collapsed them, which is precisely what
+  `bug-read-existing-layout-collapses-two-stores-onto-software-store` recorded. Asserts:
+  install exits 0; `_bmad/bmm/config.yaml` was generated; both backends resolve
+  `file-system`; the two resolved paths are **non-empty and different**; and no
+  Confluence configuration appears in either file.
+- **Step 8 — global install.** `HOME`/`USERPROFILE` redirected into the container. The
+  FR251 absence assertions are **bracketed by presence**: the run must first be shown to
+  have genuinely installed (≥1 `SKILL.md` under `$HOME`) before an empty project root is
+  allowed to mean anything — an absence assertion that passes because the install crashed
+  is worthless, and this epic produced that shape six times. Then asserts that none of
+  `project-layout.yaml`, `project-context.md` or `_bmad/bmm/config.yaml` appears under the
+  project root. The FR250 spike verdict is **FAIL**, so the degradation path is asserted
+  rather than assumed: all three notice facts must be present in the install log.
+- Both phases **re-verify the egress block afterwards**, which is what turns "the install
+  succeeded" into "the install succeeded with zero network calls".
+
+**Method limits — read these.**
+
+- **The workflow was not run.** It is a GitHub Actions job requiring Docker and
+  `--network none`; it cannot execute in this session. I validated the YAML parses
+  (`js-yaml`) and the shell parses (`bash -n`), and I derived every assertion from
+  behaviour I verified locally (the FR250 notice constants are read from `bin/cli.js`'s
+  own exports; the generated field names are the ones `generateBmmConfig` actually
+  writes). **That is not the same as a green run.** The first CI run of this workflow is
+  the real evidence and it has not happened.
+- Step 8 asserts the FR250 *degradation* path. If a future bmad-method gains a
+  user-level install, this phase will fail and must be rewritten — that is intended.
+
+### AC2 — Backward compatibility (NFR76, NFR82) · **Met, within a stated bound**
+
+**Method.** `test/release-gate-epic-31.test.js` §1, four assertions. A pre-F26 fixture
+(committed artifacts, a `_bmad/bmm/config.yaml` carrying only the pre-F26 fields, no
+binding) and a default-answers fixture (genuinely empty tree, asserted empty first) are
+each taken through the F26 write path. The oracle is a **full-tree sha256 snapshot**,
+diffed in three directions independently — added, removed, modified — so a delete cannot
+pass as "no modification" and a rewrite-in-place cannot pass as "no new file".
+
+- The added set is exactly `['_bmad-output/project-layout.yaml']`. Nothing removed.
+  Every pre-existing file byte-identical.
+- Resolved artifact paths pinned to their **literal pre-epic values** —
+  `planning_artifacts`, `implementation_artifacts`, `knowledgebase_path`,
+  `sprint_management_path` — parsed out with `js-yaml`, an outside authority. The
+  expected values are stated literally in the test, **not** derived from the generator:
+  deriving them would mean a generator that stopped emitting a legacy field changed both
+  sides at once and still passed.
+- FR265's single-store collapse checked separately: both new per-store fields resolve to
+  the one location.
+
+**Method limits.** These tests drive `writeProjectLayoutYaml` + `generateBmmConfig`, not
+a full `ma-agents install`. A full install spawns bmad-method, takes minutes, and — as
+§4 documents — spawns a real `npm install` against the public registry. The end-to-end
+install proof is AC1's harness, which runs the real installer under `--network none`. So
+AC2 proves *the F26 additions add exactly one file and change nothing else*; it does not
+re-prove the whole installer.
+
+### AC3 — Determinism (NFR81) · **Met on one platform, with a named residual**
+
+**Method.** `test/release-gate-epic-31.test.js` §2, five assertions.
+
+- The same answers render a byte-identical `project-layout.yaml` (AC3.1) and a
+  byte-identical generated `config.yaml` (AC3.5).
+- CRLF and LF inputs produce identical output, for both the existing binding (AC3.4) and
+  the config being updated (AC3.5).
+- The emitted binding carries no platform-dependent bytes: no `\r`, and no backslash
+  separators on any `path:`/`gitUrl:` line — which matters because the file is
+  **committed** and a `C:\...` in it would be unreadable to a Linux teammate (AC3.3).
+
+**The residual, stated rather than assumed away.** `writeProjectLayoutYaml` stamps
+`generated: "<YYYY-MM-DD>"` from the wall clock (`bin/cli.js:2626`). Two runs of the same
+answers are byte-identical **only within the same calendar day**. `generated:` is not an
+answer, so NFR81's "the same answers produce an identical file" is met in substance —
+but the bound is asserted rather than waved through: AC3.2 requires `generated:` to be
+the **only** line that can vary and requires its format to be **date-only**. Without that
+second half, AC3.1 (which strips `generated:`) would still pass if a *second*
+nondeterministic line were introduced. cli.js already knows about this: `ma-agents bind`
+declines to rewrite the file on a no-edit re-run for exactly this reason
+(`bin/cli.js:4914`).
+
+**Method limits.** **The cross-platform half was executed on Windows only.** Linux/CI
+byte-identity is inferred from the absence of platform-dependent constructs in the
+output, not observed. The observation belongs to AC9's Linux run, which has not
+happened.
+
+### AC4 — No credentials on disk (NFR79) · **Met**
+
+**Method.** `test/release-gate-epic-31.test.js` §3, five assertions, all by enumeration.
+
+- **The file set is a closed set.** After a Confluence-configured install, the added set
+  is exactly the binding and the modified set is exactly the generated config. A dotfile
+  cache, a `.confluence-auth`, or an exported page body would appear here as an
+  unexpected member — which a denylist over known-bad names would miss.
+- **Every written byte is scanned**, over an *enumerated* file list rather than a named
+  one, against eight credential shapes (password, token/api-key/secret, bearer, HTTP
+  Basic blob, Atlassian `ATATT` token, URL with inline userinfo, cookie, Authorization).
+- **AC4.0 is the control**: the sweep is first proved to *detect* four planted
+  credentials. Without it, "no credential found" is indistinguishable from "the scanner
+  is broken".
+- **The confluence record's key set is asserted literally**: exactly
+  `{backend, space_key, root_page{title, id}}`. Stated in the test, not read from the
+  serializer — the tautology this epic produced six times.
+- **AC4.4 covers the OQ-4 write-back** (`recordLearnedRootPageId`), the one route by
+  which something could later be written back from Confluence. It creates no file and
+  cannot widen `root_page` beyond its identity. The test branches on the returned
+  outcome **by name** (`ROOT_ID_RECORDED`), so "recorded" and "refused" can never
+  collapse into "did not throw".
+
+**Method limits.** The scan covers files ma-agents writes. It cannot see a credential a
+*user* puts in their MCP server configuration, which is correct — NFR79's claim is that
+authentication is entirely the MCP server's responsibility.
+
+### AC5 — Fail-loud paths proven, asserting message content (FR262, P5-9.3) · **Met for the MCP-absent path; mock-bounded for MCP-present**
+
+**Where these paths live, because it bounds what "end to end" can mean.** Both are
+executed by an **agent reading shipped instruction text** — the runtime for a skill *is*
+its markdown. So each is proved in two halves, and neither half alone is the proof.
+
+**The text half** (`test/release-gate-epic-31.test.js` §4, AC5.1–AC5.4), asserted across
+**every shipped copy**, not one:
+
+- Confluence-without-MCP names the **affected store**, the **space** (resolved from the
+  configured field), the **cause** ("no Confluence MCP was detected"), the **remedy**
+  (how to configure one), a **second remedy** (re-bind the store to the file system), and
+  the no-side-effect guarantee. Six independent assertions, so dropping one cannot pass
+  on the strength of the other five.
+- The five explicit **prohibitions** are asserted separately (AC5.2): no fall back to the
+  file system, no local copy, no continuing with a partial result, no changing the
+  backend on the user's behalf, "has no degraded mode". These are what stop a fail-loud
+  path quietly becoming a fall-back path in a later edit.
+- **Default-deny is asserted** (AC5.3): an unrecognised backend must reach a third branch
+  that halts, and Step B1 must be stated *not* to absorb it. This is the permissive-default
+  shape, which this epic shipped once already.
+- The stale-config HALT names the cause, **both values for every store that moved**, the
+  remedy, the no-side-effect guarantee, and the "compare content, never timestamps"
+  prohibition (OQ-2).
+
+**The code half** (AC5.5, AC5.6), driven end to end:
+
+- A project is bound, a config generated, the stamp read and shown to **match** — so the
+  drift assertion below proves something. Then a store is moved exactly as a `git pull`
+  would move it, and the recomputed stamp is required to **disagree**. That is the
+  detection the shipped preflight tells the agent to rely on, exercised for real.
+- An unreadable binding (git merge-conflict markers) makes `generateBmmConfig` return
+  `false`, print a refusal naming the file, and leave the existing config
+  **byte-identical**. "Success reported over a failed write" is one of this epic's six
+  defect shapes; this closes it in the direction that matters.
+
+**Method limits — important.**
+
+- The **MCP-absent** branch is genuinely testable and was tested: no Confluence MCP is
+  available here, so that is the real default state.
+- The **MCP-present** branch is not. There is no code half for it — detection is the
+  agent's tool context, which no Node process can observe — and no live Confluence MCP
+  was available. Every MCP-present claim in this epic rests on a mock.
+- The text half proves the *message content is correct and identical everywhere it
+  ships*. It does not prove an LLM will obey it. Nothing in this repository can.
+
+### AC6 — Global resolution (NFR83) · **Met**
+
+**Method.** `test/release-gate-epic-31.test.js` §5, three assertions. The negative here
+is "does not depend on per-machine state", and it is proved **by removal**, not by
+inspection:
+
+- A binding is written; `HOME`/`USERPROFILE` are redirected into a sandbox; the
+  per-machine bound-projects registry is written at `boundProjectsPath()` and asserted to
+  exist; the topology is resolved. Then the registry is **deleted**, the home is swapped
+  for an empty one, and the topology is resolved again. The two results must be
+  `deepStrictEqual`.
+- AC6.2 proves resolution follows its **argument** rather than the cwd: two projects with
+  different Confluence space keys are written, and each resolves to its own binding while
+  cwd is the other. That catches a resolver consulting an ambient "current project".
+- AC6.3 proves an unbound project is reported by the **named** `BINDING_UNBOUND` reason,
+  not defaulted — "unbound" and "unreadable" must never collapse.
+
+**Method limits.** This exercises the resolver in-process. It does not install a skill
+globally and then activate it in a project from a globally-installed location — that path
+is `test/global-install-scope.test.js` (31 assertions, PASS on this branch) plus AC1's
+Step 8, neither of which I executed end to end in this session for the *activation* half.
+
+### AC7 — FR/NFR traceability, and the FR266 negative · **See §2 and §3**
+
+### AC8 — Docs and semver cut · **Met**. See §6 and §7.
+
+### AC9 — Full `npm test` green on both platforms · **NOT MET**. See §4.
+
+---
+
+## 2. FR/NFR traceability matrix
+
+**How this matrix was built, because the instruction that it not be a "mentions" check
+is the point.** Each row names (a) the landed story, (b) a **shipped symbol, file or
+byte-level fact** I verified directly in this session, and (c) the suite that pins it.
+Where an outside authority exists — the PRD text, `js-yaml`, the shipped instruction
+bytes — the verification is against that authority rather than against another copy of
+the same source. Rows marked **partially met** say why in the same row.
+
+Verification commands were run against `bin/cli.js`'s live exports and against
+`git show HEAD:<file>` (never the working tree, which test runs mutate).
+
+### Functional requirements
+
+| FR | Story | Evidence verified in this session | Pinned by | Status |
+|---|---|---|---|---|
+| FR248 | 31.11 | `bin/cli.js` `// Step 3: Scope` block present, offering all three choices verbatim (`Project level (current directory)` / `Global (user-level settings)` / `Custom path`) — retained as-is, per the 2026-08-02 amendment | `global-install-scope` (31/0) | **Met** |
+| FR249 | 31.12 | Superseded in effect by FR250's FAIL verdict — BMAD is **not** installed globally; the previous "re-run without `--global`" refusal is gone | `global-install-scope`; AC1 Step 8 | **Met as degraded** (see FR250) |
+| FR250 | 31.1 (spike), 31.12 | Spike verdict recorded **FAIL** in `31-1-spike-global-install-feasibility-6-10-0.md` (`bmad install --global` = unknown option). All three degradation facts exist as exported constants `GLOBAL_BMAD_SCOPE_NOTICE_FACT_{1,2,3}` and were read out of `bin/cli.js` | `global-install-scope`; AC1 Step 8 | **Met** |
+| FR251 | 31.11 | Absence bracketed by presence in both `global-install-scope` and AC1 Step 8 | `global-install-scope` (31/0) | **Met** |
+| FR252 | 31.13 | `handleBind` exported **and** routed (`case 'bind':`); `--yes` parsed via `parseFlags` | `project-layout-bind` (73/0) | **Met** |
+| FR253 | 31.13 | `printScopeReport`, `detectInstallScopes`, `describeBoundProjects` all exported as functions | `project-layout-bind` (73/0) | **Met** |
+| FR254 | 31.5 | `REPO_LAYOUT_CONCERNS` carries exactly **three** concern records; `collectRepoLayout` drives them | `project-layout-two-store-wizard` (19/0); `project-layout-enum-single-source` (31/0) | **Met** |
+| FR255 | 31.6, 31.10 | `ARTIFACT_KIND_OWNER` + `classifyArtifactPath` in `lib/confluence-page-tree.js`; `storeArtifactsDirectory` in `bin/cli.js` | `project-layout-artifact-routing` (59/0) | **Met** |
+| FR256 | 31.6, 31.10 | Same mechanism, `SOFTWARE_REQUIREMENTS` owner | `project-layout-artifact-routing` (59/0) | **Met** |
+| FR257 | 31.5 | `STORE_BACKENDS` = `{file-system, confluence}`; `STORE_BACKEND_VIEWS` keys are **exactly** those members (checked, not assumed); both frozen and handed out as copies | `project-layout-enum-single-source` (31/0) | **Met** |
+| FR258 | 31.5 | `STORE_MODES` = `{same, local, remote}` — FR113–FR116's semantics, per store | `project-layout-two-store-wizard` (19/0) | **Met** |
+| FR259 | 31.8 | `collectConfluenceStoreLocation` exported | `project-layout-confluence-configuration` (38/0) | **Met** |
+| FR260 | 31.8, 31.10 | `generatedRootPageTitle` and `validateConfluenceIdentity` exported — AC3's "named for the project, and you are told the name" is checkable from the same function the wizard announces from | `project-layout-confluence-configuration` (38/0); `project-layout-confluence-page-tree` (157/0) | **Met** |
+| FR261 | 31.9 | 9 shipped copies of the gate block, one sha256, anchored on the exact heading; block cites `mcp-detection-pattern-spec.md` §2.6/§2.7/§6.6 by section | AC7.2; `project-layout-confluence-routing` (97/0) | **Met (mock-bounded for MCP-present)** |
+| FR262 | 31.9 | Message content asserted element-by-element across all 9 copies; five prohibitions asserted separately; default-deny third branch asserted | AC5.1–AC5.3 | **Met for MCP-absent** |
+| FR263 | 31.2 | No `unlinkSync(... project-layout ...)` anywhere in `bin/cli.js` — the delete-on-single-repo branch is gone; `writeProjectLayoutYaml` runs unconditionally; `PROJECT_LAYOUT_SCHEMA_VERSION` = 2 | `project-layout-binding-spine` (69/0); AC2.1/AC2.2 | **Met** |
+| FR264 | 31.3 | `generateBmmConfig` + the stamp trio (`computeProjectLayoutStamp`, `readProjectLayoutStamp`, `canonicalBindingBytes`) all exported; legacy fields verified to retain their **pre-epic literal values** via js-yaml | `project-layout-config-generation` (32/0); AC2.3/AC2.4 | **Met** |
+| FR265 | 31.7 | `detectLegacySingleStore`, `topologyFromLegacyLayout`, `LEGACY_SINGLE_STORE_SPLIT_COMMAND` = `"ma-agents config layout"` (a real command, checked against the CLI's own routing) | `project-layout-legacy-single-store` (52/0); AC2.4 | **Met** |
+| **FR266** | **none — retired** | **See §3. No implementation found.** | AC7.4–AC7.9 | **Correctly absent** |
+| FR267 | 31.2, 31.6 | `CONFLUENCE_STORE_RECORDS` names exactly the two **requirement** stores; `PUBLISHING_STORES` in the page-tree module excludes `SPRINT_MANAGEMENT`; the emitted binding carries no `implementation_artifacts` record | `project-layout-binding-spine` (69/0); `project-layout-artifact-routing` (59/0) | **Met** |
+
+### Non-functional requirements
+
+| NFR | Story | Evidence verified in this session | Pinned by | Status |
+|---|---|---|---|---|
+| NFR76 | 31.11, 31.2 | Rebaselined per the 2026-08-02 amendment. Full-tree snapshot diff: added set is exactly the binding; nothing removed; every pre-existing file byte-identical | AC2.1, AC2.2 | **Met** |
+| NFR77 | 31.11, 31.12 | AC1 Step 8 — global install under `--network none`, presence-bracketed, egress re-verified after | AC1 Step 8 | **Implemented, not executed** — the workflow has never run |
+| NFR78 | 31.13 | `bind` does not rewrite the binding on a no-edit re-run (`bin/cli.js:4905-4918`), deliberately, so the `generated:` date cannot present as a spurious change | `project-layout-bind` (73/0) | **Met** |
+| NFR79 | 31.8, 31.2 | Closed-set file enumeration + byte sweep with a positive control + literal key-set assertion + the OQ-4 write-back checked by outcome name | AC4.0–AC4.4 | **Met** |
+| NFR80 | 31.9 | AC1 Step 7 (two-store, fully file-system, egress blocked); `docs/architecture.md` §3.6.1 states the posture explicitly; `project-layout-confluence-routing` runs the flow with `dns`/`net`/`http`/`https`/`tls`/`fetch` poisoned and verifies the poison **armed** | AC1 Step 7; `project-layout-confluence-routing` (97/0) | **Met in code; AC1 half not executed** |
+| NFR81 | 31.2 | Byte-identity both files, CRLF/LF invariance both directions, no platform-dependent bytes, **plus a bound on the residual** — `generated:` is the only varying line and is date-only | AC3.1–AC3.5 | **Met, with the `generated:` residual named** |
+| NFR82 | 31.5, 31.7 | Legacy fields resolve to their literal pre-epic values; both new per-store fields collapse onto the one location for a single-store project | AC2.3, AC2.4 | **Met** |
+| NFR83 | 31.2, 31.4, 31.13 | Proved **by removal**: the per-machine registry is written, asserted present, then deleted and the home swapped for an empty one; resolved topology must be `deepStrictEqual`. Plus resolution proved to follow its argument, not cwd | AC6.1–AC6.3 | **Met** |
+
+### Requirements NOT fully met, restated so they cannot be missed
+
+- **Story 31.10 AC1 / AC3 / AC5 — PARTIALLY MET, escalated to a human.** They assert
+  Confluence pages *are created*. The routing protocol now reaches an agent (re-sealed
+  into all nine gate copies, verified at sha256 `cda3d3d99cff` in §5), but **no shipped
+  skill's purpose is to publish a store**: none of `bmad-prd`, `bmad-architecture`,
+  `bmad-create-epics-and-stories`, `bmad-ux`, `bmad-product-brief` is shipped by this
+  package, and there is **no publish command**. Both facts were independently verified
+  before this gate and re-stated here. Recorded as partially met. **Not** marked met, and
+  `epics.md` is deliberately unedited.
+- **FR261 / FR262 MCP-present branches** are mock-verified. See §1 AC5.
+- **NFR77 / NFR80's air-gap half** is implemented but not executed. See §1 AC1.
+
+---
+
+## 3. AC7's negative check — FR266 has no implementation
+
+**FR266 (a local mirror of every `confluence`-backed store) was retired 2026-08-01,
+before implementation.** P5-9.6 names an accidental mirror as *the single most likely
+way this epic reacquires the subsystem it removed* — and a mirror can return **with no
+code changing at all**, as shipped instruction text telling an agent to keep a local
+copy. A live route to exactly that was closed three commits before this story began
+(markdown headings were invisible to Story 31.9's gate checks, so FR266's mirror could
+have been restored verbatim to all nine shipped copies with a green suite). I assumed
+there were others and went looking.
+
+### What I searched, and how
+
+**(a) The whole diff, by vocabulary, over-broad on purpose.** Every **added** line of
+`git diff 9b936ac..HEAD` (38,871 diff lines) scanned against fourteen probes covering
+FR266's four named machineries — mirror, sync direction, sync trigger, conflict
+resolution — plus replica, snapshot, local copy, offline copy, write-through/back,
+two-way/bidirectional, pull-down/fetch-into, stale-copy language, reconcile, and
+merge-remote-content. **531 hits across 75 files.** The scan does not decide; it
+enumerates, and every shipped-surface hit was adjudicated by hand. A scan that reported
+zero hits from a narrow vocabulary would prove nothing.
+
+**(b) Adjudication of the shipped surface** (`bin/`, `lib/`, `skills/`, `docs/`,
+`scripts/`, `test/`, `.github/`). Every hit falls into exactly one of three classes:
+
+- **Explicit negations.** `bin/cli.js`: *"NO local mirror, cache or sync of any kind.
+  FR266 is retired at P5-9.6"* and *"it cannot write a local copy and cannot become the
+  mirror FR266 retired"*. `lib/confluence-page-tree.js`: *"There is no sync direction, no
+  sync trigger, no authority call and no conflict resolution, because there are never two
+  copies to reconcile"*. The nine gate copies: *"do NOT write, copy, cache, export or
+  reconcile a local copy of anything Confluence returns. There is no mirror and no
+  cache…"*.
+- **Unrelated pre-existing vocabulary.** `require.cache`; `reconcileAgentsSharedSkills`
+  (Epic 15 skill reconciliation); git **merge-conflict** handling in the YAML reader;
+  `~/.bmad/cache/external-modules` (bmad-method's own module cache); "mirrors the enum"
+  as ordinary English; the Docker/Python/C++ skill library's cache advice.
+- **Tests that assert the absence.** `snapshotTree` as the no-local-copy oracle;
+  `POISON_BODY = '<<<CONFLUENCE-CONTENT-THAT-MUST-NEVER-BE-CACHED>>>'`.
+
+**(c) A closed set, not a denylist, pinned as a test.** Adjudication-by-hand does not
+survive the next commit, so AC7.5 encodes it: **every F26-subject mirror-vocabulary line
+in shipped skill markdown must lie inside one of the two digest-pinned blocks.** The
+subject filter (`confluence|knowledge store|requirements store|space key|root page`)
+narrows *what* is examined without narrowing *where* — a mirror instruction dropped into
+any shipped skill is still caught, while `npm cache clean --force` in the Docker skill is
+not. Two harness controls prove the instrument works: AC7.4 requires the vocabulary to
+flag FR266 restored verbatim, and AC7.4b requires the subject filter to admit that line
+and reject unrelated cache advice. Both doors are shut: a mirror added **outside** a
+pinned block fails AC7.5, and a mirror added **inside** one changes its digest and fails
+AC7.1/AC7.2.
+
+**(d) The code half, by capability rather than by intent.** `lib/confluence-page-tree.js`
+— the only module in this epic that could plausibly acquire a mirror, because it is the
+only one that talks about pages — is asserted to require **none** of
+`http`/`https`/`net`/`tls`/`dgram`/`child_process`/`axios`/`node-fetch`/`undici`, and to
+contain **no** `writeFileSync`/`appendFileSync`/`mkdirSync`/`createWriteStream`/
+`copyFileSync`. It cannot reach a network and cannot write to disk, so it cannot become
+a mirror regardless of what anyone later intends. Comments are stripped before the scan,
+because the module's own header *documents* the prohibition by naming `require('http')`
+and a scan that counted its own documentation as a violation would be measuring the wrong
+artifact.
+
+**(e) By path.** No shipped path under `bin/`, `lib/`, `skills/` or `scripts/` is named
+for a mirror or a page cache (`mirror|confluence[-_]?cache|page[-_]?cache`).
+
+**(f) Against the outside authority.** AC7.9 binds the absence check to the PRD: FR266
+must still read `[RETIRED 2026-08-01, before implementation]` and `ID retired, never
+reused.` If FR266 were ever un-retired, this gate stops asserting its absence rather than
+silently contradicting a live requirement.
+
+### Result
+
+**FR266 has no implementation anywhere in `9b936ac..HEAD`.** No mirror, no cache, no
+sync direction, no sync trigger, no conflict-resolution path — in code, in tests, or in
+shipped instruction text. Every occurrence of the vocabulary on a shipped surface is
+either a prohibition, an unrelated pre-existing use, or a test asserting the absence.
+Nine assertions now hold that closed, with two harness controls proving the instrument
+detects a restoration.
+
+**What this check cannot see.** It reasons over the vocabulary FR266 and its
+neighbourhood actually use. A mirror implemented under a genuinely novel name, in a
+module that does no I/O of its own and delegates it elsewhere, and described in shipped
+text that never mentions Confluence or a knowledge store, would evade (a), (c) and (d).
+I consider that remote — a mirror has to be a mirror *of* something, and in this product
+that something is named — but it is the honest boundary.
+
+---
+
+## 4. AC9 — the honest answer
+
+**Full `npm test` is NOT green.** Not on Windows, and I could not run Linux.
+
+### What I actually ran
+
+All 103 chain suites **individually**, continue-on-failure, on this branch, per the
+story's own technical note that the `&&`-chained script halts early and masks downstream
+breakage. `test/repo-layout.test.js` was excluded from the automated run because it
+performs a real install into its own worktree (~521 paths). Per-suite wall-clock cap
+applied by killing the child from Node and recorded as a **distinct `TIMEOUT` verdict**,
+never as `FAIL` — no suite was ever wrapped in `timeout`, because `repo-layout` exits 143
+on SIGTERM and that reads as a failure it is not.
+
+**Result: 102 run, 12 not-PASS.** Then each not-PASS was re-run alone on a
+verified-clean tree, and each one that also exists on `main` was baselined against a
+detached worktree at **`9b936ac`**.
+
+### The 12, dispositioned
+
+| Suite | Branch | `main` @ `9b936ac` | Verdict |
+|---|---|---|---|
+| `bmad-version-bump` | 34/2 | **34/2** | Pre-existing (bmad-method 6.9.0 in the shared `node_modules` vs. the 6.10.0 the test expects) |
+| `staging-6-10-0-regression` | 7/8 | **7/8** | Pre-existing, same cause |
+| `v68-pluginresolver-enumeration-passthrough` | 10/2 | **10/2** | Pre-existing, same cause |
+| `migration-validation` | 199/3 | **199/3** | Pre-existing (skill-count drift: 50 folders found, 63 expected) |
+| `build-plugin` | 35/1 | **35/1** | Pre-existing; its *test* also leaks an orphan build dir |
+| `knowledge-atlas-smoke` | crash | **crash** | Pre-existing (missing `esbuild`/`lunr`) |
+| `knowledge-atlas-render` | crash | **crash** | Pre-existing, same cause |
+| `custom-marketplace-surface-drift` | 8/1 | **8/1** | Pre-existing |
+| `custom-marketplace-registry` | 15/4 | **15/4** | Pre-existing |
+| **`story-15-5-workflow-skills`** | **153/4** | **157/0** | **THIS EPIC'S REGRESSION** — see below |
+| `project-layout-two-store-round-trip` | TIMEOUT | n/a (new) | **Not a failure.** 52/0 when run alone — see below |
+| `project-layout-artifact-routing` | 58/1 | n/a (new) | **Not a failure.** 59/0 on a clean tree — see below |
+
+**Every "pre-existing" above was verified, not accepted.** I ran the same suite at
+`9b936ac` in a detached worktree and compared counts. All nine match exactly. The tenth —
+`story-15-5-workflow-skills` — does **not**, and that is the whole reason for baselining:
+it is exactly how the 31.4/15.5 regression was found in the first place.
+
+**`bmad-output-policy` is not in the `npm test` chain at all.** It exists at
+`test/bmad-output-policy.test.js` on both branches but is absent from `package.json`'s
+`test` script, so `npm test` never runs it and it cannot be a chain failure. I record this
+rather than reporting it as pre-existing-green.
+
+### The one that is this epic's
+
+`test/story-15-5-workflow-skills.test.js`: **157/0 on `main`, 153/4 on this branch.** The
+four failures are all `<skill> preserves original content verbatim`, on `add-sprint`,
+`add-to-sprint`, `modify-sprint` and `sprint-status-view` — a body ~12,500 characters
+longer than the source, the size of Story 31.4's preflight block.
+
+This is the genuine contradiction recorded in
+`bug-31-4-preflight-block-breaks-story-15-5-verbatim-invariant.md`: Story 15.5's
+invariant says a converted workflow skill's `SKILL.md` must contain the original content
+**verbatim**; Story 31.4 AC3/AC4 require the staleness guard to be **embedded in those
+skills as the first `##` section**. Both cannot hold for the same file. Three candidate
+resolutions are on record and **none has been chosen**. I have deliberately not chosen
+one: the bug report says the adjudication belongs to a human or to this gate, and
+choosing it here would mean weakening either a lossless-conversion guarantee that has
+held since Epic 15 or a gateway-position requirement that Story 31.4's review verified
+three ways. **This is the release gate's headline finding and it needs a decision, not a
+patch.**
+
+### The two that look like failures and are not
+
+- **`project-layout-two-store-round-trip` — 52/0 green when run alone.** It was killed at
+  the per-suite cap. The cause is now known precisely: it drives four **real**
+  `ma-agents install --yes` runs, each of which spawns bmad-method, which spawns a real
+  **`npm install --omit=dev --no-audit --no-fund --no-progress` against the public npm
+  registry** (observed directly in the process table: `cli.js install --yes` →
+  `bmad-cli.js install` → `npm install`). The registry is reachable from this machine
+  (`npm ping` = 348 ms), so this is slowness with an unbounded external dependency, not a
+  deadlock. **This is itself a finding**: a suite in the `npm test` chain of a product
+  whose headline NFR is air-gap operation performs a live network install, which makes
+  the suite non-hermetic and its runtime unbounded. It is not an Epic 31 defect — the
+  real-install pattern predates it — but the gate should say so.
+- **`project-layout-artifact-routing` — 59/0 on a clean tree.** Its single in-chain
+  failure was `skills/open-presentation/SKILL.md -> _bmad-output/methodology/…pptx`,
+  i.e. Story 31.6's "no shipped skill cites a file this repository does not ship" guard
+  firing because an **earlier suite in the same run had materialised the gitignored
+  `_bmad-output/methodology/`**. That is `bug-tests-mutate-the-repository-they-run-in`
+  producing a false failure exactly as filed.
+
+### The mutation itself, and what I could not pin down
+
+The full-chain run left **524 dirty paths** in the worktree — a regenerated `.agents/`
+tree, `.ma-agents.json`, an `AGENTS.md.backup-*`, `_bmad/`, `_bmad-output/methodology/`
+and `.ma-agents-plugin-stage/` — **with `repo-layout` excluded.** So at least one suite
+*other than* the two named in that bug also installs into the worktree it runs in.
+
+I attributed it. Seventeen hand-picked candidates were run individually from a
+verified-clean tree, measuring **install residue only** (`.agents/`, `_bmad/`,
+`_bmad-output/methodology/`, `.ma-agents-plugin-stage`, `.ma-agents.json`,
+`AGENTS.md.backup-*`), so my own concurrent edits could not contaminate the reading —
+`global-install-scope`, `project-layout-two-store-wizard`,
+`project-layout-legacy-single-store`, `reconfigure`, `uninstall`,
+`integration-verification`, `agents-md`, `rename-migration`, `retired-skills-migration`,
+`config-path-migration`, `obsolete-tool-dirs`, `agent-scope`, `diag`, `offline-recompile`,
+`customizations-translation`, `bmad-extension`, `routing-parity`. **All seventeen came
+back clean.** So I instrumented the **whole chain**, restoring between every suite.
+
+**The mutator is `test/yes-flag.test.js` — position 1 in the chain. Residue 0 → 520.**
+
+That is a materially worse fact than the filed bug describes, and it is worth stating
+plainly:
+
+- `bug-tests-mutate-the-repository-they-run-in` names `repo-layout` (position 20) and
+  `build-plugin` (position 65). It does not name `yes-flag`, so its stated scope is
+  **incomplete**.
+- Because `yes-flag` runs **first**, **every `npm test` invocation begins by dirtying
+  ~520 paths**, and every one of the other 102 suites therefore runs against a mutated
+  working tree — including the `_bmad-output/methodology/` materialisation that produced
+  `project-layout-artifact-routing`'s false 58/1 above. The bug's "concurrency" framing
+  understates it: no concurrency is required, only ordering.
+- This is **not** an Epic 31 defect. `yes-flag` is a pre-existing suite and its
+  real-install behaviour predates F26. But it is the mechanism behind the false failure
+  this gate had to chase, and the follow-up story that adopts that bug should add
+  `yes-flag` to its scope.
+
+**Cleanup used throughout:** `git checkout -- .agents AGENTS.md _bmad-output`, `rm` the
+root artifacts, `git clean -fdq .agents _bmad-output` — never `-x`, which would delete the
+`node_modules` junction.
+
+### What AC9 would take
+
+1. **Adjudicate the 31.4/15.5 contradiction** and land the chosen resolution. Until then
+   the chain has a red suite that `main` does not.
+2. **Nine pre-existing failures** stand between position 11 and the end of the chain, so
+   `npm test` short-circuits at position 11 (`bmad-version-bump`) regardless. Three are a
+   shared-`node_modules` version skew (6.9.0 vs 6.10.0), two are missing Atlas
+   dependencies, and the rest are their own tickets. **The new gate suite is registered
+   at position 104 and is therefore unreachable via `npm test` today.** Run it directly:
+   `node test/release-gate-epic-31.test.js` (**33 passed, 0 failed** on this branch).
+3. **Linux/CI was never run.** I have no Linux host. Every Linux claim in this document is
+   inference, and inference is not a run.
+
+### `skills/git-workflow-skill/skill.json`
+
+Shows as modified in `git status` throughout. Verified byte-identical to `HEAD`
+(sha256 `872ba9a1…`); the flag is git's CRLF filter. Left alone, as instructed.
+
+---
+
+## 5. Invariants, re-derived by an independent walk
+
+Both were re-derived from **committed blobs** (`git show HEAD:<file>`), never the working
+tree — `.agents/` is regenerated mid-run by the suites and would otherwise contaminate the
+count. Enumeration is `git grep -l` against the revision; the block is taken from a line
+that is **exactly** the heading up to the next column-0 `## `; CRLF normalised to LF;
+sha256 over the result.
+
+| Invariant | Expected | **Derived** | Distribution |
+|---|---|---|---|
+| Story 31.4 preflight (`## Knowledge Store Binding Preflight`) | 41 copies, one sha256 `ca9bf25ba475` | **41 copies, 1 distinct digest, `ca9bf25ba475f11ac760e8c92a2d41f92a21298d9f11df55881527673e67051f`** | 13 `skills/` + 14 `lib/bmad-extension/` + 14 `lib/bmad-extension-plugin/` — **exactly as stated** |
+| Story 31.9 gate (`## Knowledge Store Backend Routing`) | 9 copies, one sha256 `cda3d3d99cff` | **9 copies, 1 distinct digest, `cda3d3d99cff06edb3b7bbb00bc1399d6a060fc153829fba7108cdfb91b09cfb`** | 3 + 3 + 3 — **exactly as stated** |
+
+Both are now pinned as tests (AC7.1, AC7.2), including the distribution, so a block that
+lands in one deploy pipeline and not the other fails.
+
+**The loose-probe control, confirmed.** A naive `Backend Routing` substring probe matches
+**60** tracked markdown files against the gate's 9 — 6.7× over-match, because it also hits
+Story 17.22's sprint-tracking `## Backend Routing` block, which is a different block
+present in every sprint skill. The exact-heading anchor is load-bearing, and AC7.3 pins
+the control so nobody can quietly loosen it.
+
+**Quotations correctly do not count.** The run-ledger, `epics.md` and the Story 31.6
+routing table all *quote* these blocks. They are indented or fenced, so none produces a
+column-0 `## <heading>` line and none is counted. Verified by the derived totals landing
+on 41 and 9 exactly.
+
+### One thing the invariants do not cover
+
+`.agents/` is a **fourth** tracked deploy surface (592 files at `HEAD`) and it is
+**stale**: it carries neither block at `HEAD`, while `skills/` gained both. `git diff
+9b936ac..HEAD -- .agents` is **empty** — Epic 31 changed 13 files under `skills/` and zero
+under `.agents/`. Consequences:
+
+- `.agents/` is **not** in `package.json`'s `files`, so it does **not** ship in the npm
+  tarball. This is a repo-local convention, not a product surface. **Not a shipping
+  defect.**
+- It *is* why any suite that regenerates `.agents/` immediately produces ~500 dirty
+  paths: the committed tree and the source tree genuinely disagree.
+- The 41/9 invariants are correct as stated. I record `.agents/` only so a future reader
+  is not surprised to find 56 and 13 when they scan a post-test-run working tree, as I
+  did on my first pass.
+
+---
+
+## 6. Semver
+
+**Recommendation: MINOR. `3.17.1` → `3.18.0`.** Cut and applied.
+
+**Rationale.** Every F26 change is additive:
+
+- Three **new** commands (`bind`, `confluence-plan`, `confluence-record-root-page`) — all
+  verified to exist in `bin/cli.js`'s command routing *and* its help text before being
+  documented.
+- Two **new** install questions; `--yes` still selects the previous single-repository
+  `file-system` default for both stores, so CI and non-interactive installs are
+  unaffected.
+- **New** generated `config.yaml` fields. The legacy fields (`planning_artifacts`,
+  `knowledgebase_path`, `implementation_artifacts`, `sprint_management_path`) are retained
+  and resolve to their **pre-epic literal values** — asserted, not assumed (AC2.3).
+- One **new** committed file.
+
+No existing command, flag or generated field is removed or changes meaning. Consistent
+with the prior epic cuts (3.15.0, 3.16.0, 3.17.0), all feature additions taken as MINOR.
+
+### What argues against MINOR — stated, because the instruction is to state it
+
+Four candidates were considered. **None rises to a breaking change to the public CLI**,
+but a reviewer should weigh them rather than take my word:
+
+1. **`_bmad-output/project-layout.yaml` is now written unconditionally, and the previous
+   code *deleted* it in single-repo mode.** For a project that was relying on that
+   deletion, a new committed file appears. This is a behaviour change to a
+   version-controlled artifact — the strongest argument on the list. It is not a *CLI*
+   break (no command, flag or exit code changes), NFR76 explicitly rebaselines the
+   comparison to post-FR263 behaviour, and the file is additive. **Recorded so a
+   reviewer can disagree.**
+2. **`_bmad/bmm/config.yaml` is now generated rather than written directly.** A user who
+   hand-edited it will find their edits overwritten on the next install or bind. Mitigated
+   by design: the per-developer TOML overrides are never touched, and the generator
+   *refuses* rather than overwriting when the binding is unreadable (AC5.6). But a
+   hand-edited generated file is a real-world thing.
+3. **A global install no longer installs BMAD agents *and no longer tells you to re-run
+   without `--global`*.** The old message framed a working mode as a failure, so this is a
+   strict improvement — but scripts that grepped for that message will not find it.
+4. **`schema_version` moves to 2.** Older ma-agents reading a schema-2 binding take the
+   `too-new` fail-loud path. That is a forward-compatibility property, not a break in this
+   direction — this release reads both.
+
+**If a reviewer judges (1) or (2) breaking, MINOR is wrong and the cut must be MAJOR.** I
+do not believe either is, and the PRD's own rebaselining of NFR76 supports that reading —
+but the judgement is not mine to close.
+
+**Files bumped:** `package.json`, `package-lock.json` (2 occurrences), and
+`lib/bmad-extension-plugin/.claude-plugin/marketplace.json` via a fresh
+`npm run build:plugin` (the Bundle Drift Guard enforces this). The orphan build directory
+the script leaks was deleted. `test/plugin-manifests.test.js` re-run after the rebuild:
+**29/0**.
+
+---
+
+## 7. Docs and CHANGELOG
+
+**`README.md`** gains a **"Knowledge Stores and the Project Binding"** section covering
+all five surfaces AC8 names — the two store questions, the install-scope question and
+what a global answer now does, the Confluence backend and its MCP requirement, `ma-agents
+bind`, and the two fail-loud behaviours — plus a "What's New in v3.18.0" block, and the
+three new commands in the CLI usage list. Every documented command was checked against
+`bin/cli.js`'s own `case` routing and help text first, so the docs describe the shipped
+surface rather than the intended one.
+
+**`CHANGELOG.md`** gains a `[3.18.0] - 2026-08-24` entry, Keep-a-Changelog structured,
+carrying two sections the prior cuts did not need:
+
+- **"Deliberately not implemented"** records FR266's retirement and *why* — so a future
+  maintainer who finds no mirror does not helpfully add one.
+- **"Known limitations"** puts the mock-verification bound, the missing publish path, the
+  `generated:` date residual and the Windows `npm test` state **in the shipped changelog**,
+  not only in an internal artifact.
+
+**`docs/architecture.md`** §3.6.1 (landed with Story 31.9) already states the air-gap
+posture with a Confluence-backed store; not re-edited.
+
+---
+
+## 8. Disposition of all 20 filed defects
+
+`_bmad-output/implementation-artifacts/bug-*.md`. Every one categorised. Where a bug's
+own header still says OPEN but the code says otherwise, I checked the code and say so.
+
+### Closed by this epic (5)
+
+| Bug | Evidence |
+|---|---|
+| `bug-31-2-ac5-no-rewrite-half-was-never-implemented` | Its own header records **CLOSED by Story 31.7** (legacy preservation in `writeProjectLayoutYaml`). Corroborated: `project-layout-legacy-single-store` 52/0 and the round-trip's "(c) `install --yes` keeps a LEGACY single-store project on its config.yaml path" |
+| `bug-read-existing-layout-collapses-two-stores-onto-software-store` | Header still says "OPEN — blocks Story 31.5". **The code disagrees and the code is right.** `readExistingLayout` now returns the full three-record `topology` additively, with `knowledge base` kept only as a back-compat alias onto the software store. Pinned by `project-layout-two-store-round-trip` 52/0 |
+| `bug-serialize-sprint-management-passes-store-modes-enum` | Header says OPEN. **Fixed.** `serializeSprintManagement` now passes `SPRINT_MODES` to `assertWritableMode`; `STORE_MODES` survives only in the explanatory comment. Pinned by `project-layout-enum-single-source` 31/0 |
+| `bug-show-current-layout-prints-undefined-for-confluence-store` | Header says OPEN. **Fixed.** `showCurrentLayout` renders through the per-backend identity view (`summarizeStoreIdentity` / `storeIdentityFields` / `renderIdentityValue`), which throws rather than degrading for a backend with no view |
+| `bug-store-from-raw-open-codes-the-default-backend` | Header says OPEN. **Fixed.** `storeFromRaw` now reads `DEFAULT_STORE_BACKEND`; **zero** literal `'file-system'` occurrences remain in it |
+
+> **Four bug files carry a stale `Status:` header.** They say OPEN (three of them "blocks
+> Story 31.5") when the code shows them fixed. That is a records-hygiene problem, not a
+> code problem — but a reader trusting the headers would over-count this epic's open
+> defects by four. Left unedited, per this epic's standing rule that a gate reports
+> contradictions rather than resolving them.
+
+### Open, owned by a named follow-up, and bearing directly on this gate (5)
+
+| Bug | Disposition |
+|---|---|
+| `bug-31-4-preflight-block-breaks-story-15-5-verbatim-invariant` | **OPEN — blocks AC9, and it is the gate's headline finding.** Independently re-confirmed here: 157/0 on `main`, 153/4 on this branch. A genuine contradiction between two delivered requirements, with three candidate resolutions and none chosen. **Needs a human adjudication.** Deliberately not patched — resolving it by weakening either test is exactly what its own report forbids |
+| `bug-tests-mutate-the-repository-they-run-in` | **OPEN, and it bit this gate twice**: it produced `project-layout-artifact-routing`'s false 58/1, and it left 524 dirty paths in a run with `repo-layout` excluded — which means **its stated scope is incomplete** (see §4). Not an Epic 31 defect; both named suites predate it |
+| `bug-npm-test-windows-suite-health-chain` | **OPEN, partly stale.** Its headline claim — `reconfigure.test.js` test 8.8 fails standalone on Windows — **did not reproduce**: `reconfigure` exits 0 on this branch, both in-chain and standalone. The structural claim (the `&&` chain masks downstream failures) is entirely correct and is why this gate ran all 103 suites individually. The chain now halts at **position 11** (`bmad-version-bump`), not position 32 |
+| `bug-bmad-knowledge-atlas-renders-a-confluence-backed-store-from-stale-local-files` | **OPEN — a real FR262 coverage gap.** `bmad-knowledge` renders a Confluence-backed store's section from local files, silently. The AC7 negative and the AC5 gate cover the *routing* skills; the Atlas is a separate consumer that no story in this epic owns. Epic 31's cross-epic notes said the Atlas interaction "should be confirmed at the Story 31.14 gate" — **this is that confirmation, and the answer is that it is not covered.** Needs a follow-up story |
+| `bug-system-requirements-store-has-no-ma-agents-owned-confluence-gate` | **OPEN — the second FR262 coverage gap, and it is structural.** The gate block is in 9 shipped skills, all of which resolve *software* requirements. A Confluence-backed **system** requirements store's only consumers are upstream BMM workflows this package does not ship, so ma-agents owns no gate for it. Directly related to the Story 31.10 AC1/AC3/AC5 escalation: the same missing-shipped-skill fact underlies both |
+
+### Open, owned by a named follow-up, not blocking this gate (7)
+
+| Bug | Disposition |
+|---|---|
+| `bug-oq3-guard-scope-misses-skills-that-write-from-nested-prompt-files` | OPEN, filed 2026-08-23. A scope hole in Story 31.4's merged guard: coverage is computed from top-level `SKILL.md` only, so a skill writing planning artifacts from a nested `prompts/` file escapes both the preflight and its own completeness check. Not a live data-loss path. **Note:** the 41-copy invariant is unaffected — it counts copies of the block, not the skills that should have one |
+| `bug-dev-epic-pipeline-does-not-own-the-story-status-field` | OPEN, high, **process defect not product defect** — story subagents write `done` on self-report, inverting the review gate. Out of scope for a release gate but worth a maintainer's attention, since it is the mechanism by which an unreviewed story can look finished |
+| `bug-knowledgebase-path-has-no-defined-meaning-for-a-confluence-store` | OPEN, explicitly filed as **a question, not a defect**. `knowledgebase_path` is written as `.` for a Confluence store because that is what the old code fell through to. Nothing is broken today; AC2.3 pins the value at `.` precisely because changing it would move resolved artifact paths and violate NFR82. Deciding it later is the correct sequencing |
+| `bug-uninstall-skill-hardcodes-project-scope-on-update` | OPEN, needs triage. Bears on the global-install thread (a global install's update removes skills from the project location, orphaning the global copies) but is not in any Epic 31 story's scope |
+| `bug-marker-merge-orphan-start-drops-content` | OPEN, backlog. Pre-existing, unrelated to F26 |
+| `bug-root-skills-dir-orphaned-artifact-dirs-on-install` | OPEN, backlog. Pre-existing. **This is bug B3 (root `skills/`), which I was instructed not to touch** |
+| `bug-custom-marketplace-stage-survives-install-and-is-not-gitignored` | OPEN, low, backlog. Epic 30 territory. Partially addressed by commit `b222f54` on `main` |
+
+### Out of scope and pre-existing (3)
+
+| Bug | Disposition |
+|---|---|
+| `bug-fr123-custom-content-flag-name-stale-upstream-renamed-custom-source` | OPEN, low, **documentation-only staleness**. The code already probes for both flag spellings. Epic 27/30 territory |
+| `bug-wds-installed-by-default-creates-design-artifacts` | `ready-for-dev` — the PRD amendment landed 2026-08-02. Epic 30 territory, has its own path forward |
+| `bug-docs-dir-created-empty-by-default-on-every-install` | **WON'T FIX**, closed 2026-08-02. No action |
+
+**Totals: 5 closed by this epic, 12 open with a named owner or follow-up, 3 out of scope
+(one of them already closed as WON'T FIX).** Of the 12 open, **one blocks AC9**
+(31.4/15.5) and **two are genuine FR262 coverage gaps** (Atlas staleness; the system
+requirements store having no ma-agents-owned gate).
+
+---
+
+## 9. Everything I could not verify, and why
+
+This is the most important section in the document. An honest limit is worth more than a
+confident claim, and this epic's record is that the confident claims are the ones that
+failed.
+
+1. **The extended air-gap workflow has never run.** AC1's two new phases are written,
+   syntax-checked (`bash -n`, `js-yaml`) and derived from behaviour I verified locally,
+   but a GitHub Actions job with Docker and `--network none` cannot execute here. **The
+   first CI run is the real evidence and it has not happened.** Every AC1 claim in this
+   document is "implemented", never "proven".
+2. **Linux/CI was never run at all.** AC3's cross-platform byte-identity and AC9's Linux
+   half are both inferences from the absence of platform-dependent constructs. Inference
+   is not a run.
+3. **Every MCP-present claim is mock-verified.** The `claude.ai Atlassian Rovo` connector
+   is unauthorised and cannot be authorised from a non-interactive session. Stories 31.9
+   and 31.10 both state this; I re-state it because it is easy to lose. The MCP-*absent*
+   path — AC5's actual subject — is the default state and was exercised for real.
+4. **Confluence page *creation* is not demonstrable from this package.** Story 31.10's
+   AC1/AC3/AC5 remain **partially met**. No shipped skill's purpose is to publish a store,
+   and there is no publish command. Escalated, not resolved.
+5. **The AC5 text half proves message content, not obedience.** The shipped bytes are
+   correct and identical in all nine copies. Whether an LLM actually halts when it reads
+   them is not something this repository can establish.
+6. **The mutation source is now attributed** — `test/yes-flag.test.js`, chain position 1,
+   residue 0 → 520 (§4). What I have **not** established is whether it is the *only* one:
+   the instrumented chain run was still in progress when this document was written, so
+   later suites may also mutate. See the addendum below for the completed result.
+7. **AC2 does not re-prove the whole installer**, only that the F26 write path adds
+   exactly one file and changes nothing else. The installer's own end-to-end proof is
+   AC1, which is item 1 on this list.
+8. **AC6 does not exercise a globally-installed skill activating in a project.** It proves
+   resolution is independent of per-machine state and follows its argument. The activation
+   half lives in `global-install-scope` (which passes) and AC1 Step 8 (which has not run).
+9. **The FR266 negative reasons over vocabulary and capability.** A mirror under a
+   genuinely novel name, in a module that does no I/O itself, described in text that never
+   mentions Confluence or a knowledge store, would evade it. I consider that remote and I
+   name it anyway.
+10. **The wall clock on this machine is unreliable.** It advanced ~7.6 hours during a
+    single suite run, so every elapsed-time figure I recorded is untrustworthy. This is why
+    the round-trip suite's first result read as a hang: the durations were meaningless. All
+    verdicts in §4 rest on **re-runs and exit codes**, never on timings.
+11. **I did not run `test/repo-layout.test.js`** in the automated chain, because it
+    installs ~521 paths into its own worktree. Its status on this branch is therefore
+    unknown to me. It is in the chain at position 20 — behind the position-11 halt, so
+    `npm test` does not reach it either way.
+12. **Four bug files carry stale OPEN headers** (§8). I verified the code and reported the
+    contradiction rather than editing the files. If a reviewer trusts the headers over this
+    document, they will over-count the open defects by four.
+
+### Addendum — full-chain residue attribution
+
+*(Populated by the instrumented re-run described in §4 item 6. If this section is empty
+or says "did not complete", item 6 stands unresolved.)*
+
+**Result: did not complete before this document was finalised.** Treat §4's mutation
+finding as unattributed.
+
+---
+
+## 10. What changed on this branch
+
+| Commit | Change |
+|---|---|
+| `e4acea4` | `test/release-gate-epic-31.test.js` (33 assertions, 33/0) + registration at chain position 104 |
+| `4c10ffd` | `.github/scripts/offline-install-verify.sh` steps 7–8; `.github/workflows/offline-install.yml` cap and summary |
+| `ec097ad` | `3.17.1` → `3.18.0`; `CHANGELOG.md`; `README.md`; rebuilt plugin `marketplace.json` |
+| *(this)* | This gate record |
+
+**Not done, deliberately:** no push, no PR, no npm publish — those are human gates. No
+edit to the PRD, to Decision P5-9, or to `epics.md`. No filed defect fixed. Bug B3 (root
+`skills/`) untouched.
