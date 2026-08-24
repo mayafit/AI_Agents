@@ -583,7 +583,7 @@ bypasses rather than descriptions of residual risk:
 
 ### What I actually ran
 
-All 103 chain suites **individually**, continue-on-failure, on this branch, per the
+All 103 of the chain's 104 suites **individually**, continue-on-failure, on this branch, per the
 story's own technical note that the `&&`-chained script halts early and masks downstream
 breakage. `test/repo-layout.test.js` was excluded from the automated run because it
 performs a real install into its own worktree (~521 paths). Per-suite wall-clock cap
@@ -594,6 +594,30 @@ on SIGTERM and that reads as a failure it is not.
 **Result: 102 run, 12 not-PASS.** Then each not-PASS was re-run alone on a
 verified-clean tree, and each one that also exists on `main` was baselined against a
 detached worktree at **`9b936ac`**.
+
+> **Reconciling the suite counts, which this document gave three different values for.**
+> §4 said "102 run", the §9 addendum said "all 103 chain suites", and the chain has
+> **104** entries. Re-derived from `package.json` at `HEAD`:
+>
+> - **104** `&&`-separated entries in the `test` script. Position 1 is `yes-flag`,
+>   position 11 is `bmad-version-bump` (where the chain halts), position 20 is
+>   `repo-layout`, position 104 is this story's new `release-gate-epic-31` — which is what
+>   the reviewer's count of 104 reflects and which the earlier drafts predate.
+> - **103** attempted, after excluding `repo-layout` as the already-known mutator. That is
+>   the addendum's figure and it is correct for the instrumented run.
+> - **102** produced a verdict in §4's earlier, separate run.
+>
+> **The one-suite gap between 103 and 102 is not reconstructible from what I recorded**,
+> and I am not going to reverse-engineer a reconciliation for it — the most likely
+> explanation is that §4's run predates the registration of the release-gate suite itself,
+> but the run log does not survive to prove that. The 12-row disposition table below is
+> complete for the suites that did report, and every "pre-existing" verdict in it was
+> baselined against `9b936ac` individually, so the gap does not put any verdict in doubt.
+> It does mean **"102 run" should be read as "102 verdicts recorded", not "102 of the
+> chain's suites"**, and a re-run would be needed to close it properly. Re-running the
+> full chain was not attempted in this fix round: it takes hours and dirties ~520 paths,
+> and the finding it would confirm (AC9 NOT MET, on `story-15-5`) is already independently
+> reproduced below.
 
 ### The 12, dispositioned
 
@@ -634,12 +658,71 @@ This is the genuine contradiction recorded in
 invariant says a converted workflow skill's `SKILL.md` must contain the original content
 **verbatim**; Story 31.4 AC3/AC4 require the staleness guard to be **embedded in those
 skills as the first `##` section**. Both cannot hold for the same file. Three candidate
-resolutions are on record and **none has been chosen**. I have deliberately not chosen
-one: the bug report says the adjudication belongs to a human or to this gate, and
-choosing it here would mean weakening either a lossless-conversion guarantee that has
-held since Epic 15 or a gateway-position requirement that Story 31.4's review verified
-three ways. **This is the release gate's headline finding and it needs a decision, not a
-patch.**
+resolutions are on record and **none has been chosen**. **This is the release gate's
+headline finding and it needs a decision, not a patch.**
+
+#### A recommendation, which is not a decision
+
+The first draft of this record offered none. That was wrong: the bug's own AC1 asks that
+the contradiction be *"adjudicated explicitly and recorded"*, and it names **"a human *or*
+Story 31.14's release gate"** as the venue. Declining the second half of a job I was
+offered is not neutrality, it is an omission. So — **a recommendation, with the reasoning
+exposed so it can be overruled. The human still chooses, and I have implemented none of
+it.**
+
+**What the test actually enforces, checked rather than assumed.**
+`verifyContentPreserved` (`test/story-15-5-workflow-skills.test.js:222`) does
+`assert.strictEqual(body, original)` — **strict equality**, not containment — where `body`
+is `lib/bmad-extension/skills/<name>/SKILL.md` after frontmatter stripping and `original`
+is the authored source under `lib/bmad-extension/workflows/<name>/`. Two consequences the
+options list does not draw out:
+
+- **Any byte added to the skill body breaks it.** So option 3 as written — "move the guard
+  somewhere the verbatim check does not scan, while keeping it ahead of skill logic" —
+  cannot leave so much as a one-line pointer in the body. It needs the pointer in the
+  frontmatter (which *is* stripped before comparison) or in `skill.json`, and it then has
+  to be shown that an agent reads that pointer before the body. That is a real design
+  question, not a formatting one.
+- **The comparison is between two files this repository owns.** `lib/bmad-extension/
+  workflows/**` is this project's own authored text, not vendored upstream content — the
+  same fact FIX-2's attack 2 turned on.
+
+**My recommendation: a variant of option 3 that is not on the list — put the block in the
+SOURCE as well.** Add the preflight to `lib/bmad-extension/workflows/<name>/`'s authored
+content, at the same gateway position, so the skill body and the source *both* carry it.
+
+Why I prefer it:
+
+- **It weakens neither delivered requirement, and unlike option 3 it does not have to
+  relocate anything.** Story 31.4 AC3/AC4 hold unchanged — the block stays the first `##`
+  section of the shipped `SKILL.md`. Story 15.5's invariant holds unchanged **and in its
+  strict form**: the conversion remains byte-for-byte lossless and additive-free, because
+  the converter is no longer the thing adding the block. The contradiction dissolves
+  rather than being arbitrated.
+- **It puts the guard where the requirement it enforces actually lives.** All four skills
+  resolve `sprint_management_path` from the generated config, which is exactly 31.4's OQ-3
+  criterion for needing the guard. If the *workflow* needs the preflight, the workflow
+  should say so; the current arrangement has the installer injecting it into a derivative
+  and the source silently disagreeing.
+- **Option 1 (containment) is the one I would argue against most strongly.** It converts a
+  strict equality into a substring check across every converted workflow skill, and it
+  buys the epic exactly one exemption at the price of permanently disabling the property
+  for everything else. **Option 2 the bug already rates weakest**, and I agree — it trades
+  a real staleness hole for a green suite.
+
+**What I did not verify, and a human must before adopting this.** I have not run it. Three
+things need checking: (a) whether `lib/bmad.js`'s deploy path would then emit the block
+*twice* into some pipeline; (b) whether Story 31.4's completeness test, which fails when a
+skill resolving a binding-derived field lacks the guard, is satisfied by a source-carried
+block; (c) the 41-copy preflight invariant. On (c) I can say something concrete now:
+`collectBlocks` walks `skills/`, `lib/bmad-extension/skills/` and
+`lib/bmad-extension-plugin/skills/`, and `lib/bmad-extension/workflows/` is under **none**
+of them, so a source-carried block would **not** move the 41 — but that also means the
+41-copy invariant would stop covering the copy this resolution relies on, and AC7.1 would
+need extending to match.
+
+**This remains a recommendation. AC9 stays NOT MET, nothing here is implemented, neither
+test is weakened, and the orchestrator's halt on this item is correct.**
 
 ### The two that look like failures and are not
 
@@ -680,7 +763,7 @@ verified-clean tree, measuring **install residue only** (`.agents/`, `_bmad/`,
 back clean.** So I instrumented the **whole chain**, restoring between every suite.
 
 **The mutator is `test/yes-flag.test.js` — position 1 in the chain. Residue 0 → 520, and
-it is the ONLY one:** the instrumented run completed all 103 suites and reported exactly
+it is the ONLY one:** the instrumented run completed all 103 of the 104 (repo-layout excluded) and reported exactly
 one `MUTATES` line. Confirmed directly afterwards by running it alone from a
 verified-clean tree — **`node test/yes-flag.test.js` → exit 0, 522 dirty paths**, the
 regenerated `.agents/` tree plus `.ma-agents.json`, an `AGENTS.md.backup-*`, `_bmad/`,
@@ -1065,7 +1148,7 @@ failed.
 
 ### Addendum — full-chain residue attribution (completed)
 
-The instrumented run finished all **103** chain suites (`repo-layout` excluded as the
+The instrumented run finished all **103** of the chain's **104** suites (`repo-layout` excluded as the
 already-known mutator), restoring the tree between every one and measuring install
 residue only.
 
