@@ -309,7 +309,7 @@ Verification commands were run against `bin/cli.js`'s live exports and against
 | FR263 | 31.2 | No `unlinkSync(... project-layout ...)` anywhere in `bin/cli.js` — the delete-on-single-repo branch is gone; `writeProjectLayoutYaml` runs unconditionally; `PROJECT_LAYOUT_SCHEMA_VERSION` = 2 | `project-layout-binding-spine` (69/0); AC2.1/AC2.2 | **Met** |
 | FR264 | 31.3 | `generateBmmConfig` + the stamp trio (`computeProjectLayoutStamp`, `readProjectLayoutStamp`, `canonicalBindingBytes`) all exported; legacy fields verified to retain their **pre-epic literal values** via js-yaml | `project-layout-config-generation` (32/0); AC2.3/AC2.4 | **Met** |
 | FR265 | 31.7 | `detectLegacySingleStore`, `topologyFromLegacyLayout`, `LEGACY_SINGLE_STORE_SPLIT_COMMAND` = `"ma-agents config layout"` (a real command, checked against the CLI's own routing) | `project-layout-legacy-single-store` (52/0); AC2.4 | **Met** |
-| **FR266** | **none — retired** | **See §3. No implementation found.** | AC7.4–AC7.9 | **Correctly absent** |
+| **FR266** | **none — retired** | **See §3. No implementation found**, re-confirmed in the fix round by a multi-line re-scan of all 2,332 tracked shipped markdown files — including the 733 the original closed set never covered. Clean. | AC7.4–AC7.9 — 13 assertions, 5 harness controls | **Correctly absent.** The *result* held; the *check* was defeatable three ways and is now fixed — §3 |
 | FR267 | 31.2, 31.6 | `CONFLUENCE_STORE_RECORDS` names exactly the two **requirement** stores; `PUBLISHING_STORES` in the page-tree module excludes `SPRINT_MANAGEMENT`; the emitted binding carries no `implementation_artifacts` record | `project-layout-binding-spine` (69/0); `project-layout-artifact-routing` (59/0) | **Met** |
 
 ### Non-functional requirements
@@ -839,7 +839,7 @@ root artifacts, `git clean -fdq .agents _bmad-output` — never `-x`, which woul
    shared-`node_modules` version skew (6.9.0 vs 6.10.0), two are missing Atlas
    dependencies, and the rest are their own tickets. **The new gate suite is registered
    at position 104 and is therefore unreachable via `npm test` today.** Run it directly:
-   `node test/release-gate-epic-31.test.js` (**33 passed, 0 failed** on this branch).
+   `node test/release-gate-epic-31.test.js` (**37 passed, 0 failed** on this branch after the fix round; 33/0 before it).
 3. **Linux/CI was never run.** I have no Linux host. Every Linux claim in this document is
    inference, and inference is not a run.
 
