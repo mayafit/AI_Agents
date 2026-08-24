@@ -400,12 +400,33 @@ either a prohibition, an unrelated pre-existing use, or a test asserting the abs
 Nine assertions now hold that closed, with two harness controls proving the instrument
 detects a restoration.
 
-**What this check cannot see.** It reasons over the vocabulary FR266 and its
-neighbourhood actually use. A mirror implemented under a genuinely novel name, in a
-module that does no I/O of its own and delegates it elsewhere, and described in shipped
-text that never mentions Confluence or a knowledge store, would evade (a), (c) and (d).
-I consider that remote — a mirror has to be a mirror *of* something, and in this product
-that something is named — but it is the honest boundary.
+**Re-run over the whole branch, my own commits included.** The scan was repeated against
+`9b936ac..HEAD` after this story's four code/doc commits landed (678 added-line hits, up
+from 531). The **shipped-surface file set is unchanged** — my commits added hits only in
+`test/release-gate-epic-31.test.js` (the scan's own vocabulary), the offline-install
+script, `README.md` and `CHANGELOG.md`. Every one of the latter two was adjudicated by
+hand: *"There is no local mirror and no cache"*, *"has no code, no cache, no sync
+direction, no sync trigger and no conflict-resolution path"*, *"do not fall back to any
+local copy"*, and *"nested to mirror the source folder structure"* — the last describing
+the page **tree's shape**, which is FR255/FR256's actual requirement, not a content
+mirror.
+
+**What this check cannot see.** Three boundaries, stated:
+
+- It reasons over the vocabulary FR266 and its neighbourhood actually use. A mirror
+  implemented under a genuinely novel name, in a module that does no I/O of its own and
+  delegates it elsewhere, and described in shipped text that never mentions Confluence or
+  a knowledge store, would evade (a), (c) and (d). I consider that remote — a mirror has
+  to be a mirror *of* something, and in this product that something is named.
+- The **closed set (c) covers shipped skill markdown only** — `skills/`,
+  `lib/bmad-extension/skills/`, `lib/bmad-extension-plugin/skills/`. The root `README.md`
+  and `CHANGELOG.md` also ship on npm and are **not** scanned by it; they were adjudicated
+  by hand above. That is a deliberate scope choice (they are human documentation, not
+  agent instruction text) and it is a gap a future edit could walk through.
+- `bug-oq3-guard-scope-misses-skills-that-write-from-nested-prompt-files` records a
+  related scope hole in Story 31.4's *guard*: coverage is computed from top-level
+  `SKILL.md` only. My scan walks **every** `.md` under the three skill roots, so it does
+  not inherit that hole — but the two scopes are different and should not be conflated.
 
 ---
 
