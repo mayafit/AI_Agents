@@ -31,6 +31,15 @@ The three things a reader should take away before anything else:
    assert Confluence pages *are created*. No shipped skill's purpose is to publish a
    store, and there is no publish command. Recorded, not resolved, and `epics.md` is
    deliberately unedited.
+4. **This record went through an independent review and did not survive it intact.** The
+   reviewer found one **false statement** (a defect listed as closed that is not — §8),
+   one **wrong shipping claim** (`CHANGELOG.md` does not ship on npm — §7), and a
+   **FR266 check that was defeatable three ways**, which they demonstrated by planting
+   three mirrors and watching the suite stay green (§3). All are corrected, and the
+   corrections are recorded as corrections rather than quietly folded in. **The gate's
+   product is an honest record, and its first draft was not one** — which is the strongest
+   available argument for the review step that caught it. §9 items 13–22 are the limits
+   this document did not previously admit to.
 
 ---
 
@@ -147,6 +156,16 @@ second half, AC3.1 (which strips `generated:`) would still pass if a *second*
 nondeterministic line were introduced. cli.js already knows about this: `ma-agents bind`
 declines to rewrite the file on a no-edit re-run for exactly this reason
 (`bin/cli.js:4914`).
+
+> **Correction — this bound covered ONE answer shape and was written as though it were
+> general.** AC3.2 ran only a single-store `mode: 'same'` binding. A two-store or
+> Confluence binding emits lines that shape never produces — `space_key:`, `root_page:`, a
+> second store block, a divergent `path:` — and a second nondeterministic line in any of
+> them would have gone unseen. **AC3.2 now runs four shapes**: the legacy single store,
+> two divergent file-system stores (FR257's motivating case), both stores
+> Confluence-backed, and the mixed system-in-Confluence case. Each is rendered twice and
+> required to agree line for line, and each Confluence shape must actually emit a
+> `space_key:` or the extension would be decoration. The claim and the test now match.
 
 **Method limits.** **The cross-platform half was executed on Windows only.** Linux/CI
 byte-identity is inferred from the absence of platform-dependent constructs in the
@@ -646,6 +665,17 @@ it is exactly how the 31.4/15.5 regression was found in the first place.
 `test` script, so `npm test` never runs it and it cannot be a chain failure. I record this
 rather than reporting it as pre-existing-green.
 
+> **And it is not green.** Run directly in the fix round because §7's change edits
+> `README.md` and this is the only other suite that reads it: **10 passed, 1 failed, exit
+> 1.** The failure is `_bmad-output/ section appears within first two major sections after
+> Installation` — "found 9 H2s before it". **Pre-existing and not caused by the §7 edit**:
+> the `## Project Knowledge: _bmad-output/` heading is the 10th `##` in `README.md` at
+> `dfd5e47` and the 10th at `HEAD`, verified against both blobs, and the fix-round
+> additions are `###` subsections inside an existing `##`, so they cannot move an H2 count.
+> The suite is unreachable via `npm test` and its assertion is a documentation-layout
+> preference rather than a product property, but it is a red suite in this repository and
+> this gate should not have left it unmentioned.
+
 ### The one that is this epic's
 
 `test/story-15-5-workflow-skills.test.js`: **157/0 on `main`, 153/4 on this branch.** The
@@ -1142,9 +1172,66 @@ failed.
     installs ~521 paths into its own worktree. Its status on this branch is therefore
     unknown to me. It is in the chain at position 20 — behind the position-11 halt, so
     `npm test` does not reach it either way.
-12. **Four bug files carry stale OPEN headers** (§8). I verified the code and reported the
-    contradiction rather than editing the files. If a reviewer trusts the headers over this
-    document, they will over-count the open defects by four.
+12. **Three bug files carry stale OPEN headers** (§8) — not four, as the first draft said.
+    I verified the code and reported the contradiction rather than editing the files. If a
+    reviewer trusts those headers over this document, they will over-count the open
+    defects by three. **The fourth was this document's error, not the bug file's**: see
+    item 13.
+
+### Added by the fix round — limits this record did not previously admit to
+
+**These are not new problems. They are problems that were here in the first draft and were
+described as smaller than they were.** They belong at the top of this section rather than
+the bottom, because the pattern they share is the one this gate exists to catch: a check
+that reported green, described as though the green meant more than it did.
+
+13. **This record contained a false statement about a defect closure, and it was
+    checkable.** §8 listed `bug-store-from-raw-open-codes-the-default-backend` as closed on
+    the evidence "zero literal `'file-system'` occurrences remain in it". The literal is at
+    `bin/cli.js:1830` and it is the exact one the bug's own reproduction step 3 names. Half
+    the fix had landed, and a check that stopped at the first confirming evidence read the
+    half as the whole. **Corrected in §8, and the mechanism is the general warning: for
+    every other "fixed" row in that table, a partial fix reads exactly like a complete one
+    to a check that stops early.** The other three closure claims were re-verified against
+    each bug's own reproduction steps for this fix round.
+14. **The FR266 closed set was defeatable three ways, and the most important of the three
+    was the default case, not an exotic one.** An independent reviewer planted three
+    mirrors and the suite stayed 33/0 on all three. Two are now closed and proved closed by
+    re-planting (§3); the third was already covered by Story 31.10's suite while this
+    document credited AC7.7 for it. **What this means for anyone reading the FR266
+    negative: the version of it in the first draft did not hold, and its confidence was
+    not earned.** The current version is stronger and re-scanned across the whole shipped
+    surface — but it earned that by failing first, not by being right the first time.
+15. **The FR266 window is four lines and a five-line split still evades.** The *default*
+    prose shape is now caught; a determined one is not. Stated in §3 and repeated here
+    because it is the live residual of the most serious of the three bypasses.
+16. **Scope is closed for shipped markdown only.** Shipped non-markdown agent-readable
+    text — `.yaml` skill manifests, `MANIFEST.yaml`, JSON prompt fragments — is not
+    scanned by AC7.5. Nothing in this epic puts instruction prose there; nothing in this
+    suite would notice if something later did.
+17. **`CHANGELOG.md` does not ship on npm, and this record claimed it did.** 1,929 tarball
+    entries, `CHANGELOG.md` not among them. The "Deliberately not implemented" and "Known
+    limitations" sections are now reproduced in `README.md`, which does ship (§7). **The
+    duplication is a new, real maintenance hazard**: two copies held in step by a request
+    in a comment, with nothing asserting it.
+18. **AC7.3 pinned nothing and cited the wrong population.** It asserted `> 9` — satisfied
+    by any number above nine — while this document called it "pinned so nobody can quietly
+    loosen it", and cited 60 tracked markdown files when its own population is 316 shipped
+    skill files and the tracked figure is 61. Now pins 36 exactly, with both figures
+    recorded (§5).
+19. **AC7.7's forward guarantee is withdrawn.** "Cannot become a mirror regardless of what
+    anyone later intends" overstates what any test enforces. Today's module has no I/O
+    capability and the guard now fails on the shapes by which one would be added; that is
+    all that is claimed.
+20. **AC3.2's determinism bound covered one answer shape and read as general.** Now
+    extended to four — legacy single-store, two divergent file-system stores, both stores
+    Confluence-backed, and the mixed case (§1 AC3). The claim and the test now match.
+21. **The chain-suite counts in this document disagreed with each other** (102 / 103 /
+    104). Reconciled in §4, with the residual one-suite gap flagged as not reconstructible
+    rather than reverse-engineered into a tidy number.
+22. **The 31.4/15.5 recommendation in §4 is a recommendation, and I have not run it.**
+    Three specific things need checking before anyone adopts it, and they are named there.
+    A gate that recommends is still not a gate that decides.
 
 ### Addendum — full-chain residue attribution (completed)
 
@@ -1172,7 +1259,45 @@ the full consequence. Item 6 above is resolved.
 | `9d2d265` | Two latent `pipefail` aborts in the new air-gap phases; `read_field` anchored and verified against real generated output |
 | `f78584a`, `69a3660`, `73d6836` | FR266 scan re-run over the whole branch and its scope limits stated; the `yes-flag` attribution |
 
-**Final verification run, on a clean tree, after every change above:**
+**Fix round, after independent review.** The reviewer's findings and what closed them:
+
+| Commit | Change |
+|---|---|
+| `ded9d82` | **FIX-2 attacks 1 and 2.** AC7.5 matches over a four-line window and never straddles a pinned block; population widened from 316 skill-root files to 2,332 tracked shipped markdown, derived from `package.json`'s `files`; five hand-adjudicated passages digest-pinned. New AC7.5b/c/d. **FIX-4:** AC7.3 pins 36 exactly instead of `> 9` |
+| `312cfcf` | **FIX-2 attack 3.** AC7.7 leads with "this module requires nothing"; `node:` stripped before matching; writer list gains the async half and `fs.promises`; dynamic acquisition refused. New AC7.7b |
+| `f640130` | **FIX-3.** "Deliberately not implemented" and "Known limitations" reproduced in `README.md`, which ships; `CHANGELOG.md` notes that it does not |
+| `185c8a9` | **FIX-4.** AC3.2 extended from one answer shape to four |
+| `85380de` | **FIX-1.** `store-from-raw` corrected from closed to open; stale-header count 4 → 3; totals 4/13/3; the other three closure claims re-verified in source |
+| `ce12467` | **FIX-2, record half.** §3 restated; the 733-file multi-line re-scan; the forward guarantee withdrawn; "what this check cannot see" rewritten |
+| `c06b765` | **FIX-3/FIX-4, record half.** The shipping claim, the 61/36 loose-probe figures, and semver argument 2 corrected |
+| `6900193` | **FIX-5.** The 31.4/15.5 recommendation; the 104/103/102 count reconciliation |
+
+**Verification run for the fix round, on a clean tree:**
+
+| Suite | Result | Exit |
+|---|---|---|
+| `release-gate-epic-31` | **37 / 0** (was 33/0; +4 assertions) | 0 |
+| `project-layout-confluence-routing` | 97 / 0 | 0 |
+| `project-layout-confluence-page-tree` | 157 / 0 | 0 |
+| `project-layout-staleness-guard` | 64 / 0 | 0 |
+| `project-layout-bind` | 73 / 0 | 0 |
+| `project-layout-binding-spine` | 69 / 0 | 0 |
+| `project-layout-artifact-routing` | 59 / 0 | 0 |
+| `project-layout-config-generation` | 32 / 0 | 0 |
+| `project-layout-enum-single-source` | 31 / 0 | 0 |
+| `plugin-manifests` | 29 / 0 | 0 |
+| **`story-15-5-workflow-skills`** | **153 / 4** — unchanged, and deliberately so | **1** |
+| `bmad-output-policy` (not in the chain) | 10 / 1 — pre-existing, see §4 | 1 |
+
+**With the reviewer's three attacks re-planted: 35 / 2, exit 1.** Attacks 1 and 2 die at
+AC7.5 as separate strays; attack 3 dies at AC7.7. Reverted with `git checkout --`; the
+tree is clean and the suite is back to 37/0.
+
+**`test/project-layout-two-store-round-trip.test.js` was NOT run in the fix round.** It
+drives four real `npm install` runs against the public registry, and its 52/0 is
+established. Its exclusion here is a deliberate cost decision, not a result.
+
+**Final verification run of the ORIGINAL draft, on a clean tree** (superseded by the fix-round table above; retained so the two runs can be compared):
 
 | Suite | Result |
 |---|---|
@@ -1193,3 +1318,13 @@ and re-checking `git status`.
 **Not done, deliberately:** no push, no PR, no npm publish — those are human gates. No
 edit to the PRD, to Decision P5-9, or to `epics.md`. No filed defect fixed. Bug B3 (root
 `skills/`) untouched.
+
+**Not done in the fix round, deliberately:** the 31.4/15.5 contradiction is **not**
+resolved — a recommendation is recorded in §4 and nothing is implemented. Neither
+`test/story-15-5-workflow-skills.test.js` nor Story 31.4's guard was weakened or edited;
+`story-15-5` is still 153/4 and **AC9 is still NOT MET**. No bug file's `Status:` header
+was edited, including the one this record was wrong about — the correction belongs in this
+document, where the error was. `test/repo-layout.test.js` and
+`test/project-layout-two-store-round-trip.test.js` were not run. The status of this story
+remains `review`; **no verdict is claimed here, and none was claimed in the first draft
+either.** That part held up.
