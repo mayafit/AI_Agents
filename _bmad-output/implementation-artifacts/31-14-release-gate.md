@@ -1232,6 +1232,15 @@ that reported green, described as though the green meant more than it did.
 22. **The 31.4/15.5 recommendation in §4 is a recommendation, and I have not run it.**
     Three specific things need checking before anyone adopts it, and they are named there.
     A gate that recommends is still not a gate that decides.
+23. **The gate suite could have lost assertions without saying so, and this document was
+    citing its count.** Six sibling suites in this epic pin their own test count
+    (`global-install-scope`, `project-layout-artifact-routing`, `project-layout-bind` and
+    others); `release-gate-epic-31` did not — the one suite whose numbers this record
+    quotes. A test lost to a rename or an early return would have reported nothing, and
+    "0 failed" over a silently shrunken set is the same presence-rather-than-effect shape
+    this epic produced six times. **Now pinned at 37 in both directions**, with the failure
+    message naming this document as the other thing to update. Verified to fire: with the
+    constant set to 99 the suite exits 1 on a run where all 37 assertions passed.
 
 ### Addendum — full-chain residue attribution (completed)
 

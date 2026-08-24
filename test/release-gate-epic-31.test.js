@@ -1532,4 +1532,24 @@ if (failed > 0) {
   for (const e of errors) console.log(`  ${e.name}:\n    ${e.error}`);
 }
 summaryPrinted = true;
+
+// ─── THE COUNT, PINNED IN BOTH DIRECTIONS ────────────────────────────────────
+//
+// Story 31.14 fix round. Six sibling suites in this epic pin their own test
+// count (`global-install-scope`, `project-layout-artifact-routing`,
+// `project-layout-bind` and others) and this one — the release gate itself —
+// did not. That is the wrong suite to leave unpinned: a test that stops running
+// reports nothing, and "0 failed" over a silently shrunken set is exactly the
+// presence-rather-than-effect shape this epic produced six times. A DEFICIT
+// catches an assertion lost to a rename, a merge or an early return; a SURPLUS
+// catches one added without being recorded in the gate document, which is the
+// artifact these assertions exist to support.
+const EXPECTED_TEST_COUNT = 37;
+const total = passed + failed;
+if (total !== EXPECTED_TEST_COUNT) {
+  console.error(`\n  FATAL: ran ${total} tests, expected exactly ${EXPECTED_TEST_COUNT}. ` +
+    `If you added or removed a test, update EXPECTED_TEST_COUNT — and update ` +
+    `_bmad-output/implementation-artifacts/31-14-release-gate.md, which cites this count.`);
+  process.exit(1);
+}
 process.exit(failed > 0 ? 1 : 0);
