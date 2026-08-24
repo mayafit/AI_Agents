@@ -339,31 +339,80 @@ test('AC3.1 the same answers produce byte-identical project-layout.yaml (modulo 
     'NFR81: identical answers must produce identical bytes');
 });
 
-test('AC3.2 `generated:` is the ONLY line that may vary, and it is date-only', () => {
+test('AC3.2 `generated:` is the ONLY line that may vary, and it is date-only — across FOUR answer shapes', () => {
   // Proving the bound matters more than proving the equality: if a SECOND
   // nondeterministic line were added, AC3.1 above would still pass because it
   // strips only `generated:`. This test closes that.
-  const answers = {
-    knowledgebase: { mode: 'same', path: '.' },
-    sprintManagement: SPRINT_SAME,
+  //
+  // Story 31.14 fix round, FIX-4. This previously ran ONE answer shape — a
+  // single-store `mode: 'same'` binding — while the record stated the bound as
+  // though it were general. A two-store or Confluence binding emits lines this
+  // shape never produces (`space_key:`, `root_page:`, a second store block, a
+  // divergent `path:`), and a nondeterministic line in ANY of those would have
+  // gone unseen. The claim is now as general as the record states it, because
+  // the test is: every shape the wizard can answer is rendered twice and
+  // required to agree line for line.
+  const SHAPES = {
+    'single-store, mode: same (the legacy shape)': {
+      knowledgebase: { mode: 'same', path: '.' },
+      sprintManagement: SPRINT_SAME,
+    },
+    'two DIVERGENT file-system stores (FR257\'s motivating case)': {
+      systemRequirementsStore: { backend: 'file-system', mode: 'local', path: 'sysreq' },
+      softwareRequirementsStore: { backend: 'file-system', mode: 'local', path: 'swreq' },
+      sprintManagement: SPRINT_SAME,
+    },
+    // Inlined rather than reusing `CONFLUENCE_ANSWERS` below: `test()` runs its
+    // body immediately, and that constant is declared further down the file, so
+    // referencing it here would hit the temporal dead zone.
+    'both stores Confluence-backed': {
+      systemRequirementsStore: {
+        backend: 'confluence', spaceKey: 'SYSREQ', rootPage: { title: 'System Requirements', id: null },
+      },
+      softwareRequirementsStore: {
+        backend: 'confluence', spaceKey: 'SWREQ', rootPage: { title: 'Software Requirements', id: null },
+      },
+      sprintManagement: SPRINT_SAME,
+    },
+    'MIXED — system in Confluence, software on the file system': {
+      systemRequirementsStore: {
+        backend: 'confluence', spaceKey: 'SYSREQ', rootPage: { title: 'System Requirements', id: null },
+      },
+      softwareRequirementsStore: { backend: 'file-system', mode: 'local', path: 'swreq' },
+      sprintManagement: SPRINT_SAME,
+    },
   };
-  const render = () => withTmpProject((root) => {
-    capture(() => cli.writeProjectLayoutYaml(answers));
-    return fs.readFileSync(path.join(root, '_bmad-output', 'project-layout.yaml'), 'utf-8');
-  });
-  const a = render().split('\n');
-  const b = render().split('\n');
-  assert.strictEqual(a.length, b.length, 'the two renders must have the same line count');
-  const differing = a.map((l, i) => (l === b[i] ? null : i)).filter((i) => i !== null);
-  assert.deepStrictEqual(differing, [], 'within one run of this suite even `generated:` must agree');
 
-  const genLine = a.find((l) => /^generated:/.test(l));
-  assert.ok(genLine, 'the file must carry a `generated:` line (this test bounds it, it does not remove it)');
-  assert.match(
-    genLine, /^generated: "\d{4}-\d{2}-\d{2}"$/,
-    `the residual nondeterminism must be DATE-ONLY — a time or a timestamp would make ` +
-    `byte-identity impossible within a day, not merely across one. Got: ${genLine}`
-  );
+  for (const [label, answers] of Object.entries(SHAPES)) {
+    const render = () => withTmpProject((root) => {
+      capture(() => cli.writeProjectLayoutYaml(answers));
+      return fs.readFileSync(path.join(root, '_bmad-output', 'project-layout.yaml'), 'utf-8');
+    });
+    const a = render().split('\n');
+    const b = render().split('\n');
+    assert.strictEqual(a.length, b.length, `${label}: the two renders must have the same line count`);
+    const differing = a
+      .map((l, i) => (l === b[i] ? null : `${i}: ${JSON.stringify(l)} vs ${JSON.stringify(b[i])}`))
+      .filter(Boolean);
+    assert.deepStrictEqual(differing, [],
+      `${label}: within one run of this suite even \`generated:\` must agree`);
+
+    const genLine = a.find((l) => /^generated:/.test(l));
+    assert.ok(genLine,
+      `${label}: the file must carry a \`generated:\` line (this test bounds it, it does not remove it)`);
+    assert.match(
+      genLine, /^generated: "\d{4}-\d{2}-\d{2}"$/,
+      `${label}: the residual nondeterminism must be DATE-ONLY — a time or a timestamp would make ` +
+      `byte-identity impossible within a day, not merely across one. Got: ${genLine}`
+    );
+    // And the shape must genuinely be the shape it claims to be, or the
+    // extension is decoration: each non-legacy shape must emit lines the
+    // single-store shape does not.
+    if (label.includes('Confluence')) {
+      assert.ok(a.some((l) => /space_key:/.test(l)),
+        `${label}: this shape must actually emit a confluence record, or it proves nothing`);
+    }
+  }
 });
 
 test('AC3.3 the emitted binding contains no platform-dependent bytes (LF only, no backslash separators)', () => {
