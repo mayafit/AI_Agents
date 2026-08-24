@@ -361,27 +361,113 @@ zero hits from a narrow vocabulary would prove nothing.
   `POISON_BODY = '<<<CONFLUENCE-CONTENT-THAT-MUST-NEVER-BE-CACHED>>>'`.
 
 **(c) A closed set, not a denylist, pinned as a test.** Adjudication-by-hand does not
-survive the next commit, so AC7.5 encodes it: **every F26-subject mirror-vocabulary line
-in shipped skill markdown must lie inside one of the two digest-pinned blocks.** The
-subject filter (`confluence|knowledge store|requirements store|space key|root page`)
-narrows *what* is examined without narrowing *where* — a mirror instruction dropped into
-any shipped skill is still caught, while `npm cache clean --force` in the Docker skill is
-not. Two harness controls prove the instrument works: AC7.4 requires the vocabulary to
-flag FR266 restored verbatim, and AC7.4b requires the subject filter to admit that line
-and reject unrelated cache advice. Both doors are shut: a mirror added **outside** a
-pinned block fails AC7.5, and a mirror added **inside** one changes its digest and fails
-AC7.1/AC7.2.
+survive the next commit, so AC7.5 encodes it: **every F26-subject mirror-vocabulary
+passage in shipped markdown must lie inside one of the two digest-pinned blocks, or be a
+hand-adjudicated, digest-pinned exception.** The subject filter
+(`confluence|knowledge store|requirements store|space key|root page`) narrows *what* is
+examined without narrowing *where* — a mirror instruction dropped into any shipped file is
+still caught, while `npm cache clean --force` in the Docker skill is not. Both doors are
+shut: a mirror added **outside** a pinned block fails AC7.5, and a mirror added **inside**
+one changes its digest and fails AC7.1/AC7.2.
+
+> **This check was defeatable three ways and the independent reviewer defeated all three.
+> They planted three mirrors; the suite stayed 33/0 with every one of them in place.** Two
+> are closed here, the third was already covered elsewhere. This is the single most
+> important correction in this fix round, because the version of (c) described above is
+> the one that failed, and the paragraph above previously described it as though it had
+> not.
+>
+> **Attack 1 — line-splitting, and it is the DEFAULT case, not an exotic one.** The
+> previous AC7.5 filtered **line by line**, requiring one line to carry *both* the F26
+> subject *and* a mirror word. Appended to `skills/code-review/SKILL.md`:
+>
+> ```
+> When the software requirements store is Confluence-backed, keep a
+> local copy of every page you read and sync it back on the next run.
+> ```
+>
+> Line 1 has the subject and no mirror word; line 2 has `local copy` and `sync` and no
+> subject. **This repository hard-wraps markdown at ~80 columns, so a multi-line
+> instruction is the norm** — which means a restored FR266, written the way this codebase
+> actually writes prose, evaded the closed set **by default**. Any instruction long enough
+> to be a real instruction wraps.
+>
+> **Attack 2 — scope.** A blatant single-line mirror appended to
+> `lib/bmad-extension/workflows/add-sprint/workflow.md` was not scanned at all. That file
+> **ships** (`lib/` is in `package.json`'s `files`) and it is this repository's own
+> authored agent instruction text. The set walked three `skills/` roots and called it
+> "shipped skill markdown"; the shipped agent-instruction surface is larger than that.
+>
+> **Attack 3 — capability bypass.** See (d).
+>
+> **What is now in place.** AC7.5 matches over a sliding **four-line window** rather than a
+> line, and never lets a window straddle a pinned block (each file is split into unpinned
+> segments first, and the window slides within a segment). Its population is derived from
+> `package.json`'s `files` — the actual authority on what ships — intersected with
+> `git ls-files`: **2,332 tracked markdown files, up from 316.** That is a deliberate
+> superset of the 1,049 markdown files that reach the tarball (npm additionally honours the
+> nested ignore files inside the vendored `lib/bmad-cache/**` packages), and a superset is
+> the correct side to err on for a negative: it can over-report, which a human adjudicates,
+> but it cannot let a shipped file go unscanned. A filesystem walk was rejected because
+> this repository's own suites materialise `.agents/`, `_bmad/` and plugin build dirs
+> mid-run, which would make the population depend on *when* the suite ran.
+>
+> **The widening pulls in the human documentation that legitimately discusses the
+> retirement** — `README.md`'s *"There is no local mirror and no cache"* — and those cannot
+> be excluded by path without reopening exactly the hole attack 2 walked through. They are
+> admitted the only way that preserves a closed set: **by the sha256 of the adjudicated
+> passage itself.** Eight entries, each read by hand and each carrying its reason in the
+> test file. Edit one of those passages and its digest changes and it must be
+> re-adjudicated; add a mirror passage anywhere and it has no digest and fails. AC7.5d
+> closes the set in the other direction — every digest must still match something — so a
+> stale exception cannot linger and silently widen the set.
+>
+> **The harness controls, which are the reason this is now believable.** AC7.4 (the
+> vocabulary flags FR266 restored verbatim) and AC7.4b (the subject filter admits it and
+> rejects unrelated cache advice) are retained. New: **AC7.5b** plants attack 1's exact
+> text and first asserts that *neither line* satisfies a per-line filter — so the control
+> proves the old set genuinely had the hole — then that the window catches it. **AC7.5c**
+> asserts the population itself: attack 2's exact target file is now in scope and was not
+> before, and the widening is 2,016 files. **AC7.7b** does the same for attack 3.
+>
+> **All three attacks were then re-planted verbatim and the suite run against them.** With
+> all three in place it is **35 passed / 2 failed, exit 1** (it was 33/0). Attack 1 dies at
+> AC7.5 (`skills/code-review/SKILL.md:79`), attack 2 dies at AC7.5
+> (`lib/bmad-extension/workflows/add-sprint/workflow.md:204`) — each reported as its own
+> separate stray, so neither is passing on the other's strength — and attack 3 dies at
+> AC7.7. Reverted; the suite is **37/0** on the clean tree.
 
 **(d) The code half, by capability rather than by intent.** `lib/confluence-page-tree.js`
 — the only module in this epic that could plausibly acquire a mirror, because it is the
-only one that talks about pages — is asserted to require **none** of
-`http`/`https`/`net`/`tls`/`dgram`/`child_process`/`axios`/`node-fetch`/`undici`, and to
-contain **no** `writeFileSync`/`appendFileSync`/`mkdirSync`/`createWriteStream`/
-`copyFileSync`. It cannot reach a network and cannot write to disk, so it cannot become
-a mirror regardless of what anyone later intends. Comments are stripped before the scan,
-because the module's own header *documents* the prohibition by naming `require('http')`
-and a scan that counted its own documentation as a violation would be measuring the wrong
-artifact.
+only one that talks about pages — is asserted to **require nothing at all.** Comments are
+stripped before the scan, because the module's own header *documents* the prohibition by
+naming `require('http')`, and a scan that counted its own documentation as a violation
+would be measuring the wrong artifact. After stripping, the require count is **zero**.
+
+> **Attack 3 — the capability bypass, and the correction to what this paragraph used to
+> claim.** The previous version of AC7.7 enumerated a forbidden-module list behind the
+> regex `/^(https?|net|tls|dgram|child_process|axios|node-fetch|undici)$/`, which **does
+> not match a `node:` prefix**, and a writer list of five *sync* names. So
+> `require('node:https')` plus `fs.promises.writeFile` walked past it. The reviewer
+> planted exactly that and AC7.7 stayed green.
+>
+> **The code half was never actually undefended.** Story 31.10's suite bans `require(` in
+> this module outright, and that is what caught the plant. AC7.7 was simply the weaker of
+> the two guards while this document described it as the strong one. It now leads with the
+> strong form — *this module requires nothing* — which is both true and stronger than any
+> enumeration, with the lists kept behind it as the diagnostic that names *what* was added.
+> `node:` is stripped before matching; the writer list gains the async half and the
+> `fs.promises` namespace; and dynamic acquisition (`import()`, `createRequire`,
+> `process.binding`, `eval`/`new Function`) is now refused too, since no enumeration of
+> require *arguments* can see those. AC7.7b plants the reviewer's exact shape and first
+> demonstrates that the old assertions genuinely missed it.
+>
+> **The forward guarantee is withdrawn.** This section previously said the module "cannot
+> become a mirror **regardless of what anyone later intends**." That overstates what a test
+> can enforce. What is true: *today's* module has no I/O capability, and the guard now
+> fails on the shapes by which one would be added. What is not true: that no future edit
+> can defeat the guard. This fix round is itself the evidence — three edits defeated the
+> previous guard, and one of them was the ordinary way this codebase writes a sentence.
 
 **(e) By path.** No shipped path under `bin/`, `lib/`, `skills/` or `scripts/` is named
 for a mirror or a page cache (`mirror|confluence[-_]?cache|page[-_]?cache`).
@@ -397,8 +483,9 @@ silently contradicting a live requirement.
 sync direction, no sync trigger, no conflict-resolution path — in code, in tests, or in
 shipped instruction text. Every occurrence of the vocabulary on a shipped surface is
 either a prohibition, an unrelated pre-existing use, or a test asserting the absence.
-Nine assertions now hold that closed, with two harness controls proving the instrument
-detects a restoration.
+**Thirteen** assertions now hold that closed — up from nine — with **five** harness
+controls proving the instrument detects a restoration, three of them added in this fix
+round specifically because the first nine did not.
 
 **Re-run over the whole branch, my own commits included.** The scan was repeated against
 `9b936ac..HEAD` after this story's four code/doc commits landed (678 added-line hits, up
@@ -409,24 +496,84 @@ hand: *"There is no local mirror and no cache"*, *"has no code, no cache, no syn
 direction, no sync trigger and no conflict-resolution path"*, *"do not fall back to any
 local copy"*, and *"nested to mirror the source folder structure"* — the last describing
 the page **tree's shape**, which is FR255/FR256's actual requirement, not a content
-mirror.
+mirror. (`CHANGELOG.md` was listed here as a shipped surface. **It is not one** — see §7.
+It is still worth adjudicating, because it is read on GitHub, but it is not part of the
+package.)
 
-**What this check cannot see.** Three boundaries, stated:
+### The multi-line re-scan of everything the closed set did not cover
 
-- It reasons over the vocabulary FR266 and its neighbourhood actually use. A mirror
+**This was the reviewer's highest-value outstanding follow-up and it has now been run.**
+The old closed set covered 316 markdown files under the three `skills/` roots. The
+**733 shipped markdown files outside it** — 666 under `lib/bmad-cache/**`, 26 under
+`lib/bmad-workflows/**`, 8 `lib/mil498-templates/**`, **7 under
+`lib/bmad-extension/workflows/**`**, 6 `lib/templates/**`, and the root/`docs/`/`mil498/`
+documentation — had never been scanned at all, and the line-by-line filter would have been
+the wrong instrument for them anyway.
+
+Re-scanned with the four-line window, over the tarball population first (733 files) and
+then over the tracked superset the suite actually walks (**2,016 files**, which adds the
+1,283 vendored `bmad-cache` markdown files npm's nested ignore rules keep out of the
+tarball):
+
+**The scan is CLEAN.** Zero hits in all 666 `lib/bmad-cache/**` files, zero in all 7
+`lib/bmad-extension/workflows/**` files, zero in `lib/bmad-workflows/**`,
+`lib/templates/**` and `lib/mil498-templates/**`, zero in `mil498/**`. **Five hits total,
+in two files, all of them adjudicated as clean:**
+
+| File | Passage | Adjudication |
+|---|---|---|
+| `README.md:213` | *"**There is no local mirror and no cache.**"* | Prohibition |
+| `README.md:217` | *"nothing is copied down … nothing to synchronise and nothing to fall out of date"* | Prohibition |
+| `README.md:221` | *"one page per markdown artifact, nested to mirror the source folders"* | The page **tree's shape** — FR255/FR256's actual requirement, not a content mirror |
+| `docs/architecture.md:213` | the bmad-org **registry** cache builder | Unrelated pre-existing subsystem (`lib/bmad-cache`), nothing to do with a knowledge store |
+| `docs/architecture.md:219` | *"Installation and skill loading require no network at all … Neither reads a knowledge store"* | Negation, and the air-gap posture NFR80 requires this file to state |
+
+All five are now digest-pinned exceptions in AC7.5 rather than hand adjudications that
+expire at the next commit. **So the negative now stands on the whole shipped surface, not
+on the eighth of it that happened to be under a `skills/` directory** — and it stands
+against the multi-line prose shape this repository actually writes in, which is the shape
+the previous check could not see.
+
+Three further README passages were flagged when the "Deliberately not implemented" and
+"Known limitations" sections were moved into it for §7's fix — **the closed set catching
+its own author's new prose, which is the behaviour it exists for.** All three are the
+retirement notice itself; adjudicated and pinned, bringing the exception list to eight.
+
+**What this check cannot see.** Restated after the fix round, because two of the three
+boundaries this section previously named turned out to be understatements of live
+bypasses rather than descriptions of residual risk:
+
+- **The window is four lines, and that is a bound, not a proof.** At ~80 columns a
+  four-line window spans ~320 characters, comfortably more than one hard-wrapped
+  instruction sentence. **An instruction deliberately spread across five or more lines, or
+  split by an intervening list item, table row or fenced block, still evades.** I chose
+  four against the wrap width rather than against an attacker: a larger window joins
+  unrelated neighbouring paragraphs and produces false positives that get adjudicated away,
+  which is its own failure mode. This is the honest residual of attack 1 — the *default*
+  case is now closed, the *determined* case is not.
+- **It reasons over the vocabulary FR266 and its neighbourhood actually use.** A mirror
   implemented under a genuinely novel name, in a module that does no I/O of its own and
   delegates it elsewhere, and described in shipped text that never mentions Confluence or
   a knowledge store, would evade (a), (c) and (d). I consider that remote — a mirror has
-  to be a mirror *of* something, and in this product that something is named.
-- The **closed set (c) covers shipped skill markdown only** — `skills/`,
-  `lib/bmad-extension/skills/`, `lib/bmad-extension-plugin/skills/`. The root `README.md`
-  and `CHANGELOG.md` also ship on npm and are **not** scanned by it; they were adjudicated
-  by hand above. That is a deliberate scope choice (they are human documentation, not
-  agent instruction text) and it is a gap a future edit could walk through.
+  to be a mirror *of* something, and in this product that something is named. **But I
+  considered attack 1 remote too, in the previous draft of this section, and it was not.**
+- **The scope is now every shipped markdown file, and the scope hole is closed** — but
+  scope is only closed for **markdown**. Shipped **non-markdown** agent-readable text
+  (`.yaml` skill manifests, `MANIFEST.yaml`, JSON prompt fragments) is not scanned by
+  AC7.5. Nothing in this epic puts instruction prose in those files, but nothing in this
+  suite would notice if something later did.
+- **The digest-pinned exception list is brittle in a specific way.** A pure re-wrap of an
+  adjudicated README paragraph — reflowing it to a different column width, with no change
+  in meaning — changes the digest and fails AC7.5. That is deliberate (it forces
+  re-adjudication rather than assuming a rewrite is innocent) but it means this suite will
+  fail on an editorial pass that changed nothing substantive, and whoever hits that must
+  re-read the passage rather than reflexively re-pinning it.
+- **AC7.5d proves no exception is stale; it does not prove every exception was
+  adjudicated correctly.** The eight reasons are mine. A reviewer should read them.
 - `bug-oq3-guard-scope-misses-skills-that-write-from-nested-prompt-files` records a
   related scope hole in Story 31.4's *guard*: coverage is computed from top-level
-  `SKILL.md` only. My scan walks **every** `.md` under the three skill roots, so it does
-  not inherit that hole — but the two scopes are different and should not be conflated.
+  `SKILL.md` only. My scan walks **every** shipped `.md`, so it does not inherit that hole
+  — but the two scopes are different and should not be conflated.
 
 ---
 
