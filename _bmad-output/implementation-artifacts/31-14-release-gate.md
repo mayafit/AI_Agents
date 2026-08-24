@@ -1465,7 +1465,7 @@ the full consequence. Item 6 above is resolved.
 |---|---|
 | `7b9621a` | **FIX-A steps 1–2.** `MIRROR_VOCABULARY` extended with the verb family (`download`, `upload`, `export`, `import`, `save`, `persist`, `snapshot`, `shadow`, `stash`, `store locally`, `write … to disk`); new AC7.5e pins the reviewer's plain-English plant as a permanent control; the verb-extended re-scan's 8 new hits adjudicated and digest-pinned (16 total); `EXPECTED_TEST_COUNT` 37 → 38 |
 | `f222fd0` | **FIX-A step 3 and FIX-B.** §9 item 9 rewritten to the honest form; items 14, 23 corrected in place; new items 24–25; §3 gains the verb-extended re-scan and its adjudications; the "five hits / all five pinned" stale count corrected to eight, then re-counted to sixteen |
-| *(this commit)* | **FIX-C.** The 31.4/15.5 recommendation strengthened: the requirement-vs-converter insight stated plainly; the AC7.1 caveat corrected in my own favour (the source copy is pinned transitively); the `remove-from-sprint` latent fifth failure recorded |
+| `449a4f7` | **FIX-C.** The 31.4/15.5 recommendation strengthened: the requirement-vs-converter insight stated plainly; the AC7.1 caveat corrected in my own favour (the source copy is pinned transitively); the `remove-from-sprint` latent fifth failure recorded |
 
 **Verification run for fix round 1, on a clean tree:**
 
