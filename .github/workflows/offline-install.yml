@@ -31,8 +31,14 @@ jobs:
   offline-install:
     name: Air-gapped install (claude-code)
     runs-on: ubuntu-latest
-    # AC 4: total wall-clock < 5 min. Hard cap at 8 min so a hang fails fast.
-    timeout-minutes: 8
+    # Story 22.9 AC4 asked for < 5 min of wall clock and capped at 8. Story
+    # 31.14 adds two more full installs inside the same container — the F26
+    # two-store file-system install and the global install — so the cap is
+    # raised to 14. It is still a HARD cap: a hang fails fast rather than
+    # burning a runner, which matters because Epic 31 found a hang class in
+    # exactly this area (a prompt stub returning '' forever against an
+    # unbounded retry loop).
+    timeout-minutes: 14
 
     env:
       # F3 Section 7 — pin by manifest-list digest (sha256) so a re-tag
@@ -142,4 +148,14 @@ jobs:
             echo ""
             echo "**Story 29.5 extension:** Atlas generate under egress-block: OK"
             echo "(Atlas engine generates index/graph/diagrams/orphans/search/manifest with no network access.)"
+            echo ""
+            echo "**Story 31.14 extension (F26 — NFR77, NFR80):**"
+            echo "- Two-store, fully \`file-system\` install under egress-block: the committed"
+            echo "  two-store binding survives the install, both stores stay DISTINCT, both"
+            echo "  backends resolve to \`file-system\`, and no Confluence configuration appears."
+            echo "- Global install under egress-block: ma-agents skills install under a sandbox"
+            echo "  \`\$HOME\`, the project root receives NO project-scoped artifact (FR251), and"
+            echo "  the FR250 degradation notice reports all three required facts."
+            echo "- The egress block is re-verified AFTER both installs, so \"succeeded\" means"
+            echo "  \"succeeded with zero network calls\", not merely \"exited 0\"."
           } >> "$GITHUB_STEP_SUMMARY"
