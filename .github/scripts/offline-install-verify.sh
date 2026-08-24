@@ -403,7 +403,17 @@ if [ ! -f "$GEN_CONFIG" ]; then
 else
   # Read each field only from a line at column 0 and strip one balanced pair of
   # quotes — the same rule the shipped preflight tells an agent to use.
-  read_field() { tr -d '\r' < "$GEN_CONFIG" | sed -n "s/^$1:[[:space:]]*//p" | head -1 | sed 's/^"//; s/"$//'; }
+  # `|| true` is load-bearing: this script runs under `set -euo pipefail`, and
+  # `head -1` closing the pipe early hands sed a SIGPIPE, which pipefail turns
+  # into a non-zero pipeline. Without the guard, a field that simply matched
+  # more than once would abort the whole gate. A missing field must read as
+  # EMPTY and be caught by the assertion below, never kill the run.
+  read_field() {
+    tr -d '\r' < "$GEN_CONFIG" 2>/dev/null \
+      | grep -E "^$1:" \
+      | head -1 \
+      | sed -E "s/^$1:[[:space:]]*//; s/^\"//; s/\"$//" || true
+  }
   SYS_PATH=$(read_field system_requirements_path)
   SW_PATH=$(read_field software_requirements_path)
   SYS_BACKEND=$(read_field system_requirements_backend)
@@ -472,7 +482,7 @@ fi
 
 # PRESENCE first: at least one real ma-agents skill, with a SKILL.md, under the
 # sandbox home. Without this the absence checks below prove nothing.
-GLOBAL_SKILL_COUNT=$(find "$GLOBAL_HOME" -name 'SKILL.md' 2>/dev/null | wc -l)
+GLOBAL_SKILL_COUNT=$(find "$GLOBAL_HOME" -name 'SKILL.md' 2>/dev/null | wc -l || true)
 if [ "$GLOBAL_SKILL_COUNT" -gt 0 ]; then
   echo "    OK:   the global install genuinely installed ($GLOBAL_SKILL_COUNT SKILL.md files under \$HOME)"
 else
