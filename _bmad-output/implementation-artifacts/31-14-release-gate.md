@@ -1313,6 +1313,14 @@ failed.
    sha256 of the adjudicated bytes and asserted non-stale in both directions. **Subject:**
    the passage must name an F26 store. Those two are enumerated and hold.
 
+   > **Qualification added in fix round 3.** "Place … enumerated and hold" is true **only
+   > within markdown.** Place is closed over every tracked shipped *markdown* file and
+   > over nothing else. Shipped `.toml`, `.yaml` and JSON agent-readable text is outside
+   > the scan entirely, and there is Confluence instruction prose in such a file today —
+   > **see item 16**, which carries the limit and the example. Item 9 previously stated
+   > the Place axis without that qualification, and a reader who stopped here would take
+   > "enumerated" to mean "enumerated over the shipped surface". It is not.
+
    **The third axis — the predicate — is a word list, and a word list is not closed against
    natural language.** The Story 31.14 reviewer demonstrated this, and the demonstration
    was not exotic:
@@ -1340,10 +1348,39 @@ failed.
      `keep a copy of`, `grab`, `archive`, `stage`, and any synonym a author coins in the
      sentence itself are still absent. Each extension is a response to one attack, and the
      next ordinary word is always available.
+
+     > **CORRECTION (fix round 3), and it is the important one on this page.** That list
+     > was written as if it were *the residual* — the words still missing. **It was
+     > illustrative and incomplete, and a reader who took it as the residual was wrong in
+     > the most consequential possible way: it omitted `copy` and `write`, and `copy` and
+     > `write` were the two words the very next attack used.** They were not exotic
+     > coinages. They are two of the five verbs **the product's own shipped prohibition
+     > names out loud** — *"do NOT write, copy, cache, export or reconcile a local copy of
+     > anything Confluence returns"* — and the detector enforcing that sentence could not
+     > see either of them. Attack 5 was mounted with both, in a shipped skill file, and
+     > the suite returned **38 passed, 0 failed, exit 0** for each form.
+     >
+     > What follows for the reader: **treat any enumeration of "still absent" words in
+     > this document as illustrative only.** No such list has ever been the residual, and
+     > this one demonstrably was not. The residual is "every English word not on the
+     > list", which is not enumerable, which is the whole content of this item.
+     >
+     > What follows for the check: the verb half is no longer *only* a list. AC7.5f binds
+     > the vocabulary to the shipped prohibition and fails if the product ever forbids a
+     > verb the detector cannot see (verified in both directions — see item 26). That
+     > closes the vocabulary against **the product's own enumeration** and against nothing
+     > wider. Ordinary English outside those five verbs remains exactly as open as this
+     > item has always said.
    - **I am not claiming closure here, because I cannot demonstrate it.** What I can
-     demonstrate is that the four attacks actually mounted against this check all now fail,
-     and that its two enumerable axes are enumerated. A predicate over English prose is a
-     heuristic. **This one was called "remote" once already and was not.**
+     demonstrate is that the **five** attacks actually mounted against this check all now
+     fail *(four when this bullet was written; the fifth is attack 5, above)*, and that
+     one and a half of its three axes are enumerated — Place within markdown only (see
+     the qualification above and item 16), Subject fully, and the verb half of the
+     predicate only as far as the product's own five-verb prohibition reaches. A predicate
+     over English prose is a heuristic. **This one was called "remote" once already and
+     was not.** **Three consecutive rounds of attack have each found a live bypass; the
+     prior that a sixth exists is not low, and nothing in this document should be read as
+     claiming otherwise** (item 26).
 10. **The wall clock on this machine is unreliable.** It advanced ~7.6 hours during a
     single suite run, so every elapsed-time figure I recorded is untrustworthy. This is why
     the round-trip suite's first result read as a hang: the durations were meaningless. All
@@ -1388,10 +1425,29 @@ that reported green, described as though the green meant more than it did.
 15. **The FR266 window is four lines and a five-line split still evades.** The *default*
     prose shape is now caught; a determined one is not. Stated in §3 and repeated here
     because it is the live residual of the most serious of the three bypasses.
-16. **Scope is closed for shipped markdown only.** Shipped non-markdown agent-readable
-    text — `.yaml` skill manifests, `MANIFEST.yaml`, JSON prompt fragments — is not
-    scanned by AC7.5. Nothing in this epic puts instruction prose there; nothing in this
-    suite would notice if something later did.
+16. **Scope is closed for shipped markdown only — and the claim that nothing lives outside
+    it was wrong.** Shipped non-markdown agent-readable text — `.yaml` skill manifests,
+    `MANIFEST.yaml`, `.toml` workflow customisation, JSON prompt fragments — is not
+    scanned by AC7.5, and nothing in this suite would notice if a mirror instruction were
+    added there.
+
+    **CORRECTION (fix round 3).** This item read *"Nothing in this epic puts instruction
+    prose there."* That understated it to the point of being misleading. A shipped,
+    unscanned, non-markdown file carries Confluence instruction prose **today**:
+
+    ```
+    lib/bmad-cache/gds/src/workflows/1-preproduction/gds-create-game-brief/customize.toml:114
+      "After finalize, upload brief.md and addendum.md to Confluence via
+       corp:confluence_upload (space_key='GAME', parent_page='Game Briefs', …)"
+    ```
+
+    It is vendored upstream text, it sits in a comment as an example for a team override,
+    and `external_handoffs = []` is empty by default — **so this is not an FR266 finding
+    and is not adjudicated as one.** What it *is*: proof that the non-markdown scope hole
+    is not hypothetical. The honest form of this item is "the scan does not look there,
+    and there is already Confluence instruction prose there", not "nothing puts it there".
+    See also item 28 on what `{workflow.external_handoffs}` actually does with such an
+    entry.
 17. **`CHANGELOG.md` does not ship on npm, and this record claimed it did.** 1,929 tarball
     entries, `CHANGELOG.md` not among them. The "Deliberately not implemented" and "Known
     limitations" sections are now reproduced in `README.md`, which does ship (§7). **The
