@@ -1552,6 +1552,42 @@ that reported green, described as though the green meant more than it did.
     This item makes no prediction that the fifth was the last, and nothing elsewhere in
     this document should be read as making one — item 9 declines to claim closure for
     exactly this reason.
+27. **The round's own new test was vacuous, and only mutation caught it.** AC7.5g was
+    written in this round to close the gap that the end-to-end proof — a planted mirror in
+    a real file comes back as a stray from the *real* scan path — existed only as a manual
+    replant recorded in prose, in no assertion at all. It ran three named attacks over a
+    fixture built from the shipped pinned block. **Deleting the `5-copy` attack from its
+    plant set outright left the suite at 40 passed, 0 failed, exit 0.**
+
+    The reason is the whole point. AC7.5g's loop asserted something about **every plant it
+    was given** and **nothing whatsoever about how many it was given**, so the set could
+    silently shrink to one — or to none, with the loop body never executing — while the
+    test kept its three-attack name and its green tick. It measured the list it was
+    handed. It is now pinned by **name and by size in both directions**
+    (`assert.deepStrictEqual(Object.keys(PLANTS).sort(), ['4a', '5-copy', '5-write'], …)`),
+    so removing a plant fails this test rather than quietly reducing what it covers
+    (`ab744a5`).
+
+    **And the same shape was live in round 2's flagship control.** AC7.5e — the permanent
+    control written to close attack 4a — asserted over the **source text** of the matching
+    regexes (`why.join(' ')`) rather than over which patterns actually fired. That is
+    satisfiable by a vocabulary in which two of its three claimed verbs can never match:
+    replace the three real patterns with the single degenerate
+    `/\bdownload\b|\bzzupload\b|\bzzsave\b/i`, in which only `download` can match anything,
+    and the old assertion still **passed** — because the strings `upload` and `sav` appear
+    inside that one regex's own source. `d307908` repaired it to collect the firing
+    patterns **by identity**, one verb per inert carrier, and assert three *distinct*
+    patterns fire, each of which must also fire on the joined window the scan really sees.
+
+    **The lesson, stated without softening it.** This is the epic's recurring
+    **"proves presence, not effect"** shape — the same defect as items 13, 18, 23 and 25 —
+    and in this round it appeared **twice in one place: inside the control written to close
+    the previous instance of it, and inside the brand-new test written in the same round to
+    close the gap that control left.** Writing a test about a defect class is not
+    protection against committing that defect class in the test. Neither instance was found
+    by reading the test; both were found by **mutating it and watching the suite stay
+    green**. That is the only method in this record that has actually worked, and it should
+    be assumed necessary for every assertion added from here on.
 
 ### Addendum — full-chain residue attribution (completed)
 
