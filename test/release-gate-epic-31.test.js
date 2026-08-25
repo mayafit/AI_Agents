@@ -1603,6 +1603,21 @@ test('AC7.5g [end-to-end] the REAL scan path reports attack 4a and both attack-5
         'session.',
       ],
     };
+    // ─── ANTI-SHRINK (fix round 3, verification of FIX-4) ──────────────────
+    //
+    // Found by MUTATING this test rather than by reading it: deleting the
+    // `5-copy` plant outright left the suite at 40 passed, 0 failed, exit 0.
+    // The loop below asserts something about every plant it is GIVEN and
+    // nothing about how many it was given, so the set could silently shrink to
+    // one — or to none — while the test kept its three-attack name. That is
+    // this epic's signature defect (an assertion that measures the LIST it was
+    // handed) reappearing inside the test written to close it.
+    //
+    // The set is therefore pinned by NAME and by SIZE, in both directions.
+    assert.deepStrictEqual(Object.keys(PLANTS).sort(), ['4a', '5-copy', '5-write'],
+      'AC7.5g is named for three specific attacks and must run all three: a plant removed ' +
+      'here must fail this test, not quietly reduce what it covers');
+
     // The pinned block, taken from the SHIPPED bytes rather than retyped, so
     // the "inside a pinned block is exempt" half is proved against the real
     // thing and cannot drift from it.
