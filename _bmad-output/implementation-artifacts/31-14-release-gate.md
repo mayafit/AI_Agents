@@ -534,10 +534,27 @@ then over the tracked superset the suite actually walks (**2,016 files**, which 
 1,283 vendored `bmad-cache` markdown files npm's nested ignore rules keep out of the
 tarball):
 
-**The scan is CLEAN.** Zero hits in all 666 `lib/bmad-cache/**` files, zero in all 7
-`lib/bmad-extension/workflows/**` files, zero in `lib/bmad-workflows/**`,
-`lib/templates/**` and `lib/mil498-templates/**`, zero in `mil498/**`. **Five hits, in two
-files, all of them adjudicated as clean:**
+**The scan is CLEAN.** Zero in all 7 `lib/bmad-extension/workflows/**` files, zero in
+`lib/bmad-workflows/**`, `lib/templates/**` and `lib/mil498-templates/**`, zero in
+`mil498/**`. **Five hits, in two files, all of them adjudicated as clean:**
+
+> **CORRECTION (fix round 3).** This paragraph read *"Zero hits in all 666
+> `lib/bmad-cache/**` files"*. **That is false as this document now stands: there are
+> seven** — all in the vendored GDS workflow assets, and all seven carried in the
+> adjudicated list as `2ee78afd`, `bad65455`, `b6995c09`, `667ee3c2`, `fa07f6dc`,
+> `18433621` and `0a953733` (the upstream `external_handoffs` and Confluence
+> `headless-schemas` payload examples). The zero was true when this paragraph was written
+> and stopped being true one round later, when the verb half of the vocabulary was
+> extended and began matching `Confluence upload` inside those upstream examples. The
+> **adjudication** of all seven is unchanged and unchallenged; only the sentence claiming
+> they do not exist was wrong.
+>
+> **How it was found matters more than the number.** It was found by a verifier
+> *re-deriving the count from the code*, not by the count sweep of fix round 2 — whose own
+> §9 item 25 claims to have swept this document for exactly this defect class. Round 2
+> edited line 539 of this very paragraph and left the sentence above it standing. A sweep
+> that walks past a false number in the paragraph it is editing did not do the job item 25
+> credits it with, and item 25 should be read with that in mind.
 
 | File | Passage | Adjudication |
 |---|---|---|
