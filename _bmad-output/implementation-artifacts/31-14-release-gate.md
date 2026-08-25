@@ -679,9 +679,12 @@ bypasses rather than descriptions of residual risk:
   fail on an editorial pass that changed nothing substantive, and whoever hits that must
   re-read the passage rather than reflexively re-pinning it.
 - **AC7.5d proves no exception is stale; it does not prove every exception was
-  adjudicated correctly.** The **sixteen** reasons are mine. A reviewer should read them —
-  and note that seven of the sixteen are vendored upstream text (`lib/bmad-cache/**`) that
-  I adjudicated but did not author.
+  adjudicated correctly.** The **seventeen** reasons are mine. A reviewer should read them —
+  and note that seven of the seventeen are vendored upstream text (`lib/bmad-cache/**`) that
+  I adjudicated but did not author. *(Fix round 3: this bullet read "sixteen" after the code
+  already held seventeen — see §9 item 29, and re-derive the figure from
+  `ADJUDICATED_MIRROR_PASSAGES` rather than from this sentence. On the vendored seven and
+  what they actually instruct, see §9 item 28.)*
 - `bug-oq3-guard-scope-misses-skills-that-write-from-nested-prompt-files` records a
   related scope hole in Story 31.4's *guard*: coverage is computed from top-level
   `SKILL.md` only. My scan walks **every** shipped `.md`, so it does not inherit that hole
@@ -1632,6 +1635,33 @@ that reported green, described as though the green meant more than it did.
     is *"a one-way publish directive and its example payload, in vendored upstream text"*,
     not *"only an example payload."* **These seven are not re-adjudicated here and must not
     be**: the verdicts stand, the wording is what was wrong.
+29. **The adjudicated-hit count moved again, and it is now seventeen.** Round 2 reported
+    **16** (item 25). The count in the code is **17**, re-derived for this item by reading
+    the keys of `ADJUDICATED_MIRROR_PASSAGES` in
+    `test/release-gate-epic-31.test.js` — 17 digests, all distinct: 7 `README.md`,
+    3 `docs/architecture.md`, 7 `lib/bmad-cache/**`.
+
+    **Why it moved, and it is not a new hit.** Binding the bare `write` verb into the
+    vocabulary (item 26) made `docs/architecture.md:219`'s *"the installer **writes** the
+    binding"* match from a window starting two lines earlier. The scan reports one window
+    per neighbourhood and then strides, so the *same* prose is now reported at `:217` and
+    `:221` instead of once at `:219`. §3.6.1 was therefore re-cut into **two** adjudicated
+    digests (`fd970458`, `59781ed9`) replacing the single stale `425df87a` (`d307908`).
+    **No passage changed, no adjudication was revised, and nothing new was admitted** — one
+    reported window became two. AC7.5d caught the stale digest, which is the direction it
+    exists for.
+
+    **The lesson this record has now learned three times.** Round 1 shipped a stale count.
+    Round 2's fix-round shipped a stale count and item 25 was written about it. Round 3
+    found another one — including a bullet in §3 that still read "the **sixteen** reasons
+    are mine" after the code held seventeen, corrected in the same commit as this item.
+    **A count in this document has been stale at every single review round without
+    exception.** The countermeasure is not another sweep; sweeps have been run twice and
+    both times left a stale figure behind. **Treat every figure in this document as
+    advisory and re-derive it from the code.** For this one the derivation is: count the
+    keys of `ADJUDICATED_MIRROR_PASSAGES`. Item 13 and item 25 make the same point about
+    numbers no test asserts; this is its third confirmed instance, and it is the reason no
+    number here should be quoted onward without checking it first.
 
 ### Addendum — full-chain residue attribution (completed)
 
