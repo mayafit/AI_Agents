@@ -31,15 +31,20 @@ The three things a reader should take away before anything else:
    assert Confluence pages *are created*. No shipped skill's purpose is to publish a
    store, and there is no publish command. Recorded, not resolved, and `epics.md` is
    deliberately unedited.
-4. **This record went through an independent review and did not survive it intact.** The
-   reviewer found one **false statement** (a defect listed as closed that is not — §8),
-   one **wrong shipping claim** (`CHANGELOG.md` does not ship on npm — §7), and a
-   **FR266 check that was defeatable three ways**, which they demonstrated by planting
-   three mirrors and watching the suite stay green (§3). All are corrected, and the
-   corrections are recorded as corrections rather than quietly folded in. **The gate's
-   product is an honest record, and its first draft was not one** — which is the strongest
-   available argument for the review step that caught it. §9 items 13–22 are the limits
-   this document did not previously admit to.
+4. **This record went through three independent review rounds and did not survive any of
+   them intact.** Round 1's reviewer found one **false statement** (a defect listed as
+   closed that is not — §8) and one **wrong shipping claim** (`CHANGELOG.md` does not ship
+   on npm — §7). Across all three rounds the **FR266 check has been defeated five times —
+   five independent attacks, five live bypasses**, each demonstrated by planting a mirror
+   in a shipped file and watching the suite stay green (37/0, then 38/0). All five now
+   fail; a further weak assertion inside the test written to close attack 5 was found by
+   mutation in round 3 and repaired. **Every round so far has found at least one live
+   bypass, and this document does not claim the fifth was the last** (§9 item 9, §9 item
+   26). All findings are corrected, and the corrections are recorded as corrections rather
+   than quietly folded in. **The gate's product is an honest record, and its first draft
+   was not one** — which is the strongest available argument for the review step that
+   caught it. §9 items 13–22 are the limits this document did not previously admit to, and
+   items 23–29 the limits the later rounds added.
 
 ---
 
@@ -309,7 +314,7 @@ Verification commands were run against `bin/cli.js`'s live exports and against
 | FR263 | 31.2 | No `unlinkSync(... project-layout ...)` anywhere in `bin/cli.js` — the delete-on-single-repo branch is gone; `writeProjectLayoutYaml` runs unconditionally; `PROJECT_LAYOUT_SCHEMA_VERSION` = 2 | `project-layout-binding-spine` (69/0); AC2.1/AC2.2 | **Met** |
 | FR264 | 31.3 | `generateBmmConfig` + the stamp trio (`computeProjectLayoutStamp`, `readProjectLayoutStamp`, `canonicalBindingBytes`) all exported; legacy fields verified to retain their **pre-epic literal values** via js-yaml | `project-layout-config-generation` (32/0); AC2.3/AC2.4 | **Met** |
 | FR265 | 31.7 | `detectLegacySingleStore`, `topologyFromLegacyLayout`, `LEGACY_SINGLE_STORE_SPLIT_COMMAND` = `"ma-agents config layout"` (a real command, checked against the CLI's own routing) | `project-layout-legacy-single-store` (52/0); AC2.4 | **Met** |
-| **FR266** | **none — retired** | **See §3. No implementation found**, re-confirmed across two fix rounds by a multi-line re-scan of all 2,332 tracked shipped markdown files — including the 2,016 the original closed set never covered — and then again under a **verb-extended** vocabulary. Clean both times; 16 hits, all hand-adjudicated and digest-pinned. | AC7.4–AC7.9 — 14 assertions, 6 harness controls | **Correctly absent.** The *result* held every time; the *check* was defeatable **four** ways across two rounds of attack and is now fixed for all four — §3, §9 items 14 and 24 |
+| **FR266** | **none — retired** | **See §3. No implementation found**, re-confirmed across three fix rounds by a multi-line re-scan of all 2,332 tracked shipped markdown files — including the 2,016 the original closed set never covered — and then again under a **verb-extended** vocabulary, and again under a vocabulary **bound to the product's own prohibition**. Clean every time; **17** hits, all hand-adjudicated and digest-pinned (16 before this round's §3.6.1 re-cut, which split one passage into two and revised no adjudication). | **AC7.4–AC7.9 — 14 tests**: 5 direct gate assertions, 6 harness controls, 1 closed-set hygiene check, 1 outside-authority binding, 1 end-to-end. *(Recount, fix round 3: the previous "14 assertions" was reachable only by silently adding AC7.1 and AC7.2 to a set of 12. AC7.4–AC7.9 is now genuinely 14 — the same number by coincidence, which is precisely why the set is now named.)* | **Correctly absent — and this row is NOT a closure claim.** The *result* has held under every attack. The *check* has been defeated **five times across three rounds — five independent attacks, five live bypasses found, all five now failing.** Every round so far has found one. **Do not read "all five now failing" as "no sixth exists": §9 item 9 declines to claim closure and cannot demonstrate it, and this row claims no more than item 9 does.** — §3, §9 items 9, 14, 24, 26 |
 | FR267 | 31.2, 31.6 | `CONFLUENCE_STORE_RECORDS` names exactly the two **requirement** stores; `PUBLISHING_STORES` in the page-tree module excludes `SPRINT_MANAGEMENT`; the emitted binding carries no `implementation_artifacts` record | `project-layout-binding-spine` (69/0); `project-layout-artifact-routing` (59/0) | **Met** |
 
 ### Non-functional requirements
@@ -389,6 +394,20 @@ still caught, while `npm cache clean --force` in the Docker skill is not. Both d
 shut: a mirror added **outside** a pinned block fails AC7.5, and a mirror added **inside**
 one changes its digest and fails AC7.1/AC7.2.
 
+> ### ⟵ ROUND-1 SNAPSHOT — HISTORY, NOT CURRENT STATE
+>
+> **Everything in this blockquote, down to the line that ends "the suite is 37/0 on the
+> clean tree", is a verbatim round-1 record and is preserved unedited.** It is written in
+> the present tense and its numbers were true when written and are not true now. Read it
+> as *what round 1 found and claimed*, never as a description of the check as it stands.
+> In particular: *"defeatable three ways"* became **five** (rounds 2 and 3 each found one
+> more); *"Eight entries"* in the adjudicated set is now **seventeen**; *"the suite is
+> 37/0"* is now **40/0**; and AC7.5b/AC7.5c/AC7.7b are no longer the whole harness — see
+> §9 items 24 and 26 and the FR266 traceability row for current state. **Nothing below is
+> retracted; it is simply dated.**
+>
+> ---
+>
 > **This check was defeatable three ways and the independent reviewer defeated all three.
 > They planted three mirrors; the suite stayed 33/0 with every one of them in place.** Two
 > are closed here, the third was already covered elsewhere. This is the single most
