@@ -807,9 +807,10 @@ bypasses rather than descriptions of residual risk:
   scanned** and item 16 enumerates every one of them by extension: program text (`.py`,
   `.js`, `.ts`, `.mjs`, `.cjs`, `.sh`, `.ps1`, `.groovy` — 189), non-covered markup and
   data (`.html`, `.astro`, `.css`, `.csv`, `.xml`, `.txt`, `.svg`, `.template` — 63),
-  binary formats (`.png`, `.ico`, `.pptx`, `.excalidraw`, git `.pack`/`.idx`/`.rev` — 29),
-  and dotfiles/extensionless manifests (251). **Do not read this as the hole being gone —
-  read it as the hole being bounded and written down.**
+  binary formats and git internals (`.png`, `.ico`, `.pptx`, `.excalidraw`,
+  `.pack`/`.idx`/`.rev`, 3 tag refs — 32), and dotfiles/extensionless manifests (251).
+  **189 + 63 + 32 + 251 = 535. Do not read this as the hole being gone — read it as the
+  hole being bounded and written down.**
 - **The digest-pinned exception list is brittle in a specific way.** A pure re-wrap of an
   adjudicated README paragraph — reflowing it to a different column width, with no change
   in meaning — changes the digest and fails AC7.5. That is deliberate (it forces
@@ -1638,11 +1639,13 @@ that reported green, described as though the green meant more than it did.
     .sample  70   .csv 30   .sh 13   .astro 13   .html 10   .png 8
     .gitignore 5  .npmrc 5  .nvmrc 5  .prettierignore 5  .idx 5  .pack 5
     .rev 5        .css 5    .npmignore 4  .ico 4  .cjs 2  .xml 2
-    .excalidraw 1 .1 1  .0 1  .3 1  .groovy 1  .svg 1  .txt 1
-    .template 1   .pptx 1   .ps1 1
+    .excalidraw 1 .groovy 1  .svg 1  .txt 1  .template 1  .pptx 1  .ps1 1
+    .1 1  .0 1  .3 1   ← not extensions: git tag refs under
+                          lib/bmad-cache/*/_git_preserved/refs/tags/v*.*.*
     ```
 
-    Named precisely rather than waved at:
+    Named precisely rather than waved at. **The four groups sum to 535; they were checked,
+    because the first draft of this list summed to 532 and lost the three tag refs.**
 
     - **Program text (`.py` 65, `.js` 53, `.ts` 31, `.mjs` 23, `.cjs` 2, `.sh` 13,
       `.ps1` 1, `.groovy` 1 — 189 files).** An agent instruction embedded in a source
@@ -1651,10 +1654,10 @@ that reported green, described as though the green meant more than it did.
     - **Markup and data that is not one of the five (`.html` 10, `.astro` 13, `.css` 5,
       `.csv` 30, `.xml` 2, `.txt` 1, `.svg` 1, `.template` 1 — 63 files).** `.csv` and
       `.txt` in particular are plain text an agent can read.
-    - **Binary formats (`.png` 8, `.ico` 4, `.pptx` 1, `.excalidraw` 1, and the git
-      `.pack`/`.idx`/`.rev` objects — 29 files).** Not scannable as text at all. A
-      `.pptx` is a zip of XML and a `.excalidraw` is JSON-in-a-`.excalidraw`-extension;
-      neither is opened.
+    - **Binary formats and git internals (`.png` 8, `.ico` 4, `.pptx` 1, `.excalidraw` 1,
+      the `.pack`/`.idx`/`.rev` objects 15, and 3 tag-ref files whose names merely end in
+      `.1`/`.0`/`.3` — 32 files).** Not scannable as text at all. A `.pptx` is a zip of XML
+      and a `.excalidraw` is JSON under a different extension; neither is opened.
     - **Dotfiles and manifests without an extension (`.gitkeep` 98, `.gitignore` 5,
       `.npmrc` 5, `.nvmrc` 5, `.prettierignore` 5, `.npmignore` 4, `.sample` 70, and 59
       extensionless files — 251).** Mostly empty or configuration, but "mostly" is the
@@ -1743,6 +1746,12 @@ that reported green, described as though the green meant more than it did.
     **sixteen** after the verb extension. **The general point is the same one item 13
     makes:** a number that no test asserts drifts silently, and this document is full of
     numbers.
+
+    *(And the point kept proving itself: "sixteen" became **17** in round 3 and **20** in
+    round 4 — see item 29 — and §4's suite figure sat at "38" through the whole of round 3
+    while the code held 40. **Every round of this record has left at least one stale count
+    behind, including the two rounds whose stated job was to sweep them.** Read any number
+    in this document as a claim to re-derive, not as a fact.)*
 
 ### Added by fix round 3 — the fifth bypass, a vacuous new test, vendored adjudications, and a count that moved again
 
