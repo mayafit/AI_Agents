@@ -798,16 +798,75 @@ function extractBlocks(text, heading) {
  * window only through the regions that are not. Deriving both from the same
  * `## heading` → next column-0 `## ` rule keeps the pin and the scan describing
  * the same boundary.
+ *
+ * ─── FIX ROUND 4, FIX-2: THE RAW EXTENT IS NOT A SAFE CARVE-OUT ─────────────
+ *
+ * `extractBlockExtentsRaw` is the rule as written above, and on its own it is a
+ * LIVE BLIND SPOT. "Up to the next column-0 `## `" assumes every block is
+ * followed by a heading. In `lib/bmad-extension/workflows/remove-from-sprint/
+ * workflow.md` the preflight was spliced before `<workflow>` and NOTHING after
+ * it is a document heading — the extent only stops at line 143 because
+ * `## Sprints with Assigned Items` happens to be markdown INSIDE an `<output>`
+ * block. So the raw extent ran 5–142 (138 lines) against a 111-line canonical
+ * block, and 26 lines of live agent instruction text — the `<workflow>` opener,
+ * all of `<step n="0">`, most of `<step n="1">` — were carved OUT of the AC7.5
+ * scan. `mirrorWindowsOutsidePinnedBlocks` walks only UNPINNED segments, so an
+ * FR266 mirror planted in those 26 lines was invisible. Verified before the fix:
+ * the same three-line `<action>` mirror plant scored 42 passed / 0 failed, exit
+ * 0 at line 121 and 41/1 exit 1 at line 160. Position was the only variable. And
+ * the terminator is ACCIDENTAL: reword that user-facing `<output>` string and
+ * the carve-out grows.
+ *
+ * The carve-out is therefore CAPPED at the canonical block's own line count. A
+ * pin may never cover more bytes than the block it pins; anything past the block
+ * is live text and gets scanned. The cap is not a chosen number — it is derived
+ * from the block AC7.1/AC7.2 already pin by digest, so it moves only when the
+ * pinned block itself moves.
+ *
+ * AC7.5j is the permanent control: it asserts every carve-out is byte-identical
+ * to the canonical block, and pins the ONE file whose raw extent over-runs, so
+ * the next occurrence surfaces instead of silently widening a blind spot.
  */
-function extractBlockRanges(lines, heading) {
-  const ranges = [];
+function extractBlockExtentsRaw(lines, heading) {
+  const extents = [];
   for (let i = 0; i < lines.length; i += 1) {
     if (lines[i] !== heading) continue;
     let j = i + 1;
     while (j < lines.length && !/^## /.test(lines[j])) j += 1;
-    ranges.push([i, j - 1]);
+    extents.push([i, j - 1]);
   }
-  return ranges;
+  return extents;
+}
+
+/**
+ * The canonical text of a pinned block, and its line count.
+ *
+ * Read from the SHIPPED BYTES — the three `skills/` roots, the same population
+ * AC7.1 and AC7.2 pin by count and by digest — rather than restated here, so the
+ * cap cannot drift from the thing it caps. Uniqueness is asserted rather than
+ * assumed: if the copies ever disagree there is no single canonical length, and
+ * that must be a loud failure, not a silently-chosen first element.
+ *
+ * Memoised because `collectBlocks` walks 316 files and this is consulted once
+ * per scanned file.
+ */
+const CANONICAL_BLOCK_CACHE = new Map();
+function canonicalPinnedBlock(heading) {
+  if (CANONICAL_BLOCK_CACHE.has(heading)) return CANONICAL_BLOCK_CACHE.get(heading);
+  const texts = new Set(collectBlocks(heading).map((c) => c.block));
+  assert.strictEqual(texts.size, 1,
+    `the pinned block "${heading}" must have ONE canonical form in the shipped skills/ roots ` +
+    `for its length to be a safe carve-out cap; found ${texts.size}`);
+  const text = [...texts][0];
+  const value = Object.freeze({ text, lines: text.split('\n').length });
+  CANONICAL_BLOCK_CACHE.set(heading, value);
+  return value;
+}
+
+function extractBlockRanges(lines, heading) {
+  const canonicalLines = canonicalPinnedBlock(heading).lines;
+  return extractBlockExtentsRaw(lines, heading)
+    .map(([a, b]) => [a, Math.min(b, a + canonicalLines - 1)]);
 }
 
 const GATE_HEADING = '## Knowledge Store Backend Routing';
@@ -2003,6 +2062,94 @@ test('AC7.5i [end-to-end] a TOML external_handoffs mirror directive is REPORTED,
   }
 });
 
+test('AC7.5j [control] every pinned carve-out is EXACTLY the canonical block — a pin cannot swallow live instruction text', () => {
+  // ─── THE CONTROL FOR ATTACK 7 (fix round 4, FIX-2) ───────────────────────
+  //
+  // The pinned blocks are a hole in the AC7.5 scan by design: the closed set
+  // excuses them because their bytes are pinned by digest elsewhere. That excuse
+  // holds only while the carve-out and the pinned block are the SAME BYTES. They
+  // stopped being the same bytes the moment a block was spliced into a file with
+  // no following column-0 `## `, and the resulting 26-line over-pin was a live,
+  // exploitable blind spot (see `extractBlockRanges`).
+  //
+  // This asserts the invariant directly and over the WHOLE scanned population,
+  // so it generalises past the one file that broke it.
+  const HEADINGS = [[PREFLIGHT_HEADING, 'preflight'], [GATE_HEADING, 'gate']];
+
+  // The canonical blocks, and their lengths, pinned LITERALLY here as well as
+  // read from the tree. Both digests are AC7.1's and AC7.2's — restated so this
+  // control cannot be satisfied by a canonical block that quietly changed.
+  const canonical = {};
+  for (const [h] of HEADINGS) canonical[h] = canonicalPinnedBlock(h);
+  assert.strictEqual(sha(canonical[PREFLIGHT_HEADING].text),
+    'ca9bf25ba475f11ac760e8c92a2d41f92a21298d9f11df55881527673e67051f',
+    'the canonical preflight block is the one AC7.1 pins');
+  assert.strictEqual(canonical[PREFLIGHT_HEADING].lines, 111,
+    `the preflight block is 111 lines; got ${canonical[PREFLIGHT_HEADING].lines}`);
+  assert.strictEqual(sha(canonical[GATE_HEADING].text),
+    'cda3d3d99cff06edb3b7bbb00bc1399d6a060fc153829fba7108cdfb91b09cfb',
+    'the canonical gate block is the one AC7.2 pins');
+  assert.strictEqual(canonical[GATE_HEADING].lines, 48,
+    `the gate block is 48 lines; got ${canonical[GATE_HEADING].lines}`);
+
+  const notCanonical = [];
+  const overRunning = [];
+  const carveOuts = { preflight: 0, gate: 0 };
+  const files = new Set();
+
+  for (const { abs } of shippedTextToScan()) {
+    const rel = path.relative(REPO_ROOT, abs).replace(/\\/g, '/');
+    const lines = fs.readFileSync(abs, 'utf-8').replace(/\r\n/g, '\n').split('\n');
+    for (const [heading, name] of HEADINGS) {
+      // (a) FORWARD — what the scan actually carves out must BE the block.
+      for (const [a, b] of extractBlockRanges(lines, heading)) {
+        carveOuts[name] += 1;
+        files.add(rel);
+        const text = lines.slice(a, b + 1).join('\n');
+        if (text !== canonical[heading].text) {
+          notCanonical.push(`${rel}:${a + 1}-${b + 1} (${name}, ${b - a + 1} lines) — the carve-out `
+            + `is not byte-identical to the canonical block`);
+        }
+      }
+      // (b) DIAGNOSTIC — which files' RAW `## `-to-`## ` extent over-runs their
+      // block. Capping makes the over-run harmless, but it does NOT make it go
+      // away, and an over-running extent is the signature of a block spliced
+      // into a file that cannot terminate it. Pinned to the one known instance
+      // so the NEXT one fails here and is looked at by a human.
+      for (const [a, b] of extractBlockExtentsRaw(lines, heading)) {
+        const ext = lines.slice(a, b + 1);
+        while (ext.length && ext[ext.length - 1].trim() === '') ext.pop();
+        if (ext.length !== canonical[heading].lines) {
+          overRunning.push(`${rel}:${a + 1}-${b + 1} (${name}) raw extent is ${ext.length} lines `
+            + `against a ${canonical[heading].lines}-line block`);
+        }
+      }
+    }
+  }
+
+  assert.deepStrictEqual(notCanonical, [],
+    `a pinned carve-out that is not the pinned block is a region of live instruction text `
+    + `excused from the AC7.5 scan for no reason. Found:\n` + notCanonical.join('\n'));
+
+  // The population, pinned in both directions: a carve-out that stops happening
+  // is as much a change as one that appears.
+  assert.deepStrictEqual(carveOuts, { preflight: 46, gate: 9 },
+    `the shipped tree carries 46 preflight blocks (41 in the skills/ roots + 5 in the workflow `
+    + `sources) and 9 gate blocks: ${JSON.stringify(carveOuts)}`);
+  assert.strictEqual(files.size, 46,
+    `spread over 46 files; found ${files.size}`);
+
+  // The one known over-run, named. This is `remove-from-sprint`'s copy: the
+  // block was spliced before `<workflow>`, and the raw extent only stops at all
+  // because `## Sprints with Assigned Items` — markdown inside an `<output>`
+  // block, not a document heading — happens to sit at column 0 at line 143.
+  assert.deepStrictEqual(overRunning, [
+    'lib/bmad-extension/workflows/remove-from-sprint/workflow.md:5-142 (preflight) raw extent '
+    + 'is 138 lines against a 111-line block',
+  ], `a NEW block copy cannot terminate its own extent. Cap it and adjudicate it. Found:\n`
+    + overRunning.join('\n'));
+});
+
 test('AC7.5d [closed-set hygiene] every adjudicated-passage digest still matches a real passage', () => {
   // The closed set has to be closed in BOTH directions. An exception whose text
   // has since been deleted or rewritten is a hole that silently admits whatever
@@ -2192,7 +2339,7 @@ summaryPrinted = true;
 // catches an assertion lost to a rename, a merge or an early return; a SURPLUS
 // catches one added without being recorded in the gate document, which is the
 // artifact these assertions exist to support.
-const EXPECTED_TEST_COUNT = 42;
+const EXPECTED_TEST_COUNT = 43;
 const total = passed + failed;
 if (total !== EXPECTED_TEST_COUNT) {
   console.error(`\n  FATAL: ran ${total} tests, expected exactly ${EXPECTED_TEST_COUNT}. ` +
