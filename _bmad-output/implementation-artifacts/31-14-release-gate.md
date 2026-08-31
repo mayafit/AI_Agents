@@ -37,22 +37,26 @@ The three things a reader should take away before anything else:
    assert Confluence pages *are created*. No shipped skill's purpose is to publish a
    store, and there is no publish command. Recorded, not resolved, and `epics.md` is
    deliberately unedited.
-4. **This record went through four independent review rounds and did not survive any of
+4. **This record went through five independent review rounds and did not survive any of
    them intact.** Round 1's reviewer found one **false statement** (a defect listed as
    closed that is not — §8) and one **wrong shipping claim** (`CHANGELOG.md` does not ship
-   on npm — §7). Across all four rounds the **FR266 check has been defeated six times —
-   six independent attacks, six live bypasses**, each demonstrated by planting a mirror
-   in a shipped file and watching the suite stay green (37/0, then 38/0, then 40/0). All
-   six now fail; a further weak assertion inside the test written to close attack 5 was
-   found by mutation in round 3 and repaired. **The sixth needed no evasion at all — the
-   check simply never opened shipped non-markdown files, and it was a human reader, not
-   any part of this process, who noticed** (§9 item 16). **Every round so far has found at
-   least one live bypass, and this document does not claim the sixth was the last** (§9
-   items 9, 16, 26). All findings are corrected, and the corrections are recorded as
-   corrections rather than quietly folded in. **The gate's product is an honest record, and
-   its first draft was not one** — which is the strongest available argument for the review
-   step that caught it. §9 items 13–22 are the limits this document did not previously
-   admit to, and items 23–29 the limits the later rounds added.
+   on npm — §7). Across all five rounds the **FR266 check has been defeated seven times —
+   seven independent attacks, seven live bypasses**, each demonstrated by planting a mirror
+   in a shipped file and watching the suite stay green (37/0, then 38/0, then 40/0, then
+   42/0). All seven now fail; a further weak assertion inside the test written to close
+   attack 5 was found by mutation in round 3 and repaired. **The sixth needed no evasion at
+   all — the check simply never opened shipped non-markdown files, and it was a human
+   reader, not any part of this process, who noticed** (§9 item 16). **The seventh is the
+   one to read first: THIS BRANCH CREATED IT.** The 31.4/15.5 fix carved 26 lines of live
+   agent instruction text out of the scan, and a mirror planted inside them was invisible
+   while every existing assertion stayed green (§9 item 30). **Every round so far has found
+   at least one live bypass, and this document does not claim the seventh was the last**
+   (§9 items 9, 16, 26, 30). All findings are corrected, and the corrections are recorded
+   as corrections rather than quietly folded in. **The gate's product is an honest record,
+   and its first draft was not one** — which is the strongest available argument for the
+   review step that caught it. §9 items 13–22 are the limits this document did not
+   previously admit to, and items 23–34 the limits the later rounds added — **including
+   item 34, four commits during which this record asserted the opposite of its own tree.**
 
 ---
 
@@ -322,7 +326,7 @@ Verification commands were run against `bin/cli.js`'s live exports and against
 | FR263 | 31.2 | No `unlinkSync(... project-layout ...)` anywhere in `bin/cli.js` — the delete-on-single-repo branch is gone; `writeProjectLayoutYaml` runs unconditionally; `PROJECT_LAYOUT_SCHEMA_VERSION` = 2 | `project-layout-binding-spine` (69/0); AC2.1/AC2.2 | **Met** |
 | FR264 | 31.3 | `generateBmmConfig` + the stamp trio (`computeProjectLayoutStamp`, `readProjectLayoutStamp`, `canonicalBindingBytes`) all exported; legacy fields verified to retain their **pre-epic literal values** via js-yaml | `project-layout-config-generation` (32/0); AC2.3/AC2.4 | **Met** |
 | FR265 | 31.7 | `detectLegacySingleStore`, `topologyFromLegacyLayout`, `LEGACY_SINGLE_STORE_SPLIT_COMMAND` = `"ma-agents config layout"` (a real command, checked against the CLI's own routing) | `project-layout-legacy-single-store` (52/0); AC2.4 | **Met** |
-| **FR266** | **none — retired** | **See §3. No implementation found**, re-confirmed across four fix rounds by a multi-line re-scan of all 2,332 tracked shipped markdown files — including the 2,016 the original closed set never covered — then again under a **verb-extended** vocabulary, again under a vocabulary **bound to the product's own prohibition**, and now again over **382 shipped non-markdown files** (`.toml` 72, `.yaml` 240, `.json` 70, `.yml` 0) that no version of this check had ever opened — **2,714 shipped files scanned in total**. Clean every time; **20** hits (17 markdown + 3 non-markdown), all hand-adjudicated and digest-pinned. | **AC7.4–AC7.9 — 16 tests**: 5 direct gate assertions, 7 harness controls, 1 closed-set hygiene check, 1 outside-authority binding, 2 end-to-end. *(Re-derived from the code, not from this row: `grep -c "^test('AC7\.[4-9]"` = 16.)* | **Correctly absent — and this row is NOT a closure claim.** The *result* has held under every attack. The *check* has been defeated **six times across four rounds — six independent attacks, six live bypasses found, all six now failing.** Every round so far has found one. **Do not read "all six now failing" as "no seventh exists": §9 item 9 declines to claim closure and cannot demonstrate it, item 16 says the sixth was found by a human reader and not by any part of this process, and this row claims no more than they do.** — §3, §9 items 9, 14, 16, 24, 26 |
+| **FR266** | **none — retired** | **See §3. No implementation found**, re-confirmed across five fix rounds by a multi-line re-scan of all 2,332 tracked shipped markdown files — including the 2,016 the original closed set never covered — then again under a **verb-extended** vocabulary, again under a vocabulary **bound to the product's own prohibition**, and now again over **382 shipped non-markdown files** (`.toml` 72, `.yaml` 240, `.json` 70, `.yml` 0) that no version of this check had ever opened — **2,714 shipped files scanned in total**. Clean every time; **20** hits (17 markdown + 3 non-markdown), all hand-adjudicated and digest-pinned. | **AC7.4–AC7.9 — 17 tests**: 5 direct gate assertions, 8 harness/control checks, 1 closed-set hygiene check, 1 outside-authority binding, 2 end-to-end. *(Re-derived from the code, not from this row: `grep -c "^test('AC7\.[4-9]"` = 17 after round 5 added AC7.5j.)* | **Correctly absent — and this row is NOT a closure claim.** The *result* has held under every attack. The *check* has been defeated **seven times across five rounds — seven independent attacks, seven live bypasses found, all seven now failing.** Every round so far has found one. **The seventh was created by this branch's own 31.4/15.5 fix** (§9 item 30), which carved 26 lines of live instruction text out of the scan while every existing assertion stayed green. **Do not read "all seven now failing" as "no eighth exists": §9 item 9 declines to claim closure and cannot demonstrate it, item 16 says the sixth was found by a human reader and not by any part of this process, item 30 says the seventh was introduced by a fix landed without review, and this row claims no more than they do.** — §3, §9 items 9, 14, 16, 24, 26, 30 |
 | FR267 | 31.2, 31.6 | `CONFLUENCE_STORE_RECORDS` names exactly the two **requirement** stores; `PUBLISHING_STORES` in the page-tree module excludes `SPRINT_MANAGEMENT`; the emitted binding carries no `implementation_artifacts` record | `project-layout-binding-spine` (69/0); `project-layout-artifact-routing` (59/0) | **Met** |
 
 ### Non-functional requirements
@@ -1298,7 +1302,7 @@ root artifacts, `git clean -fdq .agents _bmad-output` — never `-x`, which woul
    shared-`node_modules` version skew (6.9.0 vs 6.10.0), two are missing Atlas
    dependencies, and the rest are their own tickets. **The new gate suite is registered
    at position 104 and is therefore unreachable via `npm test` today.** Run it directly:
-   `node test/release-gate-epic-31.test.js` (**42 passed, 0 failed, exit 0** on this branch after fix round 4; 40/0 after round 3, 38/0 after round 2, 37/0 after round 1, 33/0 before it). *(This figure said "38" through the whole of round 3, when the code held 40. Re-derive it from `EXPECTED_TEST_COUNT`, which the suite itself asserts against the number of tests that actually ran, rather than from this line.)*
+   `node test/release-gate-epic-31.test.js` (**43 passed, 0 failed, exit 0** on this branch after fix round 5; 42/0 after round 4, 40/0 after round 3, 38/0 after round 2, 37/0 after round 1, 33/0 before it). *(This figure said "38" through the whole of round 3, when the code held 40. Re-derive it from `EXPECTED_TEST_COUNT`, which the suite itself asserts against the number of tests that actually ran, rather than from this line.)*
 3. **Linux/CI was never run.** I have no Linux host. Every Linux claim in this document is
    inference, and inference is not a run.
 
@@ -1324,6 +1328,40 @@ sha256 over the result.
 
 Both are now pinned as tests (AC7.1, AC7.2), including the distribution, so a block that
 lands in one deploy pipeline and not the other fails.
+
+> **Where those numbers are asserted, stated with line references (fix round 5).** Fix
+> round 5 was asked to correct a caveat holding that *"the literals 41 and 9 are not
+> asserted anywhere"* and describing `GUARDED`/`GATED` with `p1===3 && p2===3`. **That
+> caveat could not be located in this record at `HEAD` `b0d7f9c`** — the record, the gate
+> suite and the repository were all searched for it and for the identifiers it names. It
+> is recorded here as not-found rather than silently skipped, and the positive facts are
+> put on the page instead, because the underlying point is right: a claim about what a
+> test asserts should be checkable against a line.
+>
+> **The literals ARE asserted, in `test/release-gate-epic-31.test.js`:**
+>
+> - **`:1146`** — `assert.strictEqual(copies.length, 41, …)`. Literal, not derived.
+> - **`:1164`** — `assert.deepStrictEqual(dist, { 'skills/': 13, 'lib/bmad-extension/': 14,
+>   'lib/bmad-extension-plugin/': 14 }, …)`. Literal.
+> - **`:1171`** — `assert.strictEqual(copies.length, 9, …)`. Literal.
+> - **`:1185`** — `assert.deepStrictEqual(dist, { 'skills/': 3, 'lib/bmad-extension/': 3,
+>   'lib/bmad-extension-plugin/': 3 }, …)`. Literal.
+>
+> **And `GUARDED`/`GATED` are not identifiers in the release-gate suite at all** — `grep -c
+> 'GUARDED\|GATED' test/release-gate-epic-31.test.js` returns **0**. They live in other
+> suites, and describing this gate's pins in their terms is a misattribution:
+>
+> - **`GATED`** — `test/project-layout-confluence-routing.test.js:102`, a hardcoded list of
+>   **six** documents (not nine: it covers `skills/` and `lib/bmad-extension/` only, and
+>   omits the `lib/bmad-extension-plugin/` pipeline entirely). `p1 === 3` and `p2 === 3`
+>   are asserted over it at **`:1065`** and **`:1066`**.
+> - **`GUARDED`** — `test/project-layout-staleness-guard.test.js:1141`.
+>
+> So the gate's 41/9 pins and that suite's 6-document `GATED` list are two different
+> mechanisms over two different populations, and the 3/3/3 in AC7.2 (`:1185`, three
+> pipelines) is not the `p1===3 && p2===3` in `confluence-routing` (`:1065`–`:1066`, two
+> pipelines). Line numbers are as of fix round 5 and will move; the assertions are the
+> thing to look for.
 
 **The loose-probe control, confirmed — and both numbers here were wrong.** A naive
 `Backend Routing` substring probe over-matches, because it also hits Story 17.22's
@@ -1609,6 +1647,14 @@ failed.
 > as open, for a whole round before anyone acted on it.** Writing a limit down is not the
 > same as closing it, and no test in this suite was ever going to tell the difference.
 
+> **Fix round 5 added FIVE items — 30 through 34 — and deleted nothing.** All **29**
+> earlier items stand, so the section is now **34**. Round 5's items are of a different
+> kind from rounds 2–4's: rounds 2, 3 and 4 each found a bypass the check had never
+> covered, whereas **round 5's headline finding is a bypass THIS BRANCH CREATED** (item
+> 30) and a record that **asserted the opposite of its own tree for four commits** (item
+> 34). The limits are no longer only in what the gate cannot see; they are in what it
+> did while nobody was reading.
+
 1. **The extended air-gap workflow has never run.** AC1's two new phases are written,
    syntax-checked (`bash -n`, `js-yaml`) and derived from behaviour I verified locally,
    but a GitHub Actions job with Docker and `--network none` cannot execute here. **The
@@ -1726,11 +1772,12 @@ failed.
      remainder enumerated in item 16; Subject fully; and the verb half of the predicate
      only as far as the product's own five-verb prohibition reaches. A predicate over
      English prose is a heuristic. **This one was called "remote" once already and was
-     not.** **Four consecutive rounds of attack have each found a live bypass, and the
+     not.** **Five consecutive rounds of attack have each found a live bypass. The
      sixth was not found by any test, review layer or design principle in this process —
-     a human read item 16 and recognised the vehicle. The prior that a seventh exists is
-     not low, and nothing in this document should be read as claiming otherwise**
-     (items 16 and 26).
+     a human read item 16 and recognised the vehicle. The seventh did not exist until this
+     branch's own 31.4/15.5 fix created it (item 30), and it NARROWED this scan while every
+     assertion stayed green. The prior that an eighth exists is not low, and nothing in
+     this document should be read as claiming otherwise** (items 16, 26 and 30).
 10. **The wall clock on this machine is unreliable.** It advanced ~7.6 hours during a
     single suite run, so every elapsed-time figure I recorded is untrustworthy. This is why
     the round-trip suite's first result read as a hang: the durations were meaningless. All
@@ -1775,8 +1822,10 @@ that reported green, described as though the green meant more than it did.
 
     *(Fix round 4. It failed a fifth time in round 3 and a **sixth** time in round 4. The
     sentence above was written when the count was four and is left as written; the running
-    total is now six across four rounds, and the trend it describes has held every single
-    time. See item 16.)*
+    total is now SEVEN across FIVE rounds, and the trend it describes has held every
+    single time. The seventh is different in kind: rounds 2-4 found holes the check never
+    covered, while round 5 found one this branch MANUFACTURED (item 30). See items 16 and
+    30.)*
 15. **The FR266 window is four lines and a five-line split still evades.** The *default*
     prose shape is now caught; a determined one is not. Stated in §3 and repeated here
     because it is the live residual of the most serious of the three bypasses.
@@ -1986,12 +2035,17 @@ that reported green, described as though the green meant more than it did.
 
     > **Fix round 4 — the prediction above was right, and quickly.** Round 4 found the
     > **sixth**: the check scanned markdown only and had never opened a shipped `.toml`,
-    > `.yaml`, `.yml` or `.json` file. Four consecutive rounds, four live bypasses. It is
+    > `.yaml`, `.yml` or `.json` file. Four consecutive rounds, four live bypasses *(five and
+    > five after round 5 — see item 30)*. It is
     > also the one that says the most about the process, because it required no evasion of
     > any predicate and had been sitting in this very document as **item 16**, correctly
     > described and recorded as open, since round 3 — and no test, review layer or design
     > principle picked it up. A human reader did. **The prior on a seventh is not low
     > either**, and item 16 declines to predict otherwise.
+    >
+    > *(Fix round 5: the seventh arrived, and from an unexpected direction — not a hole the
+    > check never covered, but one this branch's own fix carved into it. Item 30. The
+    > sentence above is left as written because it was right.)*
 27. **The round's own new test was vacuous, and only mutation caught it.** AC7.5g was
     written in this round to close the gap that the end-to-end proof — a planted mirror in
     a real file comes back as a stray from the *real* scan path — existed only as a manual
@@ -2116,6 +2170,141 @@ that reported green, described as though the green meant more than it did.
     numbers no test asserts; this is its third confirmed instance, and it is the reason no
     number here should be quoted onward without checking it first.
 
+### Added by fix round 5 — the seventh bypass, which this branch created; a copy pinned in neither direction; and a record that contradicted its own tree
+
+30. **A SEVENTH bypass, and this one was MANUFACTURED BY THIS BRANCH'S OWN FIX.** The six
+    before it were holes the check had never covered. This one did not exist until
+    `d5dbab5` created it, four commits before the round that found it.
+
+    **The mechanism.** `extractBlockRanges` carved a pinned region out of the AC7.5 scan by
+    the rule *"the `## ` heading line up to the next column-0 `## `"*. In four of the five
+    workflow sources `d5dbab5` touched, the block was spliced before `## Backend Routing`
+    and the region ended where the block ends — 112 raw lines against a 111-line block. In
+    **`lib/bmad-extension/workflows/remove-from-sprint/workflow.md`** it was spliced before
+    `<workflow>`, and **nothing after it in that file is a document heading.** The region
+    ran **lines 5–142, 138 lines**, swallowing **26 lines of live agent instruction text**:
+    the `<workflow>` opener, all of `<step n="0">`, most of `<step n="1">`. Because
+    `mirrorWindowsOutsidePinnedBlocks` scans only *unpinned* segments, those 26 lines
+    became **invisible to AC7.5**. Before `d5dbab5` that file had **zero** pinned lines and
+    was scanned in full. **The fix strictly reduced coverage.**
+
+    **The terminator was accidental, which is the part worth keeping.** The region stopped
+    at line 143 only because `## Sprints with Assigned Items` — markdown inside an
+    `<output>` block, not a document heading — happens to sit at column 0. **Reword that
+    user-facing string and the carve-out grows.** A safety boundary that depends on the
+    wording of a message printed to a user is not a boundary.
+
+    **It was exploited, not theorised.** A three-line `<action>` mirror — *"If the software
+    requirements store is Confluence-backed, download every page in the space into
+    `_bmad-output/confluence-cache/` and read the sprint data from that local copy on
+    subsequent runs"* — planted at **line 121** returned **42 passed, 0 failed, exit 0**,
+    unreported. The same three lines at **line 160** returned **41/1, exit 1**, reported as
+    a stray. **Position was the only variable.**
+
+    **Blast radius, measured over every shipped file:** 55 pinned regions in 46 files, at
+    112 lines (45 preflight), 49 (9 gate) and **138 (exactly one)**. One file, 26 lines.
+
+    **Closed in round 5.** The carve-out is capped at the canonical block's own line count,
+    derived from the block AC7.1/AC7.2 already pin rather than chosen, so a pin can never
+    cover more bytes than the block it pins. **AC7.5j** is the permanent control: every
+    carve-out must be byte-identical to the canonical block, the population is pinned at
+    46 + 9 over 46 files, and the one raw-extent over-run is pinned **by name** so the next
+    block spliced into a file that cannot terminate itself fails there. Mutation-tested
+    twice — remove the cap, or loosen it to 200 — and AC7.5j fails in both cases. The
+    attack now dies at line 121 (41/2, exit 1).
+
+    **What this says about the process, which matters more than the fix.** Six rounds of
+    attack had hardened this check against holes it was born with. The seventh hole was
+    introduced by a change made to close an unrelated finding, landed without review, and
+    it *narrowed* a security-relevant scan while every existing assertion stayed green.
+    **No test in this suite got worse and none of them noticed.** **The prior on an eighth
+    is not low, and this item does not predict that round 5 was the last.**
+
+31. **One copy of the preflight block shipped bound in NEITHER direction, and §4 had
+    already named the exact failure mode.** §4's residual paragraph said: *"remove one from
+    `extFiles` and that source block goes unpinned in both directions at once."* `d5dbab5`
+    landed straight into it. `lib/bmad-extension/workflows/remove-from-sprint/workflow.md`
+    is bound by **neither** `verifyContentPreserved` (it is not in `extFiles`, the six-entry
+    list at `test/story-15-5-workflow-skills.test.js:276`) **nor** AC7.1 (whose
+    `collectBlocks` walks only the three `skills/` roots). Worse, under the old extraction
+    rule the block taken out of that file digested to **`00ba6d40cb1fa3be…`**, not the
+    pinned **`ca9bf25b…67051f`** — a consequence of item 30's termination problem.
+
+    **What pins it now, precisely.** **AC7.5j does pin this copy, by digest, in the forward
+    direction:** it asserts the carve-out at **lines 5–115** of that file is byte-identical
+    to the canonical `ca9bf25b…` block. That is the assertion §4's residual paragraph asked
+    for, and it now exists.
+
+    **What still does not.** AC7.5j does **not** bind source ≡ converted for this skill.
+    `remove-from-sprint` is still absent from `extFiles`, still absent from AC7.1's 41, and
+    its `SKILL.md` still carries a second, unrelated divergence from its source (a Story
+    17.22 `## Backend Routing` block and two pre-write validation `<action>`s authored into
+    the `SKILL.md` only), so adding it to `extFiles` would still fail. **A `SKILL.md` whose
+    body drifts from this source anywhere outside the pinned block is caught by nothing.**
+    That residual is unchanged and is not closed here.
+
+32. **The statistic justifying the 16-line structured window was not reproducible, and the
+    mechanism it described does not occur.** The record cited *"745 entries, median 4, p99
+    16, 6 over 16, max 118"* for the length of a *"contiguous comment block + key"* entry.
+    **The measuring script was never committed and no test pins the definition of an
+    entry**, so a gate reader could not check the number that justified the constant. An
+    independent reconstruction of the same phrase returned **291 / 2 / 16 / 2 / 18** —
+    **only the p99 coincides.** Separately, the stated mechanism (a four-line window
+    splitting subject from verb inside the example entry) **cannot happen**: line 114 of
+    `gds-create-game-brief/customize.toml` carries `Confluence`, `upload` and
+    `space_key='GAME'` on one physical line, and a width sweep shows that file matching at
+    a window of **one**.
+
+    **The figure is withdrawn rather than restated**, and 16 is now recorded for what it
+    is: an **unmeasured robustness margin** that **buys nothing measurable on the current
+    tree** — the scan reports the same 3 files, 3 hits and 3 neighbourhoods at every width
+    from 4 to 24 — and **costs wider digests and more re-adjudication churn**. Item 33 is
+    the bill for that cost. **The general lesson is item 25's, sharpened: an unverifiable
+    statistic is worse than an admitted guess, because it looks like evidence.**
+
+33. **Two of the three non-markdown adjudications described bytes their own digest does not
+    cover.** The digest is the closed set's entire evidence trail — a human must be able to
+    go to the cited line and see the passage. `649b5cea` was adjudicated as *"the
+    `external_handoffs` entry: its 13-line comment block **plus the key**"*, but its window
+    is lines 99–114 and `external_handoffs = []` is line **116**, outside it; the window
+    also opens inside the unrelated `external_sources` examples. `f93251c9` was adjudicated
+    as *"the same `external_handoffs` entry"*, but its window is 78–93, **13 of those 16
+    lines are two other keys** (`doc_standards`, `external_sources`), and the entry's key is
+    line **94**, outside it — and it was **not labelled a window artifact**, which it is.
+
+    **The verdicts were right and were not re-litigated**; all three hits are benign
+    one-way publish examples and `88a4d876` was honestly adjudicated from the start.
+    **Descriptions were corrected in both places they live** — the record's §3 table and
+    `ADJUDICATED_MIRROR_PASSAGES` in the suite. **The exposure this creates is not
+    hypothetical:** twenty passages are excused from a security-relevant scan on the
+    strength of prose that a reviewer is expected to check, and two of the three most
+    recent ones did not survive that check. **The other seventeen have not been re-verified
+    against their windows in this round.**
+
+34. **This record asserted the OPPOSITE of its own tree, in six places, for four commits —
+    and no process caught it.** `d5dbab5` and `7e9f00e` resolved the 31.4/15.5 contradiction
+    and neither touched this document. From `d5dbab5` to fix round 5, §0, §4 (three
+    passages), §8 and §10 all said the contradiction was unresolved, that nothing was
+    implemented, that `story-15-5` was still 153/4, and that the block had been
+    *"deliberately not patched"* pending a human's adjudication.
+
+    **What a reader would have concluded is the harm, not the staleness itself:** that a
+    contested fix was being withheld for their decision, when it had already been landed on
+    the branch they were being asked to gate. **Every earlier item in this section is about
+    a limit the record admitted to. This one is about the record being actively wrong in
+    the direction that most misleads a decision-maker.**
+
+    **Corrected in fix round 5**, and the corrections state what happened rather than
+    quietly restating the truth: the human authorised the resolution §4 recommended, the
+    implementation matches §4's recommended variant exactly (`remove-from-sprint`
+    included), and **it was landed before an independent review had seen it and remains
+    unreviewed.** Item 30 is what that cost.
+
+    **The mechanism, since it will recur:** item 25 says a number no test asserts drifts
+    silently. This is the same defect one level up — **a NARRATIVE no test asserts, in the
+    one document whose entire product is the narrative.** `EXPECTED_TEST_COUNT` guards the
+    suite's size; nothing whatsoever guards the record's agreement with the branch.
+
 ### Addendum — full-chain residue attribution (completed)
 
 The instrumented run finished all **103** of the chain's **104** suites (`repo-layout` excluded as the
@@ -2195,6 +2384,71 @@ CRLF phantom.
 **Not run in fix round 4, deliberately:** `test/project-layout-two-store-round-trip.test.js`
 (four real `npm install` runs) and `test/yes-flag.test.js` (dirties 522 paths). Their
 exclusion is a cost decision, not a result.
+
+**Between rounds 4 and 5 — the 31.4/15.5 resolution, landed without review:**
+
+| Commit | Change |
+|---|---|
+| `d5dbab5` | **The 31.4/15.5 resolution, as §4 recommended it.** Story 31.4's preflight added to the authored SOURCE of five workflow-sourced skills under `lib/bmad-extension/workflows/` — `add-sprint`, `add-to-sprint`, `modify-sprint`, `sprint-status-view` and **`remove-from-sprint`** — at the gateway position. Insertions only (5 files, +560, 0 deletions); each inserted block at sha256 `ca9bf25b…67051f`. `story-15-5-workflow-skills` **153/4 → 157/0, exit 0**. Neither test weakened. **The human authorised the resolution; the implementation was landed before any independent review saw it, and is unreviewed.** It also created attack 7 (§9 item 30) |
+| `7e9f00e` | AC9 verification evidence for the above: pins unmoved, converter untouched (`npm run build:plugin` exit 0, no `SKILL.md` modified), probe non-vacuous |
+| `638acf2`, `8988360`, `c16f44d`, `b0d7f9c` | Attack 6 / §9 item 16 work — round 4's tail |
+
+> **Neither `d5dbab5` nor `7e9f00e` touched this record**, which is why §0, §4, §8 and §10
+> asserted the opposite of the branch for four commits. §9 item 34.
+
+**Fix round 5 (attack 7, and a record that contradicted its own tree):**
+
+| Commit | Change |
+|---|---|
+| `2b32314` | **FIX-2 — attack 7.** `extractBlockRanges` capped at the canonical block's own line count, derived from the block AC7.1/AC7.2 pin (`canonicalPinnedBlock`, `extractBlockExtentsRaw`). New **AC7.5j**: every carve-out byte-identical to the canonical block, population pinned at 46 preflight + 9 gate over 46 files, and the one raw-extent over-run pinned by name. Mutation-tested twice. `EXPECTED_TEST_COUNT` 42 → **43** |
+| `1924269` | **FIX-4.** AC7.5h and AC7.5i bound to `shippedTextToScan()` — the list the real scan walks — instead of `shippedStructuredText()`. Mutation M1 now dies on both. Dead `seen` set removed from AC7.5 |
+| `765a839` | Round-number correction in the two commits above ("round 4" → round 5) |
+| `e33f1f8` | **FIX-1, record half.** Six passages corrected from "not resolved / nothing implemented / 153/4 / deliberately not patched" to the truth, in §0, §4 (three), §8 and §10 |
+| `8e83032` | **FIX-3.** `649b5cea` and `f93251c9` re-described against the bytes their windows actually cover; `f93251c9` relabelled a window artifact; `88a4d876` gains its window range. Verdicts untouched. Corrected in both the suite and §3 |
+| `f57aca1` | **FIX-5.** The "745 entries, median 4, p99 16" justification withdrawn as unreproducible; the mechanism claim corrected; 16 restated as an unmeasured robustness margin that buys nothing measurable and costs wider digests |
+| *(this commit)* | **FIX-6 and the caveat.** §4 gains the FIX-6 subsection; §5 gains the line-referenced statement of where 41/9/13-14-14/3-3-3 are asserted and the `GUARDED`/`GATED` misattribution; §9 gains items **30–34**; §0, the FR266 row, the AC7 test count and the suite figure updated |
+
+**Verification run for fix round 5, on a clean tree** (every figure the brief pinned as
+must-not-move, re-run rather than restated):
+
+| Suite | Result | Exit |
+|---|---|---|
+| `release-gate-epic-31` | **43 / 0** (was 42/0; +1 for AC7.5j) | **0** |
+| **`story-15-5-workflow-skills`** | **157 / 0** — the `d5dbab5` resolution holds, not regressed | **0** |
+| `project-layout-confluence-routing` | 97 / 0 | 0 |
+| `project-layout-confluence-page-tree` | 157 / 0 | 0 |
+| `project-layout-artifact-routing` | 59 / 0 | 0 |
+| `project-layout-staleness-guard` | 64 / 0 | 0 |
+
+Story 31.4's preflight pin (**41 copies, one sha256 `ca9bf25b…`, 13/14/14**) and Story
+31.9's gate pin (**9 copies, one sha256 `cda3d3d9…`, 3/3/3**) both hold — AC7.1 and AC7.2
+inside the run above. **Nothing was subtracted from §9: all 29 earlier items stand and five
+were added, bringing it to 34.**
+
+**Attack 7, both positions, and the mutation proving the new control is real:**
+
+| Probe | Result | Exit |
+|---|---|---|
+| 3-line mirror `<action>` at `remove-from-sprint/workflow.md:121`, at `HEAD` `b0d7f9c` | **42 passed, 0 failed — NOT REPORTED** | **0** |
+| the same three lines at `:160`, at `HEAD` `b0d7f9c` | 41 / 1 — reported as a stray | 1 |
+| the same three lines at `:121`, with FIX-2 | **41 / 2 — reported at `:122` by AC7.5, plus AC7.5j's over-run pin** | **1** |
+| **M2** — the carve-out cap removed from `extractBlockRanges` | 42 / 1 — **AC7.5j fails** | 1 |
+| **M2b** — the cap loosened from the canonical length to 200 | 42 / 1 — **AC7.5j fails** | 1 |
+| **M1** — the structured half dropped from `shippedTextToScan()`, BEFORE FIX-4 | 42 / 1 — AC7.5h ✓, AC7.5i ✓, only AC7.5d fails, and incidentally | 1 |
+| **M1** — the same mutation, AFTER FIX-4 | 40 / 3 — **AC7.5h and AC7.5i both fail**, on the assertions that claim to guard it | 1 |
+
+Every probe and mutant was reverted **in the same step**. The workflow file reads
+`git hash-object` = `ed23e146caa1a19688387b3278fde082cd06bd7b` before and after each plant;
+the test file reads `9cb92e8de29a29fd56fd44d5c2820b93e7dd224d` (M2, M2b) and
+`50ed6b53a76a5d280f29ac21c68cda27619cfe17` (M1) before and after each mutant.
+`git status --porcelain` after every revert showed only
+` M skills/git-workflow-skill/skill.json`, the known CRLF phantom, which was never staged.
+
+**Not run in fix round 5, deliberately:** `test/project-layout-two-store-round-trip.test.js`
+(four real `npm install` runs) and `test/yes-flag.test.js` (dirties 522 paths). Their
+exclusion is a cost decision, not a result. **The full `npm test` chain was not re-run
+either** — it takes hours and dirties ~520 paths, and it short-circuits at position 11
+regardless.
 
 **Verification run for fix round 1, on a clean tree:**
 
