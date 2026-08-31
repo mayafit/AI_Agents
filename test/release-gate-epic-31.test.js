@@ -799,7 +799,7 @@ function extractBlocks(text, heading) {
  * `## heading` → next column-0 `## ` rule keeps the pin and the scan describing
  * the same boundary.
  *
- * ─── FIX ROUND 4, FIX-2: THE RAW EXTENT IS NOT A SAFE CARVE-OUT ─────────────
+ * ─── FIX ROUND 5, FIX-2: THE RAW EXTENT IS NOT A SAFE CARVE-OUT ─────────────
  *
  * `extractBlockExtentsRaw` is the rule as written above, and on its own it is a
  * LIVE BLIND SPOT. "Up to the next column-0 `## `" assumes every block is
@@ -1652,7 +1652,7 @@ test('AC7.5 every F26-subject mirror-vocabulary WINDOW in ALL shipped text — m
   //
   // (There is no `seen` set here. One existed, was populated on every
   // adjudicated hit and was never asserted on — dead code, removed in fix
-  // round 4. The property it LOOKED like it guarded — that no adjudicated
+  // round 5. The property it LOOKED like it guarded — that no adjudicated
   // digest has gone stale — is AC7.5d's job and is asserted there.)
   const strays = [];
   for (const { abs, window } of shippedTextToScan()) {
@@ -1960,7 +1960,7 @@ test('AC7.5h [harness] the scan population includes shipped NON-MARKDOWN agent-r
   // The named target is the file the attack was found on. It ships, it names
   // Confluence outright at :114, and the markdown scan never opened it.
   //
-  // ─── FIX-4 (fix round 4): BOUND TO THE FUNCTION THE REAL SCAN WALKS ──────
+  // ─── FIX-4 (fix round 5): BOUND TO THE FUNCTION THE REAL SCAN WALKS ──────
   //
   // This test used to enumerate `shippedStructuredText()` directly. So did
   // AC7.5i. Neither touched `shippedTextToScan()` — the ONE list AC7.5 and
@@ -2056,7 +2056,7 @@ test('AC7.5i [end-to-end] a TOML external_handoffs mirror directive is REPORTED,
     + 'later run", tool = "corp:confluence_download" }]';
 
   //
-  // ─── FIX-4 (fix round 4): "END-TO-END" NOW MEANS THE REAL SCAN LIST ──────
+  // ─── FIX-4 (fix round 5): "END-TO-END" NOW MEANS THE REAL SCAN LIST ──────
   //
   // This test was labelled [end-to-end] and was not. It called
   // `mirrorWindowsOutsidePinnedBlocks` with a width restated here, and checked
@@ -2126,7 +2126,7 @@ test('AC7.5i [end-to-end] a TOML external_handoffs mirror directive is REPORTED,
 });
 
 test('AC7.5j [control] every pinned carve-out is EXACTLY the canonical block — a pin cannot swallow live instruction text', () => {
-  // ─── THE CONTROL FOR ATTACK 7 (fix round 4, FIX-2) ───────────────────────
+  // ─── THE CONTROL FOR ATTACK 7 (fix round 5, FIX-2) ───────────────────────
   //
   // The pinned blocks are a hole in the AC7.5 scan by design: the closed set
   // excuses them because their bytes are pinned by digest elsewhere. That excuse
