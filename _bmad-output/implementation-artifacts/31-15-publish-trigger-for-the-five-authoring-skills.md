@@ -179,7 +179,9 @@ would print a message, and Step B1 is explicit that *"a file-system project gets
 this section, no prompt, and no offer"* (`skills/generate-backlog/SKILL.md:139`). Recording the
 rejected alternative here so it is not re-proposed.
 
-### 4.4 The two hazards this design must survive
+### 4.4 The two MERGE-MODEL hazards this design must survive
+(The writer-count hazard is separate and lives in §4.6 R5.)
+
 
 **Hazard A — TOML has no duplicate keys, and the resolver swallows a parse failure.** If ma-agents
 emits `on_complete` inside its marker block while a user has already written `on_complete`
@@ -187,6 +189,8 @@ elsewhere in the same file, the file is invalid TOML. `load_toml` treats a non-r
 `TOMLDecodeError` as a **warning**, returns `{}`, and **silently discards the entire team layer**
 (`_bmad/scripts/resolve_customization.py:84-89`). Both the user's customization and ma-agents'
 publish hook vanish, with nothing on the skill's path to notice. AC4 exists for this.
+**A third writer reaches this exact end state without ever calling ma-agents' generator, so AC4's
+write-side refusal cannot be the whole defence — see §4.6 R5 and AC12.**
 
 **Hazard B — a scalar override wins outright.** `deep_merge`'s final line is `return override`
 (`_bmad/scripts/resolve_customization.py:168`): array + array appends, but **anything else is
@@ -206,6 +210,99 @@ copies with one sha256 (§5); a tenth copy in a TOML value invites drift and is 
 unexplained count move this epic treats as a defect. The hook is a **short directive that routes to
 the shipped protocol** by naming `ma-agents confluence-plan --store <store>` and carrying the
 fail-loud obligation — not a second copy of the protocol.
+
+### 4.6 FIVE FACTS ABOUT THE WRITE SURFACE — named here, not discovered in review
+
+Each was verified at source after the story was first written. None of them blocks the design; all
+five change what the implementer and the reviewer must check.
+
+**R1 — This story opens ma-agents' FIRST write path into `_bmad/custom/`, directly against an
+established never-touch discipline.**
+**Every** current ma-agents reference to that directory is a read, a comment, or a **delete**.
+`cleanupLegacyArtifacts()` *removes* legacy `.xml` from `_bmad/custom/agents/`
+(`lib/bmad.js:3340-3351`; `BMAD_DIR = '_bmad'` at `lib/bmad.js:31`) — and that `path.join(projectRoot,
+BMAD_DIR, 'custom', ...)` at `:3341` is the **only** such join in `lib/` or `bin/`. The two other
+mentions, `bin/cli.js:1006` and `bin/cli.js:4855`, are comments asserting the **opposite of a
+write** — that `_bmad/config.user.toml` and `_bmad/custom/config.user.toml` are never touched
+(AC5 / P5-9.4). No `writeFileSync`, `ensureDir` or `outputFile` in either tree targets that
+directory.
+
+**So this story does not extend existing behaviour. It opens a new write surface into a directory
+this product has only ever read from or cleaned.** The precedent it sits against is real and
+narrower than it looks: P5-9.4 is a **sibling-file** rule about `config.user.toml`, not a blanket
+"ma-agents does not write under `_bmad/custom/`". This story respects it exactly — it writes
+`<skill>.toml` only, never `<skill>.user.toml` (AC2), and never `config.toml` or `config.user.toml`
+at all. That distinction is written down here because the blanket reading is the reasonable
+default, and a reviewer arriving at the diff from `bin/cli.js:1006` will make it.
+
+**R2 — ma-agents would be writing into a directory whose lifecycle ANOTHER PACKAGE owns.**
+`_bmad/custom/` is created by the **vendored bmad-method installer**, not by ma-agents:
+`node_modules/bmad-method/tools/installer/core/install-paths.js:24`
+(`const customDir = path.join(bmadDir, 'custom')`), with `:31`/`:33` putting it through
+`ensureWritableDir` as one of five directories. Its `.gitignore` (`*.user.toml`) is seeded by the
+same package (`node_modules/bmad-method/tools/installer/core/installer.js:680-683`), and the
+existing `_bmad/custom/config.toml` is a **bmad-method-authored stub**, not an ma-agents artifact.
+ma-agents contributes **no path segment and no content** today; it only causes the installer to run
+(`installBmad()`, `lib/bmad.js:842` → `lib/bmad.js:375`).
+
+**Consequence to carry:** an upstream change to that installer can move, reinitialise or repopulate
+the directory, and ma-agents finds out at the next `bmad-method` pin bump, not at review. The
+generator MUST therefore create the directory if absent rather than assume it, and MUST never treat
+any file it did not delimit as its own. **Pin-bump discipline:** whoever moves `bmad-method` past
+`6.10.0` (`package.json:35`) re-reads `install-paths.js` and `_installSharedScripts` before
+accepting the bump.
+
+**R3 — the upstream update path treats the generated hook as USER content, and that cuts both ways.**
+On a bmad-method **update** (an existing `_bmad/` is present) the installer diffs the tree against
+`files-manifest.csv`; a file with no manifest entry is classified `customFiles`, backed up to
+`_bmad-custom-backup-temp/`, and **restored verbatim after the install**
+(`node_modules/bmad-method/tools/installer/core/installer.js:588`, `:624-636`, `:509-546`,
+`:918-923`). `_bmad/custom/<skill>.toml` has no manifest entry. **AC3(b)'s "user content survives an
+ma-agents update" is therefore upheld by upstream — and so, verbatim, is ma-agents' own block.**
+
+That second half is the hazard. `config.yaml` is **explicitly exempted** from this restore
+(`installer.js:915-917` — *"Skip config.yaml files - these are regenerated on each install/update"*);
+`_bmad/custom/<skill>.toml` is **not**. A stale hook is restored, not regenerated, by the upstream
+installer acting alone. Two orderings, and only one of them is ours:
+
+- **Inside `ma-agents install` this is safe.** `installBmad()` runs at `bin/cli.js:4089`/`:4104`;
+  the generation pass runs at `bin/cli.js:4252` — **after** the restore, so generation overwrites
+  the restored block. The sibling generator must be called from that same site (Task 1.5) and MUST
+  NOT be moved ahead of `installBmad`. A reviewer should treat a reordering here as a defect.
+- **Outside it, it is not.** A user who runs bmad-method's own installer directly gets the old block
+  back with no regeneration. Accepted residual, **disclosed not fixed**; the remedy is
+  `ma-agents bind`, already one of the three generation sites.
+
+AC3(b) must be proved against a **real** install — a fresh one **and** an update over an existing
+`_bmad/` — not a simulated one.
+
+**R4 — the gitignore/staleness reasoning was re-checked and HOLDS. Recorded so it is not re-opened.**
+`_bmad/` is ignored at `.gitignore:20` (`git check-ignore -v _bmad/custom` → `.gitignore:20:_bmad/`;
+`git ls-files _bmad` → **0**), and ma-agents writes that same rule into target projects via
+`installer.ensureBmadDirIgnored` (`lib/bmad.js:295-308`, patterns `lib/installer.js:436-441`). The
+file is untracked and can vanish on a re-install. **It vanishing changes nothing, because it cannot
+vanish alone.** `_bmad/custom/<skill>.toml` is untracked in exactly the way `_bmad/bmm/config.yaml`
+is untracked, sits under the same ignored root, and is generated at the same three sites from the
+same committed binding. A fresh clone has **no `_bmad/` at all** — no config, no `resolve_customization.py`,
+and none of the five skills installed to trigger — so there is no window in which a skill runs with a
+missing hook that is not equally a window in which it runs with a missing `config.yaml`, which Story
+31.4's preflight already fails loud on. `_bmad/` is regenerated **only** when the bmad-method
+installer actually runs: not by `npm test`, and not by `npm install` — `package.json`'s `prepare` is
+`build-plugin` + `build-atlas`, neither of which mentions `_bmad`. **The hook is never staler than
+`config.yaml`; the "generate alongside `config.yaml`" reasoning survives the untracked-file objection.**
+The one case this does **not** cover is R3's out-of-band restore — a staleness path `config.yaml` is
+exempt from and this file is not. That is why R3 is a separate risk and not a footnote here.
+
+**R5 — there are THREE writers to `_bmad/custom/<skill>.toml`, not two.**
+The story's idempotency design assumes ma-agents and a **human**. There is a third: the
+`bmad-customize` **skill** instructs an agent to author TOML into exactly this path at runtime —
+*"Write. Create `{project-root}/_bmad/custom/` if needed"* (`.claude/skills/bmad-customize/SKILL.md:87`),
+scope stated at `:8`, team/user routing at `:77-79`, sparse-override rule at `:71`. **That skill is
+not shipped by ma-agents** — no source under `skills/`, `lib/bmad-extension/`,
+`lib/bmad-extension-plugin/` or `lib/bmad-cache/`, and absent from `.claude/skills/.ma-agents.json`;
+it ships from `node_modules/bmad-method/src/core-skills/bmad-customize/`, i.e. from the same package
+as R2's installer. It writes TOML **programmatically and will not know ma-agents' markers**.
+Combined with Hazard A this is materially worse than the human case, and it is **AC12**.
 
 ---
 
@@ -382,11 +479,54 @@ done-record are **byte-unchanged**.
 > history — which is why the correction is recorded here and 31.10 is not edited.
 
 **AC11 — Full `npm test` green on Linux/CI and Windows.**
-New tests cover AC1–AC9. Per the standing Epic 31 note, run every touched test file **directly** as
-well as through `npm test` — the chained script halts on the known MIL-498 CRLF drift at position 13
-and can mask downstream breakage (the Story 30.4 / 30.8 precedent).
+New tests cover AC1–AC9 and AC12. Per the standing Epic 31 note, run every touched test file
+**directly** as well as through `npm test` — the chained script halts on the known MIL-498 CRLF drift
+at position 13 and can mask downstream breakage (the Story 30.4 / 30.8 precedent).
 
 > **Authority: `epics.md`** Story 31.14 Technical notes, third bullet.
+
+**AC12 — The three-writer collision is DEMONSTRATED and defended against, not asserted as handled.**
+After this story there are **three** writers to `_bmad/custom/<skill>.toml`: (i) the ma-agents
+generator this story adds, (ii) a human hand-editing the team layer, (iii) an **agent running the
+`bmad-customize` skill**, which authors TOML into exactly this path at runtime and knows nothing of
+ma-agents' markers (§4.6 R5). AC3 and AC4 cover (i) and (ii). This AC covers (iii):
+
+(a) A test **reproduces the end state a `bmad-customize` run can leave** — an `on_complete` key
+written **outside** ma-agents' markers alongside ma-agents' block — and demonstrates, through the
+**real** `resolve_customization.py`, that the duplicate key makes the file invalid TOML, that
+`load_toml` emits `warning:` and returns `{}`, and that **the entire team layer — the customizer's
+change and the publish hook together — is discarded while the resolver exits ZERO**. The publish
+silently disappears and nothing on the skill's path notices. This must be shown, not stated.
+(b) The AC4(b) refusal must hold against that end state as an **input**, not only as a state the
+generator declined to create: on the next generation over such a file the generator writes nothing,
+names the file and the key, and exits non-zero — so the collision surfaces at install/`bind` time.
+(c) **A detection path independent of the generator.** A collision introduced by an agent *between*
+two generations must be discoverable without re-running the generator: an already-shipped surface
+(`ma-agents status` or `ma-agents diag`) reports a `_bmad/custom/<skill>.toml` that does not parse
+under `tomllib`, or that carries an `on_complete` outside ma-agents' markers. Without (c) the window
+between a `bmad-customize` run and the next install is a window in which the publish is dead and
+silent.
+(d) The generated block carries an **in-file comment** naming ma-agents as the owner of the
+delimited region and directing a customizer to write their own `on_complete` as a **TOML array in
+`<skill>.user.toml`** — the one form that appends rather than replaces (AC7). `bmad-customize` shows
+its author a diff before writing (*"If the file exists, show a diff. Never silently overwrite … Wait
+for explicit yes"*, `.claude/skills/bmad-customize/SKILL.md:85-86`); that comment is the **only**
+channel this story has into that human decision, and it is a mitigation, never a guarantee — the
+gate is a human's yes, and (a)–(c) must stand without it.
+
+> **Authority: the third writer's own instruction**, `.claude/skills/bmad-customize/SKILL.md:87` —
+> *"Write. Create `{project-root}/_bmad/custom/` if needed"* — with its scope at `:8`, its team/user
+> routing at `:77-79`, and its sparse-override rule at `:71` (*"only the fields being changed"*),
+> which is precisely what produces a bare `on_complete` next to ma-agents' block. **That skill is not
+> ma-agents'**: no source under `skills/`, `lib/bmad-extension/`, `lib/bmad-extension-plugin/` or
+> `lib/bmad-cache/`, absent from `.claude/skills/.ma-agents.json`, shipped from
+> `node_modules/bmad-method/src/core-skills/bmad-customize/`. **Plus the discard mechanism**,
+> `_bmad/scripts/resolve_customization.py:84-89`. This AC exists because **AC4's refusal is a
+> write-side guard against a read-side failure**, and a writer that never calls ma-agents' generator
+> can produce the read-side failure without ever tripping the write-side guard. The result is **this
+> epic's signature defect — success reported over a failed write — reached by a route no earlier
+> story named**, and it is the one failure mode of this design that is invisible from inside
+> ma-agents. Treat an implementation that satisfies (a), (b) and (d) but not (c) as incomplete.
 
 ---
 
@@ -397,9 +537,12 @@ and can mask downstream breakage (the Story 30.4 / 30.8 precedent).
 - [ ] 1.2 Marker-delimited block writer for TOML, mirroring `injectOnPremPrefixBlock` (`lib/bmad.js:1324-1357`) exactly in discipline: fresh insert, in-place replace, trailing-newline swallow, malformed-half-block → fresh insert. Comment markers (`# BEGIN:ma-agents-confluence-publish` / `# END:...`).
 - [ ] 1.3 Pre-write collision check: refuse loudly if `on_complete` exists outside the markers (AC4b). Post-write parse check under `tomllib` (AC4a).
 - [ ] 1.4 Removal path: backend flips away from `confluence` → block removed, rest of file untouched (AC3d).
-- [ ] 1.5 Call it from the same three sites as `generateBmmConfig`: `bin/cli.js:4252`, `:4690`, `:4994`. Do not add a fourth.
+- [ ] 1.5 Call it from the same three sites as `generateBmmConfig`: `bin/cli.js:4252`, `:4690`, `:4994`. Do not add a fourth. **Ordering is load-bearing (§4.6 R3):** `:4252` runs *after* `installBmad()` (`:4089`/`:4104`), which is what lets generation overwrite a block the bmad-method installer restored from its pre-update backup. Do not move it earlier.
+- [ ] 1.6 Create `_bmad/custom/` if absent rather than assuming it — another package owns that directory's lifecycle (§4.6 R2).
+- [ ] 1.7 Detection surface for AC12(c): `ma-agents status` / `diag` reports a `_bmad/custom/<skill>.toml` that fails to parse or carries an `on_complete` outside ma-agents' markers. This is the only guard that fires between two generations.
 
 ### Task 2 — The hook text (AC5, AC8)
+- [ ] 2.0 Emit the block with an owner comment naming ma-agents and directing a customizer to write their own `on_complete` as an **array in `<skill>.user.toml`** (AC12d).
 - [ ] 2.1 Emit as a **TOML array of one instruction** (AC7). Short: name `ma-agents confluence-plan --store <store>`, obey the printed operations parents-first, update-if-present / create-if-absent, `ma-agents confluence-record-root-page` when the root page was created, STOP and report no publish on any failed write, and **correct the already-emitted "ready" message on a halt** (AC5c).
 - [ ] 2.2 **Do not restate Story 31.9's gate block.** Route to the shipped protocol; do not become a tenth copy (§4.5).
 - [ ] 2.3 Run the text through the hardened FR266 analysis before committing it (AC8).
@@ -411,6 +554,8 @@ and can mask downstream breakage (the Story 30.4 / 30.8 precedent).
 - [ ] 3.4 Duplicate-key collision: refusal (AC4b) **and** a demonstration that without the refusal `load_toml` discards the whole layer (AC4a rationale).
 - [ ] 3.5 Invariant proof: re-run I1 and I2, report actual numbers; path-scoped diff check that no skill document changed (AC9c).
 - [ ] 3.6 Append new test files to the `package.json` test chain; run each directly **and** via `npm test`, on Windows and Linux.
+- [ ] 3.7 **Three-writer collision (AC12).** Reproduce the `bmad-customize` end state — a bare `on_complete` outside ma-agents' markers — and prove through the real resolver that the whole team layer is discarded **at exit status 0** (a); prove the generator refuses over that file as an *input* (b); prove the independent detection surface fires on it (c). Do not simulate the resolver.
+- [ ] 3.8 **Real-install proof for AC3(b) / §4.6 R3.** Both a fresh install and an update over an existing `_bmad/`. Confirm the restore-then-generate ordering actually leaves the freshly generated block, not the restored one.
 
 ### Task 4 — Record-keeping (AC10)
 - [ ] 4.1 Completion report states the **mock-only** limit verbatim (§2) and the AC7 residual.
@@ -432,7 +577,13 @@ and can mask downstream breakage (the Story 30.4 / 30.8 precedent).
 
 ### Two facts that complicate the design and must not be glossed
 - **`_bmad/` is gitignored** (`.gitignore:20`), so `_bmad/custom/<skill>.toml` is **not** committed in this repository, despite the resolver describing that layer as *"team/org, committed"* (`resolve_customization.py:6`). This is not a blocker — the file is **generated from the committed binding** at the same three sites as `config.yaml`, so every developer derives the same hook from the same `project-layout.yaml` (FR263/FR264). It **is** the reason the hook must be generated rather than hand-maintained, and the reason install-time gating (§4.3) is safe.
-- **`_bmad/` is regenerated by the installer** and its own header calls it read-only. Confirm at implementation time whether bmad-method's installer clears `_bmad/custom/` — if it does, AC3(b)'s "user content survives an ma-agents update" must be proved against a **real** install, not a simulated one, and any loss is an upstream fact to report, not to paper over.
+- **`_bmad/` is regenerated by the installer** and its own header calls it read-only. **This has now been answered — see §4.6 R3.** bmad-method's installer does **not** clear `_bmad/custom/`: on an update it classifies any file absent from `files-manifest.csv` as a `customFile`, backs it up, and restores it verbatim after the install (`node_modules/bmad-method/tools/installer/core/installer.js:588`, `:624-636`, `:509-546`, `:918-923`). The survival claim is upheld upstream. The *new* finding is the inverse hazard: `config.yaml` is exempted from that restore (`installer.js:915-917`) and `_bmad/custom/<skill>.toml` is not, so a **stale** block is restored rather than regenerated by the upstream installer acting alone. Safe inside `ma-agents install` only because generation runs after `installBmad()`. AC3(b) still requires a **real** install, both fresh and update.
+
+### Verified at source during refinement (2026-08-31) — four claims, all four confirmed
+- **This story opens ma-agents' first write path into `_bmad/custom/`.** Only join in `lib/`+`bin/`: `lib/bmad.js:3341`/`:3347`, and it is a *delete*. Only other mentions: the never-touch comments `bin/cli.js:1006`, `:4855`. §4.6 R1.
+- **The directory is bmad-method's, not ma-agents'.** `node_modules/bmad-method/tools/installer/core/install-paths.js:24`, `:31`, `:33`; the `.gitignore` stub at `installer.js:680-683`; `_bmad/custom/config.toml` is a bmad-method-authored stub. §4.6 R2.
+- **A third writer exists:** `.claude/skills/bmad-customize/SKILL.md:87`, not shipped by ma-agents, from `node_modules/bmad-method/src/core-skills/bmad-customize/`. §4.6 R5, AC12.
+- **The gitignore/staleness reasoning holds.** `.gitignore:20`; `git ls-files _bmad` → 0; `prepare` = `build-plugin` + `build-atlas`, no `_bmad`. §4.6 R4.
 
 ### Files expected
 ```
