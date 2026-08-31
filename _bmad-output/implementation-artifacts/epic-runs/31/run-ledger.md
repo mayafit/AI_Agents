@@ -1063,4 +1063,38 @@ This is the epic's recurring **"proves presence, not effect"** shape, appearing 
 
 Ranked behind it: a verb outside the product's five (`persist`, `stash`, `snapshot`, `vendor`); the five-line split (item 15); and splitting subject from verb beyond the four-line window by naming the store by pronoun.
 
+## Rounds 4 and 5 — three human decisions taken, and the seventh bypass came from our own fix
+
+The human resolved all three outstanding decisions on 2026-08-31. Branch `feature/epic-31-story-31.14`, HEAD **`035df4d`**; suite **43 passed / 0 failed**, `EXPECTED_TEST_COUNT = 43`; §9 now carries **34** limits items.
+
+**Decision 1 — the 31.4/15.5 contradiction: RESOLVED.** The preflight block was added to the **source** workflow files (`d5dbab5`), so shipped and source agree and the converter is no longer the thing that adds it. `story-15-5-workflow-skills` went **153/4 → 157/0**. Both pinned counts held, proved by population differencing rather than asserted. **Correction to this ledger's earlier framing:** there is *no live workflow→skill converter* — Story 15.5's conversion was a one-time authored step with committed output, so the divergence was **authored drift**, not generated. The fix is right; the earlier explanation of why was not.
+
+**Decision 2 — Story 31.10's AC1/AC3/AC5 escalation was WRONG, and the human caught it.** The escalation reasoned that the five authoring skills *"are not shipped by this package"* and that there is *"no publish command"*. Both re-checked:
+- `bmad-method` is a **runtime dependency** (`package.json:35`); the five skills live under `node_modules/bmad-method/src/bmm-skills/` and reach a project **because ma-agents puts them there**. The original check looked only under `skills/` and `lib/bmad-extension/skills/` and **mistook absence-from-one-channel for absence-from-any — a location fact substituted for a capability fact**, the epic's presence-not-effect shape in a new place. (Its literal observation was true: `.ma-agents.json` lists 45 skills and none of the five. The inference was the error, not the fact.)
+- **`ma-agents confluence-plan` is a real shipped command** (`bin/cli.js:5384`, dispatch `:5702`), and `generate-backlog/SKILL.md` Step B2 already instructs create/update. **Pages are created today** — only for *gated* skills. The five authoring skills are simply not gated. That is the whole gap.
+
+**Resolution: new Story 31.15**, `ready-for-dev`, using the upstream-sanctioned `on_complete` override channel. `epics.md` **append-only, 34 insertions / 0 deletions**; 31.10's definition byte-unchanged (`b71f9dbc…` before and after). The near-miss worth knowing: `external_handoffs` looks purpose-built and is array-merged, but is **absent from `bmad-create-epics-and-stories`** and its contract is **skip-and-flag**, which contradicts FR262's fail-loud — writing an FR262 obligation into a skip-and-flag field installs the silent-skip defect by construction. Non-negotiable at implementation: `on_complete` fires **after** the user is told the artifact is ready, so without an AC forcing the hook to correct that message on a halt, the story ships *"success reported over a failed write"* as a structural property.
+
+**Decision 3 — the non-markdown scope hole: CLOSED for four extensions.** 382 files added (240 `.yaml`, 72 `.toml`, 70 `.json`), no path excluded by rule; **2,714 of 3,249** shipped tracked files now scanned, **535 still unscanned**. Three hits, none a mirror. The load-bearing proof is two-directional: with a read-back directive planted the new scan fails 41/1, and **with the population reverted to markdown-only and the same plant still live it passes 40/0** — the widened population is what closed it, not an assertion that was already true.
+
+### Attack 7 — created by our own fix, and it narrowed the scan while every assertion stayed green
+
+`extractBlockRanges` runs a heading to the next column-0 `## `. In `remove-from-sprint/workflow.md` the block was spliced before `<workflow>` with **no following heading**, so the carve-out ran **138 lines instead of 112** and swallowed **26 lines of live agent instruction text** — which the scan skips, because pinned regions are not scanned. Same directive at line 121: **42/0, invisible.** At line 160: 41/1, caught. Position was the only variable.
+
+**This came from a direction none of the first six did: a fix this branch landed, which narrowed the check while every existing assertion stayed green.** Closed by **AC7.5j**, which caps every carve-out at the canonical block's own length *derived from the pinned block* and pins the 55 regions (112 ×45, 49 ×9).
+
+### The record had become actively false, and that was an orchestration failure
+
+`d5dbab5` and `7e9f00e` landed the fix and **touched no part of the record**. Six passages then asserted the opposite of the tree — *"nothing is implemented"*, *"still 153/4"*, *"Deliberately not patched"*. A human would have concluded a contested fix was withheld for their decision when it had already been landed, unreviewed, on the branch they were being asked to gate. **Round 3's failure mode was a stale count; round 4's was a stale state of the world**, which is harder to detect because the prose is confident and internally consistent. All six corrected, each now recording that the human authorised the *choice* and that the *engineering* was landed before any review saw it.
+
+### Still open at the halt
+
+- **AC9 NOT MET** — and no longer for the 15.5 reason. It fails on **Linux/CI never run** (impossible on this machine) and **nine pre-existing failures that short-circuit `npm test` at position 11**, leaving the gate suite at position 104 unreachable.
+- **`d5dbab5` is unreviewed engineering.** It has already produced one live bypass.
+- **17 of the 20 adjudicated passages were never re-verified against their windows.** Two of the three that *were* checked had citations that did not cover the passage they described — right verdicts, wrong evidence trail.
+- **The 16-line structured window is unjustified.** Its supporting statistic was not reproducible and was **dropped rather than re-measured**, because committing a script afterwards would pin one reading of "entry" and make a definitional disagreement look settled.
+- **The record's agreement with the branch is guarded by nothing.** `EXPECTED_TEST_COUNT` guards the suite's size; nothing detects the record drifting from the tree.
+
+**Seven attacks across five rounds. Every round has found at least one. Do not treat the seventh as the last.**
+
 <!-- updated at every state transition -->
