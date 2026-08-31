@@ -687,17 +687,67 @@ const SHIPPED_SKILL_ROOTS = [
  * over-report, which a human then adjudicates, but it cannot let a shipped file
  * go unscanned. Both figures are asserted in AC7.5c.
  */
-function shippedMarkdown() {
+function shippedFilesWithExtensions(extensions) {
   const pkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf-8'));
   const roots = pkg.files || [];
   const tracked = execFileSync('git', ['ls-files', '-z'], {
     cwd: REPO_ROOT, maxBuffer: 1 << 28,
   }).toString('utf8').split('\0').filter(Boolean);
   const out = tracked
-    .filter((f) => f.toLowerCase().endsWith('.md'))
+    .filter((f) => extensions.some((x) => f.toLowerCase().endsWith(x)))
     .filter((f) => roots.some((e) => (e.endsWith('/') ? f.startsWith(e) : f === e)))
     .map((f) => path.join(REPO_ROOT, f));
   return [...new Set(out)].sort();
+}
+
+function shippedMarkdown() {
+  return shippedFilesWithExtensions(['.md']);
+}
+
+/**
+ * ─── THE NON-MARKDOWN HALF OF THE POPULATION (Story 31.14, attack 6) ────────
+ *
+ * The sixth bypass of this check, and the one that needed no cleverness at all:
+ * `shippedMarkdown()` scans markdown ONLY. Shipped agent-readable text that is
+ * not markdown — TOML, YAML, JSON — was never opened. For those files no verb,
+ * no window and no subject filter was ever consulted, so the whole closed set
+ * simply did not apply to them.
+ *
+ * It was not hypothetical when it was found. `lib/bmad-cache/gds/src/workflows/
+ * 1-preproduction/gds-create-game-brief/customize.toml:114` names Confluence
+ * outright, in an `external_handoffs` directive, in a shipped file nothing
+ * scanned — and that workflow's own `SKILL.md:99` tells the agent to "execute
+ * each entry in `{workflow.external_handoffs}` … Invoke the tool". So the
+ * vehicle for a live, executed mirror existed in the tree: the same key with a
+ * READ-BACK direction rather than a one-way publish.
+ *
+ * The population is derived from the SAME outside authority as the markdown
+ * half — `package.json`'s `files` ∩ `git ls-files` — for the same reason, and
+ * with NO path excluded by rule. A path exclusion for `lib/bmad-cache/**` would
+ * be the easy fix here (all three real hits are vendored) and would reopen
+ * attack 2's scope hole across 666 shipped files. This epic already refused
+ * that trade once and pinned by digest instead; the same is done below.
+ *
+ * `.yml` is in the extension set although the shipped tree currently contains
+ * ZERO of them (3 tracked `.yml` exist, all under `.github/`, none inside the
+ * `files` roots). It is listed so renaming a `.yaml` cannot escape the scan.
+ */
+const SHIPPED_STRUCTURED_EXTENSIONS = Object.freeze(['.toml', '.yaml', '.yml', '.json']);
+
+function shippedStructuredText() {
+  return shippedFilesWithExtensions([...SHIPPED_STRUCTURED_EXTENSIONS]);
+}
+
+/**
+ * The whole scanned population, each file paired with the window width that
+ * suits its format. This is the single list AC7.5 and AC7.5d both walk, so the
+ * forward check and the hygiene check can never diverge on scope.
+ */
+function shippedTextToScan() {
+  return [
+    ...shippedMarkdown().map((abs) => ({ abs, window: MIRROR_WINDOW_LINES })),
+    ...shippedStructuredText().map((abs) => ({ abs, window: MIRROR_WINDOW_LINES_STRUCTURED })),
+  ];
 }
 
 /** Every shipped skill markdown file, as absolute paths. Enumerated, not listed. */
@@ -1284,6 +1334,49 @@ test('AC7.4b [harness] the subject filter admits a restored FR266 line and rejec
  */
 const MIRROR_WINDOW_LINES = 4;
 
+/**
+ * ─── THE SAME WINDOW, ADAPTED TO STRUCTURED TEXT (attack 6) ─────────────────
+ *
+ * Four lines is calibrated against MARKDOWN's unit — one hard-wrapped prose
+ * sentence. TOML, YAML and JSON have a different unit, and copying the number
+ * across unexamined would have changed the semantics silently. So it was
+ * measured against the shipped bytes rather than guessed:
+ *
+ *   - Mean line LENGTH is not the difference. The shipped `.md` population
+ *     averages 34.9 characters per line; the shipped `.toml`/`.yaml`/`.json`
+ *     population averages 34.7, with a longest line of 497 (no minified JSON
+ *     anywhere in the tree). So a character-span argument does not distinguish
+ *     them and is not the reason for the change.
+ *
+ *   - The UNIT is the difference. In these formats an instruction is not a
+ *     wrapped sentence, it is an ENTRY: a contiguous leading comment block plus
+ *     the key it documents. Over the 745 such entries in the shipped TOML/YAML,
+ *     the median is 4 lines but the 99th percentile is 16, and the entry this
+ *     attack actually rides on — `external_handoffs` in
+ *     `gds-create-game-brief/customize.toml` — is 14. A four-line window can
+ *     therefore put the F26 subject (line 104, "route outputs … (Confluence,
+ *     Notion, Google Drive…)") and the mirror verb (the directive on the key's
+ *     own line) in DIFFERENT windows within one entry, which is a miss with no
+ *     markdown analogue.
+ *
+ * Sixteen lines covers 739 of those 745 entries. It is bought at zero
+ * adjudication cost, which was also measured rather than assumed: the scan
+ * reports the SAME three files and the same three neighbourhoods at every width
+ * from 4 through 24, so widening the window here adds coverage without adding
+ * a single passage a human must sign off.
+ *
+ * It is a bound, not a proof, exactly as the markdown window is: 6 of 745
+ * entries are longer than 16 lines (the longest is a 118-line GitHub-Actions
+ * template header), and an instruction split across a longer entry still
+ * evades. §9 item 16 of the record states that rather than papering over it.
+ *
+ * The cost of the wider window is on the OTHER side and is stated too: a
+ * 16-line window digests more surrounding text, so an unrelated edit within
+ * those 16 lines changes the digest and forces a re-adjudication. That churn
+ * is the price of not excluding `lib/bmad-cache/**` by path.
+ */
+const MIRROR_WINDOW_LINES_STRUCTURED = 16;
+
 /** Normalised text of a window, so a re-wrap of the SAME sentence digests the same. */
 const normaliseWindow = (s) => s.replace(/\s+/g, ' ').trim();
 
@@ -1291,8 +1384,14 @@ const normaliseWindow = (s) => s.replace(/\s+/g, ' ').trim();
  * Every F26-subject mirror-vocabulary WINDOW in `absPath` that falls OUTSIDE
  * every digest-pinned block. Windows never straddle a pinned region: the file
  * is split into unpinned segments first and the window slides within a segment.
+ *
+ * `windowLines` defaults to the markdown width. The pinned-block carve-out is
+ * applied to structured files too, unchanged — it simply never fires there,
+ * because no shipped `.toml`/`.yaml`/`.json` file carries either `## ` heading
+ * (verified: 0 of 382). That is stated rather than special-cased, so a future
+ * skill shipped as YAML front matter would be pinned by the same rule.
  */
-function mirrorWindowsOutsidePinnedBlocks(absPath) {
+function mirrorWindowsOutsidePinnedBlocks(absPath, windowLines = MIRROR_WINDOW_LINES) {
   const lines = fs.readFileSync(absPath, 'utf-8').replace(/\r\n/g, '\n').split('\n');
   const pinned = [
     ...extractBlockRanges(lines, PREFLIGHT_HEADING),
@@ -1310,12 +1409,12 @@ function mirrorWindowsOutsidePinnedBlocks(absPath) {
   const found = [];
   for (const s of segments) {
     for (let k = 0; k < s.length; k += 1) {
-      const idx = s.slice(k, k + MIRROR_WINDOW_LINES);
+      const idx = s.slice(k, k + windowLines);
       const win = normaliseWindow(idx.map((i) => lines[i]).join(' '));
       if (!F26_SUBJECT.test(win)) continue;
       if (!MIRROR_VOCABULARY.some((re) => re.test(win))) continue;
       found.push({ line: s[k] + 1, text: win });
-      k += MIRROR_WINDOW_LINES - 1; // one report per neighbourhood, not four
+      k += windowLines - 1; // one report per neighbourhood, not one per line
     }
   }
   return found;
@@ -1431,9 +1530,49 @@ const ADJUDICATED_MIRROR_PASSAGES = Object.freeze({
     + '(Create payload). A one-way PUBLISH RECORD.',
   '0a953733': 'lib/bmad-cache/gds/…/gds-ux/assets/headless-schemas.md:47 — same upstream example '
     + '(Update payload). A one-way PUBLISH RECORD.',
+
+  // ─── Admitted by the NON-MARKDOWN half of the population (attack 6) ───────
+  //
+  // Extending the scan to shipped `.toml`/`.yaml`/`.yml`/`.json` — 382 files
+  // that no verb, window or subject filter had ever been applied to — produced
+  // exactly THREE hits over the whole population, at a 16-line window. All
+  // three were read at source, individually, by hand. None is an FR266 mirror,
+  // and the reason is the same in every case: FR266 is a local copy of what
+  // Confluence RETURNS plus a direction to read from that copy. Every hit below
+  // is the opposite arrow — a locally-produced artifact routed OUTWARD — or no
+  // arrow at all.
+  //
+  // Two further shipped `.toml` files carry the F26 subject and correctly do
+  // NOT hit (`gds-gdd/customize.toml:95`, `gds-prd/customize.toml:80`): both say
+  // only "route outputs beyond local files (Confluence, Notion, Google Drive,
+  // ticket systems, etc.)" with `external_handoffs = []` and no mirror verb.
+  // They were read too; they are recorded here because "the scan found nothing
+  // there" is only meaningful if someone checked what was there.
+  '649b5cea': 'lib/bmad-cache/gds/…/gds-create-game-brief/customize.toml:99 — the '
+    + '`external_handoffs` entry: its 13-line comment block plus the key. THE FILE THIS '
+    + 'ATTACK WAS FOUND ON. The matched directive is an EXAMPLE — "After finalize, upload '
+    + 'brief.md and addendum.md to Confluence via corp:confluence_upload (space_key=\'GAME\', '
+    + 'parent_page=\'Game Briefs\', …)" — and the key itself ships EMPTY (`external_handoffs '
+    + '= []`). A one-way PUBLISH of a locally-produced artifact: no copy of anything '
+    + 'Confluence returns, no read-back direction, no trigger, no conflict resolution, and '
+    + 'the comment states "local files always exist regardless" — the local file is the '
+    + 'SOURCE, not the cache. Same shape as this product\'s own FR255/FR256 publish, which '
+    + 'FR266\'s retirement leaves intact, and the same upstream example already adjudicated '
+    + 'in markdown at 2ee78afd.',
+  'f93251c9': 'lib/bmad-cache/gds/…/gds-ux/customize.toml:78 — the same `external_handoffs` '
+    + 'entry in the UX workflow, again shipping EMPTY, again a one-way publish example: '
+    + '"Upload DESIGN.md to Confluence via corp:confluence_upload (space_key=\'DESIGN\')." A '
+    + 'one-way PUBLISH RECORD.',
+  '88a4d876': 'lib/bmad-cache/tea/…/bmad-testarch-trace/workflow.yaml:20 — a WINDOW ARTIFACT, '
+    + 'not an instruction. The subject comes from `allow_external_pointer_resolution: true # '
+    + 'Follow local placeholder pointers (e.g., Jira/Confluence) when compatible adapters '
+    + 'exist` — RESOLVING a reference, which is a read, not a local copy — and the verbs '
+    + '(`export`, `persist`) come from two unrelated neighbouring keys (`coverage_basis`, '
+    + '`summary_confidence`) about the workflow\'s own step outputs. Nothing here copies '
+    + 'anything Confluence returns.',
 });
 
-test('AC7.5 every F26-subject mirror-vocabulary WINDOW in ALL shipped markdown is inside a pinned block or an adjudicated passage', () => {
+test('AC7.5 every F26-subject mirror-vocabulary WINDOW in ALL shipped text — markdown AND toml/yaml/json — is inside a pinned block or an adjudicated passage', () => {
   // THE CLOSED SET. Not "no line matches" — that would be a denylist, and this
   // epic already shipped one where a closed set was needed. The set of PLACES an
   // F26-subject mirror sentence may appear is closed to the two pinned blocks
@@ -1446,11 +1585,16 @@ test('AC7.5 every F26-subject mirror-vocabulary WINDOW in ALL shipped markdown i
   //              roots. `lib/bmad-extension/workflows/**` is this repository's
   //              own authored agent instruction text, it ships, and it was not
   //              scanned at all.
+  //
+  // And one changed in the attack-6 round, which was live in the tree:
+  //   attack 6 — the population is no longer MARKDOWN ONLY. Shipped `.toml`,
+  //              `.yaml`, `.yml` and `.json` are agent-readable instruction
+  //              text too, they ship, and not one byte of them was scanned.
   const strays = [];
   const seen = new Set();
-  for (const abs of shippedMarkdown()) {
+  for (const { abs, window } of shippedTextToScan()) {
     const rel = path.relative(REPO_ROOT, abs).replace(/\\/g, '/');
-    for (const hit of mirrorWindowsOutsidePinnedBlocks(abs)) {
+    for (const hit of mirrorWindowsOutsidePinnedBlocks(abs, window)) {
       const digest = sha(hit.text).slice(0, 8);
       if (ADJUDICATED_MIRROR_PASSAGES[digest]) { seen.add(digest); continue; }
       strays.push(`${rel}:${hit.line}  [${digest}]  ${hit.text.slice(0, 200)}`);
@@ -1745,14 +1889,130 @@ test('AC7.5c [harness] the scan reaches shipped instruction text OUTSIDE the thr
     `and the total scanned markdown population is pinned: found ${shipped.length}`);
 });
 
+test('AC7.5h [harness] the scan population includes shipped NON-MARKDOWN agent-readable text', () => {
+  // The control for attack 6, and the POPULATION half of its proof. AC7.5i is
+  // the behavioural half; this one asserts the set of files, because a widening
+  // that quietly narrows again later is exactly how attack 2 got in.
+  //
+  // The named target is the file the attack was found on. It ships, it names
+  // Confluence outright at :114, and the markdown scan never opened it.
+  const structured = shippedStructuredText()
+    .map((f) => path.relative(REPO_ROOT, f).replace(/\\/g, '/'));
+  const md = new Set(shippedMarkdown().map((f) => path.relative(REPO_ROOT, f).replace(/\\/g, '/')));
+  const TARGET = 'lib/bmad-cache/gds/src/workflows/1-preproduction/'
+    + 'gds-create-game-brief/customize.toml';
+  assert.ok(structured.includes(TARGET),
+    'attack 6\'s exact target must now be in the scanned population');
+  assert.ok(!md.has(TARGET),
+    'and it must genuinely be OUTSIDE the markdown population, or this control proves nothing');
+
+  // The populations do not overlap — the structured half is pure widening, not
+  // a re-count of files already scanned.
+  assert.deepStrictEqual(structured.filter((f) => md.has(f)), [],
+    'the structured population must add files, never double-count markdown ones');
+
+  // Pinned by extension, so a silent narrowing fails here rather than passing
+  // quietly. `.yml` is deliberately 0: three exist in the repo, all under
+  // `.github/`, none inside `package.json`'s `files` roots. It stays in the
+  // extension set so renaming a `.yaml` cannot escape.
+  const byExt = {};
+  for (const x of SHIPPED_STRUCTURED_EXTENSIONS) byExt[x] = 0;
+  for (const f of structured) {
+    const x = SHIPPED_STRUCTURED_EXTENSIONS.find((e) => f.toLowerCase().endsWith(e));
+    byExt[x] += 1;
+  }
+  assert.deepStrictEqual(byExt, { '.toml': 72, '.yaml': 240, '.yml': 0, '.json': 70 },
+    `the non-markdown population is pinned by extension: got ${JSON.stringify(byExt)}`);
+  assert.strictEqual(structured.length, 382,
+    `and its total is pinned: found ${structured.length}`);
+
+  // The scanned whole, and the honest remainder. 3,249 tracked files sit under
+  // the `files` roots; 2,332 + 382 = 2,714 of them are now scanned and 535 are
+  // not (.py, .js, .ts, .mjs, .cjs, .sh, .ps1, .groovy, .astro, .html, .css,
+  // .csv, .xml, .txt, .svg, binaries and dotfiles). §9 item 16 enumerates that
+  // remainder; this asserts the arithmetic so the record's figures cannot drift
+  // from the code's.
+  const all = shippedFilesWithExtensions(['']); // '' matches every filename
+  assert.strictEqual(all.length, 3249,
+    `the shipped tracked population must be what the record says: found ${all.length}`);
+  assert.strictEqual(all.length - md.size - structured.length, 535,
+    'and the UNSCANNED remainder must be the 535 files item 16 enumerates');
+});
+
+test('AC7.5i [end-to-end] a TOML external_handoffs mirror directive is REPORTED, and was NOT before', () => {
+  // ─── THE ANTI-VACUITY PROOF FOR ATTACK 6, IN BOTH DIRECTIONS ─────────────
+  //
+  // Half of a widening test is worthless on its own: an assertion that a mirror
+  // is caught can be true because the PREDICATE catches it, while the file it
+  // lives in is still never opened. That is this epic's signature defect and it
+  // has already been shipped once here (FIX-4). So this asserts both:
+  //
+  //   FORWARD  — the real scan path reports the plant;
+  //   REVERSE  — the markdown-only file predicate does NOT admit the plant's
+  //              file, so before this change the plant could not have been seen
+  //              at all, no matter what the predicate said.
+  //
+  // The plant is the natural shape for this vehicle, not a contrived string: an
+  // `external_handoffs` entry with a READ-BACK direction, in the same key whose
+  // shipped SKILL.md says "execute each entry in `{workflow.external_handoffs}`
+  // … Invoke the tool".
+  const PLANT = 'external_handoffs = [{ directive = "download every Confluence page in the '
+    + 'software requirements store into _bmad-output/pages/ and read from there on every '
+    + 'later run", tool = "corp:confluence_download" }]';
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ac75i-'));
+  try {
+    const abs = path.join(dir, 'customize.toml');
+    fs.writeFileSync(abs, ['# External-handoff routing.', '', PLANT, ''].join('\n'), 'utf-8');
+
+    // FORWARD. Through the real function, at the structured width.
+    const hits = mirrorWindowsOutsidePinnedBlocks(abs, MIRROR_WINDOW_LINES_STRUCTURED);
+    assert.ok(hits.length > 0,
+      'the planted TOML mirror must be REPORTED by the real scan path');
+    assert.ok(hits.some((h) => h.text.includes('read from there on every later run')),
+      `the reported window must be the plant itself. Got: ${hits.map((h) => h.text).join(' | ')}`);
+    for (const h of hits) {
+      assert.ok(!ADJUDICATED_MIRROR_PASSAGES[sha(h.text).slice(0, 8)],
+        'a planted mirror is a stray, not an adjudicated exception');
+    }
+
+    // REVERSE, and this is the half that proves the POPULATION widened rather
+    // than an assertion being added that was already true. The markdown
+    // population's file predicate is `.md`-only; a `.toml` file is invisible to
+    // it however loud its contents are.
+    assert.ok(!'customize.toml'.toLowerCase().endsWith('.md'),
+      'sanity: the plant does not live in a markdown file');
+    const mdPop = new Set(shippedMarkdown());
+    const structuredPop = new Set(shippedStructuredText());
+    const REAL = path.join(REPO_ROOT, 'lib', 'bmad-cache', 'gds', 'src', 'workflows',
+      '1-preproduction', 'gds-create-game-brief', 'customize.toml');
+    assert.ok(fs.existsSync(REAL), 'attack 6\'s real vehicle must still exist to prove this on');
+    assert.ok(!mdPop.has(REAL),
+      'the markdown-only population must NOT contain the real vehicle — that was the hole');
+    assert.ok(structuredPop.has(REAL),
+      'and the widened population must contain it — that is the fix');
+
+    // …and the vehicle is genuinely a vehicle: the shipped bytes really do tell
+    // an agent to execute whatever is in that key. Read from the shipped file,
+    // not restated, so this cannot drift into a claim about nothing.
+    const skill = fs.readFileSync(path.join(path.dirname(REAL), 'SKILL.md'), 'utf-8');
+    assert.match(skill, /\{workflow\.external_handoffs\}/,
+      'the workflow SKILL.md must really dispatch on external_handoffs, or attack 6 has no vehicle');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('AC7.5d [closed-set hygiene] every adjudicated-passage digest still matches a real passage', () => {
   // The closed set has to be closed in BOTH directions. An exception whose text
   // has since been deleted or rewritten is a hole that silently admits whatever
   // later happens to hash to it — and, more practically, it is a claim in this
   // file that no longer describes the shipped bytes.
   const live = new Set();
-  for (const abs of shippedMarkdown()) {
-    for (const hit of mirrorWindowsOutsidePinnedBlocks(abs)) live.add(sha(hit.text).slice(0, 8));
+  for (const { abs, window } of shippedTextToScan()) {
+    for (const hit of mirrorWindowsOutsidePinnedBlocks(abs, window)) {
+      live.add(sha(hit.text).slice(0, 8));
+    }
   }
   const stale = Object.keys(ADJUDICATED_MIRROR_PASSAGES).filter((d) => !live.has(d));
   assert.deepStrictEqual(stale, [],
@@ -1932,7 +2192,7 @@ summaryPrinted = true;
 // catches an assertion lost to a rename, a merge or an early return; a SURPLUS
 // catches one added without being recorded in the gate document, which is the
 // artifact these assertions exist to support.
-const EXPECTED_TEST_COUNT = 40;
+const EXPECTED_TEST_COUNT = 42;
 const total = passed + failed;
 if (total !== EXPECTED_TEST_COUNT) {
   console.error(`\n  FATAL: ran ${total} tests, expected exactly ${EXPECTED_TEST_COUNT}. ` +
