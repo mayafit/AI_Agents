@@ -17,11 +17,17 @@ wrong, so this one does not.
 
 The three things a reader should take away before anything else:
 
-1. **`npm test` is NOT green, on either platform, and one of the failures is this
-   epic's.** `test/story-15-5-workflow-skills.test.js` passes on `main` (157/0) and
-   fails on this branch (153/4). I re-derived that independently — see §4. Nine other
-   failures are genuinely pre-existing and I baselined every one of them against
-   `main @ 9b936ac` rather than accepting the claim.
+1. **`npm test` is NOT green, on either platform. No remaining failure is this epic's.**
+   *(This item read "one of the failures is this epic's … fails on this branch (153/4)"
+   until fix round 5, and was false from `d5dbab5` onward.)*
+   `test/story-15-5-workflow-skills.test.js` failed on this branch (153/4) against 157/0
+   on `main`; I re-derived that independently. **It was resolved on this branch at commit
+   `d5dbab5` and now reads 157/0, matching `main`** — the human authorised the resolution
+   §4 recommended, and **the implementation was landed before any independent review saw
+   it; it is unreviewed** (§4, §9 item 30). The nine remaining failures are genuinely
+   pre-existing and I baselined every one of them against `main @ 9b936ac` rather than
+   accepting the claim. **AC9 stays NOT MET on those nine plus "Linux never run"** — the
+   chain short-circuits at position 11 — **not on `story-15-5`.**
 2. **Every claim in this epic about behaviour with a Confluence MCP *present* is
    mock-verified, not live.** The `claude.ai Atlassian Rovo` connector is unauthorised
    and cannot be authorised from a non-interactive session. The MCP-*absent* branch —
@@ -887,14 +893,17 @@ detached worktree at **`9b936ac`**.
 | `knowledge-atlas-render` | crash | **crash** | Pre-existing, same cause |
 | `custom-marketplace-surface-drift` | 8/1 | **8/1** | Pre-existing |
 | `custom-marketplace-registry` | 15/4 | **15/4** | Pre-existing |
-| **`story-15-5-workflow-skills`** | **153/4** | **157/0** | **THIS EPIC'S REGRESSION** — see below |
+| **`story-15-5-workflow-skills`** | **157/0** — *was 153/4; resolved at `d5dbab5`* | **157/0** | **WAS THIS EPIC'S REGRESSION. RESOLVED ON THIS BRANCH** — see below. The 153/4 reading is the pre-`d5dbab5` state and is what the disposition walk in this table was performed against |
 | `project-layout-two-store-round-trip` | TIMEOUT | n/a (new) | **Not a failure.** 52/0 when run alone — see below |
 | `project-layout-artifact-routing` | 58/1 | n/a (new) | **Not a failure.** 59/0 on a clean tree — see below |
 
 **Every "pre-existing" above was verified, not accepted.** I ran the same suite at
 `9b936ac` in a detached worktree and compared counts. All nine match exactly. The tenth —
-`story-15-5-workflow-skills` — does **not**, and that is the whole reason for baselining:
-it is exactly how the 31.4/15.5 regression was found in the first place.
+`story-15-5-workflow-skills` — did **not** at the time of that walk, and that is the whole
+reason for baselining: it is exactly how the 31.4/15.5 regression was found in the first
+place. **It matches now.** The regression was resolved on this branch at commit `d5dbab5`
+and the suite reads **157 passed, 0 failed, exit 0**, the same as `main`. See below for
+what was landed, by whose authority, and what has *not* happened to it.
 
 **`bmad-output-policy` is not in the `npm test` chain at all.** It exists at
 `test/bmad-output-policy.test.js` on both branches but is absent from `package.json`'s
@@ -912,29 +921,76 @@ rather than reporting it as pre-existing-green.
 > preference rather than a product property, but it is a red suite in this repository and
 > this gate should not have left it unmentioned.
 
-### The one that is this epic's
+### The one that was this epic's — RESOLVED ON THIS BRANCH, and the record ran behind it
 
-`test/story-15-5-workflow-skills.test.js`: **157/0 on `main`, 153/4 on this branch.** The
-four failures are all `<skill> preserves original content verbatim`, on `add-sprint`,
-`add-to-sprint`, `modify-sprint` and `sprint-status-view` — a body ~12,500 characters
-longer than the source, the size of Story 31.4's preflight block.
+> **STATUS, STATED FIRST BECAUSE THIS DOCUMENT PREVIOUSLY STATED THE OPPOSITE.**
+>
+> The 31.4/15.5 contradiction **is resolved on this branch.** Commit **`d5dbab5`** landed
+> the fix; commit `7e9f00e` recorded its verification evidence. **Neither commit touched
+> this record**, so from `d5dbab5` until fix round 5 this section, §8's bug row and §10 all
+> said the opposite — that nothing was implemented, that `story-15-5` was still 153/4, and
+> that the block had been *"deliberately not patched"* pending a human's adjudication.
+> **A reader would have concluded that a contested fix was being withheld for their
+> decision, when it had already been landed on the branch they were being asked to gate.**
+> That is the most serious defect fix round 5 was asked to close, and it is closed here.
+>
+> - **What is true now:** `test/story-15-5-workflow-skills.test.js` reads **157 passed,
+>   0 failed, exit 0** on this branch — the same as `main` — and the preflight block is
+>   present in five workflow **sources** under `lib/bmad-extension/workflows/`.
+> - **By whose authority:** **the human authorised the resolution that §4 recommended.**
+>   This was not an agent deciding an adjudication reserved for a human.
+> - **What has NOT happened:** **the implementation was landed before an independent
+>   review had seen it.** Nothing below should be read as reviewed-and-blessed. The
+>   engineering is unreviewed; only the *choice of resolution* was authorised.
+> - **The process ran ahead of the record.** Two commits changed the branch's headline
+>   finding and left the document asserting the negation of it for four commits. That is a
+>   process failure in its own right and it is recorded as one, not smoothed over.
+> - **It also created a new defect.** The fix over-pinned 26 lines of live agent
+>   instruction text out of the AC7.5 scan and a mirror instruction walked through the
+>   hole — attack 7. See §9 item 30. Landing a fix ahead of review is not a free action.
 
-This is the genuine contradiction recorded in
+**What was landed, and how exactly it matches the recommendation below.** `d5dbab5` is
+**§4's own recommended variant, unmodified**: the Story 31.4 preflight block was added to
+the authored **source** of five workflow-sourced skills under
+`lib/bmad-extension/workflows/` — `add-sprint`, `add-to-sprint`, `modify-sprint`,
+`sprint-status-view` **and `remove-from-sprint`** — at the same gateway position, so the
+skill body and the source both carry it. **The `remove-from-sprint` instruction was
+followed**: the recommendation explicitly said to include the fifth, latently-armed copy
+and not only the four that failed, and the fix did. Insertions only (5 files, +560 lines,
+0 deletions); the block was lifted from the already-converted `SKILL.md` with the gate's
+own extraction rule rather than retyped; sha256 of each inserted block is
+`ca9bf25b…67051f`, the digest AC7.1 pins. Neither test was weakened: no edit to
+`test/story-15-5-workflow-skills.test.js` and none to Story 31.4's guard.
+
+**What the failure looked like before it was fixed**, kept because the disposition table
+above was walked against it. `test/story-15-5-workflow-skills.test.js` read **157/0 on
+`main`, 153/4 on this branch.** The four failures were all `<skill> preserves original
+content verbatim`, on `add-sprint`, `add-to-sprint`, `modify-sprint` and
+`sprint-status-view` — a body ~12,500 characters longer than the source, the size of
+Story 31.4's preflight block.
+
+That was the genuine contradiction recorded in
 `bug-31-4-preflight-block-breaks-story-15-5-verbatim-invariant.md`: Story 15.5's
 invariant says a converted workflow skill's `SKILL.md` must contain the original content
 **verbatim**; Story 31.4 AC3/AC4 require the staleness guard to be **embedded in those
 skills as the first `##` section**. Both cannot hold for the same file. Three candidate
-resolutions are on record and **none has been chosen**. **This is the release gate's
-headline finding and it needs a decision, not a patch.**
+resolutions were on record and none had been chosen. **It was the release gate's headline
+finding, it needed a decision rather than a patch, and it got a decision** — see the
+status box above.
 
-#### A recommendation, which is not a decision
+#### The recommendation, which was not a decision — and which was subsequently adopted
 
 The first draft of this record offered none. That was wrong: the bug's own AC1 asks that
 the contradiction be *"adjudicated explicitly and recorded"*, and it names **"a human *or*
 Story 31.14's release gate"** as the venue. Declining the second half of a job I was
 offered is not neutrality, it is an omission. So — **a recommendation, with the reasoning
-exposed so it can be overruled. The human still chooses, and I have implemented none of
-it.**
+exposed so it could be overruled.**
+
+> **It was not overruled. The human authorised it and it was implemented at `d5dbab5`,
+> exactly as written below, `remove-from-sprint` included — before any independent review
+> saw the implementation.** The sentence that stood here until fix round 5 — *"The human
+> still chooses, and I have implemented none of it"* — was true when written and false
+> from `d5dbab5` onward. It is corrected rather than deleted so the sequence stays legible.
 
 **What the test actually enforces, checked rather than assumed.**
 `verifyContentPreserved` (`test/story-15-5-workflow-skills.test.js:222`) does
@@ -988,7 +1044,9 @@ Why I prefer it:
   for everything else. **Option 2 the bug already rates weakest**, and I agree — it trades
   a real staleness hole for a green suite.
 
-**A live trap, and the recommendation should cover it.** `remove-from-sprint` **has** a
+**A live trap, and the recommendation should cover it** *(written before `d5dbab5`; the
+trap is described as it stood then, and what became of it is recorded immediately after)*.
+`remove-from-sprint` **has** a
 workflow source (`lib/bmad-extension/workflows/remove-from-sprint/workflow.md`) **and** its
 converted `lib/bmad-extension/skills/remove-from-sprint/SKILL.md` carries the preflight
 block — but it is **absent from `extFiles`**, the six-entry list at
@@ -1007,11 +1065,33 @@ workflow-sourced skill carrying the preflight block has it in its source"* — w
 uniformly, survives someone completing `extFiles`, and does not depend on which subset a
 test currently enumerates. Fixing only the four leaves a latent fifth failure armed.
 
-**What I did not verify, and a human must before adopting this.** I have not run it. Two
-things still need checking: (a) whether `lib/bmad.js`'s deploy path would then emit the
-block *twice* into some pipeline; (b) whether Story 31.4's completeness test, which fails
-when a skill resolving a binding-derived field lacks the guard, is satisfied by a
-source-carried block.
+> **ADOPTED, INCLUDING THIS PART.** `d5dbab5` put the block in all **five** sources. The
+> fifth copy is what FIX-6 below is about, and it is also where attack 7 came in — the
+> `remove-from-sprint` source is the one file in the tree whose block cannot terminate its
+> own extent (§9 item 30). Including the fifth copy was still right; the cost of it was a
+> defect nobody looked for.
+
+**What I did not verify, and a human must before adopting this** *(written before the
+adoption; both items were subsequently checked at `7e9f00e`, and the outcome is recorded
+under each)*. I have not run it. Two things still need checking: (a) whether `lib/bmad.js`'s
+deploy path would then emit the block *twice* into some pipeline; (b) whether Story 31.4's
+completeness test, which fails when a skill resolving a binding-derived field lacks the
+guard, is satisfied by a source-carried block.
+
+> **(a) — CHECKED, no double emission.** There is no live workflow→skill converter: the
+> Story 15.5 conversion was a one-time authored step whose output is committed, and
+> `scripts/build-plugin.js` copies `lib/bmad-extension/skills/` only. `npm run
+> build:plugin` was run with the block present in the sources — exit 0, and `git status
+> --porcelain` afterwards showed no modification to any `SKILL.md` or to
+> `lib/bmad-extension-plugin/`.
+>
+> **(b) — CHECKED by observation rather than by reasoning.** Both pins held across the fix
+> unchanged: preflight **41 copies / one sha256 `ca9bf25b…` / 13-14-14**, gate **9 / one
+> sha256 / 3-3-3**, and `story-15-5-workflow-skills` went 153/4 → **157/0**. Story 31.4's
+> completeness check counts copies of the block in the shipped `SKILL.md`s, which the fix
+> did not touch, so it is satisfied for the same reason it was before. **This is a
+> pass-by-non-disturbance, not a positive proof that a source-carried block would satisfy
+> it if the converted copy were ever removed.**
 
 **On (c) — the 41-copy preflight invariant — my earlier caveat was too pessimistic, and it
 is corrected here in my own favour.** It said the 41-copy invariant "would stop covering
@@ -1036,8 +1116,61 @@ once**, because the only thing binding it to the digested copy was the strict-eq
 assertion that entry drives. That is a real fragility and worth an assertion of its own,
 but it is a much smaller one than "AC7.1 would need extending".
 
-**This remains a recommendation. AC9 stays NOT MET, nothing here is implemented, neither
-test is weakened, and the orchestrator's halt on this item is correct.**
+#### FIX-6 — the fix landed straight into that fragility, and one copy shipped unpinned
+
+**The paragraph above named the failure mode and then the fix walked into it.** Of the five
+source copies `d5dbab5` created, four are transitively pinned by the chain described above.
+The fifth — `lib/bmad-extension/workflows/remove-from-sprint/workflow.md` — is bound by:
+
+- **not `verifyContentPreserved`.** `remove-from-sprint` is absent from `extFiles`
+  (`test/story-15-5-workflow-skills.test.js:276`, six entries), so no strict-equality
+  assertion binds its source to its converted `SKILL.md`. Adding it would still fail, on
+  the *second*, unrelated divergence that file carries — a Story 17.22 `## Backend Routing`
+  block and two pre-write validation `<action>`s authored into the `SKILL.md` only.
+- **not AC7.1.** `collectBlocks` walks only the three `skills/` roots, and
+  `lib/bmad-extension/workflows/` is a prefix of none of them. The 41-copy count is
+  unreachable from that source by construction — the very property `7e9f00e` proved in
+  order to show the count could not move.
+
+So from `d5dbab5` to fix round 5 that block copy was **unpinned in both directions at
+once** — exactly the sentence above, arrived at from the other end. And it was worse than
+unpinned: under the old heading-to-next-`## ` rule the block extracted out of that file was
+**138 lines, digest `00ba6d40cb1fa3be…`, not the pinned `ca9bf25b…67051f`** — because
+nothing after the block in that file is a document heading (§9 item 30).
+
+**What pins it now, stated precisely because "it is covered" is the claim this section
+exists to distrust.**
+
+- **AC7.5j does pin this copy, in the forward direction, by digest.** The new
+  canonical-length control walks every shipped file, and for this one it asserts that the
+  carve-out at **lines 5–115** is **byte-identical to the canonical `ca9bf25b…67051f`
+  block**. Edit those 111 lines in that source and AC7.5j fails. That is a direct digest
+  pin on the source file, and it is the assertion the residual paragraph above asked for.
+- **AC7.5j also pins the anomaly itself.** It names this file as the one known raw-extent
+  over-run (5–142, 138 lines against a 111-line block), so the condition cannot silently
+  spread to a sixth copy.
+- **What AC7.5j does NOT do.** It does not bind source ≡ converted for this skill: the rest
+  of the file, including the two `SKILL.md`-only divergences, is still unbound in both
+  directions. It does not put `remove-from-sprint` into `extFiles` and it does not put the
+  copy into AC7.1's 41. **A `SKILL.md` whose body drifts from this source outside the block
+  is still caught by nothing.** That residual is unchanged and is recorded as §9 item 31.
+
+#### Where this item now stands
+
+**The recommendation was adopted and implemented at `d5dbab5`. Neither test was weakened
+or edited. `story-15-5-workflow-skills` is 157/0.** What stood here until fix round 5 —
+*"This remains a recommendation. AC9 stays NOT MET, nothing here is implemented"* — was
+false in its second and third clauses from `d5dbab5` onward.
+
+**AC9 still stays NOT MET, but no longer for this reason.** The reasons are now, and only:
+
+1. **Linux/CI was never run.** No Linux host was available. Every Linux claim in this
+   document is inference, and inference is not a run.
+2. **Nine pre-existing failures** stand in the chain, and `npm test` short-circuits at
+   **position 11** (`bmad-version-bump`) regardless of anything this epic did.
+
+**`story-15-5` is not one of the reasons any more.** The implementation is nonetheless
+**unreviewed**, and this record is not the place that changes: no verdict is claimed here.
 
 ### The two that look like failures and are not
 
@@ -1117,8 +1250,13 @@ root artifacts, `git clean -fdq .agents _bmad-output` — never `-x`, which woul
 
 ### What AC9 would take
 
-1. **Adjudicate the 31.4/15.5 contradiction** and land the chosen resolution. Until then
-   the chain has a red suite that `main` does not.
+1. ~~**Adjudicate the 31.4/15.5 contradiction** and land the chosen resolution. Until then
+   the chain has a red suite that `main` does not.~~ **DONE — this is no longer one of the
+   things AC9 takes.** The human authorised §4's recommended resolution and it was landed
+   at **`d5dbab5`**; `story-15-5-workflow-skills` is **157/0, exit 0**, matching `main`, so
+   the chain no longer has a red suite that `main` does not. The implementation has **not**
+   been independently reviewed, and it introduced attack 7 (§9 item 30), now fixed. **The
+   two items below are the entirety of what AC9 still takes.**
 2. **Nine pre-existing failures** stand between position 11 and the end of the chain, so
    `npm test` short-circuits at position 11 (`bmad-version-bump`) regardless. Three are a
    shared-`node_modules` version skew (6.9.0 vs 6.10.0), two are missing Atlas
@@ -1368,7 +1506,7 @@ own header still says OPEN but the code says otherwise, I checked the code and s
 
 | Bug | Disposition |
 |---|---|
-| `bug-31-4-preflight-block-breaks-story-15-5-verbatim-invariant` | **OPEN — blocks AC9, and it is the gate's headline finding.** Independently re-confirmed here: 157/0 on `main`, 153/4 on this branch. A genuine contradiction between two delivered requirements, with three candidate resolutions and none chosen. **Needs a human adjudication.** Deliberately not patched — resolving it by weakening either test is exactly what its own report forbids |
+| `bug-31-4-preflight-block-breaks-story-15-5-verbatim-invariant` | **RESOLVED ON THIS BRANCH at `d5dbab5` — it no longer blocks AC9.** It was the gate's headline finding, independently re-confirmed here as 157/0 on `main` against 153/4 on this branch: a genuine contradiction between two delivered requirements, three candidate resolutions, none chosen. **The human adjudicated it and authorised §4's recommended variant**, which was then implemented — the preflight added to five workflow **sources**, `remove-from-sprint` included. `story-15-5-workflow-skills` is now **157/0, exit 0**. **Neither test was weakened or edited**, which is what its own report forbade. Two things this row does not claim: **the implementation has not been independently reviewed** — it was landed before any reviewer saw it — and it **introduced a new defect**, attack 7 (§9 item 30, fixed in fix round 5). **The bug file's own `Status:` header was not edited by this gate** (this record corrects itself, it does not edit other artifacts), so the file still reads OPEN; adopting the disposition is a follow-up action for its owner |
 | `bug-tests-mutate-the-repository-they-run-in` | **OPEN, and it bit this gate twice**: it produced `project-layout-artifact-routing`'s false 58/1, and it left 524 dirty paths in a run with `repo-layout` excluded. **Its stated scope is incomplete** — an instrumented full-chain run attributes that to `test/yes-flag.test.js`, chain **position 1** (522 dirty paths standalone, including a written `_bmad-output/project-layout.yaml` — this repository's own committed binding). The bug names `repo-layout` and `build-plugin` only. Because `yes-flag` runs **first**, every `npm test` begins against a dirtied tree — no concurrency required, only ordering. Not an Epic 31 defect; all three suites predate it. **The follow-up story that adopts this bug must add `yes-flag` to its scope.** |
 | `bug-npm-test-windows-suite-health-chain` | **OPEN, partly stale.** Its headline claim — `reconfigure.test.js` test 8.8 fails standalone on Windows — **did not reproduce**: `reconfigure` exits 0 on this branch, both in-chain and standalone. The structural claim (the `&&` chain masks downstream failures) is entirely correct and is why this gate ran all 103 suites individually. The chain now halts at **position 11** (`bmad-version-bump`), not position 32 |
 | `bug-bmad-knowledge-atlas-renders-a-confluence-backed-store-from-stale-local-files` | **OPEN — a real FR262 coverage gap.** `bmad-knowledge` renders a Confluence-backed store's section from local files, silently. The AC7 negative and the AC5 gate cover the *routing* skills; the Atlas is a separate consumer that no story in this epic owns. Epic 31's cross-epic notes said the Atlas interaction "should be confirmed at the Story 31.14 gate" — **this is that confirmation, and the answer is that it is not covered.** Needs a follow-up story |
@@ -1396,9 +1534,18 @@ own header still says OPEN but the code says otherwise, I checked the code and s
 | `bug-docs-dir-created-empty-by-default-on-every-install` | **WON'T FIX**, closed 2026-08-02. No action |
 
 **Totals: 4 closed by this epic, 13 open with a named owner or follow-up, 3 out of scope
-(one of them already closed as WON'T FIX).** Of the 13 open, **one blocks AC9**
-(31.4/15.5) and **two are genuine FR262 coverage gaps** (Atlas staleness; the system
-requirements store having no ma-agents-owned gate).
+(one of them already closed as WON'T FIX).** Of the 13 open, **two are genuine FR262
+coverage gaps** (Atlas staleness; the system requirements store having no ma-agents-owned
+gate).
+
+> **Correction (fix round 5).** This sentence used to continue *"one blocks AC9
+> (31.4/15.5)"*. **Nothing in this section blocks AC9 any more.** 31.4/15.5 was resolved on
+> this branch at `d5dbab5` and `story-15-5-workflow-skills` is 157/0. The totals are
+> deliberately **unchanged at 4 / 13 / 3**: the bug's own file still carries an `OPEN`
+> header, this gate does not edit other artifacts' status headers, and counting it as
+> closed here while its file says otherwise is precisely the kind of quiet renumbering the
+> note below this table warns against. The two remaining blockers on AC9 are *"Linux never
+> run"* and the nine pre-existing chain failures — see §4.
 
 > **These totals were 5 / 12 / 3 in the first draft.** One bug moved from closed to open
 > because its closure evidence was false — see `store-from-raw` above. The correction is
@@ -2053,10 +2200,19 @@ and re-checking `git status`.
 edit to the PRD, to Decision P5-9, or to `epics.md`. No filed defect fixed. Bug B3 (root
 `skills/`) untouched.
 
-**Not done in the fix round, deliberately:** the 31.4/15.5 contradiction is **not**
-resolved — a recommendation is recorded in §4 and nothing is implemented. Neither
-`test/story-15-5-workflow-skills.test.js` nor Story 31.4's guard was weakened or edited;
-`story-15-5` is still 153/4 and **AC9 is still NOT MET**. No bug file's `Status:` header
+**The 31.4/15.5 contradiction IS resolved on this branch.** *(This paragraph asserted the
+exact opposite from `d5dbab5` until fix round 5 — see the correction box in §4. What stood
+here was: "the 31.4/15.5 contradiction is **not** resolved — a recommendation is recorded
+in §4 and nothing is implemented … `story-15-5` is still 153/4".)* **The human authorised
+the resolution §4 recommended, and it was landed at `d5dbab5`** — the preflight block added
+to five workflow sources under `lib/bmad-extension/workflows/`, `remove-from-sprint`
+included, exactly the variant §4 recommends. **`story-15-5-workflow-skills` is 157 passed,
+0 failed, exit 0.** Neither `test/story-15-5-workflow-skills.test.js` nor Story 31.4's
+guard was weakened or edited. **The implementation was landed before an independent review
+had seen it and remains unreviewed; do not read this as reviewed-and-blessed.** It also
+created attack 7 (§9 item 30), closed in fix round 5. **AC9 is still NOT MET**, on *"Linux
+never run"* and the nine pre-existing failures that short-circuit `npm test` at position
+11 — **not** on `story-15-5`. No bug file's `Status:` header
 was edited, including the one this record was wrong about — the correction belongs in this
 document, where the error was. `test/repo-layout.test.js` and
 `test/project-layout-two-store-round-trip.test.js` were not run. The status of this story
