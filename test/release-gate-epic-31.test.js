@@ -1607,9 +1607,20 @@ const ADJUDICATED_MIRROR_PASSAGES = Object.freeze({
   // ticket systems, etc.)" with `external_handoffs = []` and no mirror verb.
   // They were read too; they are recorded here because "the scan found nothing
   // there" is only meaningful if someone checked what was there.
-  '649b5cea': 'lib/bmad-cache/gds/…/gds-create-game-brief/customize.toml:99 — the '
-    + '`external_handoffs` entry: its 13-line comment block plus the key. THE FILE THIS '
-    + 'ATTACK WAS FOUND ON. The matched directive is an EXAMPLE — "After finalize, upload '
+  //
+  // FIX-3 (fix round 5) rewrote the two descriptions below. The VERDICTS were
+  // right and are not re-litigated; the DESCRIPTIONS named bytes the digested
+  // window does not cover, which breaks the one thing the digest is for — a
+  // human going to the cited line and seeing the passage that was adjudicated.
+  '649b5cea': 'lib/bmad-cache/gds/…/gds-create-game-brief/customize.toml — the digested window is '
+    + 'lines 99-114 and the citation is its FIRST line, which is not the matching text: line 99 '
+    + 'is the tail of the `external_sources` EXAMPLES ("query corp:wishlist_search…"), followed '
+    + 'by `external_sources = []` at :101. The window then covers the `external_handoffs` '
+    + 'comment block (:103-:114) and STOPS at :114. So it holds the comment block but NOT the '
+    + 'key: `external_handoffs = []` is line 116, OUTSIDE the window, as is the Slack example at '
+    + ':115. (This entry previously read "its 13-line comment block plus the key" — the key was '
+    + 'never in these bytes.) THE FILE THIS ATTACK WAS FOUND ON. The matched directive is line '
+    + '114, an EXAMPLE — "After finalize, upload '
     + 'brief.md and addendum.md to Confluence via corp:confluence_upload (space_key=\'GAME\', '
     + 'parent_page=\'Game Briefs\', …)" — and the key itself ships EMPTY (`external_handoffs '
     + '= []`). A one-way PUBLISH of a locally-produced artifact: no copy of anything '
@@ -1618,10 +1629,21 @@ const ADJUDICATED_MIRROR_PASSAGES = Object.freeze({
     + 'SOURCE, not the cache. Same shape as this product\'s own FR255/FR256 publish, which '
     + 'FR266\'s retirement leaves intact, and the same upstream example already adjudicated '
     + 'in markdown at 2ee78afd.',
-  'f93251c9': 'lib/bmad-cache/gds/…/gds-ux/customize.toml:78 — the same `external_handoffs` '
-    + 'entry in the UX workflow, again shipping EMPTY, again a one-way publish example: '
-    + '"Upload DESIGN.md to Confluence via corp:confluence_upload (space_key=\'DESIGN\')." A '
-    + 'one-way PUBLISH RECORD.',
+  'f93251c9': 'lib/bmad-cache/gds/…/gds-ux/customize.toml — A WINDOW ARTIFACT, in the same '
+    + 'sense as 88a4d876 below, and it was not labelled as one. The digested window is lines '
+    + '78-93 and the cited line 78 is "# Polish passes applied to DESIGN.md and EXPERIENCE.md '
+    + 'at finalize." — nothing to do with the adjudication. The window is DOMINATED by two '
+    + 'unrelated keys: `doc_standards` (:78-:84) and `external_sources` (:86-:89). Only its '
+    + 'last three lines (:91-:93) are the `external_handoffs` comment, and the key '
+    + '`external_handoffs = []` is line 94, OUTSIDE the window. (This entry previously read '
+    + '"the same `external_handoffs` entry"; the digest does not cover that entry.) ONE '
+    + 'RESPECT IN WHICH IT DIFFERS FROM 88a4d876, measured rather than asserted: 88a4d876 '
+    + 'needs a window of 2 or more to match at all, while this file still matches at a window '
+    + 'of ONE — line 93 carries subject and verb together. So the MATCH is not manufactured by '
+    + 'the window; the CITATION and the DIGESTED SPAN are. The matching text is line 93 alone: '
+    + '"# Example: \\"Upload DESIGN.md to Confluence via corp:confluence_upload '
+    + '(space_key=\'DESIGN\').\\"" — a one-way PUBLISH example for a key that ships EMPTY. '
+    + 'A one-way PUBLISH RECORD; verdict unchanged.',
   '88a4d876': 'lib/bmad-cache/tea/…/bmad-testarch-trace/workflow.yaml:20 — a WINDOW ARTIFACT, '
     + 'not an instruction. The subject comes from `allow_external_pointer_resolution: true # '
     + 'Follow local placeholder pointers (e.g., Jira/Confluence) when compatible adapters '
