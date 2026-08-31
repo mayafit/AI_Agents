@@ -679,10 +679,10 @@ vendored `lib/bmad-cache/**`, and a `lib/bmad-cache/` path exclusion would have 
 easy fix and would have reopened attack 2's hole across 666 shipped files. They are pinned
 by content digest instead, exactly as the seven vendored markdown hits were in round 2.
 
-**How the proximity window was adapted, and why.** Not copied across and not guessed —
-measured against the shipped bytes, because a four-line window means something different
-in TOML/JSON than in prose and changing that silently is the failure mode this section
-exists to avoid:
+**How the proximity window was adapted, and why.** *(Rewritten in fix round 5, FIX-5. What
+stood here justified the constant with a statistic that cannot be checked and a mechanism
+that does not occur — both are removed below rather than restated. The heading used to
+promise "not guessed — measured". Half of that promise is withdrawn.)*
 
 - **Line *length* is not the difference, and the obvious argument for changing it is
   wrong.** The markdown window's stated rationale is "~80 columns × 4 lines ≈ 320
@@ -690,24 +690,50 @@ exists to avoid:
   line and the shipped `.toml`/`.yaml`/`.json` population averages **34.7**, with a
   longest line of 497 and no minified JSON anywhere in the tree. A character-span argument
   does not distinguish these populations and is **not** the reason for the change.
-- **The *unit* is the difference.** In these formats an instruction is not a wrapped
-  sentence; it is an **entry** — a contiguous leading comment block plus the key it
-  documents. Over the **745** such entries in the shipped TOML/YAML the median is **4**
-  lines but the 99th percentile is **16**, and the entry this attack rides on
-  (`external_handoffs` in `gds-create-game-brief/customize.toml`) is **14**. A four-line
-  window can therefore put the F26 subject (line 104, *"route outputs beyond local files
-  (Confluence, Notion, Google Drive…)"*) and the mirror verb (on the key's own line) in
-  **different windows within one entry** — a miss with no markdown analogue.
-- **So: 16 lines for structured files, 4 for markdown.** 16 covers 739 of the 745 entries.
-- **It costs nothing, and that was measured too rather than assumed.** The scan reports
-  **the same three files and the same three neighbourhoods at every window width from 4
-  through 24.** Widening buys coverage without adding a single passage a human must sign
-  off.
-- **The costs, stated.** (i) It is a bound, not a proof: **6 of 745 entries exceed 16
-  lines** (the longest is a 118-line GitHub-Actions template header) and an instruction
-  split across one still evades. (ii) A 16-line window digests more surrounding text, so
-  an unrelated edit anywhere in those 16 lines changes the digest and forces a
-  re-adjudication — that churn is the price of not excluding `lib/bmad-cache/` by path.
+- **The *unit* is plausibly the difference.** In these formats an instruction is not a
+  wrapped sentence; it is an **entry** — a contiguous leading comment block plus the key it
+  documents. Entries run longer than a wrapped sentence, so a wider window is a reasonable
+  hedge. **That is the whole of the argument for 16, and it is an argument, not a
+  measurement.**
+- **The statistic that used to justify 16 is WITHDRAWN, not restated.** This bullet read:
+  *"Over the **745** such entries in the shipped TOML/YAML the median is **4** lines but
+  the 99th percentile is **16** … 16 covers 739 of the 745 … **6 of 745 entries exceed 16
+  lines** (the longest is a 118-line GitHub-Actions template header)."* **It is not
+  reproducible.** The measuring script was never committed and no test pins the definition
+  of an "entry", so a reader of this gate cannot check the number that justifies the
+  constant. An independent reconstruction of the same phrase — *"contiguous comment block
+  + key"* — returns **291 entries, median 2, p99 16, 2 over 16, max 18**, against
+  745 / 4 / 16 / 6 / 118. **Only the p99 coincides.** Two defensible readings of one phrase
+  differing by 2.6× on the population and 6.5× on the maximum is what an unpinned
+  measurement looks like. Either figure might be right; neither is checkable, and **an
+  unverifiable statistic is a worse justification than an admitted guess, because it looks
+  like evidence.**
+- **The stated MECHANISM does not occur either.** The withdrawn bullet claimed a four-line
+  window could put the F26 subject (line 104, *"route outputs beyond local files
+  (Confluence, Notion, Google Drive…)"*) and the mirror verb in **different windows within
+  one entry**. It cannot. **Line 114 carries `Confluence`, `upload` and `space_key='GAME'`
+  on one physical line**, so a four-line window matches it trivially — and a **one**-line
+  window matches it, confirmed by a width sweep at 1/2/4/8/16/24. The example chosen to
+  demonstrate the need for a wider window is an example that never needed one.
+- **So 16 is an UNMEASURED ROBUSTNESS MARGIN, and it buys nothing on the current tree.**
+  This part *is* reproducible, from the scan itself rather than from an uncommitted script:
+  **the same three files, three hits and three digest neighbourhoods are reported at every
+  window width from 4 through 24.** Not one additional passage is found by widening.
+- **And it costs.** (i) A 16-line window digests more surrounding text, so an unrelated
+  edit anywhere in those 16 lines changes the digest and forces a re-adjudication — that
+  churn is the price of not excluding `lib/bmad-cache/` by path. (ii) **FIX-3 is the
+  concrete bill for that width:** two of the three adjudications described bytes their
+  16-line window did not cover, and one of the two turned out to be a window artifact that
+  was not labelled as one. **At width 4 neither mis-description would have been available
+  to make.**
+- **It remains a bound, not a proof** — now with no number attached. An instruction split
+  across a longer entry still evades. §9 item 16 states that.
+
+> **The honest summary: 16 is defensible and unproven. 4 would very likely do the same job
+> on this tree, and the wider window has so far cost more in adjudication quality than it
+> has bought in coverage.** The constant is left at 16 because changing it would move every
+> structured digest and force a re-adjudication of all three hits for no demonstrated
+> benefit — but it is recorded here as a judgement call, not as a measurement.
 
 The pinned-block carve-out is applied to structured files unchanged. It never fires there:
 **0 of the 382** carry either `## ` heading. That is left as a rule rather than
@@ -1821,10 +1847,17 @@ that reported green, described as though the green meant more than it did.
       operative word and nothing here checks.
 
     **And the residual inside what IS covered.** The 16-line structured window is a
-    bound, not a proof, chosen against measurement: over the 745 comment-block-plus-key
-    entries in the shipped TOML/YAML the median is 4 lines and the p99 is 16, so **6 of
-    745 entries are longer than the window** and an instruction split across one still
-    evades. The markdown window's own five-line residual (item 15) is unchanged. The
+    bound, not a proof, and **it was not chosen against a measurement** — *(corrected in
+    fix round 5, FIX-5; this passage previously cited "over the 745 comment-block-plus-key
+    entries … median 4 … p99 16 … 6 of 745 entries are longer than the window", a figure
+    whose measuring script was never committed, whose "entry" definition no test pins, and
+    which an independent reconstruction put at 291 / 2 / 16 / 2 / 18)*. **16 is an
+    unmeasured robustness margin.** It buys nothing on the current tree — the scan reports
+    the same three files, three hits and three neighbourhoods at every width from 4 to 24 —
+    and it costs wider digests and therefore more re-adjudication churn. **An instruction
+    split across an entry longer than the window still evades, and no reproducible figure
+    says how many such entries there are.** See §3 for the full withdrawal. The markdown
+    window's own five-line residual (item 15) is unchanged. The
     predicate — vocabulary and subject filter — is unchanged and remains the heuristic
     item 9 describes; only its verb axis is closed, against the shipped prohibition
     (AC7.5f).
@@ -2134,7 +2167,7 @@ the full consequence. Item 6 above is resolved.
 
 | Commit | Change |
 |---|---|
-| *(this round)* | **AC7.5's population extended to shipped non-markdown agent-readable text.** `shippedMarkdown()` refactored into `shippedFilesWithExtensions()`; new `shippedStructuredText()` over `.toml`/`.yaml`/`.yml`/`.json` from the same `package.json` `files` ∩ `git ls-files` authority — **382 files, no path excluded by rule**; `mirrorWindowsOutsidePinnedBlocks` parameterised by window width; new `MIRROR_WINDOW_LINES_STRUCTURED = 16`, chosen against the measured p99 comment-block-plus-key entry length (745 entries, median 4, p99 16). AC7.5 and AC7.5d walk one combined `shippedTextToScan()` list so the forward and hygiene checks cannot diverge on scope. Three hits adjudicated and digest-pinned (`649b5cea`, `f93251c9`, `88a4d876`) — exception list 17 → **20**. New **AC7.5h** (population, pinned by extension plus the 3,249 / 2,714 / 535 arithmetic) and **AC7.5i** (end-to-end plant, asserting **both** directions). `EXPECTED_TEST_COUNT` 40 → **42** |
+| *(this round)* | **AC7.5's population extended to shipped non-markdown agent-readable text.** `shippedMarkdown()` refactored into `shippedFilesWithExtensions()`; new `shippedStructuredText()` over `.toml`/`.yaml`/`.yml`/`.json` from the same `package.json` `files` ∩ `git ls-files` authority — **382 files, no path excluded by rule**; `mirrorWindowsOutsidePinnedBlocks` parameterised by window width; new `MIRROR_WINDOW_LINES_STRUCTURED = 16` — *(described in round 4 as "chosen against the measured p99 comment-block-plus-key entry length (745 entries, median 4, p99 16)"; **that justification was withdrawn in round 5, FIX-5** as unreproducible, and 16 now stands as an unmeasured robustness margin — see §3)*. AC7.5 and AC7.5d walk one combined `shippedTextToScan()` list so the forward and hygiene checks cannot diverge on scope. Three hits adjudicated and digest-pinned (`649b5cea`, `f93251c9`, `88a4d876`) — exception list 17 → **20**. New **AC7.5h** (population, pinned by extension plus the 3,249 / 2,714 / 535 arithmetic) and **AC7.5i** (end-to-end plant, asserting **both** directions). `EXPECTED_TEST_COUNT` 40 → **42** |
 | *(this round)* | **Record half.** §9 item 16 rewritten from "hole open" to what is covered, what is not (all 535 remaining files by extension), and that it was found by attack and closed by human decision; §3 gains the non-markdown re-scan, the three adjudications, the window-adaptation measurements and the plant-and-revert proof; items 9, 14, 26, 28, 29 and the FR266 traceability row corrected in place; the stale "38 passed" in §4 corrected to 42. **No §9 item deleted — all 29 stand** |
 
 **Verification run for fix round 4, on a clean tree** (every figure the brief pinned as

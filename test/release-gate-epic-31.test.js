@@ -1407,32 +1407,60 @@ const MIRROR_WINDOW_LINES = 4;
  *     anywhere in the tree). So a character-span argument does not distinguish
  *     them and is not the reason for the change.
  *
- *   - The UNIT is the difference. In these formats an instruction is not a
- *     wrapped sentence, it is an ENTRY: a contiguous leading comment block plus
- *     the key it documents. Over the 745 such entries in the shipped TOML/YAML,
- *     the median is 4 lines but the 99th percentile is 16, and the entry this
- *     attack actually rides on — `external_handoffs` in
- *     `gds-create-game-brief/customize.toml` — is 14. A four-line window can
- *     therefore put the F26 subject (line 104, "route outputs … (Confluence,
- *     Notion, Google Drive…)") and the mirror verb (the directive on the key's
- *     own line) in DIFFERENT windows within one entry, which is a miss with no
- *     markdown analogue.
+ *   - The UNIT is plausibly the difference. In these formats an instruction is
+ *     not a wrapped sentence, it is an ENTRY: a contiguous leading comment
+ *     block plus the key it documents. Entries run longer than a wrapped
+ *     sentence, so a wider window is a reasonable hedge.
  *
- * Sixteen lines covers 739 of those 745 entries. It is bought at zero
- * adjudication cost, which was also measured rather than assumed: the scan
- * reports the SAME three files and the same three neighbourhoods at every width
- * from 4 through 24, so widening the window here adds coverage without adding
- * a single passage a human must sign off.
+ * ─── FIX ROUND 5, FIX-5: THE STATISTIC IS GONE, AND SO IS THE MECHANISM ─────
  *
- * It is a bound, not a proof, exactly as the markdown window is: 6 of 745
- * entries are longer than 16 lines (the longest is a 118-line GitHub-Actions
- * template header), and an instruction split across a longer entry still
- * evades. §9 item 16 of the record states that rather than papering over it.
+ * What stood here justified 16 with a measurement: "Over the 745 such entries
+ * in the shipped TOML/YAML, the median is 4 lines but the 99th percentile is
+ * 16 … Sixteen lines covers 739 of those 745 … 6 of 745 entries are longer
+ * than 16 lines." Two things were wrong with that, and both matter more than
+ * the number.
  *
- * The cost of the wider window is on the OTHER side and is stated too: a
- * 16-line window digests more surrounding text, so an unrelated edit within
- * those 16 lines changes the digest and forces a re-adjudication. That churn
- * is the price of not excluding `lib/bmad-cache/**` by path.
+ *   1. IT IS NOT CHECKABLE. The script that produced it was never committed
+ *      and no test pins the definition of an "entry", so a gate reader cannot
+ *      reproduce the figure that justifies the constant. An independent
+ *      reconstruction of "contiguous comment block + key" got 291 entries,
+ *      median 2, p99 16, 2 over 16, max 18 — against 745 / 4 / 16 / 6 / 118.
+ *      Only the p99 coincides. Two defensible readings of the same phrase
+ *      differ by 2.6x on the population and 6.5x on the max, which is the
+ *      definition of an unpinned measurement. An unverifiable statistic is a
+ *      worse justification than an honest guess, because it looks like
+ *      evidence. It is REMOVED rather than restated.
+ *
+ *   2. THE STATED MECHANISM DOES NOT OCCUR. The claim was that a four-line
+ *      window could put the F26 subject and the mirror verb in DIFFERENT
+ *      windows within the `external_handoffs` entry this attack rides on. It
+ *      cannot: line 114 of `gds-create-game-brief/customize.toml` carries
+ *      "Confluence", "upload" AND "space_key='GAME'" on ONE PHYSICAL LINE. A
+ *      width sweep confirms it — that file matches at a window of 1.
+ *
+ * ─── SO WHAT 16 ACTUALLY IS ─────────────────────────────────────────────────
+ *
+ * SIXTEEN IS AN UNMEASURED ROBUSTNESS MARGIN. It is a guess that an entry-shaped
+ * instruction may span more lines than a wrapped sentence, and nothing here
+ * demonstrates it is the right guess or that any number above 4 is needed.
+ *
+ *   - IT BUYS NOTHING ON THE CURRENT TREE. Measured, and this part IS
+ *     reproducible from the scan itself: the same THREE files, THREE hits and
+ *     THREE digest neighbourhoods are reported at every width from 4 through
+ *     24. Not one additional passage is found by widening.
+ *   - IT COSTS WIDER DIGESTS. A 16-line window digests more surrounding text,
+ *     so an unrelated edit anywhere in those 16 lines changes the digest and
+ *     forces a re-adjudication. FIX-3 is the concrete bill: two of the three
+ *     adjudications described bytes their 16-line window did not cover, and one
+ *     of the two was really a window artifact. At width 4 neither
+ *     mis-description was available to make.
+ *   - IT IS A BOUND, NOT A PROOF, and now without a number attached: an
+ *     instruction split across a longer entry still evades. §9 item 16 of the
+ *     record states that.
+ *
+ * The honest summary is that 16 is defensible and unproven, that 4 would very
+ * likely do the same job on this tree, and that the wider window has already
+ * cost more in adjudication quality than it has bought in coverage.
  */
 const MIRROR_WINDOW_LINES_STRUCTURED = 16;
 
