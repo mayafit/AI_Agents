@@ -31,20 +31,22 @@ The three things a reader should take away before anything else:
    assert Confluence pages *are created*. No shipped skill's purpose is to publish a
    store, and there is no publish command. Recorded, not resolved, and `epics.md` is
    deliberately unedited.
-4. **This record went through three independent review rounds and did not survive any of
+4. **This record went through four independent review rounds and did not survive any of
    them intact.** Round 1's reviewer found one **false statement** (a defect listed as
    closed that is not — §8) and one **wrong shipping claim** (`CHANGELOG.md` does not ship
-   on npm — §7). Across all three rounds the **FR266 check has been defeated five times —
-   five independent attacks, five live bypasses**, each demonstrated by planting a mirror
-   in a shipped file and watching the suite stay green (37/0, then 38/0). All five now
-   fail; a further weak assertion inside the test written to close attack 5 was found by
-   mutation in round 3 and repaired. **Every round so far has found at least one live
-   bypass, and this document does not claim the fifth was the last** (§9 item 9, §9 item
-   26). All findings are corrected, and the corrections are recorded as corrections rather
-   than quietly folded in. **The gate's product is an honest record, and its first draft
-   was not one** — which is the strongest available argument for the review step that
-   caught it. §9 items 13–22 are the limits this document did not previously admit to, and
-   items 23–29 the limits the later rounds added.
+   on npm — §7). Across all four rounds the **FR266 check has been defeated six times —
+   six independent attacks, six live bypasses**, each demonstrated by planting a mirror
+   in a shipped file and watching the suite stay green (37/0, then 38/0, then 40/0). All
+   six now fail; a further weak assertion inside the test written to close attack 5 was
+   found by mutation in round 3 and repaired. **The sixth needed no evasion at all — the
+   check simply never opened shipped non-markdown files, and it was a human reader, not
+   any part of this process, who noticed** (§9 item 16). **Every round so far has found at
+   least one live bypass, and this document does not claim the sixth was the last** (§9
+   items 9, 16, 26). All findings are corrected, and the corrections are recorded as
+   corrections rather than quietly folded in. **The gate's product is an honest record, and
+   its first draft was not one** — which is the strongest available argument for the review
+   step that caught it. §9 items 13–22 are the limits this document did not previously
+   admit to, and items 23–29 the limits the later rounds added.
 
 ---
 
@@ -314,7 +316,7 @@ Verification commands were run against `bin/cli.js`'s live exports and against
 | FR263 | 31.2 | No `unlinkSync(... project-layout ...)` anywhere in `bin/cli.js` — the delete-on-single-repo branch is gone; `writeProjectLayoutYaml` runs unconditionally; `PROJECT_LAYOUT_SCHEMA_VERSION` = 2 | `project-layout-binding-spine` (69/0); AC2.1/AC2.2 | **Met** |
 | FR264 | 31.3 | `generateBmmConfig` + the stamp trio (`computeProjectLayoutStamp`, `readProjectLayoutStamp`, `canonicalBindingBytes`) all exported; legacy fields verified to retain their **pre-epic literal values** via js-yaml | `project-layout-config-generation` (32/0); AC2.3/AC2.4 | **Met** |
 | FR265 | 31.7 | `detectLegacySingleStore`, `topologyFromLegacyLayout`, `LEGACY_SINGLE_STORE_SPLIT_COMMAND` = `"ma-agents config layout"` (a real command, checked against the CLI's own routing) | `project-layout-legacy-single-store` (52/0); AC2.4 | **Met** |
-| **FR266** | **none — retired** | **See §3. No implementation found**, re-confirmed across three fix rounds by a multi-line re-scan of all 2,332 tracked shipped markdown files — including the 2,016 the original closed set never covered — and then again under a **verb-extended** vocabulary, and again under a vocabulary **bound to the product's own prohibition**. Clean every time; **17** hits, all hand-adjudicated and digest-pinned (16 before this round's §3.6.1 re-cut, which split one passage into two and revised no adjudication). | **AC7.4–AC7.9 — 14 tests**: 5 direct gate assertions, 6 harness controls, 1 closed-set hygiene check, 1 outside-authority binding, 1 end-to-end. *(Recount, fix round 3: the previous "14 assertions" was reachable only by silently adding AC7.1 and AC7.2 to a set of 12. AC7.4–AC7.9 is now genuinely 14 — the same number by coincidence, which is precisely why the set is now named.)* | **Correctly absent — and this row is NOT a closure claim.** The *result* has held under every attack. The *check* has been defeated **five times across three rounds — five independent attacks, five live bypasses found, all five now failing.** Every round so far has found one. **Do not read "all five now failing" as "no sixth exists": §9 item 9 declines to claim closure and cannot demonstrate it, and this row claims no more than item 9 does.** — §3, §9 items 9, 14, 24, 26 |
+| **FR266** | **none — retired** | **See §3. No implementation found**, re-confirmed across four fix rounds by a multi-line re-scan of all 2,332 tracked shipped markdown files — including the 2,016 the original closed set never covered — then again under a **verb-extended** vocabulary, again under a vocabulary **bound to the product's own prohibition**, and now again over **382 shipped non-markdown files** (`.toml` 72, `.yaml` 240, `.json` 70, `.yml` 0) that no version of this check had ever opened — **2,714 shipped files scanned in total**. Clean every time; **20** hits (17 markdown + 3 non-markdown), all hand-adjudicated and digest-pinned. | **AC7.4–AC7.9 — 16 tests**: 5 direct gate assertions, 7 harness controls, 1 closed-set hygiene check, 1 outside-authority binding, 2 end-to-end. *(Re-derived from the code, not from this row: `grep -c "^test('AC7\.[4-9]"` = 16.)* | **Correctly absent — and this row is NOT a closure claim.** The *result* has held under every attack. The *check* has been defeated **six times across four rounds — six independent attacks, six live bypasses found, all six now failing.** Every round so far has found one. **Do not read "all six now failing" as "no seventh exists": §9 item 9 declines to claim closure and cannot demonstrate it, item 16 says the sixth was found by a human reader and not by any part of this process, and this row claims no more than they do.** — §3, §9 items 9, 14, 16, 24, 26 |
 | FR267 | 31.2, 31.6 | `CONFLUENCE_STORE_RECORDS` names exactly the two **requirement** stores; `PUBLISHING_STORES` in the page-tree module excludes `SPRINT_MANAGEMENT`; the emitted binding carries no `implementation_artifacts` record | `project-layout-binding-spine` (69/0); `project-layout-artifact-routing` (59/0) | **Met** |
 
 ### Non-functional requirements
@@ -400,11 +402,11 @@ one changes its digest and fails AC7.1/AC7.2.
 > clean tree", is a verbatim round-1 record and is preserved unedited.** It is written in
 > the present tense and its numbers were true when written and are not true now. Read it
 > as *what round 1 found and claimed*, never as a description of the check as it stands.
-> In particular: *"defeatable three ways"* became **five** (rounds 2 and 3 each found one
-> more); *"Eight entries"* in the adjudicated set is now **seventeen**; *"the suite is
-> 37/0"* is now **40/0**; and AC7.5b/AC7.5c/AC7.7b are no longer the whole harness — see
-> §9 items 24 and 26 and the FR266 traceability row for current state. **Nothing below is
-> retracted; it is simply dated.**
+> In particular: *"defeatable three ways"* became **six** (rounds 2, 3 and 4 each found one
+> more); *"Eight entries"* in the adjudicated set is now **twenty**; *"the suite is
+> 37/0"* is now **42/0**; and AC7.5b/AC7.5c/AC7.7b are no longer the whole harness — see
+> §9 items 24, 26 and 16 and the FR266 traceability row for current state. **Nothing below
+> is retracted; it is simply dated.**
 >
 > ---
 >
@@ -644,6 +646,134 @@ hand-read exceptions. **That is a materially stronger negative than the noun-onl
 supported.** It does not say the vocabulary is complete — see §9 item 9, which was rewritten
 in this round precisely because it had claimed more than this.
 
+#### The non-markdown re-scan — attack 6, fix round 4
+
+**The check scanned markdown and nothing else.** Shipped `.toml`, `.yaml`, `.yml` and
+`.json` are agent-readable instruction text, they ship, and no version of AC7.5 had ever
+opened one of them: for those files no verb, no proximity window and no subject filter was
+ever consulted. This is the sixth attack to defeat this check and the only one that needed
+no cleverness — the previous five each had to *evade* a predicate; this one walked around
+the population.
+
+**It was not hypothetical, and the vehicle was already in the tree.**
+`lib/bmad-cache/gds/src/workflows/1-preproduction/gds-create-game-brief/customize.toml:114`
+names Confluence outright in an `external_handoffs` directive, and that same workflow's
+`SKILL.md:99` instructs an agent to *"execute each entry in `{workflow.external_handoffs}`
+… Invoke the tool"*. So a handoff entry with a **read-back direction** would have been a
+live, executed mirror in a file nothing scanned. **Found by a human reader, not by this
+process** — see §9 item 16.
+
+**The new population, and the authority for it.** The same authority the markdown half
+uses: `package.json`'s `files` ∩ `git ls-files`. **382 files** — `.yaml` 240, `.toml` 72,
+`.json` 70, `.yml` 0 (three `.yml` are tracked, all under `.github/`, none inside the
+`files` roots; the extension is kept in the set so renaming a `.yaml` cannot escape).
+Combined with the 2,332 markdown files, **the scan now covers 2,714 of the 3,249 tracked
+files under the `files` roots.** **No path is excluded by rule** — all three real hits are
+vendored `lib/bmad-cache/**`, and a `lib/bmad-cache/` path exclusion would have been the
+easy fix and would have reopened attack 2's hole across 666 shipped files. They are pinned
+by content digest instead, exactly as the seven vendored markdown hits were in round 2.
+
+**How the proximity window was adapted, and why.** Not copied across and not guessed —
+measured against the shipped bytes, because a four-line window means something different
+in TOML/JSON than in prose and changing that silently is the failure mode this section
+exists to avoid:
+
+- **Line *length* is not the difference, and the obvious argument for changing it is
+  wrong.** The markdown window's stated rationale is "~80 columns × 4 lines ≈ 320
+  characters". Measured: the shipped `.md` population averages **34.9** characters per
+  line and the shipped `.toml`/`.yaml`/`.json` population averages **34.7**, with a
+  longest line of 497 and no minified JSON anywhere in the tree. A character-span argument
+  does not distinguish these populations and is **not** the reason for the change.
+- **The *unit* is the difference.** In these formats an instruction is not a wrapped
+  sentence; it is an **entry** — a contiguous leading comment block plus the key it
+  documents. Over the **745** such entries in the shipped TOML/YAML the median is **4**
+  lines but the 99th percentile is **16**, and the entry this attack rides on
+  (`external_handoffs` in `gds-create-game-brief/customize.toml`) is **14**. A four-line
+  window can therefore put the F26 subject (line 104, *"route outputs beyond local files
+  (Confluence, Notion, Google Drive…)"*) and the mirror verb (on the key's own line) in
+  **different windows within one entry** — a miss with no markdown analogue.
+- **So: 16 lines for structured files, 4 for markdown.** 16 covers 739 of the 745 entries.
+- **It costs nothing, and that was measured too rather than assumed.** The scan reports
+  **the same three files and the same three neighbourhoods at every window width from 4
+  through 24.** Widening buys coverage without adding a single passage a human must sign
+  off.
+- **The costs, stated.** (i) It is a bound, not a proof: **6 of 745 entries exceed 16
+  lines** (the longest is a 118-line GitHub-Actions template header) and an instruction
+  split across one still evades. (ii) A 16-line window digests more surrounding text, so
+  an unrelated edit anywhere in those 16 lines changes the digest and forces a
+  re-adjudication — that churn is the price of not excluding `lib/bmad-cache/` by path.
+
+The pinned-block carve-out is applied to structured files unchanged. It never fires there:
+**0 of the 382** carry either `## ` heading. That is left as a rule rather than
+special-cased, so a skill later shipped as YAML front matter would be pinned the same way.
+
+**Three hits over the whole 382-file population. Every one read at source, individually.
+None is an FR266 mirror.**
+
+| Digest | File | What matched | Adjudication |
+|---|---|---|---|
+| `649b5cea` | `gds-create-game-brief/customize.toml:99` | the `external_handoffs` entry — its 13-line comment block plus the key. **The file this attack was found on.** Matched text is an *example*: *"After finalize, upload brief.md and addendum.md to Confluence via `corp:confluence_upload` (space_key='GAME', parent_page='Game Briefs', …)"* | **One-way publish, and the key ships EMPTY** (`external_handoffs = []`, line 116). No copy of anything Confluence *returns*, no read-back direction, no trigger, no conflict resolution. The comment itself says *"local files always exist regardless"* — the local file is the **source**, not the cache. Same shape as this product's own FR255/FR256 publish, which FR266's retirement leaves intact, and the same upstream example already adjudicated in markdown as `2ee78afd` |
+| `f93251c9` | `gds-ux/customize.toml:78` | the same `external_handoffs` entry in the UX workflow: *"Upload DESIGN.md to Confluence via `corp:confluence_upload` (space_key='DESIGN')."* | **Same shape, also shipping empty.** A one-way publish record |
+| `88a4d876` | `bmad-testarch-trace/workflow.yaml:20` | `allow_external_pointer_resolution: true # Follow local placeholder pointers (e.g., Jira/Confluence) when compatible adapters exist` | **A window artifact, not an instruction.** The subject comes from that one comment — *resolving* a reference is a read, not a local copy — and the verbs (`export`, `persist`) come from two unrelated neighbouring keys (`coverage_basis`, `summary_confidence`) about the workflow's own step outputs. Nothing here copies anything Confluence returns |
+
+**Two further shipped `.toml` files carry the F26 subject and correctly do *not* hit**, and
+they were read too, because "the scan found nothing there" is only worth anything if
+someone checked what was there: `gds-gdd/customize.toml:95` and `gds-prd/customize.toml:80`
+both say only *"route outputs beyond local files (Confluence, Notion, Google Drive, ticket
+systems, etc.)"* with `external_handoffs = []` and no mirror verb.
+
+**The exception list is therefore 20** — 17 markdown + 3 non-markdown — re-derived from
+`ADJUDICATED_MIRROR_PASSAGES`, not from this sentence. The live scan reports exactly 20
+hits over 2,714 files and exactly 20 distinct digests, so the list has no stale entry and
+no unused one.
+
+##### Anti-vacuity proof, both directions
+
+A widening test is worthless if it only proves the *predicate* fires; the predicate already
+fired on this text before the change. The proof therefore runs a real plant in the real
+shipped file and shows it turning on the **population**:
+
+```
+target : lib/bmad-cache/gds/src/workflows/1-preproduction/
+         gds-create-game-brief/customize.toml   (CRLF throughout, 116 lines)
+baseline git hash-object : 5c1c19b70ea74d6349b701851bba78539eaa6ef0
+```
+
+Line 116 — `external_handoffs = []` — was replaced, preserving CRLF, with the natural shape
+of the attack:
+
+```toml
+external_handoffs = [{ directive = "download every Confluence page in the software
+requirements store into _bmad-output/pages/ and read from there on every later run",
+tool = "corp:confluence_download" }]
+```
+
+*(one physical line in the file; wrapped here only for the page)*
+
+```
+planted git hash-object : f88f667dc22cafd54d379e00d74efdf4a8bd3bf5
+```
+
+| Direction | Scan | Result |
+|---|---|---|
+| **Forward** | new scan, plant live | **41 passed, 1 failed, exit 1.** AC7.5 reports it as a stray: `customize.toml:115 [eb442b99] … external_handoffs = [{ directive = "download every Confluence page in …` |
+| **Reverse** | population reverted to markdown-only (`git checkout HEAD~1 -- test/release-gate-epic-31.test.js`), **same plant still live**, hash-object still `f88f667d` | **40 passed, 0 failed, exit 0** |
+
+**The second row is the load-bearing one.** The identical instruction, live in a shipped
+file, is invisible to the markdown-only scan — so what closes this is the widened
+population, not an assertion that was already true.
+
+**The plant was reverted in the same step.** `git checkout HEAD -- <target>
+test/release-gate-epic-31.test.js` restored both; `git hash-object` on the target returns
+**`5c1c19b70ea74d6349b701851bba78539eaa6ef0`**, identical to the baseline, line 116 reads
+`external_handoffs = []` again, and `git status --porcelain` shows only
+` M skills/git-workflow-skill/skill.json` — the known CRLF phantom (§4). Suite back to
+**42 passed, 0 failed, exit 0**.
+
+The plant is also left behind as a permanent regression control in **AC7.5i**, which
+asserts both directions in code so this cannot decay into a claim about a manual run that
+never happens again.
+
 **What this check cannot see.** Restated after the fix round, because two of the three
 boundaries this section previously named turned out to be understatements of live
 bypasses rather than descriptions of residual risk:
@@ -667,11 +797,19 @@ bypasses rather than descriptions of residual risk:
   vocabulary has since been extended with the verb family, and that exact text now fails
   AC7.5 — but see §9 item 9: **the closed set is closed over a place and a subject; its
   verb list is open, and extending it narrows the gap without closing it.**
-- **The scope is now every shipped markdown file, and the scope hole is closed** — but
-  scope is only closed for **markdown**. Shipped **non-markdown** agent-readable text
-  (`.yaml` skill manifests, `MANIFEST.yaml`, JSON prompt fragments) is not scanned by
-  AC7.5. Nothing in this epic puts instruction prose in those files, but nothing in this
-  suite would notice if something later did.
+- **The scope is now every shipped markdown file *and* every shipped `.toml`/`.yaml`/
+  `.yml`/`.json` file — 2,714 of the 3,249 tracked files under the `files` roots.**
+  *(Fix round 4. This bullet previously ended "Nothing in this epic puts instruction prose
+  in those files, but nothing in this suite would notice if something later did." Both
+  halves were wrong in the same direction: something already did — `customize.toml:114` —
+  and the sentence read as residual risk when it was describing a live hole. See the
+  non-markdown re-scan above and §9 item 16.)* **535 shipped tracked files are still not
+  scanned** and item 16 enumerates every one of them by extension: program text (`.py`,
+  `.js`, `.ts`, `.mjs`, `.cjs`, `.sh`, `.ps1`, `.groovy` — 189), non-covered markup and
+  data (`.html`, `.astro`, `.css`, `.csv`, `.xml`, `.txt`, `.svg`, `.template` — 63),
+  binary formats (`.png`, `.ico`, `.pptx`, `.excalidraw`, git `.pack`/`.idx`/`.rev` — 29),
+  and dotfiles/extensionless manifests (251). **Do not read this as the hole being gone —
+  read it as the hole being bounded and written down.**
 - **The digest-pinned exception list is brittle in a specific way.** A pure re-wrap of an
   adjudicated README paragraph — reflowing it to a different column width, with no change
   in meaning — changes the digest and fails AC7.5. That is deliberate (it forces
@@ -679,12 +817,13 @@ bypasses rather than descriptions of residual risk:
   fail on an editorial pass that changed nothing substantive, and whoever hits that must
   re-read the passage rather than reflexively re-pinning it.
 - **AC7.5d proves no exception is stale; it does not prove every exception was
-  adjudicated correctly.** The **seventeen** reasons are mine. A reviewer should read them —
-  and note that seven of the seventeen are vendored upstream text (`lib/bmad-cache/**`) that
-  I adjudicated but did not author. *(Fix round 3: this bullet read "sixteen" after the code
-  already held seventeen — see §9 item 29, and re-derive the figure from
-  `ADJUDICATED_MIRROR_PASSAGES` rather than from this sentence. On the vendored seven and
-  what they actually instruct, see §9 item 28.)*
+  adjudicated correctly.** The **twenty** reasons are mine. A reviewer should read them —
+  and note that **ten of the twenty** are vendored upstream text (`lib/bmad-cache/**`) that
+  I adjudicated but did not author: the seven markdown schema examples from round 2 plus
+  the three non-markdown hits from round 4. *(This bullet read "sixteen" when the code held
+  seventeen, and "seventeen" when round 4 took it to twenty. It has been stale at every
+  round. **Re-derive it from `ADJUDICATED_MIRROR_PASSAGES` rather than from this sentence**
+  — see §9 items 28 and 29.)*
 - `bug-oq3-guard-scope-misses-skills-that-write-from-nested-prompt-files` records a
   related scope hole in Story 31.4's *guard*: coverage is computed from top-level
   `SKILL.md` only. My scan walks **every** shipped `.md`, so it does not inherit that hole
@@ -984,7 +1123,7 @@ root artifacts, `git clean -fdq .agents _bmad-output` — never `-x`, which woul
    shared-`node_modules` version skew (6.9.0 vs 6.10.0), two are missing Atlas
    dependencies, and the rest are their own tickets. **The new gate suite is registered
    at position 104 and is therefore unreachable via `npm test` today.** Run it directly:
-   `node test/release-gate-epic-31.test.js` (**38 passed, 0 failed** on this branch after fix round 2; 37/0 after round 1, 33/0 before it).
+   `node test/release-gate-epic-31.test.js` (**42 passed, 0 failed, exit 0** on this branch after fix round 4; 40/0 after round 3, 38/0 after round 2, 37/0 after round 1, 33/0 before it). *(This figure said "38" through the whole of round 3, when the code held 40. Re-derive it from `EXPECTED_TEST_COUNT`, which the suite itself asserts against the number of tests that actually ran, rather than from this line.)*
 3. **Linux/CI was never run.** I have no Linux host. Every Linux claim in this document is
    inference, and inference is not a run.
 
@@ -1277,6 +1416,15 @@ This is the most important section in the document. An honest limit is worth mor
 confident claim, and this epic's record is that the confident claims are the ones that
 failed.
 
+> **Fix round 4 touched this section and added no new item.** All **29** items stand;
+> nothing was deleted. **Item 16** was rewritten — it recorded the non-markdown scope hole
+> as *open*, and that hole is now closed for `.toml`/`.yaml`/`.yml`/`.json` and bounded
+> for everything else. Items **9, 14, 26, 28 and 29** were corrected in place with the
+> counts and priors that moved. Round 4 is also the round that says the most about how
+> these limits get found: **item 16 described the sixth bypass correctly, and recorded it
+> as open, for a whole round before anyone acted on it.** Writing a limit down is not the
+> same as closing it, and no test in this suite was ever going to tell the difference.
+
 1. **The extended air-gap workflow has never run.** AC1's two new phases are written,
    syntax-checked (`bash -n`, `js-yaml`) and derived from behaviour I verified locally,
    but a GitHub Actions job with Docker and `--network none` cannot execute here. **The
@@ -1312,9 +1460,10 @@ failed.
    "remote".)*
 
    What the set genuinely closes are two of its three axes. **Place:** every tracked
-   shipped markdown file (2,332 of them), with the only permitted exceptions pinned by the
-   sha256 of the adjudicated bytes and asserted non-stale in both directions. **Subject:**
-   the passage must name an F26 store. Those two are enumerated and hold.
+   shipped markdown file (2,332 of them) **plus every tracked shipped `.toml`/`.yaml`/
+   `.yml`/`.json` file (382) — 2,714 files**, with the only permitted exceptions pinned by
+   the sha256 of the adjudicated bytes and asserted non-stale in both directions.
+   **Subject:** the passage must name an F26 store. Those two are enumerated and hold.
 
    > **Qualification added in fix round 3.** "Place … enumerated and hold" is true **only
    > within markdown.** Place is closed over every tracked shipped *markdown* file and
@@ -1323,6 +1472,17 @@ failed.
    > **see item 16**, which carries the limit and the example. Item 9 previously stated
    > the Place axis without that qualification, and a reader who stopped here would take
    > "enumerated" to mean "enumerated over the shipped surface". It is not.
+
+   > **Superseded in fix round 4, and only in part.** The round-3 qualification above was
+   > correct when written and its hole is now closed for `.toml`/`.yaml`/`.yml`/`.json`:
+   > Place is closed over **2,714** shipped files, and `customize.toml:114` — the very
+   > example it cites — is scanned and adjudicated (`649b5cea`, §3). **The shape of the
+   > round-3 warning still stands, though, over a smaller remainder:** Place is *still*
+   > not closed over the shipped surface. **535 tracked shipped files remain unscanned** —
+   > program text, non-covered markup and data, binary formats, dotfiles — enumerated by
+   > extension in item 16. A reader who takes "enumerated" to mean "enumerated over the
+   > whole shipped surface" is still wrong; the difference is that the remainder is now
+   > written down file-type by file-type instead of gestured at.
 
    **The third axis — the predicate — is a word list, and a word list is not closed against
    natural language.** The Story 31.14 reviewer demonstrated this, and the demonstration
@@ -1375,15 +1535,18 @@ failed.
      > wider. Ordinary English outside those five verbs remains exactly as open as this
      > item has always said.
    - **I am not claiming closure here, because I cannot demonstrate it.** What I can
-     demonstrate is that the **five** attacks actually mounted against this check all now
-     fail *(four when this bullet was written; the fifth is attack 5, above)*, and that
-     one and a half of its three axes are enumerated — Place within markdown only (see
-     the qualification above and item 16), Subject fully, and the verb half of the
-     predicate only as far as the product's own five-verb prohibition reaches. A predicate
-     over English prose is a heuristic. **This one was called "remote" once already and
-     was not.** **Three consecutive rounds of attack have each found a live bypass; the
-     prior that a sixth exists is not low, and nothing in this document should be read as
-     claiming otherwise** (item 26).
+     demonstrate is that the **six** attacks actually mounted against this check all now
+     fail *(four when this bullet was written; the fifth is attack 5, above; the sixth is
+     the non-markdown population, item 16)*, and that one and a half of its three axes are
+     enumerated — Place over 2,714 of the 3,249 shipped tracked files, with the 535-file
+     remainder enumerated in item 16; Subject fully; and the verb half of the predicate
+     only as far as the product's own five-verb prohibition reaches. A predicate over
+     English prose is a heuristic. **This one was called "remote" once already and was
+     not.** **Four consecutive rounds of attack have each found a live bypass, and the
+     sixth was not found by any test, review layer or design principle in this process —
+     a human read item 16 and recognised the vehicle. The prior that a seventh exists is
+     not low, and nothing in this document should be read as claiming otherwise**
+     (items 16 and 26).
 10. **The wall clock on this machine is unreliable.** It advanced ~7.6 hours during a
     single suite run, so every elapsed-time figure I recorded is untrustworthy. This is why
     the round-trip suite's first result read as a hang: the durations were meaningless. All
@@ -1425,6 +1588,11 @@ that reported green, described as though the green meant more than it did.
     by being right the first time. **And it failed a fourth time in the next round**, which
     is the more important fact: two consecutive rounds of attack each found a live bypass,
     so the prior that a fifth exists is not low.
+
+    *(Fix round 4. It failed a fifth time in round 3 and a **sixth** time in round 4. The
+    sentence above was written when the count was four and is left as written; the running
+    total is now six across four rounds, and the trend it describes has held every single
+    time. See item 16.)*
 15. **The FR266 window is four lines and a five-line split still evades.** The *default*
     prose shape is now caught; a determined one is not. Stated in §3 and repeated here
     because it is the live residual of the most serious of the three bypasses.
@@ -1616,6 +1784,15 @@ that reported green, described as though the green meant more than it did.
     This item makes no prediction that the fifth was the last, and nothing elsewhere in
     this document should be read as making one — item 9 declines to claim closure for
     exactly this reason.
+
+    > **Fix round 4 — the prediction above was right, and quickly.** Round 4 found the
+    > **sixth**: the check scanned markdown only and had never opened a shipped `.toml`,
+    > `.yaml`, `.yml` or `.json` file. Four consecutive rounds, four live bypasses. It is
+    > also the one that says the most about the process, because it required no evasion of
+    > any predicate and had been sitting in this very document as **item 16**, correctly
+    > described and recorded as open, since round 3 — and no test, review layer or design
+    > principle picked it up. A human reader did. **The prior on a seventh is not low
+    > either**, and item 16 declines to predict otherwise.
 27. **The round's own new test was vacuous, and only mutation caught it.** AC7.5g was
     written in this round to close the gap that the end-to-end proof — a planted mirror in
     a real file comes back as a stray from the *real* scan path — existed only as a manual
@@ -1652,14 +1829,22 @@ that reported green, described as though the green meant more than it did.
     by reading the test; both were found by **mutating it and watching the suite stay
     green**. That is the only method in this record that has actually worked, and it should
     be assumed necessary for every assertion added from here on.
-28. **Seven of the adjudicated passages are vendored upstream text nobody here authored,
-    and they will churn.** `lib/bmad-cache/**` is not written in this repository: it is
-    **generated by `scripts/build-bmad-cache.js` from the upstream BMAD registry** and
-    committed so an air-gapped install has its modules. **Seven of the seventeen
-    adjudicated hits live there** — one `external_handoffs` schema example repeated across
-    the `gds` module's `SKILL.md` and `headless-schemas.md` assets. Because those bytes are
-    regenerated by a build, **an upstream bump changes them, the digests stop matching,
-    AC7.5d fails, and a human must re-adjudicate seven passages they did not write.**
+28. **Ten of the adjudicated passages are vendored upstream text nobody here authored,
+    and they will churn.** *(This item was written as "seven of the seventeen" in round 3.
+    Round 4 added three more — see below. Re-derive both figures from
+    `ADJUDICATED_MIRROR_PASSAGES`.)* `lib/bmad-cache/**` is not written in this repository:
+    it is **generated by `scripts/build-bmad-cache.js` from the upstream BMAD registry** and
+    committed so an air-gapped install has its modules. **Ten of the twenty
+    adjudicated hits live there:** seven markdown copies of one `external_handoffs` schema
+    example repeated across the `gds` module's `SKILL.md` and `headless-schemas.md` assets,
+    **plus the three non-markdown hits round 4 added** (`649b5cea`, `f93251c9`,
+    `88a4d876` — two `customize.toml` files and one `workflow.yaml`, §3). Because those
+    bytes are regenerated by a build, **an upstream bump changes them, the digests stop
+    matching, AC7.5d fails, and a human must re-adjudicate ten passages they did not
+    write.** The three new ones are worse on this axis than the seven, and it should be
+    said plainly: they are pinned at a **16-line** window rather than four, so a change to
+    *any* line within 16 of the match — an upstream comment reflow, a new key inserted
+    nearby — breaks the pin without touching the adjudicated sentence at all.
 
     **That is a real recurring maintenance cost and it was accepted deliberately.** The
     cheap alternative — excluding `lib/bmad-cache/` from the scan by path rule — was
@@ -1696,11 +1881,19 @@ that reported green, described as though the green meant more than it did.
     is *"a one-way publish directive and its example payload, in vendored upstream text"*,
     not *"only an example payload."* **These seven are not re-adjudicated here and must not
     be**: the verdicts stand, the wording is what was wrong.
-29. **The adjudicated-hit count moved again, and it is now seventeen.** Round 2 reported
-    **16** (item 25). The count in the code is **17**, re-derived for this item by reading
-    the keys of `ADJUDICATED_MIRROR_PASSAGES` in
-    `test/release-gate-epic-31.test.js` — 17 digests, all distinct: 7 `README.md`,
-    3 `docs/architecture.md`, 7 `lib/bmad-cache/**`.
+29. **The adjudicated-hit count moved again, and it is now twenty.** *(Round 3 wrote this
+    item to record the move from 16 to **17**. Round 4 moved it again, to **20**, and this
+    item is corrected in place rather than re-filed — the whole point of it is that this
+    number keeps moving.)* Round 2 reported **16** (item 25); round 3, **17**; the count in
+    the code is now **20**, re-derived for this item by reading the keys of
+    `ADJUDICATED_MIRROR_PASSAGES` in `test/release-gate-epic-31.test.js` — 20 digests, all
+    distinct: 7 `README.md`, 3 `docs/architecture.md`, 7 `lib/bmad-cache/**` markdown, and
+    **3 `lib/bmad-cache/**` non-markdown** (2 `customize.toml`, 1 `workflow.yaml`).
+
+    **Independently corroborated against the live scan, not just the list.** Running the
+    scan over both populations reports **17 hits across the 2,332 markdown files and 3
+    across the 382 structured files — 20 hits, 20 distinct digests, matching the 20 keys
+    exactly.** So the list has no stale entry (AC7.5d's direction) and no unused one.
 
     **Why it moved, and it is not a new hit.** Binding the bare `write` verb into the
     vocabulary (item 26) made `docs/architecture.md:219`'s *"the installer **writes** the
@@ -1770,6 +1963,39 @@ the full consequence. Item 6 above is resolved.
 | `7b9621a` | **FIX-A steps 1–2.** `MIRROR_VOCABULARY` extended with the verb family (`download`, `upload`, `export`, `import`, `save`, `persist`, `snapshot`, `shadow`, `stash`, `store locally`, `write … to disk`); new AC7.5e pins the reviewer's plain-English plant as a permanent control; the verb-extended re-scan's 8 new hits adjudicated and digest-pinned (16 total); `EXPECTED_TEST_COUNT` 37 → 38 |
 | `f222fd0` | **FIX-A step 3 and FIX-B.** §9 item 9 rewritten to the honest form; items 14, 23 corrected in place; new items 24–25; §3 gains the verb-extended re-scan and its adjudications; the "five hits / all five pinned" stale count corrected to eight, then re-counted to sixteen |
 | `449a4f7` | **FIX-C.** The 31.4/15.5 recommendation strengthened: the requirement-vs-converter insight stated plainly; the AC7.1 caveat corrected in my own favour (the source copy is pinned transitively); the `remove-from-sprint` latent fifth failure recorded |
+
+**Fix round 4 (the non-markdown scope hole, attack 6):**
+
+| Commit | Change |
+|---|---|
+| *(this round)* | **AC7.5's population extended to shipped non-markdown agent-readable text.** `shippedMarkdown()` refactored into `shippedFilesWithExtensions()`; new `shippedStructuredText()` over `.toml`/`.yaml`/`.yml`/`.json` from the same `package.json` `files` ∩ `git ls-files` authority — **382 files, no path excluded by rule**; `mirrorWindowsOutsidePinnedBlocks` parameterised by window width; new `MIRROR_WINDOW_LINES_STRUCTURED = 16`, chosen against the measured p99 comment-block-plus-key entry length (745 entries, median 4, p99 16). AC7.5 and AC7.5d walk one combined `shippedTextToScan()` list so the forward and hygiene checks cannot diverge on scope. Three hits adjudicated and digest-pinned (`649b5cea`, `f93251c9`, `88a4d876`) — exception list 17 → **20**. New **AC7.5h** (population, pinned by extension plus the 3,249 / 2,714 / 535 arithmetic) and **AC7.5i** (end-to-end plant, asserting **both** directions). `EXPECTED_TEST_COUNT` 40 → **42** |
+| *(this round)* | **Record half.** §9 item 16 rewritten from "hole open" to what is covered, what is not (all 535 remaining files by extension), and that it was found by attack and closed by human decision; §3 gains the non-markdown re-scan, the three adjudications, the window-adaptation measurements and the plant-and-revert proof; items 9, 14, 26, 28, 29 and the FR266 traceability row corrected in place; the stale "38 passed" in §4 corrected to 42. **No §9 item deleted — all 29 stand** |
+
+**Verification run for fix round 4, on a clean tree** (every figure the brief pinned as
+must-not-move, re-run rather than restated):
+
+| Suite | Result | Exit |
+|---|---|---|
+| `release-gate-epic-31` | **42 / 0** (was 40/0; +2 for AC7.5h and AC7.5i) | **0** |
+| **`story-15-5-workflow-skills`** | **157 / 0** — the round-3 fix holds, not regressed | **0** |
+| `project-layout-confluence-routing` | 97 / 0 | 0 |
+| `project-layout-confluence-page-tree` | 157 / 0 | 0 |
+| `project-layout-artifact-routing` | 59 / 0 | 0 |
+| `project-layout-staleness-guard` | 64 / 0 | 0 |
+
+Story 31.4's preflight pin (**41 copies, one sha256, 13/14/14**) and Story 31.9's gate pin
+(**9 copies, one sha256, 3/3/3**) both hold — AC7.1 and AC7.2 inside the run above.
+
+**Anti-vacuity, both directions** (full detail in §3): a mirror directive planted in the
+real `gds-create-game-brief/customize.toml` gives **41 / 1, exit 1** under the new scan and
+**40 / 0, exit 0** under the population reverted to markdown-only. Reverted in the same
+step — `git hash-object` back to `5c1c19b70ea74d6349b701851bba78539eaa6ef0`, and
+`git status --porcelain` shows only ` M skills/git-workflow-skill/skill.json`, the known
+CRLF phantom.
+
+**Not run in fix round 4, deliberately:** `test/project-layout-two-store-round-trip.test.js`
+(four real `npm install` runs) and `test/yes-flag.test.js` (dirties 522 paths). Their
+exclusion is a cost decision, not a result.
 
 **Verification run for fix round 1, on a clean tree:**
 
