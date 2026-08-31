@@ -1428,29 +1428,90 @@ that reported green, described as though the green meant more than it did.
 15. **The FR266 window is four lines and a five-line split still evades.** The *default*
     prose shape is now caught; a determined one is not. Stated in §3 and repeated here
     because it is the live residual of the most serious of the three bypasses.
-16. **Scope is closed for shipped markdown only — and the claim that nothing lives outside
-    it was wrong.** Shipped non-markdown agent-readable text — `.yaml` skill manifests,
-    `MANIFEST.yaml`, `.toml` workflow customisation, JSON prompt fragments — is not
-    scanned by AC7.5, and nothing in this suite would notice if a mirror instruction were
-    added there.
+16. **The non-markdown scope hole is CLOSED for `.toml`/`.yaml`/`.yml`/`.json`, and still
+    open for everything else this package ships. It was found by attack and closed by
+    human decision, not by design.**
 
-    **CORRECTION (fix round 3).** This item read *"Nothing in this epic puts instruction
-    prose there."* That understated it to the point of being misleading. A shipped,
-    unscanned, non-markdown file carries Confluence instruction prose **today**:
+    **History of this item, kept because it is the point.** It has been rewritten three
+    times and was wrong twice. It first read *"Nothing in this epic puts instruction prose
+    there"* — misleading to the point of falsehood. Fix round 3 corrected that to *"the
+    scan does not look there, and there is already Confluence instruction prose there"* —
+    true, and it recorded the hole as **open**, which it then stayed. It was closed only
+    when a human read this item, recognised the vehicle, and directed the work. **No test,
+    no review pass and no design principle surfaced it; a reader did.** Attack 6 needed no
+    cleverness at all — the check simply never opened the files.
+
+    **What the scan now covers.** AC7.5's population is `package.json`'s `files` ∩
+    `git ls-files`, the same outside authority the markdown half uses, over five
+    extensions:
+
+    | population | files | window |
+    |---|---:|---:|
+    | `.md` | 2,332 | 4 lines |
+    | `.yaml` | 240 | 16 lines |
+    | `.toml` | 72 | 16 lines |
+    | `.json` | 70 | 16 lines |
+    | `.yml` | 0 | 16 lines |
+    | **scanned total** | **2,714** | |
+
+    `.yml` is 0 on purpose and is listed anyway: three `.yml` files are tracked, all under
+    `.github/`, none inside the `files` roots. Keeping the extension means renaming a
+    `.yaml` cannot escape the scan. **No path is excluded by rule.** All three real hits
+    are vendored `lib/bmad-cache/**`, and a path exclusion there would have been the easy
+    fix and would have reopened attack 2's hole across 666 shipped files — the same trade
+    this epic already refused once. They are pinned by content digest instead
+    (`649b5cea`, `f93251c9`, `88a4d876`; adjudicated in §3).
+
+    **What the scan still does not cover.** 3,249 tracked files sit under the `files`
+    roots. 2,714 are scanned; **535 are not**, and this is the full list, by extension:
 
     ```
-    lib/bmad-cache/gds/src/workflows/1-preproduction/gds-create-game-brief/customize.toml:114
-      "After finalize, upload brief.md and addendum.md to Confluence via
-       corp:confluence_upload (space_key='GAME', parent_page='Game Briefs', …)"
+    .gitkeep 98   (no extension) 59   .py 65   .js 53   .ts 31   .mjs 23
+    .sample  70   .csv 30   .sh 13   .astro 13   .html 10   .png 8
+    .gitignore 5  .npmrc 5  .nvmrc 5  .prettierignore 5  .idx 5  .pack 5
+    .rev 5        .css 5    .npmignore 4  .ico 4  .cjs 2  .xml 2
+    .excalidraw 1 .1 1  .0 1  .3 1  .groovy 1  .svg 1  .txt 1
+    .template 1   .pptx 1   .ps1 1
     ```
 
-    It is vendored upstream text, it sits in a comment as an example for a team override,
-    and `external_handoffs = []` is empty by default — **so this is not an FR266 finding
-    and is not adjudicated as one.** What it *is*: proof that the non-markdown scope hole
-    is not hypothetical. The honest form of this item is "the scan does not look there,
-    and there is already Confluence instruction prose there", not "nothing puts it there".
-    See also item 28 on what `{workflow.external_handoffs}` actually does with such an
-    entry.
+    Named precisely rather than waved at:
+
+    - **Program text (`.py` 65, `.js` 53, `.ts` 31, `.mjs` 23, `.cjs` 2, `.sh` 13,
+      `.ps1` 1, `.groovy` 1 — 189 files).** An agent instruction embedded in a source
+      comment or a template string would not be seen. AC7.7 covers `lib/confluence-page-tree.js`
+      specifically and Story 31.10's suite covers more, but neither is this scan.
+    - **Markup and data that is not one of the five (`.html` 10, `.astro` 13, `.css` 5,
+      `.csv` 30, `.xml` 2, `.txt` 1, `.svg` 1, `.template` 1 — 63 files).** `.csv` and
+      `.txt` in particular are plain text an agent can read.
+    - **Binary formats (`.png` 8, `.ico` 4, `.pptx` 1, `.excalidraw` 1, and the git
+      `.pack`/`.idx`/`.rev` objects — 29 files).** Not scannable as text at all. A
+      `.pptx` is a zip of XML and a `.excalidraw` is JSON-in-a-`.excalidraw`-extension;
+      neither is opened.
+    - **Dotfiles and manifests without an extension (`.gitkeep` 98, `.gitignore` 5,
+      `.npmrc` 5, `.nvmrc` 5, `.prettierignore` 5, `.npmignore` 4, `.sample` 70, and 59
+      extensionless files — 251).** Mostly empty or configuration, but "mostly" is the
+      operative word and nothing here checks.
+
+    **And the residual inside what IS covered.** The 16-line structured window is a
+    bound, not a proof, chosen against measurement: over the 745 comment-block-plus-key
+    entries in the shipped TOML/YAML the median is 4 lines and the p99 is 16, so **6 of
+    745 entries are longer than the window** and an instruction split across one still
+    evades. The markdown window's own five-line residual (item 15) is unchanged. The
+    predicate — vocabulary and subject filter — is unchanged and remains the heuristic
+    item 9 describes; only its verb axis is closed, against the shipped prohibition
+    (AC7.5f).
+
+    **The vehicle, since it is what made this urgent.**
+    `lib/bmad-cache/gds/src/workflows/1-preproduction/gds-create-game-brief/customize.toml`
+    carries an `external_handoffs` key, and that workflow's own `SKILL.md:99` instructs an
+    agent to *"execute each entry in `{workflow.external_handoffs}` … Invoke the tool"*. A
+    handoff with a **read-back direction** would therefore be a live, executed mirror. It
+    is proved non-vacuous by plant-and-revert in §3: the plant fails the new scan
+    (41 passed / 1 failed / exit 1) and passes the markdown-only one (40 / 0 / exit 0).
+
+    **Do not read this as "the last hole".** Six attacks have now defeated this check and
+    six have been closed one at a time; that is the base rate, and it does not argue that
+    the seventh does not exist.
 17. **`CHANGELOG.md` does not ship on npm, and this record claimed it did.** 1,929 tarball
     entries, `CHANGELOG.md` not among them. The "Deliberately not implemented" and "Known
     limitations" sections are now reproduced in `README.md`, which does ship (§7). **The
