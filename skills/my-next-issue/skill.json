@@ -1,0 +1,7 @@
+{
+  "name": "my-next-issue",
+  "version": "1.0.0",
+  "description": "Return the highest-priority open item assigned to the operating user (Jira: assignee = currentUser()) and answer \"what should I work on next?\"",
+  "category": "workflow",
+  "tags": ["sprint-management", "sprint-status", "user-scoped", "read-only"]
+}

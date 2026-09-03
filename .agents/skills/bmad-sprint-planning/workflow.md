@@ -57,6 +57,18 @@ Before executing any file-system operations, determine and route to the correct 
 
    a. Perform the Jira operation: Query all epics, backlog issues, sprint definitions, and sprint items for project `{jira_project_key}` at `{jira_url}` (multiple sequential read calls). For the write phase: create new Jira sprints for each sprint definition not already in Jira (one API call per sprint). Create or update Jira issues for each item in the plan (one API call per item). Map item fields as follows: title → issue summary, type → issue type (story → Story, bug → Bug), status → Jira workflow status (see status mapping below), priority → issue priority/rank. Map sprint fields: name → sprint name, start_date → sprint start date, end_date → sprint end date. Status mapping: backlog → Backlog/Open, ready-for-dev → To Do/Selected for Development, in-progress → In Progress, review → In Review/Code Review, done → Done/Resolved, on-hold → On Hold/Blocked, cancelled → Won't Do/Cancelled.
       Use whatever Jira-capable tool is available in your current tool context.
+      Resolve the operating user from the Jira tool's OWN authenticated identity: in JQL,
+      `assignee = currentUser()`. Jira evaluates `currentUser()` against the credential the
+      tool already holds, so it needs no configuration and never goes stale. Do NOT derive
+      the user from the OS login name and do NOT store a Jira user id in config — a local
+      account name has no defined relation to an Atlassian accountId (it resolves to nothing
+      on Cloud, and can silently resolve to a DIFFERENT person on Server/DC where directory
+      usernames collide).
+      Whenever the request is scoped to the operator — "my issues", "assigned to me", "what
+      should I work on" — add `AND assignee = currentUser()` to the JQL.
+      If `currentUser()` resolves to no user (a shared service-account token), STOP and tell
+      the user that the Jira tool is authenticated as a shared account, so user-scoped
+      queries are unavailable. Do NOT silently widen the query back to whole-project scope.
       Map Jira entities to the canonical schema (Sprint → sprints[], Backlog → backlog[],
       Epic → epics[], Jira status → canonical vocabulary per Section 6.3 of the routing spec).
    b. If the Jira operation SUCCEEDS: continue with the Jira data returned. Jira is the source of truth.
