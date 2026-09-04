@@ -71,7 +71,7 @@ const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 const hook = require(path.join(PROJECT_ROOT, 'lib', 'confluence-publish-hook.js'));
 const tree = require(path.join(PROJECT_ROOT, 'lib', 'confluence-page-tree.js'));
 
-const EXPECTED_TEST_COUNT = 80;
+const EXPECTED_TEST_COUNT = 81;
 
 let passed = 0;
 let failed = 0;
@@ -1483,7 +1483,36 @@ test('10.8 AC12(c) the detection path is reachable from the SHIPPED `status` sur
     'and must print nothing at all on a healthy project');
 });
 
-test('10.9 AC12(d) the emitted block names ma-agents as the owner of the delimited region', () => {
+test('10.9 AC12(c) [END TO END] a REAL `ma-agents status` run surfaces the collision', () => {
+  // 10.8 proves the call site exists in source and that the reporter works when
+  // called. This proves the two MEET: the shipped command, spawned the way a
+  // user runs it, in a project a `bmad-customize` run has just broken. "An
+  // exported function nothing calls" is the presence-not-effect shape this epic
+  // keeps producing, and a source grep alone cannot rule it out — the call could
+  // sit behind an early return that never executes.
+  const fx = fixture();
+  const skill = hook.AUTHORING_SKILLS[0];
+  fs.writeFileSync(teamFile(fx, skill), bmadCustomizeEndState(skill), 'utf-8');
+  const r = spawnSync(process.execPath, [path.join(PROJECT_ROOT, 'bin', 'cli.js'), 'status'],
+    { cwd: fx.root, encoding: 'utf8', timeout: 180000 });
+  const out = (r.stdout || '') + (r.stderr || '');
+  assert.strictEqual(r.status, 0,
+    `status must still exit 0 — it REPORTS the collision, it is not itself a failure:\n${out}`);
+  assert.ok(out.includes(`${skill}.toml`), `status did not name the broken file:\n${out}`);
+  assert.ok(/does not publish to Confluence while this stands/.test(out),
+    `status named the file but not the consequence:\n${out}`);
+
+  // The REVERSE, or the check above could be passing on output the command
+  // always prints regardless of the project's state.
+  const clean = fixture();
+  generate(clean, BOTH_CONFLUENCE);
+  const r2 = spawnSync(process.execPath, [path.join(PROJECT_ROOT, 'bin', 'cli.js'), 'status'],
+    { cwd: clean.root, encoding: 'utf8', timeout: 180000 });
+  assert.ok(!/need attention/.test((r2.stdout || '') + (r2.stderr || '')),
+    `status reported a collision on a project the generator had just written:\n${r2.stdout}`);
+});
+
+test('10.10 AC12(d) the emitted block names ma-agents as the owner of the delimited region', () => {
   assert.ok(/GENERATED AND OWNED BY ma-agents/.test(HOOK_BLOCK),
     'the customizer sees a diff before writing; this comment is the only channel this story ' +
     'has into that human decision');
@@ -1497,7 +1526,7 @@ test('10.9 AC12(d) the emitted block names ma-agents as the owner of the delimit
     'warning worth heeding');
 });
 
-test('10.10 AC12 [authority] the third writer is genuinely upstream, not ma-agents\'', () => {
+test('10.11 AC12 [authority] the third writer is genuinely upstream, not ma-agents\'', () => {
   for (const rel of ['skills', path.join('lib', 'bmad-extension'),
     path.join('lib', 'bmad-extension-plugin'), path.join('lib', 'bmad-cache')]) {
     const dir = path.join(PROJECT_ROOT, rel);
