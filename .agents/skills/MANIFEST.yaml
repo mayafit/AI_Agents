@@ -196,6 +196,10 @@ skills:
     file: modify-sprint/SKILL.md
     description: Guided workflow to modify an existing sprint's metadata (name, capacity, dates, status) within the sprints section of sprint-status.yaml
 
+  - id: my-next-issue
+    file: my-next-issue/SKILL.md
+    description: Return the highest-priority open item assigned to the operating user (Jira: assignee = currentUser()) and answer "what should I work on next?"
+
   - id: open-presentation
     file: open-presentation/SKILL.md
     description: Opens the BMAD-METHOD AI Development Training presentation from _bmad-output/methodology/

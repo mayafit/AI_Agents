@@ -191,6 +191,10 @@ const expectedExtensionSkills = [
   'bmad-sprint-planning', 'bmad-sprint-status', 'close-sprint',
   // Story 29.1 — Knowledge Atlas skill entrypoint (BMAD-extension pipeline copy).
   'bmad-knowledge',
+  // bug-jira-no-user-identity-context — user-scoped "what should I work on next?".
+  // The board-wide skills (sprint-status-view, prioritize-backlog) cannot answer it
+  // because neither filters by assignee.
+  'my-next-issue',
 ];
 
 // Story 30.4: the 12 ml-* skills were removed along with ma-agent-ml
@@ -207,11 +211,12 @@ const allExpectedSkills = [
   ...expectedSqaSkills,
 ];
 
-test('skills/ has exactly 50 subdirectories', () => {
+// 51 since bug-jira-no-user-identity-context added `my-next-issue` (was 50).
+test('skills/ has exactly 51 subdirectories', () => {
   const entries = fs.readdirSync(skillsDir).filter(e =>
     fs.statSync(path.join(skillsDir, e)).isDirectory()
   );
-  assert.strictEqual(entries.length, 50, `Expected 50 skill dirs, found ${entries.length}`);
+  assert.strictEqual(entries.length, 51, `Expected 51 skill dirs, found ${entries.length}`);
 });
 
 test('all 4 agent skill directories exist', () => {
@@ -307,8 +312,9 @@ test('module-help.csv has correct header columns', () => {
   }
 });
 
-test('module-help.csv has 50 skill entries (excluding header)', () => {
-  assert.strictEqual(csvData.rows.length, 50, `Expected 50 rows, found ${csvData.rows.length}`);
+// 51 since bug-jira-no-user-identity-context added the `my-next-issue` row (was 50).
+test('module-help.csv has 51 skill entries (excluding header)', () => {
+  assert.strictEqual(csvData.rows.length, 51, `Expected 51 rows, found ${csvData.rows.length}`);
 });
 
 test('all CSV entries use module code ma-skills', () => {
