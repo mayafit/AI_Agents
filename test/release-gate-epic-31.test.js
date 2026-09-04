@@ -2071,17 +2071,41 @@ test('AC7.5h [harness] the scan population includes shipped NON-MARKDOWN agent-r
   assert.strictEqual(structured.length, 382,
     `and its total is pinned: found ${structured.length}`);
 
-  // The scanned whole, and the honest remainder. 3,249 tracked files sit under
-  // the `files` roots; 2,332 + 382 = 2,714 of them are now scanned and 535 are
+  // The scanned whole, and the honest remainder. 3,250 tracked files sit under
+  // the `files` roots; 2,332 + 382 = 2,714 of them are now scanned and 536 are
   // not (.py, .js, .ts, .mjs, .cjs, .sh, .ps1, .groovy, .astro, .html, .css,
   // .csv, .xml, .txt, .svg, binaries and dotfiles). §9 item 16 enumerates that
   // remainder; this asserts the arithmetic so the record's figures cannot drift
   // from the code's.
+  //
+  // ─── STORY 31.15: 3,249 -> 3,250 AND 535 -> 536, WITH THE REASON ─────────
+  //
+  // ONE file was added under a `files` root: `lib/confluence-publish-hook.js`,
+  // the publish-trigger generator. Both figures move by exactly one and the two
+  // SCANNED populations do not move at all — markdown stays 2,332 and structured
+  // stays 382, which is what says the widening was not narrowed. Verifiable in
+  // one command:
+  //
+  //     git diff --name-only <merge-base>..HEAD --diff-filter=A
+  //
+  // This is arithmetic bookkeeping about the repository's own file count, which
+  // this assertion exists to keep honest as files are added — not a rebaseline
+  // of a failing invariant. It is recorded here rather than silently edited
+  // because this epic treats an unexplained count move as a defect.
+  //
+  // WHAT IT COSTS, STATED: the new file is `.js`, so it lands in the UNSCANNED
+  // remainder — this gate does not read its text for FR266 vocabulary, and that
+  // file is where the publish hook's shipped instruction text is authored. The
+  // negative for that text is carried instead by
+  // `test/project-layout-confluence-publish-hook.test.js` §9, which EXTRACTS
+  // `MIRROR_VOCABULARY` from this file rather than restating it and asserts the
+  // hook text matches ZERO entries. That is a mitigation in a second suite, not
+  // coverage here; a reviewer widening this scan to `.js` would subsume it.
   const all = shippedFilesWithExtensions(['']); // '' matches every filename
-  assert.strictEqual(all.length, 3249,
+  assert.strictEqual(all.length, 3250,
     `the shipped tracked population must be what the record says: found ${all.length}`);
-  assert.strictEqual(all.length - md.size - structured.length, 535,
-    'and the UNSCANNED remainder must be the 535 files item 16 enumerates');
+  assert.strictEqual(all.length - md.size - structured.length, 536,
+    'and the UNSCANNED remainder must be the 536 files item 16 enumerates');
 });
 
 test('AC7.5i [end-to-end] a TOML external_handoffs mirror directive is REPORTED, and was NOT before', () => {
