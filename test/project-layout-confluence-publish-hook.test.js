@@ -71,7 +71,7 @@ const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 const hook = require(path.join(PROJECT_ROOT, 'lib', 'confluence-publish-hook.js'));
 const tree = require(path.join(PROJECT_ROOT, 'lib', 'confluence-page-tree.js'));
 
-const EXPECTED_TEST_COUNT = 77;
+const EXPECTED_TEST_COUNT = 80;
 
 let passed = 0;
 let failed = 0;
@@ -764,6 +764,35 @@ test('4.7 AC3 a block a human MOVED under a table is re-anchored to root scope',
     `${JSON.stringify(healed.value)}`);
   assert.ok(fs.readFileSync(teamFile(fx, skill), 'utf-8').includes('[agent]'),
     "and the user's own table must still be there");
+});
+
+test('4.8 AC3(b) root-level content written AFTER the block stays at ROOT — the block captures nothing', () => {
+  // THE REASON THE BLOCK IS A DOTTED KEY AND NOT A `[workflow]` TABLE HEADER.
+  //
+  // A header form is equally valid TOML, equally idempotent, and survives every
+  // other test in this section — `removePublishHookBlock` still round-trips, the
+  // file still parses, the hook still resolves. What it does NOT survive is a
+  // user appending a root-level key after it: a table header captures everything
+  // that follows it, so `user_key = 2` silently becomes `workflow.user_key`.
+  // Measured against the real resolver, because a silent capture is invisible to
+  // every syntactic check.
+  const fx = fixture();
+  generate(fx, BOTH_CONFLUENCE);
+  const skill = hook.AUTHORING_SKILLS[0];
+  fs.appendFileSync(teamFile(fx, skill), 'a_root_level_user_key = "MINE"\n', 'utf-8');
+
+  const atRoot = resolveKey(fx, skill, 'a_root_level_user_key');
+  assert.strictEqual(atRoot.status, 0, `the file must still parse: ${atRoot.stderr}`);
+  assert.strictEqual(atRoot.value, 'MINE',
+    "the user's key resolved to " + JSON.stringify(atRoot.value) + ' at the root. If it is ' +
+    'undefined, ma-agents\' block has captured it into its own table — a silent corruption of ' +
+    'user content, which is exactly what AC3(b) forbids.');
+  const captured = resolveKey(fx, skill, 'workflow.a_root_level_user_key');
+  assert.strictEqual(captured.value, undefined,
+    "and it must NOT also appear inside ma-agents' table");
+  // The hook itself is unaffected by the append.
+  assert.ok(Array.isArray(resolveKey(fx, skill, 'workflow.on_complete').value),
+    'and the publish hook must still resolve alongside it');
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1652,6 +1681,102 @@ test('12.5 an UNBOUND project with no fallback layout generates nothing, by a NA
   });
   assert.ok(/No Confluence publish overrides generated/.test(lines.join('\n')),
     `no silent skip: ${lines.join('\n')}`);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+console.log('\n=== 13. AC3(b) / §4.6 R3 — proved against a REAL bmad-method install ===\n');
+
+/**
+ * A REAL install, not a simulated one, because AC3(b) is a claim about what
+ * ANOTHER PACKAGE's installer does to this file and a simulation of it would be
+ * a claim about the simulation.
+ *
+ * It is affordable: `bmad-cli.js` is already in `node_modules`, the run is
+ * offline, and each install takes under two seconds. This is NOT the four-real-
+ * `npm install` shape that makes `project-layout-two-store-round-trip` expensive
+ * — no package manager is invoked here at all.
+ */
+const BMAD_CLI = path.join(PROJECT_ROOT, 'node_modules', 'bmad-method',
+  'tools', 'installer', 'bmad-cli.js');
+
+function realBmadInstall(projectRoot) {
+  const r = spawnSync(process.execPath, [BMAD_CLI, 'install',
+    '--directory', projectRoot, '--modules', 'bmm', '--tools', 'claude-code', '--yes'],
+  { encoding: 'utf8', cwd: PROJECT_ROOT, timeout: 480000 });
+  assert.strictEqual(r.status, 0,
+    `the bmad-method installer failed (${r.status}):\n${String(r.stdout).slice(-1200)}\n` +
+    `${String(r.stderr).slice(-600)}`);
+}
+
+test('13.1 §4.6 R2 a REAL fresh install creates `_bmad/custom/`, and the generator writes into it', () => {
+  assert.ok(fs.existsSync(BMAD_CLI), `bmad-method's installer entry point is missing at ${BMAD_CLI}`);
+  const root = tmpProject();
+  realBmadInstall(root);
+  assert.ok(fs.existsSync(path.join(root, '_bmad', 'custom')),
+    'the directory is created by ANOTHER PACKAGE (install-paths.js:24) — ma-agents contributes ' +
+    'no path segment and no content to it today');
+  assert.ok(fs.existsSync(path.join(root, '_bmad', 'scripts', 'resolve_customization.py')),
+    'and the resolver must land, or the channel does not exist in a real project');
+  const out = hook.generatePublishHooks({ projectRoot: root, stores: BOTH_CONFLUENCE });
+  assert.deepStrictEqual(out.results.map((r) => r.outcome), Array(5).fill(hook.HOOK_WROTE),
+    `generation over a real install: ${JSON.stringify(out.results.map((r) => [r.skill, r.outcome]))}`);
+});
+
+test('13.2 §4.6 R3 an UPDATE restores the file verbatim — including a STALE block — and generation after it wins', () => {
+  // Three separate facts, all measured on the same real update:
+  //
+  //  (1) AC3(b) IS UPHELD UPSTREAM. An unmanifested `_bmad/custom/*.toml` is
+  //      classified `customFiles`, backed up and restored verbatim, so a user's
+  //      hand-written content survives an install it never asked for.
+  //  (2) THE INVERSE IS THE HAZARD, AND IT IS REAL. `config.yaml` is EXEMPTED
+  //      from that restore (installer.js:915-917) and this file is not, so a
+  //      STALE block comes back rather than being regenerated. This asserts the
+  //      hazard EXISTS rather than assuming it, because the ordering rule in
+  //      `bin/cli.js` is justified by it and an ordering rule with no hazard
+  //      behind it is cargo cult.
+  //  (3) THE ORDERING IS WHAT MAKES IT SAFE. Generation running AFTER the
+  //      install overwrites what the install restored. That is why the call site
+  //      is at bin/cli.js's install Step 3.6 and not earlier (pinned by 12.2).
+  const root = tmpProject();
+  realBmadInstall(root);
+
+  const skill = 'bmad-prd';
+  fs.writeFileSync(hook.customOverridePath(root, skill), USER_CONTENT, 'utf-8');
+  hook.generatePublishHooks({ projectRoot: root, stores: BOTH_CONFLUENCE });
+
+  // Age the block into something a later build would not produce, and stamp
+  // config.yaml so the exemption can be observed in the same run.
+  const fresh = fs.readFileSync(hook.customOverridePath(root, skill), 'utf-8');
+  const STALE = 'confluence-plan --store A-STORE-THAT-NO-LONGER-EXISTS';
+  fs.writeFileSync(hook.customOverridePath(root, skill),
+    fresh.replace('confluence-plan --store system', STALE), 'utf-8');
+  const cfgPath = path.join(root, '_bmad', 'bmm', 'config.yaml');
+  const PROBE = 'ma_agents_r3_probe: "before-update"';
+  fs.writeFileSync(cfgPath, fs.readFileSync(cfgPath, 'utf-8') + `\n${PROBE}\n`, 'utf-8');
+
+  realBmadInstall(root); // the UPDATE — an existing `_bmad/` is present
+
+  const restored = readIf(hook.customOverridePath(root, skill));
+  assert.notStrictEqual(restored, null,
+    '(1) the override file did not survive the update at all; AC3(b) fails outright');
+  assert.strictEqual(hook.removePublishHookBlock(restored), USER_CONTENT,
+    "(1) the user's own content did not survive the update byte-identical");
+  assert.ok(restored.includes(STALE),
+    '(2) the STALE block was NOT restored. If upstream has started exempting ' +
+    '`_bmad/custom/*.toml` the way it exempts config.yaml, §4.6 R3 no longer holds and the ' +
+    'ordering rule in bin/cli.js should be re-justified — do not simply delete this assertion.');
+  assert.ok(!fs.readFileSync(cfgPath, 'utf-8').includes(PROBE),
+    '(2) config.yaml kept a hand-added key across an update, so it is no longer the EXEMPTED ' +
+    'file the hazard is defined against and the asymmetry has gone');
+
+  const out = hook.generatePublishHooks({ projectRoot: root, stores: BOTH_CONFLUENCE });
+  assert.strictEqual(out.results.find((r) => r.skill === skill).outcome, hook.HOOK_WROTE,
+    '(3) generation after the install must actually rewrite the restored block');
+  const final = fs.readFileSync(hook.customOverridePath(root, skill), 'utf-8');
+  assert.ok(!final.includes(STALE), '(3) the stale block survived a post-install generation');
+  assert.ok(final.includes('confluence-plan --store system'), '(3) and the current one is back');
+  assert.strictEqual(hook.removePublishHookBlock(final), USER_CONTENT,
+    "(3) and the user's content is STILL byte-identical after all of it");
 });
 
 // ─── Summary ─────────────────────────────────────────────────────────────────
