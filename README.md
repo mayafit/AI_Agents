@@ -2,6 +2,34 @@
 
 A universal NPX tool to install AI coding agent skills. Write skills once, install them across Claude Code, Gemini, Copilot, Cline, Cursor, Kilocode, and Roo Code.
 
+## What's New in v3.18.0
+
+- **Two knowledge stores instead of one.** The install wizard now asks
+  separately where your **system requirements** (product brief, PRD) and your
+  **software requirements** (architecture, UX, epics) live. Each store answers
+  independently and each picks its own backend. Sprint management is still a
+  third, separate question, and story files still follow it — they belong to
+  neither store.
+- **A `confluence` backend for either store.** A store can live in a Confluence
+  space instead of on the file system. It requires a Confluence-capable MCP
+  server in your agent; with none, the affected skill **halts and says so**
+  rather than quietly reading stale local files. No credentials are ever
+  written to disk.
+- **`_bmad-output/project-layout.yaml` is now the authoritative binding**, written
+  on every install and committed with the project, so a whole team resolves the
+  same store locations. `_bmad/bmm/config.yaml` is **generated from it** and
+  carries a stamp of the binding it came from; a skill that finds the two
+  disagreeing stops instead of resolving paths to where the stores used to be.
+- **`ma-agents bind`** — a new command that binds an already-installed project to
+  its knowledge stores without installing anything. Idempotent, and it never
+  overwrites an existing `project-context.md`.
+- **A global install now does no project-scoped work**, and `ma-agents status`
+  reports the install scope. BMAD-METHOD remains per-project (bmad-method
+  v6.10.0 has no user-level install); the installer says so and tells you the
+  command that installs it into a project.
+- **Nothing changes for an existing project that configures no second store** —
+  same prompts, same resolved artifact paths, plus one new committed file.
+
 ## What's New in v3.17.1
 
 - **ma-agents now show up in the Copilot agent picker** — the DevOps (Amit),
@@ -126,6 +154,159 @@ The `_bmad-output/` folder is **intentionally tracked in version control** as pr
 The `ma-agents` installer automatically removes `_bmad-output/` from `.gitignore` if it finds it there. This is intentional — if your IDE or tooling suggests adding `_bmad-output/` to `.gitignore`, you should decline. The folder is project knowledge, not build artefacts.
 
 > **Do not add `_bmad-output/` to your `.gitignore`** — the installer will remove it automatically if it appears there.
+
+---
+
+## Knowledge Stores and the Project Binding
+
+A project's knowledge lives in **two independent stores** plus a sprint-management
+location. Where each one lives is recorded in
+`_bmad-output/project-layout.yaml` — a committed file, so the whole team resolves
+the same locations.
+
+| Store | Holds | Config fields it generates |
+|---|---|---|
+| **System requirements** | product brief, PRD (index and all shards) | `system_requirements_path`, `system_requirements_backend`, `system_requirements_space_key` |
+| **Software requirements** | architecture, UX designs, epics | `software_requirements_path`, `software_requirements_backend`, `software_requirements_space_key`, and the legacy `knowledgebase_path` / `planning_artifacts` |
+| **Sprint management** | `sprint-status.yaml`, story files, bugs, retrospectives | `sprint_management_path`, `sprint_backend`, `implementation_artifacts` |
+
+Story files and everything else under `implementation_artifacts` belong to
+**neither** knowledge store — a story is sprint execution state, not a
+requirement — so moving your knowledge stores does not move your stories.
+
+### The install questions
+
+The wizard asks three location questions, in this order:
+
+1. **Where do the system requirements live?** — backend (`file-system` or
+   `confluence`), then, for `file-system`, the same choices as before: current
+   repository (default), a local path, or a remote git repository.
+2. **Where do the software requirements live?** — the same question, answered
+   independently. Answering one does not constrain the other.
+3. **Where is sprint management?** — unchanged, including the Jira option.
+
+`--yes` selects the single-repository, `file-system` default for both stores, so
+CI and non-interactive installs are unaffected.
+
+Separately, the wizard's existing **Installation Scope** question — *Project
+level (current directory)* / *Global (user-level settings)* / *Custom path* —
+is unchanged, and `--global` is still its non-interactive equivalent. What
+changed is what a **global** answer does: it now performs **no project-scoped
+work at all**. No `project-layout.yaml`, no `project-context.md`, and no
+knowledge-store questions, because no project is in scope at that moment. Those
+are deferred to `ma-agents bind`.
+
+### The Confluence backend
+
+Either store can select a `confluence` backend instead of `file-system`. The
+wizard then asks for the **space** and for a **root page** under which that
+store's artifacts live; leave the root page blank and ma-agents generates one
+named for the project and tells you the name it used.
+
+**A Confluence-backed store requires a Confluence-capable MCP server** in your
+agent — an MCP server, plugin or native integration connected to the Confluence
+instance hosting that space. This is the same MCP-conditional pattern the Jira
+sprint backend already uses, not a second mechanism.
+
+**ma-agents stores no Confluence credentials anywhere on disk.** Authentication
+is entirely the MCP server's responsibility. `project-layout.yaml` records only
+the space key and the root page's title and id — which is what makes the file
+safe to commit.
+
+**There is no local mirror and no cache.** A Confluence-backed store is read and
+written through the MCP, and nothing is copied down. There is consequently
+nothing to synchronise and nothing to fall out of date.
+
+`ma-agents confluence-plan` prints the page tree a publish would produce for
+this project — one page per markdown artifact, nested to mirror the source
+folders — together with the operations a publish performs, in order. It
+enumerates the plan and performs none of it. After a root page is created,
+`ma-agents confluence-record-root-page` records the id Confluence assigned, so
+later runs address the page directly.
+
+### `ma-agents bind`
+
+```bash
+ma-agents bind          # bind this project to its knowledge stores
+ma-agents bind --yes    # non-interactive, accept the existing/default answers
+```
+
+`bind` collects only the project-scoped answers — the two store bindings and
+sprint management — and writes `_bmad-output/project-layout.yaml` plus
+`project-context.md`. It **installs nothing**: no skills, no BMAD modules. It is
+idempotent: re-running it against an already-bound project reports the existing
+bindings and changes nothing unless you explicitly edit an answer, and it never
+overwrites an existing `project-context.md`.
+
+Use it when ma-agents was installed globally and you now want to use it in a
+particular project, or when a project's binding is missing or needs to change.
+
+### When things are wrong, skills stop rather than guess
+
+Two failure modes are deliberately loud:
+
+- **A Confluence-backed store with no Confluence MCP available.** The skill
+  halts and names the affected store, its configured space, the fact that no
+  Confluence MCP was detected, and how to configure one (or how to re-bind the
+  store to the file system). It does **not** fall back to local files, does not
+  continue with an empty result, and does not change your configured backend.
+- **A stale generated config.** `_bmad/bmm/config.yaml` records which binding it
+  was generated from. If the committed binding has moved since — usually after a
+  `git pull` — the skill halts, names every store that moved and both of its
+  locations, and tells you to run `ma-agents bind` to regenerate the config. The
+  comparison is on **content, never timestamps**, so a fresh clone does not
+  report false drift and a `git checkout` cannot hide real drift.
+
+Both messages end by stating that nothing was read or written on your behalf.
+
+### Deliberately not implemented
+
+- **A local mirror of every Confluence-backed store (FR266) was RETIRED before
+  implementation** and has no code, no cache, no sync direction, no sync trigger
+  and no conflict-resolution path. It had been justified on air-gap grounds, but
+  this product's air-gap requirement means *no internet* — no npm, git or CDN
+  access — not *no network*: an enterprise Confluence inside the perimeter is
+  reachable on an air-gapped network. With Confluence unreachability
+  reclassified as a misconfiguration rather than a working mode, the fail-loud
+  behaviour above removes the need for a mirror entirely. The release gate
+  asserts the absence as a closed set rather than as a denylist. If you find no
+  mirror here, that is the design — please do not helpfully add one. (P5-9.6)
+
+### Known limitations of v3.18.0
+
+These are stated here, in the shipped documentation, rather than only in the
+repository's changelog — which is **not** part of the npm package.
+
+- **Every claim in this release about behaviour with a Confluence MCP *present*
+  is mock-verified, not live.** No authorised Confluence MCP was available to
+  the implementation or to any review, so the MCP-present branches were
+  exercised against a stubbed tool context. The MCP-*absent* branch — the
+  fail-loud path described above — is the default state and was exercised for
+  real.
+- **No shipped skill's purpose is to publish a knowledge store to Confluence.**
+  `confluence-plan` enumerates what a publish would do, and the shipped routing
+  block tells an agent how to perform one, but the skills that would author the
+  artifacts (`bmad-prd`, `bmad-architecture`, `bmad-create-epics-and-stories`,
+  `bmad-ux`, `bmad-product-brief`) are not shipped by this package, and there is
+  no publish command. Page *creation* is therefore not demonstrable from this
+  package alone.
+- **`_bmad-output/project-layout.yaml` carries a `generated:` date**, so two
+  runs of the same answers are byte-identical only within the same calendar day.
+  `ma-agents bind` declines to rewrite the file on a no-edit re-run precisely so
+  that this cannot present as a spurious change.
+- **`bmad-knowledge` (the Knowledge Atlas) does not honour a Confluence-backed
+  store.** It renders that store's section from whatever local files it finds,
+  without saying so. It is a separate consumer from the routing-gated skills
+  above and is tracked as a known defect.
+- **A Confluence-backed *system* requirements store has no ma-agents-owned
+  fail-loud gate.** The routing block ships in the skills that resolve
+  *software* requirements; a system requirements store's consumers are upstream
+  BMM workflows this package does not ship.
+- **The repository's own test suite is not green on Windows**, and one failure
+  is this release's: a conflict between the staleness-guard block embedded in
+  the sprint workflow skills and an older lossless-conversion invariant. It is
+  recorded and awaiting adjudication rather than patched. The suite was never
+  run on Linux.
 
 ---
 
@@ -323,7 +504,12 @@ npx ma-agents install                      # Interactive install wizard
 npx ma-agents install --yes                # Non-interactive, use defaults (CI/CD)
 npx ma-agents install --yes --agent <id>   # Non-interactive, target one agent
 npx ma-agents install --log                # Log all output to install_<datetime>.log
-npx ma-agents status                       # Show installed skills and paths
+npx ma-agents install --global             # Install to user-level paths; no project-scoped work
+npx ma-agents bind                         # Bind this project to its knowledge stores (installs nothing)
+npx ma-agents bind --yes                   # Non-interactive bind
+npx ma-agents status                       # Show installed skills, paths and the active install scope
+npx ma-agents confluence-plan              # Print the page tree a Confluence publish would produce
+npx ma-agents confluence-record-root-page  # Record the id Confluence assigned to a created root page
 npx ma-agents list                         # List all available skills
 npx ma-agents agents                       # List supported agents
 npx ma-agents uninstall <skill> <agents>   # Direct uninstall

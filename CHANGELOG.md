@@ -5,6 +5,177 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.18.0] - 2026-08-24
+
+Federated knowledge stores, an authoritative committed project binding, and a
+global install that does no project-scoped work (Epic 31 / PRD capability F26 /
+Architecture Decision P5-9).
+
+**MINOR, not MAJOR.** Every change below is additive: three new commands
+(`bind`, `confluence-plan`, `confluence-record-root-page`), two new install
+questions, new generated `config.yaml` fields, and one new committed file. No
+existing command, flag or generated field is removed or changes meaning. A
+project that configures no second store resolves exactly the artifact paths it
+resolved before (NFR82), and `--yes` selects the previous single-repository
+`file-system` defaults for both stores, so CI and non-interactive installs are
+unaffected. See "Known limitations" below for what this release does *not*
+close.
+
+### Added
+
+- **Two independent knowledge stores.** The installer now asks separately where
+  the **system requirements** (product brief, PRD including its shards) and the
+  **software requirements** (architecture, UX designs, epics) live. Each store
+  answers independently and each selects its own `backend`. The sprint-management
+  question is unchanged and remains a third, separate question. Story files and
+  everything else under `implementation_artifacts` belong to **neither** store —
+  they follow `sprint_management_path`, because a story is sprint execution
+  state rather than a requirement, so moving a knowledge store does not move
+  the stories. (FR254, FR255, FR256, FR257, FR258, FR267)
+- **A `confluence` backend for either store.** A store can live in a Confluence
+  space instead of on the file system, and the two stores may differ — system
+  requirements in Confluence for stakeholder visibility while software
+  requirements stay in git alongside the code, or any other combination. The
+  installer asks for the space and for a root page; left blank, ma-agents
+  generates a root page named for the project and tells the user the name it
+  used. (FR257, FR259, FR260)
+- **`ma-agents bind`.** Binds an already-installed project to its knowledge
+  stores. It collects only the project-scoped answers and writes
+  `_bmad-output/project-layout.yaml` plus `project-context.md`. It installs no
+  skills and no BMAD modules, it is idempotent — a re-run against an
+  already-bound project reports the existing bindings and changes nothing
+  unless an answer is explicitly edited — and it never overwrites an existing
+  `project-context.md`. (FR252, NFR78)
+- **`ma-agents confluence-plan`** prints, for the current project, the page tree
+  a publish would produce — one page per markdown artifact, nested so the pages
+  mirror the source folder structure — together with the enumerated operations a
+  publish performs and the order to perform them in, parents first. It writes
+  nothing, anywhere: not the plan, not a cache, not a report file. The
+  Confluence-capable MCP lives in the agent's tool context, not in this process,
+  so this command enumerates the plan and performs none of it. (FR260, P5-9.7)
+- **`ma-agents confluence-record-root-page`** records the id Confluence assigned
+  to a root page it created, so later runs address the page directly instead of
+  re-resolving it by title. It refuses to record when the binding was retitled
+  between the plan and the write-back, and reports the refusal by name.
+- **`ma-agents status` reports the active install scope**, and for a global
+  install lists which projects on this machine have been bound and whether a
+  readable `project-layout.yaml` was found at each root. (FR253)
+
+### Changed
+
+- **`_bmad-output/project-layout.yaml` is now the authoritative, always-written
+  record of where a project's knowledge lives**, carrying the backend and
+  location of both stores plus sprint management. It is written on every install
+  and every bind — not only in multi-repo or Jira mode, and no longer *deleted*
+  when both concerns are same-repo, which is what the previous code did. Because
+  `_bmad-output/` is deliberately tracked, these bindings are committed and
+  shared by the whole team. (FR263, superseding FR117 and FR122)
+- **`_bmad/bmm/config.yaml` is now GENERATED from that binding** rather than
+  written directly from install answers, on install and on bind only. It gains
+  `system_requirements_path`, `software_requirements_path` and the per-store
+  backend and space-key fields, and it records which binding it was generated
+  from in a `project_layout_stamp:` field. The legacy `planning_artifacts` and
+  `knowledgebase_path` fields are **retained** and resolve to the software
+  requirements store, so every existing reference keeps working unchanged. The
+  per-developer TOML overrides (`_bmad/config.user.toml`,
+  `_bmad/custom/config.user.toml`) are never touched. (FR264)
+- **A global install now performs no project-scoped work.** It does not generate
+  `project-context.md`, does not write `project-layout.yaml`, and does not prompt
+  for knowledge-store locations, because no project is in scope at that moment.
+  The chosen scope is recorded so a later `ma-agents bind` knows the install was
+  global. The existing Installation Scope question and the `--global` flag are
+  retained as-is. (FR248, FR251)
+- **BMAD-METHOD remains per-project on a global install, and the installer now
+  says so.** A confirmation spike against a live bmad-method v6.10.0 established
+  that upstream has no user-level install: `bmad install --global` is an unknown
+  option, and module resolution outside a project does not work. FR249 therefore
+  degrades per FR250 — ma-agents skills install globally and the installer
+  reports three facts: that BMAD remains project-scoped, the command that
+  installs BMAD into a project, and that the F26 knowledge-store requirements
+  are unaffected. This replaces the previous behaviour, which filtered BMAD
+  agents out of a global install and told the user to re-run without `--global`
+  — framing a working mode as a failure. (FR249, FR250)
+- **Legacy single-store projects keep working, and migration is offered, never
+  forced.** A `project-layout.yaml` that predates F26, or that carries only the
+  single `knowledgebase_path`, is read as both stores pointing at that one
+  location. The user is told the project is using the legacy single-store layout
+  and given the exact command that splits it; everything keeps working until
+  they run it. (FR265)
+
+### Fail-loud behaviour (new)
+
+- **A Confluence-backed store with no Confluence MCP halts.** Skills do not
+  silently degrade and do not fall back to any local copy. The error names the
+  affected store, its configured space, the fact that no Confluence MCP was
+  detected, and how to configure one — or how to re-bind the store to the file
+  system. It explicitly forbids falling back to the file system, creating a
+  local copy, continuing with a partial or empty result, and changing the
+  configured backend on the user's behalf. A Confluence-backed store with no
+  Confluence MCP has no degraded mode. (FR261, FR262)
+- **An unrecognised store backend halts rather than defaulting.** This is a
+  deliberate departure from the sprint-tracking routing pattern, which falls
+  back to the file system on an unknown value: for a knowledge store, falling
+  back would resolve a store this build cannot identify to local files, which is
+  exactly the silent degradation FR262 forbids.
+- **A stale generated config halts.** Skills that resolve knowledge-store paths
+  now run a gateway preflight that compares `_bmad/bmm/config.yaml` against the
+  committed binding before any read, any write and any prompt. On disagreement
+  it halts, names every store that moved and both of its locations, and
+  prescribes `ma-agents bind`. The comparison is on **content, never
+  timestamps** — mtime ordering is not preserved by `git pull`, `git checkout`
+  or a fresh clone, so a timestamp comparison would both miss real drift and
+  report drift on a clean checkout.
+
+### Security
+
+- **No Confluence credentials are stored on disk, anywhere.** Authentication is
+  entirely the MCP server's responsibility. `project-layout.yaml` records only
+  the space key and the root page's title and id — which is what makes the file
+  safe to commit. Verified at the release gate by enumerating every file a
+  Confluence-configured install writes and scanning every byte of each. (NFR79)
+
+### Deliberately not implemented
+
+- **FR266 (a local mirror of every Confluence-backed store) was RETIRED before
+  implementation** and has no code, no cache, no sync direction, no sync trigger
+  and no conflict-resolution path. The mirror had been justified on air-gap
+  grounds, but this product's air-gap requirement means *no internet* — no npm,
+  git or CDN access — not *no network*: an enterprise Confluence inside the
+  perimeter is reachable on an air-gapped network. With Confluence
+  unreachability reclassified as a misconfiguration rather than a working mode,
+  FR262's fail-loud behaviour removes the need for a mirror entirely. The
+  release gate asserts the absence as a closed set rather than as a denylist.
+  (P5-9.6)
+
+### Known limitations
+
+> **This file does not ship on npm.** `CHANGELOG.md` is not in `package.json`'s
+> `files` list, so it reaches readers on GitHub only. The two sections above are
+> therefore reproduced in `README.md` — under "Deliberately not implemented" and
+> "Known limitations of v3.18.0" — which **is** in the published tarball. Keep
+> the two in step.
+
+- **Every claim in this release about behaviour with a Confluence MCP *present*
+  is mock-verified, not live.** No authorised Confluence MCP was available to
+  the implementation or to any review, so the MCP-present branches were
+  exercised against a stubbed tool context. The MCP-*absent* branch — the
+  fail-loud path — is the default state and was exercised for real.
+- **No shipped skill's purpose is to publish a knowledge store to Confluence.**
+  `confluence-plan` enumerates what a publish would do, and the shipped routing
+  block tells an agent how to perform one, but the skills that would author the
+  artifacts (`bmad-prd`, `bmad-architecture`, `bmad-create-epics-and-stories`,
+  `bmad-ux`, `bmad-product-brief`) are not shipped by this package, and there is
+  no publish command. Page *creation* is therefore not demonstrable from this
+  package alone.
+- **`_bmad-output/project-layout.yaml` carries a `generated:` date**, so two
+  runs of the same answers are byte-identical only within the same calendar day.
+  `ma-agents bind` declines to rewrite the file on a no-edit re-run precisely so
+  that this cannot present as a spurious change.
+- **`npm test` is not green on Windows**, for nine reasons that predate this
+  release and one that does not. See
+  `_bmad-output/implementation-artifacts/bug-npm-test-windows-suite-health-chain.md`
+  and `_bmad-output/implementation-artifacts/bug-31-4-preflight-block-breaks-story-15-5-verbatim-invariant.md`.
+
 ## [3.17.1] - 2026-07-16
 
 ### Fixed
