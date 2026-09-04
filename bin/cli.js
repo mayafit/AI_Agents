@@ -49,6 +49,11 @@ const bmad = require('../lib/bmad');
 const { getBmadPlatformCode } = require('../lib/agents');
 const { enumerateCustomSource, NFR71_WARNING, CustomMarketplaceError, reconcileCustomMarketplaceSelection, registryTrustLabel } = require('../lib/custom-marketplace');
 const { setLogSink, diag, diagError } = require('../lib/diag');
+// Story 31.15 — the publish trigger for the five BMAD authoring skills. Kept in
+// its own leaf module for the same reason `lib/confluence-page-tree.js` is: the
+// marker discipline and the TOML reader are pure and must be testable without a
+// CLI around them.
+const confluencePublishHook = require('../lib/confluence-publish-hook');
 const { handleCreateSkill, handleValidateSkill, handleSetMandatory, handleCustomizeAgent, handleCreateAgent } = require('../lib/skill-authoring');
 // 2B nit 1 — the knowledge-store `backend` enum and its default now live in a
 // dependency-free leaf module under lib/, so `lib/installer.js` (which must NOT
@@ -244,6 +249,20 @@ async function showStatus(args) {
   // skills happen to be listed would make AC7 invisible on its own primary case.
   const scopes = detectInstallScopes();
   printScopeReport(scopes);
+
+  // Story 31.15 AC12(c) — THE DETECTION PATH INDEPENDENT OF THE GENERATOR.
+  //
+  // A third writer (an agent running the upstream `bmad-customize` skill) can
+  // leave `_bmad/custom/<skill>.toml` in a state where the resolver discards the
+  // WHOLE team layer at exit 0 — the publish hook and the customizer's own
+  // change together — without ever calling ma-agents' generator. The generator's
+  // refusal cannot see that, because the generator did not run. This can, and it
+  // is the only thing that fires between two installs.
+  //
+  // Before the early return below, for the same reason `printScopeReport` is: a
+  // project with no ma-agents skills listed is still a project whose publish may
+  // be silently dead.
+  printPublishHookCollisionReport(process.cwd());
 
   // Story 31.13 AC3 — THE OFFER'S CLI CALL SITE.
   //
@@ -1279,6 +1298,215 @@ function generateBmmConfig(opts) {
  */
 function writeRepoLayoutConfig(layout) {
   return generateBmmConfig({ projectRoot: process.cwd(), fallbackLayout: layout });
+}
+
+/**
+ * ─── STORY 31.15 — THE PUBLISH TRIGGER, AS A SECOND OUTPUT OF THE SAME PASS ──
+ *
+ * Epic 31 built the entire Confluence publish protocol and nothing fired it for
+ * the five BMAD authoring skills. They are upstream `bmad-method` documents:
+ * ma-agents does not own them and cannot edit them. What it does own is the
+ * project they are installed into, and upstream sanctions exactly one channel
+ * into that — `_bmad/custom/<skill>.toml`, the TEAM layer of the three-layer
+ * customization merge every one of the five resolves at activation and refuses
+ * to begin without.
+ *
+ * WHY IT LIVES BESIDE `generateBmmConfig` AND NOT IN A PIPELINE OF ITS OWN.
+ * `config.yaml` is derived from the committed binding at exactly three sites —
+ * install (Step 3.6), `reconfigure-layout` and `bind`. A sibling called from
+ * those same three sites cannot go stale relative to `config.yaml`, which
+ * removes a whole drift class without widening Story 31.4's guard scope. A
+ * FOURTH call site would reintroduce it; do not add one.
+ *
+ * ORDERING IS LOAD-BEARING (§4.6 R3). On an UPDATE, bmad-method's installer
+ * classifies any file absent from its `files-manifest.csv` as a `customFile`,
+ * backs it up, and restores it VERBATIM after the install
+ * (`node_modules/bmad-method/tools/installer/core/installer.js:588`, `:624-636`,
+ * `:509-546`, `:918-923`). `config.yaml` is explicitly EXEMPTED from that
+ * restore (`installer.js:915-917`); `_bmad/custom/<skill>.toml` is not. So a
+ * STALE hook is restored rather than regenerated. Inside `ma-agents install`
+ * that is harmless only because this generation runs AFTER `installBmad()` and
+ * overwrites the restored block. Moving this call ahead of `installBmad()` is a
+ * defect, not a refactor. Pinned by
+ * `test/project-layout-confluence-publish-hook.test.js`.
+ *
+ * INSTALL-TIME GATING, NOT RUNTIME GATING (§4.3). A `file-system` store gets no
+ * hook and emits nothing at runtime, because Step B1 of the shipped gate is
+ * explicit that such a project gets "no message from this section, no prompt,
+ * and no offer" (`skills/generate-backlog/SKILL.md:139`). The named reason FR262
+ * requires for a no-publish path is therefore reported HERE, to the operator
+ * running the install, and not there, to the user running the workflow.
+ *
+ * AC5(a) — no silent skip. Every outcome is named out loud. The refusal path
+ * additionally sets a non-zero exit code, so a collision surfaces at install or
+ * `bind` time rather than as a publish that quietly stopped happening.
+ *
+ * @param {object}  opts
+ * @param {string}  opts.projectRoot
+ * @param {object=} opts.fallbackLayout  same meaning as in `generateBmmConfig`
+ * @param {boolean=} opts.quiet          suppress the informational lines (tests)
+ * @returns {{results: Array, refused: boolean, reason: string|null}}
+ */
+function generateConfluencePublishHooks(opts) {
+  const options = opts || {};
+  const projectRoot = options.projectRoot || process.cwd();
+
+  // SOURCE SELECTION, identical to `generateBmmConfig`'s and for the identical
+  // reason (2B nit 4): a derived artifact is never built from a binding the
+  // system refused to trust. A hook generated from a bare default would point a
+  // publish at a store nobody bound.
+  const binding = resolveProjectTopology(projectRoot);
+  let topology;
+  if (binding.ok) {
+    topology = binding.topology;
+  } else if (binding.reason !== BINDING_UNBOUND) {
+    if (!options.quiet) {
+      console.log(chalk.red(
+        `  Refusing to regenerate the Confluence publish overrides in _bmad/custom/ — the\n` +
+        `  committed binding in _bmad-output/project-layout.yaml is ${binding.reason}:\n` +
+        `    ${binding.message}\n` +
+        `  The existing override files have been left UNCHANGED. Fix the binding (or delete it\n` +
+        `  and re-run the installer), then re-run to regenerate them.`
+      ));
+    }
+    return { results: [], refused: false, reason: binding.reason };
+  } else if (options.fallbackLayout) {
+    topology = topologyFromLegacyLayout(options.fallbackLayout);
+  } else {
+    // Named, not silent. Same disposition `generateBmmConfig` takes.
+    if (!options.quiet) {
+      console.log(chalk.gray(
+        `  No Confluence publish overrides generated: this project has no committed binding in\n` +
+        `  _bmad-output/project-layout.yaml and no layout was supplied to generate from.`
+      ));
+    }
+    return { results: [], refused: false, reason: BINDING_UNBOUND };
+  }
+
+  // The per-store view the generator needs, assembled from the SHIPPED tables so
+  // a store added to `CONFLUENCE_STORE_RECORDS` is carried here automatically
+  // rather than needing a second list kept in step by hand.
+  const stores = {};
+  for (const storeId of confluencePageTree.PUBLISHING_STORES) {
+    const record = CONFLUENCE_STORE_RECORDS[storeId];
+    const store = topology[record.topologyKey];
+    stores[storeId] = {
+      backend: backendOfStore(store),
+      cliName: record.cliName,
+      label: confluencePageTree.labelForStore(storeId),
+    };
+  }
+
+  const outcome = confluencePublishHook.generatePublishHooks({ projectRoot, stores });
+  if (!options.quiet) reportPublishHookOutcome(outcome, stores);
+
+  // AC4(b) / AC12(b) — "exits non-zero". Set rather than thrown: the install has
+  // real work after this point (project-context.md, the legacy-store notice, the
+  // summary), and aborting mid-run would leave a half-configured project to
+  // report a configuration problem. The process still exits non-zero.
+  if (outcome.refused) process.exitCode = 1;
+  return { results: outcome.results, refused: outcome.refused, reason: null };
+}
+
+/**
+ * Say what happened, by name, for every skill. FR262 / AC5(a).
+ *
+ * Aggregated by outcome rather than printed per skill: five identical lines on
+ * every install is noise, and noise is how a real refusal gets scrolled past.
+ */
+function reportPublishHookOutcome(outcome, stores) {
+  const H = confluencePublishHook;
+  const by = (kind) => outcome.results.filter((r) => r.outcome === kind);
+
+  const wrote = by(H.HOOK_WROTE);
+  const unchanged = by(H.HOOK_UNCHANGED);
+  const removed = by(H.HOOK_REMOVED);
+  const inapplicable = by(H.HOOK_NOT_APPLICABLE);
+
+  if (wrote.length || unchanged.length) {
+    const skills = [...wrote, ...unchanged].map((r) => r.skill).sort();
+    console.log(chalk.gray(
+      `  Confluence publish trigger ${wrote.length ? 'written to' : 'already current in'} ` +
+      `_bmad/custom/ for ${skills.length} authoring skill${skills.length === 1 ? '' : 's'}: ` +
+      `${skills.join(', ')}.`
+    ));
+  }
+  if (removed.length) {
+    console.log(chalk.gray(
+      `  Confluence publish trigger removed from _bmad/custom/ for ` +
+      `${removed.map((r) => r.skill).sort().join(', ')} — that store is no longer confluence-backed. ` +
+      `Everything else in those files was left as it was.`
+    ));
+  }
+  if (inapplicable.length && !wrote.length && !unchanged.length) {
+    // The NAMED reason for the commonest no-publish path. Stated to the operator
+    // at install time, never to the user at workflow time (§4.3 / Step B1).
+    const backends = [...new Set(Object.values(stores).map((s) => s.backend))].sort();
+    console.log(chalk.gray(
+      `  No Confluence publish trigger generated: ${backends.length === 1
+        ? `both knowledge stores are ${backends[0]}-backed`
+        : `neither knowledge store is confluence-backed (${backends.join(', ')})`}, ` +
+      `so there is nothing for the authoring workflows to publish to.`
+    ));
+  }
+
+  for (const r of outcome.results) {
+    if (r.outcome === H.HOOK_REFUSED_COLLISION || r.outcome === H.HOOK_REFUSED_INVALID_TOML) {
+      console.log(chalk.red(
+        `  ma-agents — refusing to generate the Confluence publish trigger for ${r.skill}.\n` +
+        `    File:  ${r.file}\n` +
+        r.collisions.map((c) => `    Line ${c.line === null ? '?' : c.line}: ${c.detail}\n`).join('') +
+        `  NOTHING was written to that file. Writing beside what is already there would make it\n` +
+        `  invalid TOML, and _bmad/scripts/resolve_customization.py answers a parse failure in\n` +
+        `  this layer with a warning, an empty table and exit 0 — discarding your customization\n` +
+        `  AND the publish together, silently.\n` +
+        `  Move your override into _bmad/custom/${r.skill}.user.toml as a TOML array\n` +
+        `  (\`workflow.on_complete = [ "..." ]\`), which appends instead of replacing, then re-run.\n` +
+        `  ${r.skill} will NOT publish to Confluence until this is resolved.`
+      ));
+    } else if (r.outcome === H.HOOK_WRITE_FAILED) {
+      console.log(chalk.red(
+        `  ma-agents — could not write the Confluence publish trigger for ${r.skill}:\n` +
+        `    ${r.file}\n    ${r.error}\n` +
+        `  ${r.skill} will NOT publish to Confluence until this is resolved.`
+      ));
+    }
+  }
+}
+
+/**
+ * AC12(c) — THE DETECTION PATH, ON AN ALREADY-SHIPPED SURFACE.
+ *
+ * The generator's refusal is a write-side guard against a read-side failure, and
+ * the third writer — an agent running the upstream `bmad-customize` skill —
+ * reaches the read-side failure without ever calling the generator. Between that
+ * run and the next install the publish is dead and nothing says so. This is the
+ * only guard that fires inside that window.
+ *
+ * It is on `status` because `status` is what a user runs when they ask "is this
+ * project set up correctly", it needs no arguments, and it already reports
+ * binding health for the same reason (Story 31.13 AC7). It reports exactly what
+ * the generator refuses over — same function, not a second opinion.
+ */
+function printPublishHookCollisionReport(projectRoot) {
+  const found = confluencePublishHook.detectPublishHookCollisions(projectRoot);
+  if (found.length === 0) return found;
+  console.log(chalk.red(`\n  Confluence publish trigger — ${found.length} override file(s) need attention:\n`));
+  for (const entry of found) {
+    console.log(chalk.red(`    ${entry.file}`));
+    for (const c of entry.collisions) {
+      console.log(chalk.red(`      line ${c.line === null ? '?' : c.line}: ${c.detail}`));
+    }
+    console.log(chalk.gray(
+      `      => ${entry.skill} does not publish to Confluence while this stands. ` +
+      `_bmad/scripts/resolve_customization.py\n` +
+      `         answers a parse failure in this layer with a warning, an empty table and exit 0,\n` +
+      `         so the whole team layer is discarded and nothing else reports it. Put your own\n` +
+      `         override in _bmad/custom/${entry.skill}.user.toml as a TOML array instead.`
+    ));
+  }
+  console.log('');
+  return found;
 }
 
 // ─── project-layout.yaml — schema v2: the two-store binding spine (Story 31.2) ──
@@ -4251,6 +4479,14 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     // generateBmmConfig.
     generateBmmConfig({ projectRoot: process.cwd(), fallbackLayout: repoLayout });
 
+    // Story 31.15 — the SECOND output of this same one-way pass. Deliberately
+    // here and not earlier: bmad-method's installer restores an unmanifested
+    // `_bmad/custom/*.toml` verbatim from its pre-update backup, and `config.yaml`
+    // is exempted from that restore while these files are not, so a STALE hook
+    // comes back. Running after `installBmad()` (:4089/:4104) is what overwrites
+    // it. Moving this call ahead of the BMAD install is a defect, not a refactor.
+    generateConfluencePublishHooks({ projectRoot: process.cwd(), fallbackLayout: repoLayout });
+
     // Story 31.7 (FR265) AC2/AC5 — tell the user, ONCE and non-blockingly, that
     // this project is on the legacy single-store layout and name the command
     // that splits it. No-op on a two-store project, on an unbound one, on a
@@ -4688,6 +4924,9 @@ async function handleConfigLayout(args) {
     ));
   }
   generateBmmConfig({ projectRoot: process.cwd(), fallbackLayout: newLayout });
+  // Story 31.15. A backend flipped away from `confluence` here is exactly the
+  // AC3(d) removal path: the block goes, the rest of the file stays.
+  generateConfluencePublishHooks({ projectRoot: process.cwd(), fallbackLayout: newLayout });
 
   // Update project-context.md
   const outputPath = path.join(process.cwd(), '_bmad-output', 'project-context.md');
@@ -4992,6 +5231,10 @@ async function handleBind(args = []) {
   // `fallbackLayout` is supplied for the unbound-and-unwritable case only; when a
   // committed binding exists it wins outright inside `generateBmmConfig`.
   generateBmmConfig({ projectRoot, fallbackLayout: layoutForContext });
+  // Story 31.15. `bind` is also the documented remedy for §4.6 R3's out-of-band
+  // case — a user who runs bmad-method's own installer directly gets the stale
+  // block restored, and this is the command that regenerates it.
+  generateConfluencePublishHooks({ projectRoot, fallbackLayout: layoutForContext });
 
   // ── Step 5. AC1/AC5 — project-context.md.
   //
@@ -5850,6 +6093,13 @@ module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, recon
   // NAME so "recorded" and "refused because the title moved" can never collapse
   // into one.
   storeArtifactsDirectory, collectStoreArtifactCandidates, recordLearnedRootPageId,
+  // Story 31.15 — the publish trigger. `generateConfluencePublishHooks` is the
+  // entry point all three generation sites call; `printPublishHookCollisionReport`
+  // is AC12(c)'s detection surface, exported separately so a test can prove the
+  // report FIRES on a collision without having to scrape `status` output around
+  // it. The marker discipline, the TOML reader and the skill->store table are in
+  // `lib/confluence-publish-hook.js` and exported from there.
+  generateConfluencePublishHooks, printPublishHookCollisionReport,
   handleConfluencePlan, handleConfluenceRecordRootPage, CONFLUENCE_STORE_RECORDS,
   ROOT_ID_RECORDED, ROOT_ID_UNCHANGED, ROOT_ID_TITLE_MOVED, ROOT_ID_NOT_CONFLUENCE,
   ROOT_ID_NO_BINDING, ROOT_ID_WRITE_FAILED };
