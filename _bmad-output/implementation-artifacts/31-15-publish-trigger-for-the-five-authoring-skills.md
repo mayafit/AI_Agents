@@ -1,6 +1,6 @@
 # Story 31.15: The Publish Trigger — `on_complete` Overrides Make the Five Authoring Skills Publish to a Confluence-Backed Store
 
-Status: ready-for-dev
+Status: review
 
 **Decision inputs:** P5-9.7 (page structure — consumed, not re-derived), P5-9.6 (no mirror, no cache, no sync), P5-9.4 (which override files are the user's).
 **FR:** completes **FR255, FR256, FR260** by supplying the trigger Story 31.10 built the protocol for. **Binding authority:** FR264's enumeration sentence. **Related:** FR261/FR262 (Story 31.9's gate), FR257 (store independence), FR267.
@@ -533,34 +533,34 @@ gate is a human's yes, and (a)–(c) must stand without it.
 ## 7. Tasks / Subtasks
 
 ### Task 1 — The generator (AC1, AC3, AC4, AC6)
-- [ ] 1.1 Add a sibling to `generateBmmConfig` (`bin/cli.js:1029`) that derives, per store, the set of skills that publish to it. Derive the skill→store assignment from a single named constant whose comment cites **FR264 `:60`**; the test builds its oracle from the PRD file itself, so the constant and the test cannot agree by construction.
-- [ ] 1.2 Marker-delimited block writer for TOML, mirroring `injectOnPremPrefixBlock` (`lib/bmad.js:1324-1357`) exactly in discipline: fresh insert, in-place replace, trailing-newline swallow, malformed-half-block → fresh insert. Comment markers (`# BEGIN:ma-agents-confluence-publish` / `# END:...`).
-- [ ] 1.3 Pre-write collision check: refuse loudly if `on_complete` exists outside the markers (AC4b). Post-write parse check under `tomllib` (AC4a).
-- [ ] 1.4 Removal path: backend flips away from `confluence` → block removed, rest of file untouched (AC3d).
-- [ ] 1.5 Call it from the same three sites as `generateBmmConfig`: `bin/cli.js:4252`, `:4690`, `:4994`. Do not add a fourth. **Ordering is load-bearing (§4.6 R3):** `:4252` runs *after* `installBmad()` (`:4089`/`:4104`), which is what lets generation overwrite a block the bmad-method installer restored from its pre-update backup. Do not move it earlier.
-- [ ] 1.6 Create `_bmad/custom/` if absent rather than assuming it — another package owns that directory's lifecycle (§4.6 R2).
-- [ ] 1.7 Detection surface for AC12(c): `ma-agents status` / `diag` reports a `_bmad/custom/<skill>.toml` that fails to parse or carries an `on_complete` outside ma-agents' markers. This is the only guard that fires between two generations.
+- [x] 1.1 Add a sibling to `generateBmmConfig` (`bin/cli.js:1029`) that derives, per store, the set of skills that publish to it. Derive the skill→store assignment from a single named constant whose comment cites **FR264 `:60`**; the test builds its oracle from the PRD file itself, so the constant and the test cannot agree by construction.
+- [x] 1.2 Marker-delimited block writer for TOML, mirroring `injectOnPremPrefixBlock` (`lib/bmad.js:1324-1357`) exactly in discipline: fresh insert, in-place replace, trailing-newline swallow, malformed-half-block → fresh insert. Comment markers (`# BEGIN:ma-agents-confluence-publish` / `# END:...`).
+- [x] 1.3 Pre-write collision check: refuse loudly if `on_complete` exists outside the markers (AC4b). Post-write parse check under `tomllib` (AC4a).
+- [x] 1.4 Removal path: backend flips away from `confluence` → block removed, rest of file untouched (AC3d).
+- [x] 1.5 Call it from the same three sites as `generateBmmConfig`: `bin/cli.js:4252`, `:4690`, `:4994`. Do not add a fourth. **Ordering is load-bearing (§4.6 R3):** `:4252` runs *after* `installBmad()` (`:4089`/`:4104`), which is what lets generation overwrite a block the bmad-method installer restored from its pre-update backup. Do not move it earlier.
+- [x] 1.6 Create `_bmad/custom/` if absent rather than assuming it — another package owns that directory's lifecycle (§4.6 R2).
+- [x] 1.7 Detection surface for AC12(c): `ma-agents status` / `diag` reports a `_bmad/custom/<skill>.toml` that fails to parse or carries an `on_complete` outside ma-agents' markers. This is the only guard that fires between two generations.
 
 ### Task 2 — The hook text (AC5, AC8)
-- [ ] 2.0 Emit the block with an owner comment naming ma-agents and directing a customizer to write their own `on_complete` as an **array in `<skill>.user.toml`** (AC12d).
-- [ ] 2.1 Emit as a **TOML array of one instruction** (AC7). Short: name `ma-agents confluence-plan --store <store>`, obey the printed operations parents-first, update-if-present / create-if-absent, `ma-agents confluence-record-root-page` when the root page was created, STOP and report no publish on any failed write, and **correct the already-emitted "ready" message on a halt** (AC5c).
-- [ ] 2.2 **Do not restate Story 31.9's gate block.** Route to the shipped protocol; do not become a tenth copy (§4.5).
-- [ ] 2.3 Run the text through the hardened FR266 analysis before committing it (AC8).
+- [x] 2.0 Emit the block with an owner comment naming ma-agents and directing a customizer to write their own `on_complete` as an **array in `<skill>.user.toml`** (AC12d).
+- [x] 2.1 Emit as a **TOML array of one instruction** (AC7). Short: name `ma-agents confluence-plan --store <store>`, obey the printed operations parents-first, update-if-present / create-if-absent, `ma-agents confluence-record-root-page` when the root page was created, STOP and report no publish on any failed write, and **correct the already-emitted "ready" message on a halt** (AC5c).
+- [x] 2.2 **Do not restate Story 31.9's gate block.** Route to the shipped protocol; do not become a tenth copy (§4.5).
+- [x] 2.3 Run the text through the hardened FR266 analysis before committing it (AC8).
 
 ### Task 3 — Tests (AC1–AC9)
-- [ ] 3.1 Oracle built by **parsing the PRD shard** for FR255/FR256/FR264 — the skill set and the skill→store map both. Assert the oracle is non-empty and names five skills, so a parse failure fails the suite instead of vacuously passing it.
-- [ ] 3.2 End-to-end through the **real** `resolve_customization.py` (not a re-implementation of the merge): confluence store → non-empty `on_complete`; file-system store → no hook; array `.user.toml` appends; scalar `.user.toml` replaces (AC7, recorded as a limitation).
-- [ ] 3.3 Idempotence, user-content survival, half-block, removal (AC3). Pre-seeded `.user.toml` byte-identical (AC2).
-- [ ] 3.4 Duplicate-key collision: refusal (AC4b) **and** a demonstration that without the refusal `load_toml` discards the whole layer (AC4a rationale).
-- [ ] 3.5 Invariant proof: re-run I1 and I2, report actual numbers; path-scoped diff check that no skill document changed (AC9c).
-- [ ] 3.6 Append new test files to the `package.json` test chain; run each directly **and** via `npm test`, on Windows and Linux.
-- [ ] 3.7 **Three-writer collision (AC12).** Reproduce the `bmad-customize` end state — a bare `on_complete` outside ma-agents' markers — and prove through the real resolver that the whole team layer is discarded **at exit status 0** (a); prove the generator refuses over that file as an *input* (b); prove the independent detection surface fires on it (c). Do not simulate the resolver.
-- [ ] 3.8 **Real-install proof for AC3(b) / §4.6 R3.** Both a fresh install and an update over an existing `_bmad/`. Confirm the restore-then-generate ordering actually leaves the freshly generated block, not the restored one.
+- [x] 3.1 Oracle built by **parsing the PRD shard** for FR255/FR256/FR264 — the skill set and the skill→store map both. Assert the oracle is non-empty and names five skills, so a parse failure fails the suite instead of vacuously passing it.
+- [x] 3.2 End-to-end through the **real** `resolve_customization.py` (not a re-implementation of the merge): confluence store → non-empty `on_complete`; file-system store → no hook; array `.user.toml` appends; scalar `.user.toml` replaces (AC7, recorded as a limitation).
+- [x] 3.3 Idempotence, user-content survival, half-block, removal (AC3). Pre-seeded `.user.toml` byte-identical (AC2).
+- [x] 3.4 Duplicate-key collision: refusal (AC4b) **and** a demonstration that without the refusal `load_toml` discards the whole layer (AC4a rationale).
+- [x] 3.5 Invariant proof: re-run I1 and I2, report actual numbers; path-scoped diff check that no skill document changed (AC9c).
+- [x] 3.6 Append new test files to the `package.json` test chain; run each directly **and** via `npm test`, on Windows and Linux.
+- [x] 3.7 **Three-writer collision (AC12).** Reproduce the `bmad-customize` end state — a bare `on_complete` outside ma-agents' markers — and prove through the real resolver that the whole team layer is discarded **at exit status 0** (a); prove the generator refuses over that file as an *input* (b); prove the independent detection surface fires on it (c). Do not simulate the resolver.
+- [x] 3.8 **Real-install proof for AC3(b) / §4.6 R3.** Both a fresh install and an update over an existing `_bmad/`. Confirm the restore-then-generate ordering actually leaves the freshly generated block, not the restored one.
 
 ### Task 4 — Record-keeping (AC10)
-- [ ] 4.1 Completion report states the **mock-only** limit verbatim (§2) and the AC7 residual.
-- [ ] 4.2 Hand Story 31.14 the AC10 wording. Do **not** edit Story 31.10's `epics.md` definition or its `sprint-status.yaml` done-record.
-- [ ] 4.3 Note in `bug-system-requirements-store-has-no-ma-agents-owned-confluence-gate.md`'s disposition that its blast radius is closed for the five authoring skills; leave its FR262-scope question OPEN for a human (§1.2).
+- [x] 4.1 Completion report states the **mock-only** limit verbatim (§2) and the AC7 residual.
+- [x] 4.2 Hand Story 31.14 the AC10 wording. Do **not** edit Story 31.10's `epics.md` definition or its `sprint-status.yaml` done-record.
+- [x] 4.3 Note in `bug-system-requirements-store-has-no-ma-agents-owned-confluence-gate.md`'s disposition that its blast radius is closed for the five authoring skills; leave its FR262-scope question OPEN for a human (§1.2).
 
 ---
 
@@ -609,8 +609,114 @@ Decision P5-9 and its sub-decisions      (consumed, not amended)
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context) — `claude-opus-5[1m]`. Implementation only; an independent review follows.
+Status set to `review`, never to `done`.
+
 ### Debug Log References
+
+Worktree `.worktrees/epic-31-story-31.15`, branch `feature/epic-31-story-31.15`, off `8b86771`.
+Four commits: `8b2e640` (generator), `a8f1652` (suite), `712b784` (real-install proof), `c9bfbf3`
+(end-to-end AC12c). Not pushed, no PR, nothing published.
 
 ### Completion Notes
 
+#### THE ENVIRONMENT LIMIT — stated verbatim, as §2 requires
+
+> **Every claim in this story about what happens when a Confluence MCP is present is
+> MOCK-VERIFIED, NOT LIVE.** No page will be created in, updated in, or read from a Confluence
+> instance by this story's tests. What is verified live is everything on this side of the
+> boundary: that the override files are written, that they resolve through
+> `resolve_customization.py` to a non-empty `on_complete`, that their text carries the fail-loud
+> and no-mirror obligations, that a user's overrides survive, and that the five shipped invariants
+> do not move.
+
+The `claude.ai Atlassian Rovo` MCP server is unauthorised and **cannot be authorised from a
+non-interactive session**. Nothing in this story compensates for that and nothing pretends to.
+
+#### AC7's residual, disclosed rather than hidden
+
+The hook is emitted as a **TOML array**, so a user's **array** override in `<skill>.user.toml`
+APPENDS and both instructions run — demonstrated through the real resolver (test 8.1: two
+elements, the publish first).
+
+**The residual: a user who writes a SCALAR `on_complete` in `<skill>.user.toml` replaces the
+publish hook outright, and the publish then does not happen, silently, at exit 0.** Demonstrated
+through the real resolver (test 8.2). It is **irreducible in the upstream merge model**:
+`deep_merge`'s fallthrough is `return override`, so anything that is not array + array replaces.
+That script ships from `bmad-method` and is re-copied on every install, so ma-agents cannot change
+it. **The remedy is to write the override as an array**, and the generated block's own comment says
+so in the file the customizer is looking at.
+
+#### AC10 — the wording Story 31.14's traceability sweep must record
+
+> Story 31.10's **AC1 (pages are created)**, **AC3 (a blank root page is created)** and **AC5 (a
+> re-run updates rather than duplicates)** are **MET BY STORY 31.15**, not "partially met". The
+> original escalation is **WITHDRAWN ON A SCOPE ERROR**: it proved a *location* fact — that those
+> five documents are not under `skills/` or `lib/bmad-extension/skills/` — and substituted it for a
+> *capability* fact — that ma-agents cannot cause them to publish. `ma-agents confluence-plan` is a
+> shipped command (`bin/cli.js:5384` / `:5702` / `:130`, with `:5546` and the by-design no-JS-caller
+> note at `:5378-5388`), and `bmad-method` is a runtime dependency (`package.json:35`) whose five
+> authoring skills reach a project through `installBmad()` (`lib/bmad.js:842` → `:375`).
+
+Story 31.10's `epics.md` definition and its `sprint-status.yaml` done-record are **byte-unchanged**
+(asserted by test 11.4).
+
+#### Three things in the story that are wrong
+
+1. **§4.1 / AC1's secondary authority over-states the activation contract.** The story says all five
+   skills "carry a **mandatory** customization-resolution step **and refuse to begin without it**".
+   Four do. **`bmad-architecture` carries no such sentence** — its `SKILL.md` has an `## On
+   Activation` section that resolves customization at step 1, but no "Do not begin the main workflow
+   until all activation steps have been completed". It is not a blocker: the load-bearing facts are
+   that the skill resolves customization at activation and runs `{workflow.on_complete}` at `:77`,
+   and it does both. Test 1.10 pins the exception as a named set so a second skill joining it fails.
+2. **The `on_complete` consumption shape is not uniform.** `bmad-create-epics-and-stories` does not
+   interpolate `{workflow.on_complete}` at all; it resolves the key **by name** in
+   `steps/step-04-final-validation.md:141-143`. A search for the braced form, or a search restricted
+   to `SKILL.md`, finds four of five. §4.1's table is right about the location; a reviewer checking
+   it with a substring search will get the wrong answer.
+3. **§5 / I3's "the release gate does not exist" is out of date.** `test/release-gate-epic-31.test.js`
+   **does** exist on this branch and its baseline is **43 passed / 0 failed** (not the "40 passed"
+   the story warns against, and not absent either). Re-derived, as §5 instructs.
+
+#### The one pinned number this story moved, and why
+
+`test/release-gate-epic-31.test.js` AC7.5h: the shipped tracked population `3249 → 3250` and the
+unscanned remainder `535 → 536`. **Exactly one file was added under a `package.json` `files` root**
+(`lib/confluence-publish-hook.js`), verifiable with
+`git diff --name-only <merge-base>..HEAD --diff-filter=A`. **The two SCANNED populations do not move
+at all** — markdown stays 2,332 and structured stays 382 — which is what says the FR266 scan was not
+narrowed. The suite still defines and runs **43** tests; `EXPECTED_TEST_COUNT` is untouched. The
+reason is written into the file beside the assertion, not only here.
+
+**What that costs, stated:** the new file is `.js`, so it lands in the release gate's *unscanned*
+remainder, and that file is where the hook's shipped instruction text is authored. The FR266
+negative for that text is carried instead by the new suite's §9, which **extracts**
+`MIRROR_VOCABULARY` from the release gate rather than restating it and asserts the hook text and the
+whole emitted block match **zero** entries. That is a mitigation in a second suite, not coverage in
+the gate; widening the gate's scan to `.js` would subsume it and is worth a reviewer's consideration.
+
+#### Not done, deliberately
+
+No push, no PR, no publish. No skill document touched. `epics.md` untouched (the Story 31.15 entry
+was already registered and needed no append; its `**Status:**` line is left as-is because epics.md
+statuses are stale across this epic — Story 31.14 still reads `backlog` there while `sprint-status.yaml`
+reads `review` — and `sprint-status.yaml` is the status authority). PRD, Decision P5-9 and every
+existing story definition unedited.
+
 ### File List
+
+```
+lib/confluence-publish-hook.js                             NEW  the generator, markers, TOML reader, detection
+bin/cli.js                                                 MOD  generateConfluencePublishHooks + its 3 call sites,
+                                                                the operator report, the status detection surface,
+                                                                the require and the exports
+test/project-layout-confluence-publish-hook.test.js        NEW  81 tests
+test/release-gate-epic-31.test.js                          MOD  AC7.5h population 3249->3250, remainder 535->536
+package.json                                               MOD  new suite at chain position 37
+.gitattributes                                             MOD  LF pin for the two new files
+_bmad-output/implementation-artifacts/31-15-*.md           MOD  this record
+_bmad-output/implementation-artifacts/sprint-status.yaml   MOD  31-15 entry + last_updated
+_bmad-output/implementation-artifacts/bug-system-requirements-store-has-no-ma-agents-owned-confluence-gate.md
+                                                           MOD  disposition note only; status stays OPEN
+```
