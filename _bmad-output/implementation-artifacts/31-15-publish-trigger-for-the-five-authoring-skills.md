@@ -1041,6 +1041,252 @@ Confluence remains MOCK-VERIFIED — the Atlassian Rovo MCP is still unauthorise
 authorised non-interactively. (5) Linux was never run; `npm test` was not run end to end (its chain
 position 1 and 20 are the two hazardous suites).
 
+#### FIX ROUND 3 — closing a third, independent REJECT
+
+No verdict is claimed here and the status stays `review`. This round did not write the story, the
+implementation, or fix rounds 1 and 2. The third review re-verified B1, B2, the BOM defect, M-e,
+M1b, M15, R10 and the §14 gap as genuinely closed and M6's rewritten reason as sound, and then filed
+**two blockers, one non-blocking finding ELEVATED to data loss, and four smaller items**.
+
+**BLOCKING-1 — the shipped block told users something that is not true.** The emitted comment, in
+all five files in a user's own project, said:
+
+> `ma-agents status` names that state if it happens, and the next install or bind refuses to
+> regenerate over it.
+
+Both halves were false for **21 of 22** measured malformations. Re-measured here on pristine
+HEAD `e1ad885`, end to end through the real `generatePublishHooks`, the real
+`detectPublishHookCollisions` and the real `_bmad/scripts/resolve_customization.py`:
+
+| team-layer content | generate | status | resolver | publish |
+| --- | --- | --- | --- | --- |
+| `prd_template = “assets/house-prd.md”` — curly quotes, pasted from Confluence or Teams | `wrote` | **silent** | exit 0 | **dead** |
+| `prd_template = C:\team\templates\prd.md` — an unquoted Windows path | `wrote` | **silent** | exit 0 | **dead** |
+| `tone = house-style` — forgot the quotes | `wrote` | **silent** | exit 0 | **dead** |
+| `prd template = "…"` — a space in a key | `wrote` | **silent** | exit 0 | **dead** |
+
+Root cause: the bundled reader validated key **structure** only. It never checked the bare-key
+charset, and **never inspected a right-hand side at all**. The module's internal comment was honest
+that it is a partial scanner; the text it emitted to users was not.
+
+**Step 1 — the emitted text now says only what the code does.** It reads:
+
+```
+# nothing reports it. `ma-agents status` names the collisions it can detect,
+# and the next install or bind refuses to regenerate over those. That check is
+# a partial scanner, not a full TOML parser: it can miss a malformation here
+# and stay silent. This warning is the guarantee; the check is not.
+```
+
+No guarantee is promised that the scanner cannot deliver, and the block now tells the reader which
+of the two — the warning or the check — to rely on.
+
+**Step 2 — done, and proved in BOTH directions.** Two checks, each a closed set, each written to be
+conservative about *refusing*:
+
+1. `bareKeyProblem` — a bare key segment is exactly `[A-Za-z0-9_-]+`, segments are separated by
+   exactly one `.`, and **quoted segments are skipped entirely**, so `"a b"`, `'a b'`, `""` and
+   `a."b c"` stay legal.
+2. `valueStartProblem` — a value's **first token** must be one of the things a TOML value can begin
+   with: `"` `'` `[` `{`, a sign, a digit, or one of the four bare words `true`/`false`/`inf`/`nan`.
+   TOML has exactly ten value types and that is the complete set of their initial characters. The
+   check deliberately says **nothing** about the rest of the value, because deciding it would mean
+   writing the number and date grammars and every one of those is a chance to refuse a valid file.
+
+**The both-directions differential.** Against real `tomllib`, in a subprocess:
+
+| direction | before | after |
+| --- | --- | --- |
+| 22 malformations `tomllib` REJECTS beside our block | ours accepted **21** | ours refuses **21**, accepts 1 (below) |
+| 31 hand-built legal files (every numeric, temporal, string, key and container form) | 2 falsely refused | **0** falsely refused |
+| every shipped upstream `customize.toml` in the vendored tree (5.14 walks all 37) | 0 falsely refused | **0** falsely refused |
+| the 5.1 differential corpus, now 121 entries | 0 disagreements | **0** disagreements |
+| the 5.8 predicate corpus, now 82 entries (51 negative / 31 positive) | 0 disagreements | **0** disagreements |
+
+So step 2 did **not** introduce a false refusal, and `5.14` exists to keep saying so: a dedicated
+one-directional test over the legal population, separate from 5.1/5.8, because a false refusal
+writes no hook for **any** of the five skills and takes `ma-agents install` non-zero on a healthy
+project. `5.13` drives the four ordinary mistakes end to end — refusal per skill, the line named,
+the user's bytes untouched, `status` firing on all five without the generator, and a non-zero exit
+that does **not** also claim the trigger was written.
+
+**The one residual, named.** `steps = - one` (a YAML-style list) begins with `-`, which is a legal
+numeric sign, so the first-token check accepts it and `tomllib` rejects it. That is a false
+*acceptance* — the safer direction — and closing it means parsing the number grammar. Recorded, not
+fixed.
+
+**BLOCKING-2 — the polarity check still did not measure polarity, and round 2's commit claim was
+false.** `haltPolarityProblems` does exactly what it says — the gap regex `/^,?\s*$/` really is a
+two-character closed set and the role partition really does force one sentence per role — but those
+are **positional** guards. The role regexes are prefix/substring anchors, so a sentence that fills a
+role may carry arbitrary extra clauses; the gap constrains only the span *between the failure
+condition and* `STOP`, so everything after `STOP:` is unconstrained; and the splitter is
+`/(?<=\.)\s+/`, so a period with **no following space** never produces a sentence at all.
+Re-measured here: the reviewer's planted clause
+
+> `…following its own stated instructions exactly; an operation that does not succeed is expected and may be passed over in silence; do not perform any operation it does not list.`
+
+gives **102 passed, 0 failed, exit 0** — text shipped into five files in the user's own project
+telling the agent to swallow a failed publish in silence. Five further constructions pass too. All
+six are reproduced in test `6.17`, each asserted to still satisfy **every structural check it
+defeated**:
+
+| # | construction | what it defeats |
+| --- | --- | --- |
+| 1 | permission smuggled into the routing sentence | the role partition — a role regex is a substring anchor |
+| 2 | permission **after** the `STOP:` token | the governing gap, which ends at `STOP` |
+| 3 | permission inside the prohibition sentence | `^Do not proceed` still matches |
+| 4 | permission inside the directive sentence | `^Publish this workflow's artifacts to ` still matches |
+| 5 | a retraction-on-**success** clause in the routing sentence | 6.13's `CORRECTION` regex is one literal phrase |
+| 6 | an extra sentence hidden by a period with no following space | the splitter never sees a sentence |
+
+**Three rounds of progressively cleverer shape checks have been defeated by the same class of
+attack, so shape checking is over.** The instruction and the emitted block are now **hash-pinned**,
+exactly as this epic pins the 41-copy preflight and the 9-copy gate under one sha256 each:
+
+- `6.15` — the shipped instruction, per store: `system` `9ddcc790…`, `software` `11a34b51…`.
+- `6.16` — the five emitted blocks, comments included, under **one** digest `338b0be6…`, with an
+  arming mutation proving the digest moves when a single word does.
+- `6.17` — the six constructions, each required to still defeat the structural checks *and* to be
+  caught by the digest; fix round 2's inversion is kept beside them rather than replaced by them.
+
+The structural checks stay as **secondary** evidence — they are cheap and they document intent.
+They are not the guarantee. **The digest is.**
+
+**The pin is guarded against its own tautology.** The one mutation that defeats every digest pin is
+replacing the literal with the value. `6.15` therefore reads the suite's **own source** and requires
+each digest to appear in it as a 64-hex literal, so a digest derived at run time fails (mutant P5).
+
+**ELEVATED from non-blocking — `findPublishHookBlock` destroyed user content.** It was a raw
+`indexOf` with no line-start, string or comment awareness, and `injectPublishHookBlock` **deletes the
+span between what it finds**. A user comment that merely *names* both markers — the most natural
+thing to write about a region you are told not to edit — was mistaken for ma-agents' region:
+
+```
+# house policy: never edit between # BEGIN:… and # END:…
+prd_template = "assets/house.md"
+        ↓
+# house policy: never edit between prd_template = "assets/house.md"
+```
+
+The team's only setting, swallowed into the middle of a comment. `scanForCollisions` returned `[]`,
+the outcome was `wrote`, the file still **parsed**, and `status` was silent — under a block whose own
+shipped text promises *"Anything OUTSIDE them is yours and is kept exactly as you left it"*. Data
+loss under a false promise is worse than either alone.
+
+`markerCommentOffsets` now requires a marker to **begin a line** (leading whitespace allowed, as TOML
+permits before a comment) and carries multi-line-string state across lines, so a marker quoted inside
+a value is a string rather than a region. Because every marker itself starts with `#`, a marker at
+the start of a line **is** a genuine comment line by TOML's own rules. Test `4.9` uses the reviewer's
+exact fixture and asserts five things: the comment is not a region; removal over it is a byte-level
+no-op; the setting survives generation and still **resolves** through the real resolver; a marker
+inside a multi-line string is likewise not a region; and — the arming half — the *genuine* block is
+still found at offset 0 and still round-trips, so the fix has not traded data loss for a block that
+can never be replaced and accumulates on every install.
+
+**Empty quoted keys no longer refuse valid TOML.** `"" = 1` and `[""]` are legal — measured, not
+reasoned about — and `splitDottedKey`'s blanket `.filter(p => p !== '')` emptied the path, so the
+reader reported "empty key" → `refused-invalid-toml` → **no hook for any of the five skills**. The
+filter now keeps an empty **quoted** segment and drops only an empty **bare** one, which
+`bareKeyProblem` reports by name instead.
+
+**A second false refusal of the same family, surfaced by the corpus added for the first.** Path
+identity was `parts.join(' ')`, so `"a b" = 1` and `a.b = 2` — two different key paths `tomllib` is
+perfectly happy to hold in one file — collided as *"cannot define a.b twice"*, which refuses the
+install on a healthy project. Serialisation is now `JSON.stringify(parts)`. This was **not** on the
+review's list; it was found by the new `5.14` fixture and fixed here because it is literally the
+defect the empty-key item names, in another spelling. Mutant **E2** replants it.
+
+**`PREDICATE_CORPUS` is pinned by exact count and by content.** Its floors (`>= 22` / `>= 19`) let
+any single entry be deleted unnoticed, and M-d and M-b each hang on one or three unpinned entries.
+`5.12` now pins the size (**82**), the exact verdict split (**51 negative / 31 positive**), a sha256
+over every name and body (`42e813fd…`), and name uniqueness. `5.8`'s floors became exact equalities
+bound to the same constants.
+
+**Recorded, not fixed: `\uXXXX` / `\UXXXXXXXX` escapes in quoted keys.**
+`splitDottedKey` copies the character *after* a backslash literally, so `"\u0061"` resolves to the
+five-character key `u0061` rather than to `a`. Measured on the fixed code:
+`workflow."\u006Fn_complete" = "x"` yields the path `["workflow","u006Fn_complete"]` and
+`scanForCollisions` returns `[]` — while `tomllib` reads that same line as `workflow.on_complete`.
+So the predicate accepts a file that reproduces B1's end state. Contrived (nobody writes a BMAD
+override that way), and closing it means implementing TOML's escape grammar inside a scanner whose
+whole warrant is that it is small. **Known residual, with its mechanism — not a closed item.**
+
+**M-m is withdrawn as a mutation survivor.** Deleting a test's own assertion is a **test-oracle**
+mutation, not a code mutant: no suite can catch the deletion of one of its own assertions, and
+listing it in a survivor column overstates what the battery measured. It is not a survivor and not
+an open gap, and it should not be reported as either again.
+
+**One mutant SURVIVED the first battery, and it found a real corpus gap.** `V5` replaced
+`valueStartProblem`'s closed four-word set `/^(true|false|inf|nan)$/` with `/^[tfin]/` — the
+shortcut anyone writing that check reaches for — and passed **109/0**. The reason: not one corpus
+entry carried a bare value beginning with a lowercase `t`, `f`, `i` or `n` that was not one of the
+four legal bare words, so the difference between "is one of these four words" and "starts with one
+of these four letters" was invisible. Four entries added (`templates/prd.md`, `falsey`,
+`interactive`, `none` — `tomllib` rejects every one), a fifth added to the 5.1 corpus, the corpus
+pins moved with them, and `V5` **and** a wider `V5b` (accept ANY bare word) were replanted: both
+now die. The gap is recorded here rather than patched quietly, because it is exactly the kind of
+thing the corpus pin exists to keep visible.
+
+##### The fix-round-3 mutation battery
+
+Every mutant was applied, the suite run, and the file restored **in the same step**; blob hashes of
+`lib/confluence-publish-hook.js` and the suite were printed before and after and are identical
+(`git status --porcelain` clean afterwards). The battery deliberately attacks the **hash pin** first,
+because a pin is only worth what its arming is.
+
+| mutant | what it removes or restores | verdict |
+| --- | --- | --- |
+| `P1` | plant the reviewer's exact permission clause into the shipped instruction | **KILLED** — 6.15, 6.16, 6.17 |
+| `P2` | permission AFTER the STOP token, where the gap regex cannot reach | **KILLED** — 6.15, 6.16, 6.17, 9.4 |
+| `P3` | an extra sentence hidden by a period with NO following space | **KILLED** — 6.15, 6.16, 6.17 |
+| `P4` | restore the FALSE PROMISE in the emitted block comment | **KILLED** — 6.16 |
+| `P5` | make the block digest a TAUTOLOGY — derive it instead of typing it | **KILLED** — 6.15 |
+| `V1` | stop inspecting the right-hand side at all | **KILLED** — 5.1, 5.8, 5.13 |
+| `V2` | stop checking the bare-key charset on keys | **KILLED** — 5.1, 5.8, 5.13 |
+| `V3` | stop checking the bare-key charset on TABLE HEADERS | **KILLED** — 5.8 |
+| `V4` | widen the bare-key charset to admit anything non-space | **KILLED** — 5.1, 5.8 |
+| `V5` | admit any letter as a value opener (the lazy true/false/inf/nan shortcut) | **KILLED** — 5.1, 5.8 |
+| `V5b` | accept any bare word as a value (drop the four-word closed set) | **KILLED** — 5.8 |
+| `V6` | drop the separator requirement, so a space inside a key passes | **KILLED** — 5.1, 5.8, 5.13 |
+| `E1` | restore the blanket empty-segment filter | **KILLED** — 5.1, 5.8, 5.14 |
+| `E2` | restore the space-joined path key | **KILLED** — 5.1, 5.14 |
+| `M1` | revert marker location to a raw indexOf | **KILLED** — 4.9 |
+| `M2` | accept a marker anywhere on the line, not only at its start | **KILLED** — 4.9 |
+| `M3` | drop the multi-line-string awareness | **KILLED** — 4.9 |
+| `C1` | delete one corpus entry | **KILLED** — 5.12, 5.8 |
+| `C2` | swap one corpus entry for a weaker one at the SAME count | **KILLED** — 5.12 |
+
+Blobs before and after: `lib=b5921a70bb0f test=eb79fe3a9e2b` — identical.
+
+**19 mutants planted, 19 applied, 0 survivors.** This is the SECOND battery: V5 survived the first one and the corpus gap it found is described above. A zero here is not offered as a clean sweep on its own — the battery is listed so its REACH can be judged. What was tried and is NOT in it: mutations of the suite's own assertions (a test-oracle mutation, which no suite can catch — see M-m), and editing the shipped text together with its digest (which the pin is designed to permit, because its whole purpose is to force a human to re-read the text rather than to make the text immutable).
+
+**Suites and invariants re-derived at fix-round-3 HEAD.** Story suite **109/0**, exit 0
+(`EXPECTED_TEST_COUNT` 102 → 109, deliberately: 4.9, 5.12, 5.13, 5.14, 6.15, 6.16 and 6.17 are new;
+nothing was weakened or deleted, and no existing assertion was relaxed). `release-gate-epic-31`
+**43/0**, `story-15-5-workflow-skills` **157/0**, `project-layout-confluence-routing` **97/0**,
+`project-layout-confluence-page-tree` **157/0**, `project-layout-artifact-routing` **59/0** (with
+`_bmad-output/methodology/` absent from this worktree), `project-layout-staleness-guard` **64/0** —
+all exit 0. I1 preflight **41 copies, split 13-14-14, one sha256 `ca9bf25b…`**; I2 gate **9 copies,
+split 3-3-3, one sha256 `cda3d3d9…`** — both re-derived independently of the suite as well as by
+tests 11.2/11.3. **No pinned number moved.** Nothing under `skills/`, `lib/bmad-extension/skills/`
+or `lib/bmad-extension-plugin/` changed.
+
+**Still open after this round.** (1) The `\uXXXX` escape residual above — recorded with its
+mechanism. (2) `steps = - one`: a value whose first character is legal and whose remainder is not is
+still accepted; the safer direction, closable only by parsing the number grammar. (3) The reader is
+still **not** `tomllib`; 5.1 and 5.8 say agreement *over their corpora* and nothing more, and the
+corpora are now pinned so the warrant cannot shrink silently. (4) The hash pin binds a human to
+re-read the text; it cannot stop someone who edits the text and the digest together, which is the
+point of it rather than a gap in it. (5) The `fs` interception's two escapes (N3) remain documented
+rather than closed; 3.1/3.2 carry the guarantee. (6) Hazard C is unchanged — upstream
+`bmad-customize` still instructs the third writer to use the exact scalar form that replaces the
+publish, and only upstream can resolve that. (7) Everything about a live Confluence remains
+MOCK-VERIFIED: the Atlassian Rovo MCP is still unauthorised and cannot be authorised
+non-interactively. (8) Linux was never run; `npm test` was not run end to end (chain positions 1 and
+20 are the two hazardous suites). **Ten attacks have landed across this epic. This is not predicted
+to be the last.**
+
 #### Not done, deliberately
 
 No push, no PR, no publish. No skill document touched. `epics.md` untouched (the Story 31.15 entry
@@ -1064,6 +1310,17 @@ lib/confluence-publish-hook.js                             NEW  the generator, m
                                                                 inlineTableEntries so R10 resolves through an
                                                                 inline table (B2); a bare-position U+FEFF is a
                                                                 reader problem, as tomllib has it
+                                                           FIX3 bareKeyProblem + valueStartProblem — the reader
+                                                                now checks the bare-key charset and a value's
+                                                                opening token (BLOCKING-1 step 2);
+                                                                markerCommentOffsets — a marker counts only at
+                                                                line start, outside a multi-line string, so a
+                                                                comment NAMING the markers is no longer treated
+                                                                as our region and its content deleted;
+                                                                splitDottedKey keeps an EMPTY QUOTED segment;
+                                                                path identity is JSON.stringify, not join(" ");
+                                                                the block comment no longer promises a
+                                                                guarantee the scanner cannot deliver
 bin/cli.js                                                 MOD  generateConfluencePublishHooks + its 3 call sites,
                                                                 the operator report, the status detection surface,
                                                                 the require and the exports
@@ -1072,7 +1329,7 @@ bin/cli.js                                                 MOD  generateConfluen
                                                            FIX2 remediesFor() — a remedy per collision KIND,
                                                                 shared by the install/bind reporter and the
                                                                 status reporter, with a named fallback (N2)
-test/project-layout-confluence-publish-hook.test.js        NEW  81 tests -> FIX1 100 -> FIX2 102 tests
+test/project-layout-confluence-publish-hook.test.js        NEW  81 tests -> FIX1 100 -> FIX2 102 -> FIX3 109
                                                            FIX2 new 5.11 (B1 end to end) and 6.14 (per-kind
                                                                 remedies); 5.3 carries the B1 shape and states
                                                                 its claim per outcome; 6.13 gains a closed-set
@@ -1082,6 +1339,14 @@ test/project-layout-confluence-publish-hook.test.js        NEW  81 tests -> FIX1
                                                                 resolve all five to their own stores;
                                                                 PREDICATE_CORPUS 22->48, CORPUS 26->33;
                                                                 the 3.4 and 5.1/5.8 claims corrected (N3/N4)
+                                                           FIX3 new 4.9 (the marker data-loss fixture), 5.12
+                                                                (the corpus pinned by count AND content), 5.13
+                                                                and 5.14 (BLOCKING-1 in both directions), 6.15
+                                                                and 6.16 (the sha256 pins, with the derived-
+                                                                digest tautology guarded), 6.17 (the six
+                                                                constructions that defeated the shape checks);
+                                                                PREDICATE_CORPUS 49->78, CORPUS 33->46 hand-built;
+                                                                5.8's floors became exact equalities
 test/release-gate-epic-31.test.js                          MOD  AC7.5h population 3249->3250, remainder 535->536
 package.json                                               MOD  new suite at chain position 37
 .gitattributes                                             MOD  LF pin for the two new files
