@@ -1469,8 +1469,8 @@ covered a guard and did not.
 
 | survivor | why it is not closed |
 | --- | --- |
-| `M12` `out.push(offset)` for `offset + k` | Near-equivalent **by construction**: `line.trim() === marker` means only whitespace can precede a marker, so it can only mis-place an offset inside indentation, never touch user content. Measured on a hand-indented block, the real code leaves ma-agents' own two spaces glued to the following user line and the mutant does not — the mutant's output is arguably the tidier one. The suite is not contorted to pin the less tidy behaviour. |
-| `M18` tabs not skipped in the leading-whitespace scan | The same thing by another route; same class, same bound. |
+| `M12` `out.push(offset)` for `offset + k` | ⚠️ **THIS ROW IS WRONG AS WRITTEN AND IS CORRECTED IN ROUND 5 — see "C1" below. It is left here verbatim because it is the finding's provenance.** ~~Near-equivalent **by construction**: `line.trim() === marker` means only whitespace can precede a marker, so it can only mis-place an offset inside indentation, never touch user content. Measured on a hand-indented block, the real code leaves ma-agents' own two spaces glued to the following user line and the mutant does not — the mutant's output is arguably the tidier one. The suite is not contorted to pin the less tidy behaviour.~~ The "never touch user content" half is TRUE. The "arguably the tidier one" half is FALSE: against this round's `end + PUBLISH_HOOK_MARKER_END.length` arithmetic the mutant's `end` lands **inside the END marker text** and leaves marker debris — `"sh\n"` on a two-space indent, `"h\n"` on one — which is **invalid TOML, not tidier**. |
+| `M18` tabs not skipped in the leading-whitespace scan | The same thing by another route; same class, same bound. **Same correction as `M12` applies.** |
 | `M15` drop the trailing-CR strip | Equivalent: `trim()` already removes `\r`. Measured on a CRLF file — region found at offset 0, round-trip exact. The strip is now redundant for the equality test. |
 | `M14` don't blank the candidate span when markers are ambiguous | Report-quality only. Without the blanking an extra `on_complete-outside-markers` is reported *alongside* the ambiguity — a true statement about the wrong thing — but the write is still refused and `status` still names the ambiguity. No safety difference. |
 | `E15` lowercase the hex before testing it | Equivalent: the test is `/^[0-9a-fA-F]+$/` and the hex string is not used for anything else. |
@@ -1528,6 +1528,255 @@ each move paired with its count and split and each recorded in its own commit. N
 **Eleven attacks have landed across this epic, and this round found four more gaps by mutation after
 the fixes were written. This is not predicted to be the last.**
 
+#### Fix round 5 — one blocking defect, and three corrections to this record
+
+*(A fifth independent review, which re-verified round 4 and found NOTHING of class (a). No verdict is
+claimed here; status stays `review`.)*
+
+**B1 (BLOCKING) — invisible trailing whitespace on ma-agents' OWN END marker silently kills the
+file.** Three lines, and the defect is the join between them:
+
+1. `markerCommentOffsets:1089` — `if (line.trim() === marker) out.push(offset + k)`.
+   `String.prototype.trim()` strips the **full Unicode WhiteSpace set**, so
+   `# END:ma-agents-confluence-publish<U+00A0>` is still recognised as ma-agents' marker.
+2. `findPublishHookBlock:1160` — `const stop = end + PUBLISH_HOOK_MARKER_END.length`. The region's
+   end was *marker start + marker length*, so it stopped **before** the character `trim()` forgave.
+3. `removePublishHookBlock:1179-1186` — `content[found.end]` is the U+00A0, not `\n`, so no newline was
+   swallowed and the splice left **a line containing only U+00A0**, which is invalid TOML.
+
+Measured end to end against the real `resolve_customization.py`, on **both** the write path and the
+removal path, with plain-space and tab controls that behave correctly throughout:
+
+| END marker suffix | input parses? | generator | `refused` | `status` | file after | `on_complete` | `prd_template` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| trailing **space** (control) | yes | `wrote` / `removed` | `false` | `[]` | **VALID** † | array, len 1 / gone as asked | preserved |
+| trailing **tab** (control) | yes | `wrote` / `removed` | `false` | `[]` | **VALID** † | array, len 1 / gone as asked | preserved |
+| **U+00A0** | yes | `wrote` / `removed` | `false` | `[]` | **INVALID** `Invalid statement (at line 31/1, column 1)` | **`""` — no publish** | **`undefined`** |
+| **U+2007** | yes | `wrote` / `removed` | `false` | `[]` | **INVALID** | **`""`** | **`undefined`** |
+| **U+3000** | yes | `wrote` / `removed` | `false` | `[]` | **INVALID** | **`""`** | **`undefined`** |
+
+† **valid, but not byte-identical on removal** — the controls left a whitespace-only line behind. That
+is `C2` below, and B1's fix closes it too.
+
+The input parses — a trailing NBSP is legal *inside a TOML comment* — and the file ma-agents writes
+does not. **The write path's own proof-before-disk did not catch it either**: `generatePublishHooks`
+validates with `tomlProblems(next)` at `:1528`, and the bundled reader **false-accepts** a bare NBSP
+line (`buf.trim()` reduces it to the empty string and it is dropped as a blank line). Measured:
+U+00A0, U+2007 and U+3000 all read clean; **U+FEFF is the only member of the family that reader
+catches**, which is why round 2's BOM work closed one spelling of this and stopped.
+
+**Reachability is low** — it takes non-ASCII whitespace appended to ma-agents' own generated marker,
+which is what a paste through a rendered Confluence page, a browser, or Word produces — **but the
+consequence is silent.** Class (b): success reported over a failed publish.
+
+**The fix, and why this one of the review's two options.** The review offered either (i) moving the
+region's start to the marker's real start and taking `stop` to end-of-line, or (ii) adding a
+bare-illegal-whitespace-line rule to the reader. **Option (i)'s trailing half is taken; option (ii)
+is declined, and so is option (i)'s leading half.** The reasons are measured, not stylistic:
+
+- **Option (ii) cannot close the removal path.** `generatePublishHooks`'s `!wantsHook` branch writes
+  `stripped` with **no validation at all** — there is no `tomlProblems` call on that path. A reader
+  rule would leave the flip-away-from-Confluence path exactly as broken. Measured.
+- **Option (ii) would also answer with the wrong thing.** The mangled file is one *ma-agents itself*
+  produced; a refusal tells the user their file is bad. Closing the span writes the correct bytes
+  instead, and introduces **no new rejection**, so it carries **zero false-refusal exposure** — the
+  direction this module names as the worse one throughout.
+- **Option (i)'s leading half — `out.push(offset + line.indexOf(marker))` — is the same defect
+  mirrored.** `markerCommentOffsets` returns the offset after **ASCII** indentation, so leading
+  whitespace `trim()` forgave is *already inside* the span and leaves with the block. `indexOf`
+  pushes the span **past** a leading NBSP. Measured, planted as mutant `N7`:
+  `removePublishHookBlock` then leaves `"<U+00A0>foo = 1\n"` and real `tomllib` answers
+  `Invalid statement (at line 1, column 1)`. **It was adopted nowhere and is pinned against.**
+
+So: a new `endOfMarkerLine(content, markerStart)` closes the span at that line's `\n`, or at
+`content.length`. It is safe by construction — the line was accepted only because `line.trim()` **is**
+the marker, so everything between the marker and the newline is whitespace. `candidateEnd` on the
+ambiguous branch uses it too. **No emitted byte changes**; this is a change to how a file is *read*.
+
+After the fix, the same fixtures on both paths: every row `wrote` / `removed`, every file **VALID**
+under real `tomllib`, `on_complete` a one-element array (or removed as asked), `prd_template`
+preserved. **The space and tab controls stay green — and are now byte-exact on removal, which they
+were not before** (see `C2`).
+
+Test **`4.11`** carries the review's exact fixtures. It judges each fixture **independently and
+accumulates every failure** rather than aborting on the first — the `M17` lesson from round 4 applied
+to a test: with a plain `assert` per fixture, a regression in the U+3000 case hides behind a failure
+in the plain-space case and the arming run can only ever name one of five. It has its own **arming
+half** (the mangled marker must still be *recognised*, or every claim below it is vacuous), it names
+**the arithmetic itself** and not only its consequence, and it runs both paths end to end through
+real `tomllib` and the real resolver. It also carries the **leading-side mirror** and the
+**no-trailing-newline** shape, both added after mutants `N7` and `N1` walked through the first
+version of it.
+
+**Armed, measured:** with `stop` restored to `end + PUBLISH_HOOK_MARKER_END.length` the suite is
+**111/1, exit 1**, and `4.11` names **29 failed checks across 24 fixture groups** — for each attack,
+real `tomllib`'s `Invalid statement (at line 31, column 1)` on the file ma-agents had just written;
+for each control, the AC3(d) byte-identity break. (Before the mirror and EOF fixtures were added the
+same run named 18 checks across all five original fixtures.)
+
+##### The three record corrections
+
+**C1 — the `M12` survivor row (`:1472`) was materially wrong, and it is where B1 was one step away.**
+The row said the mutant's output was *"arguably the tidier one"* and that the mis-placement *"can only
+mis-place an offset inside indentation, never touch user content."* Measured against the round-4
+arithmetic on a hand-indented block: the mutant's `end` lands **inside the END marker text**, leaving
+marker debris on a line of its own, which real `tomllib` rejects:
+
+| block indent | debris left on the line | `tomllib` |
+| --- | --- | --- |
+| two spaces | `"sh\n"` | `Expected '=' after a key in a key/value pair (at line 1, column 3)` |
+| one space | `"h\n"` | `Expected '=' after a key in a key/value pair (at line 1, column 2)` |
+| one tab | `"h\n"` | `Expected '=' after a key in a key/value pair (at line 1, column 2)` |
+| none (control) | none | VALID |
+
+**Invalid TOML, not tidier.** The *"never touch user content"* half is true; the *"tidier"* half is
+false. The row is corrected in place, struck through rather than deleted, because **this row is B1's
+real provenance and that belongs in the record**: it observed that the offset can be mis-placed,
+concluded "never touch user content", and **stopped one step before asking what the marker-length
+arithmetic at `:1160` does with a mis-placed offset.** The identical reasoning error covers `M18`.
+Against *this round's* arithmetic `M12` survives again, and now genuinely: with the span closed at
+end-of-line there is no debris, and the mutant's output — which also drops ma-agents' own indentation
+— is at last the tidier one. It stays open as a deliberate, analysed survivor.
+
+**C2 — a trailing PLAIN SPACE on the END marker left a whitespace-only line on removal.** Measured at
+round-4 HEAD: removal left `" \nprd_template = …"` (and `"\t\n…"` for a tab). **Valid TOML,
+non-accumulating, cosmetic** — the resolver reads the file correctly and a second install does not
+add another — so it was never a publish failure. It is recorded because it is the *legal* half of
+B1's family and it was unrecorded. **It is closed incidentally by B1's fix** (the trailing space is
+now inside the span), and `4.11`'s controls pin the byte-exact round trip so it cannot return.
+
+**C3 — a USER-MANGLED END marker refuses with the wrong finding leading.** `# END:<marker> keep` is
+not ma-agents' marker (round 4's equality test, correctly), so the block becomes a **half-block**.
+Measured on a file real `tomllib` calls VALID:
+
+| surface | what it says |
+| --- | --- |
+| generator | `refused-collision`, `refused: true`, collisions **`["on_complete-outside-markers"]`** — the half-block is **not listed at all** |
+| first detail | `` `workflow.on_complete` is defined outside ma-agents' markers `` |
+| `ma-agents status` | **`["begin-marker-without-end", "on_complete-outside-markers"]`** — both kinds, the cause **first** |
+| the user's file | untouched, on the write path and on the flip-away path (`not-applicable`) alike |
+
+So the *refusal* leads with the symptom rather than the cause, because `COLLISION_HALF_BLOCK` is
+deliberately non-blocking and is filtered out of the blocking list, while the block's own
+`workflow.on_complete` — now outside any named region — is read as a competing definition. **`status`
+does show both, with the cause first.** **Pre-existing, message-quality only, no safety difference**:
+the write is refused, nothing is written over the user's bytes, and the removal path is a
+byte-for-byte no-op. Recorded, not fixed — the remedy is a report-ordering question, and this round
+is scoped to one blocking defect.
+
+##### What was deliberately NOT widened
+
+The review found **nothing of class (a)**. The two silent-deletion marker shapes it constructed behave
+**identically at `ebee3b4` and at HEAD** — they are the block's own documented contract, not
+regressions — and they are left alone; round 4 strictly *narrowed* marker recognition. The
+known-accepted list is untouched: `N3` (multi-line inline table), raw control characters, `\uXXXX` in
+quoted keys, the `\"""` blindness, `steps = - one`, and the value-based nature of the `6.15` pin.
+
+##### The fix-round-5 mutation battery
+
+Eight mutants, all aimed at the NEW arithmetic. Every one was applied, the story suite run, and the
+file restored **in the same step**; the script asserts the blob hash after each revert and aborts if
+it differs. Baseline and final blob for `lib/confluence-publish-hook.js` are identical
+(`3e39cfe8e995…`), with `git status --porcelain` showing only the record and the test file.
+
+The battery was run **twice**: once against the fix as first written, and again after the two gaps it
+found were closed.
+
+| mutant | what it changes | first run | after the fixtures |
+| --- | --- | --- | --- |
+| `N0` | `stop` back to `end + PUBLISH_HOOK_MARKER_END.length` (the defect itself) | **KILLED** — 4.11 | **KILLED** — 111/1, 4.11 names **29 failed checks across 24 fixture groups** |
+| `N1` | `endOfMarkerLine`: no newline → return `markerStart`, not `content.length` | **SURVIVED** → gap closed | **KILLED** — 4.11 |
+| `N2` | `endOfMarkerLine`: search from offset 0 instead of from `markerStart` | **KILLED** — 95/17 | **KILLED** |
+| `N3` | `endOfMarkerLine`: return `nl + 1`, swallowing the newline into the span | **KILLED** — 4.11 | **KILLED** |
+| `N4` | `candidateEnd` back to `last + MARKER_END.length` (ambiguous branch) | **SURVIVED** | **SURVIVED** |
+| `N5` | `removePublishHookBlock`: drop the CRLF arm | **SURVIVED** | **SURVIVED** |
+| `N6` | close the span from the **BEGIN** line rather than the END line | **KILLED** — 96/16 | **KILLED** |
+| `N7` | `out.push(offset + line.indexOf(marker))` — the review's other half | **SURVIVED** | **KILLED** — 4.11 |
+| `N8` | `out.push(offset)` — round 4's `M12`, re-run against the new arithmetic | **SURVIVED** | **SURVIVED** |
+
+**TWO MUTANTS FOUND REAL, UNPINNED GAPS IN THE FIX AS FIRST WRITTEN, and both are recorded here
+rather than quietly patched.**
+
+- **`N7` is the more serious of the two.** It is *the reviewer's own other half* of option (i), and it
+  survived at **112/0** — meaning the module's new comment asserted "the leading side is already
+  safe" and **nothing in the suite held that claim.** Measured, it leaves `"<U+00A0>foo = 1\n"` and
+  real `tomllib` answers `Invalid statement (at line 1, column 1)`: B1 mirrored onto the leading
+  side. Nine fixtures were added (three whitespace positions × the five-char axis) and it dies.
+- **`N1`** survived at **112/0** too, and leaves a **stray `# END:…` line on disk** when the block is
+  the last line of a file with no trailing newline — the exact residue `4.10 (D)` / `M17` shows is
+  hazardous, because a stray END above a later BEGIN makes removal *duplicate* bytes. Six fixtures
+  (the block at EOF with no final newline, with each of the five suffixes and with none) and it dies.
+
+**THREE SURVIVORS, all analysed, none closed — each a deliberate decision, not an omission.**
+
+| survivor | why it is not closed |
+| --- | --- |
+| `N4` `candidateEnd` back to `+ marker.length` | **Report-quality only, and the same class as round 4's `M14`.** `candidateEnd` feeds `blankRange` on the AMBIGUOUS path *only*, and **nothing is ever written on that path** — `COLLISION_AMBIGUOUS_MARKERS` blocks it and `end` stays `null`, so removal is a byte-for-byte no-op. The worst it can do is report an extra `file-does-not-parse` beside the ambiguity: a true statement about the wrong thing. No safety difference. |
+| `N5` drop the CRLF arm | **Equivalent by construction, and knowingly dead code.** `endOfMarkerLine` now returns a `\n` offset or `content.length`, so `content[found.end]` can never be `\r`; the arm is kept as a guard against a future narrowing of `endOfMarkerLine`, and that intent is written beside it. Deleting it changes nothing today, which is exactly what the mutant measures. |
+| `N8` `out.push(offset)` — round 4's `M12` | **Near-equivalent, and now genuinely the tidier output** — which it was *not* before this round (see `C1`). With the span closed at end-of-line there is no marker debris; the mutant simply also drops ma-agents' own indentation. Only whitespace can precede a marker, so it still cannot touch user content. The suite is not contorted to pin the less tidy behaviour. |
+
+**This is not offered as a clean sweep.** Two of eight mutants found real gaps in code written *this
+round*, after the fix was already believed complete — the fourth round running in which a battery
+found something the fix itself had missed.
+
+##### Suites and invariants re-derived at fix-round-5 HEAD
+
+Story suite **112/0**, exit 0 (`EXPECTED_TEST_COUNT` 111 → 112, deliberately: `4.11` is new; nothing
+was weakened or deleted and no existing assertion was relaxed). `release-gate-epic-31` **43/0**,
+`story-15-5-workflow-skills` **157/0**, `project-layout-confluence-routing` **97/0**,
+`project-layout-confluence-page-tree` **157/0**, `project-layout-artifact-routing` **59/0**,
+`project-layout-staleness-guard` **64/0** — all exit 0. I1 preflight **41 copies, split 13-14-14, one
+sha256 `ca9bf25b…`**; I2 gate **9 copies, split 3-3-3, one sha256 `cda3d3d9…`**. **No pinned number
+moved.**
+
+**The hash pins did NOT move, re-derived OUTSIDE the suite.** `9ddcc790…` (system instruction),
+`11a34b51…` (software instruction) and `338b0be6…` (the five emitted blocks under one digest) were
+each recomputed from `publishHookInstruction` / `buildPublishHookBlock` in a standalone script and
+matched exactly. That is the expected result and it is the check that this round did not change what
+is *emitted*: `PREDICATE_CORPUS_DIGEST` did **not** move either, because no corpus entry was added —
+the fix introduces no new reader rule.
+
+**Both directions, so no false refusal was introduced.** The change adds no rejection at all, so the
+exposure is structurally nil; it was measured anyway. Eleven legal shapes — a plain user file, a CRLF
+file with the block, the block indented by spaces and by a tab, an END marker with two leading *and*
+two trailing spaces, a leading NBSP before BEGIN, before END, and after ASCII indentation, the block
+at EOF with and without a trailing newline, and a marker quoted inside a multi-line string — each
+answered `collisions: []`, injected to a file real `tomllib` calls VALID, was byte-identical on a
+second injection, and parsed after removal. And `5.14` (31 hand-built legal files plus every shipped
+upstream `customize.toml`), `5.1`, `5.8` and `5.15` are untouched and still green.
+
+**U+FEFF behaves as it did.** The reader's BOM rule is unchanged and still fires on a BOM at offset 0,
+mid-file, and moved inward by `injectPublishHookBlock`, and still accepts one inside a basic string, a
+literal string, a comment and a quoted key — matching `tomllib` on all seven. A **bare U+FEFF line**
+is still the one member of this whitespace family the reader catches. One behaviour *does* change and
+is disclosed: a **trailing U+FEFF on the END marker** used to make the write path answer
+`refused-invalid-toml` (the stranded BOM became a bare line that the reader *did* see); it now
+round-trips cleanly and answers `wrote`, with the file valid and the publish live. That is the same
+correction the other three receive — the refusal was accidental, not designed, and no test pinned it.
+On the **removal** path, trailing U+FEFF was silently broken exactly like U+00A0 and is now fixed
+too.
+
+##### Still open after this round
+
+Everything on round 4's list stands unchanged, plus:
+
+1. **The bundled reader still false-accepts a bare non-ASCII-whitespace line.** B1 is closed at the
+   arithmetic, so ma-agents no longer *creates* one — but a **user-authored** bare U+00A0 / U+2007 /
+   U+3000 line is a **pre-existing** divergence from `tomllib` that survives. Measured on a team file
+   that already contains one: the generator answers `wrote` with `refused: false`, `status` is `[]`,
+   and the resolver discards the whole team layer at exit 0 (`on_complete` → `""`). The distinction
+   from B1 matters and is not a softening: **that file was already invalid before ma-agents touched
+   it** — the publish was already dead and ma-agents did not break it — whereas B1 was ma-agents
+   corrupting a file that had parsed. It is a **detection** gap, not a corruption. `U+FEFF` in the
+   same position IS caught (`refused-invalid-toml`, `file-does-not-parse` on `status`), which is the
+   asymmetry the review named. It is left open rather than closed in this round because closing it
+   means adding a **new rejection rule** to the reader, with its own false-refusal exposure, a corpus
+   expansion and a `PREDICATE_CORPUS_DIGEST` move — a change outside a fix round scoped to one
+   blocking defect and three record corrections. **It is a reviewer's call, and the evidence for it
+   is above.**
+2. **Four mutants survived this round's own battery and are reported below, not quietly patched.**
+   Two others (`N1`, `N7`) found real unpinned gaps in the fix as first written and were closed.
+
 #### Not done, deliberately
 
 No push, no PR, no publish. No skill document touched. `epics.md` untouched (the Story 31.15 entry
@@ -1562,6 +1811,16 @@ lib/confluence-publish-hook.js                             NEW  the generator, m
                                                                 path identity is JSON.stringify, not join(" ");
                                                                 the block comment no longer promises a
                                                                 guarantee the scanner cannot deliver
+                                                           FIX5 endOfMarkerLine — the marker region now closes at
+                                                                the END marker's LINE ending instead of at
+                                                                `marker start + marker length`, so trailing
+                                                                Unicode whitespace that `trim()` forgave leaves
+                                                                WITH the block instead of being stranded on a
+                                                                line of its own (B1); `candidateEnd` uses it too;
+                                                                `markerCommentOffsets` and
+                                                                `removePublishHookBlock` gain the reasoning that
+                                                                makes the leading side safe WITHOUT moving the
+                                                                span's start. NO emitted byte changes.
 bin/cli.js                                                 MOD  generateConfluencePublishHooks + its 3 call sites,
                                                                 the operator report, the status detection surface,
                                                                 the require and the exports
@@ -1588,6 +1847,15 @@ test/project-layout-confluence-publish-hook.test.js        NEW  81 tests -> FIX1
                                                                 constructions that defeated the shape checks);
                                                                 PREDICATE_CORPUS 49->78, CORPUS 33->46 hand-built;
                                                                 5.8's floors became exact equalities
+                                                           FIX5 new 4.11 (B1: trailing Unicode whitespace on our
+                                                                own END marker, five fixtures on one axis with
+                                                                the plain space and tab as legal CONTROLS, both
+                                                                the write and the removal path end to end
+                                                                through real tomllib and the real resolver, plus
+                                                                the leading-side mirror and the no-trailing-
+                                                                newline shape that mutants N7 and N1 walked
+                                                                through); EXPECTED_TEST_COUNT 111->112.
+                                                                No corpus and no digest moved.
 test/release-gate-epic-31.test.js                          MOD  AC7.5h population 3249->3250, remainder 535->536
 package.json                                               MOD  new suite at chain position 37
 .gitattributes                                             MOD  LF pin for the two new files

@@ -1320,9 +1320,69 @@ test('4.11 AC3(b)/AC4 [SILENT PUBLISH FAILURE] trailing UNICODE whitespace on OU
     });
   }
 
+  // ── THE MIRROR, and why the region's START is deliberately NOT moved.
+  //
+  //    `markerCommentOffsets` returns the offset after ASCII INDENTATION, not
+  //    the marker's first character, so any leading whitespace `trim()` forgave
+  //    is ALREADY inside the span and leaves with the block. That asymmetry is
+  //    the whole reason the fix touches only the trailing side — and it is
+  //    exactly what makes `offset + line.indexOf(marker)`, the other half of
+  //    the change the review proposed, WRONG: it pushes the span PAST a leading
+  //    NBSP and strands it on the user's own first line.
+  //
+  //    Measured: with `indexOf`, `removePublishHookBlock` leaves
+  //    `"<U+00A0>foo = 1\n"` and real tomllib answers
+  //    `Invalid statement (at line 1, column 1)` — B1 mirrored. That mutant
+  //    (`N7`) SURVIVED this suite at 112/0 until these fixtures existed, so the
+  //    module's claim that "the leading side is already safe" was UNPINNED.
+  assert.ok(genuine.startsWith(hook.PUBLISH_HOOK_MARKER_BEGIN),
+    'the fixtures below assume the block OPENS with the BEGIN marker');
+  for (const [name, ws] of TRAILING_ON_END_MARKER) {
+    for (const [where, file] of [
+      ['before BEGIN', ws + genuine + '\n' + SETTING + '\n'],
+      ['before END', genuine.replace(hook.PUBLISH_HOOK_MARKER_END,
+        ws + hook.PUBLISH_HOOK_MARKER_END) + '\n' + SETTING + '\n'],
+      ['after ASCII indent, before END', '  ' + genuine.replace(hook.PUBLISH_HOOK_MARKER_END,
+        '  ' + ws + hook.PUBLISH_HOOK_MARKER_END) + '\n' + SETTING + '\n'],
+    ]) {
+      check(`${name} LEADING ${where}`, () => {
+        const found = hook.findPublishHookBlock(file);
+        assert.ok(found && found.end !== null && found.ambiguous === false,
+          `the marker must still be recognised — ${JSON.stringify(found)}`);
+        const left = hook.removePublishHookBlock(file);
+        assert.strictEqual(tomllibVerdicts([left])[0], null,
+          `removal left ${JSON.stringify(left.slice(0, 40))}, which REAL tomllib rejects — ` +
+          `${tomllibVerdicts([left])[0]}. Leading whitespace \`trim()\` forgave must leave WITH ` +
+          `the block, never be stranded on the user's own line.`);
+      });
+    }
+  }
+
+  // ── NO TRAILING NEWLINE. `endOfMarkerLine` answers `content.length` when the
+  //    marker's line runs to the end of the document. Mutant `N1` — return the
+  //    marker offset instead — also SURVIVED at 112/0, and measured it leaves a
+  //    STRAY `# END:…` LINE on disk: the exact residue `4.10 (D)` shows is
+  //    hazardous, because a stray END above a later BEGIN makes removal
+  //    DUPLICATE bytes instead of excising them.
+  for (const [name, ws] of [['(no trailing whitespace)', ''], ...TRAILING_ON_END_MARKER]) {
+    const file = SETTING + '\n' + genuine + ws;   // no final newline, on purpose
+    check(`${name} AT EOF, no trailing newline`, () => {
+      assert.ok(!file.endsWith('\n'), 'the fixture must not end in a newline');
+      const found = hook.findPublishHookBlock(file);
+      assert.ok(found && found.end !== null, `the marker must still be recognised at EOF`);
+      const left = hook.removePublishHookBlock(file);
+      assert.strictEqual(left, SETTING + '\n',
+        `removal at EOF must restore the user's bytes exactly and leave NO stray marker; got ` +
+        `${JSON.stringify(left)}`);
+      assert.ok(!left.includes(hook.PUBLISH_HOOK_MARKER_END),
+        `a stray END marker was left on disk: ${JSON.stringify(left)}`);
+      assert.strictEqual(tomllibVerdicts([left])[0], null, 'and what is left must parse');
+    });
+  }
+
   assert.strictEqual(failures.length, 0,
     `${failures.length} checks failed across ${new Set(failures.map((m) => m.split(':')[0])).size} ` +
-    `of ${TRAILING_ON_END_MARKER.length} fixtures:\n  - ` + failures.join('\n  - '));
+    `fixture groups:\n  - ` + failures.join('\n  - '));
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
