@@ -1134,8 +1134,13 @@ test('4.10 AC3(b) [DATA LOSS] a marker that BEGINS a line, and a SECOND begin ma
   //    removing anything, and leaves the whole block in place. A stray END is
   //    also the residue of the half-block AC3(c) deliberately tolerates, so this
   //    is a state the module can be handed by its own earlier behaviour.
+  //
+  //    The file is assembled BY HAND, not through `injectPublishHookBlock`,
+  //    which re-anchors the block to offset 0 and would put the stray END BELOW
+  //    it — the harmless direction, and the reason a first attempt at this
+  //    fixture let M17 through a second time.
   const strayEnd = `${hook.PUBLISH_HOOK_MARKER_END}\n${SETTING}\n`;
-  const withStray = hook.injectPublishHookBlock(strayEnd, genuine);
+  const withStray = strayEnd + genuine + '\n';
   const foundStray = hook.findPublishHookBlock(withStray);
   assert.ok(foundStray && foundStray.end !== null,
     `the genuine region must still be located past a stray END; got ${JSON.stringify(foundStray)}`);
