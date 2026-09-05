@@ -1254,6 +1254,15 @@ function differentialCorpus() {
     ['a stray backslash in a basic string (invalid)', 'pct = "50% \\q done"\n'],
     ['a truncated \\u escape (invalid)', 'x = "\\u12"\n'],
     ['a bad escape in a MULTI-LINE basic string (invalid)', 'x = """C:\\team\\prd.md"""\n'],
+    // A MUTANT FOUND THIS GAP, and it is recorded rather than quietly patched.
+    // `E10` dropped the line-ending backslash's "and NOTHING but whitespace
+    // follows it" guard and SURVIVED at 111/0: every entry with a bad escape in
+    // a multi-line basic string CLOSED ON THE SAME LINE, so the CONTINUED-line
+    // branch — the only branch `atLineEnd` is ever true in — was never exercised
+    // with a backslash that is not a line-ending one.
+    ['a bad escape on a CONTINUED line of a multi-line basic string (invalid)',
+      'x = """\nC:\\team\\prd.md\n"""\n'],
+    ['a truncated \\u on a CONTINUED line (invalid)', 'x = """\na\\u12 b\n"""\n'],
     ['a bad escape in a QUOTED KEY (invalid)', '"a\\qb" = 1\n'],
     //    …and the LEGAL half, in the same commit as the check, because a closed
     //    set is one careless character away from refusing a valid file.
@@ -1262,6 +1271,7 @@ function differentialCorpus() {
       'x = "\\b\\t\\n\\f\\r \\" \\\\ \\u00e9 \\U0001F600"\n'],
     ['a line-ending backslash in a multi-line basic string (valid)', 'x = """a\\\n  b"""\n'],
     ['a line-ending backslash with trailing whitespace (valid)', 'x = """a\\   \n  b"""\n'],
+    ['legal escapes on a CONTINUED line (valid)', 'x = """\na\\t\\n\\u00e9\n"""\n'],
     ['a legal escape in a quoted key (valid)', '"a\\tb" = 1\n'],
     ['backslashes in a multi-line LITERAL string (valid)', "x = '''C:\\team\\prd.md'''\n"],
   ]);
@@ -1620,6 +1630,13 @@ const PREDICATE_CORPUS = new Map([
   ['INVALID a truncated \\u escape', 'x = "\\u12"\n'],
   ['INVALID a \\U escape with only four hex digits', 'x = "\\U0001"\n'],
   ['INVALID a bad escape in a MULTI-LINE basic string', 'x = """C:\\team\\prd.md"""\n'],
+  // The gap mutant E10 found: it dropped the line-ending backslash's "and
+  // NOTHING but whitespace follows it" guard and SURVIVED at 111/0, because
+  // every multi-line entry closed on the SAME line and the continued-line
+  // branch was never exercised with a backslash that is not a line-ending one.
+  ['INVALID a bad escape on a CONTINUED line of a multi-line basic string',
+    'x = """\nC:\\team\\prd.md\n"""\n'],
+  ['INVALID a truncated \\u on a CONTINUED line', 'x = """\na\\u12 b\n"""\n'],
   ['INVALID a bad escape in a QUOTED KEY', '"a\\qb" = 1\n'],
   ['INVALID a \\e escape (TOML 1.1 draft, not 1.0)', 'x = "a\\e b"\n'],
   ['INVALID a \\xHH escape (TOML 1.1 draft, not 1.0)', 'x = "a\\x41 b"\n'],
@@ -1630,6 +1647,7 @@ const PREDICATE_CORPUS = new Map([
   ['every legal basic-string escape', 'x = "\\b\\t\\n\\f\\r \\" \\\\ \\u00e9 \\U0001F600"\n'],
   ['a line-ending backslash in a multi-line basic string', 'x = """a\\\n  b"""\n'],
   ['a line-ending backslash with trailing whitespace', 'x = """a\\   \n  b"""\n'],
+  ['legal escapes on a CONTINUED line', 'x = """\na\\t\\n\\u00e9\n"""\n'],
   ['a legal escape in a quoted key', '"a\\tb" = 1\n'],
   ['backslashes in a multi-line LITERAL string', "x = '''C:\\team\\prd.md'''\n"],
   ['a backslash in a single-line literal string', "x = 'C:\\team\\prd.md'\n"],
@@ -1643,14 +1661,16 @@ const PREDICATE_CORPUS = new Map([
  * silently is a warrant that can shrink silently. Deleting any single entry used
  * to move a `>=` floor without moving a test.
  */
-// FIX ROUND 4 (R2): 82 -> 99. Seventeen escape-family entries, ten of them
-// `tomllib` negatives (51 -> 61) and seven positives (31 -> 38). The three pins
-// move together, deliberately, and the digest is recomputed from the content.
-const PREDICATE_CORPUS_SIZE = 99;
-const PREDICATE_CORPUS_NEGATIVES = 61;
-const PREDICATE_CORPUS_POSITIVES = 38;
+// FIX ROUND 4 (R2): 82 -> 102. Twenty escape-family entries, twelve of them
+// `tomllib` negatives (51 -> 63) and eight positives (31 -> 39). Three of the
+// twenty were added only after mutant `E10` SURVIVED against the first
+// seventeen. The three pins move together, deliberately, and the digest is
+// recomputed from the content.
+const PREDICATE_CORPUS_SIZE = 102;
+const PREDICATE_CORPUS_NEGATIVES = 63;
+const PREDICATE_CORPUS_POSITIVES = 39;
 const PREDICATE_CORPUS_DIGEST =
-  '85983da187d0122d3e698d6f86542d990c157d6bf95c93cb476bf9a317dfe6e0';
+  '0924ff2a2af8a459fcd1b69086aa80741996848ac916cb91898c431c98860deb';
 
 test('5.12 AC4(b) [pin] the predicate corpus is pinned by exact COUNT and by CONTENT', () => {
   assert.strictEqual(PREDICATE_CORPUS.size, PREDICATE_CORPUS_SIZE,
@@ -2054,6 +2074,11 @@ test('5.15 AC4/AC12 [R2] a QUOTED Windows path is refused — with a literal-str
     ['a truncated \\u', 'x = "\\u12"\n'],
     ['a \\U with four hex digits', 'x = "\\U0001"\n'],
     ['a bad escape in a multi-line basic string', 'x = """C:\\team\\prd.md"""\n'],
+    // The E10 gap: the CONTINUED-line branch, which is the only branch the
+    // line-ending backslash's guard is ever consulted in.
+    ['a bad escape on a CONTINUED line', 'x = """\nC:\\team\\prd.md\n"""\n'],
+    ['a truncated \\u on a continued line', 'x = """\na\\u12 b\n"""\n'],
+    ['legal escapes on a continued line', 'x = """\na\\t\\n\\u00e9\n"""\n'],
     ['a bad escape in a quoted key', '"a\\qb" = 1\n'],
     ['\\e (TOML 1.1 draft only)', 'x = "a\\e b"\n'],
     ['\\xHH (TOML 1.1 draft only)', 'x = "a\\x41 b"\n'],
@@ -2083,8 +2108,8 @@ test('5.15 AC4/AC12 [R2] a QUOTED Windows path is refused — with a literal-str
     `five skills, which this module names as the worse direction.\n  ` +
     `${disagreements.join('\n  ')}`);
   // And the differential must not be vacuous in either direction.
-  assert.ok(famVerdicts.filter((v) => v !== null).length >= 9, 'the family needs real negatives');
-  assert.ok(famVerdicts.filter((v) => v === null).length >= 7, 'and real positives');
+  assert.ok(famVerdicts.filter((v) => v !== null).length >= 11, 'the family needs real negatives');
+  assert.ok(famVerdicts.filter((v) => v === null).length >= 8, 'and real positives');
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
