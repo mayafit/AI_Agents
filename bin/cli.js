@@ -1490,6 +1490,7 @@ function reportPublishHookOutcome(outcome, stores) {
  */
 function printPublishHookCollisionReport(projectRoot) {
   const found = confluencePublishHook.detectPublishHookCollisions(projectRoot);
+  printUserLayerScalarOverrideReport(projectRoot);
   if (found.length === 0) return found;
   console.log(chalk.red(`\n  Confluence publish trigger — ${found.length} override file(s) need attention:\n`));
   for (const entry of found) {
@@ -1507,6 +1508,44 @@ function printPublishHookCollisionReport(projectRoot) {
   }
   console.log('');
   return found;
+}
+
+/**
+ * R10 — the PERSONAL layer's scalar `on_complete`, on the same `status` surface.
+ *
+ * FIX ROUND 1 (independent review). The story DISCLOSED this residual and shipped
+ * no detector for it, so the one end state a user can reach entirely on their own
+ * — a scalar `workflow.on_complete` in `_bmad/custom/<skill>.user.toml`, which
+ * `deep_merge` treats as a replacement rather than an append — killed the publish
+ * at exit 0 with nothing anywhere saying so. The merge behaviour is upstream and
+ * irreducible; the SILENCE was not, because `status` already walks
+ * `_bmad/custom/` for the collision report.
+ *
+ * NOT an error and NOT a refusal: replacing the hook in your own layer is a
+ * legitimate thing to do, so this states the consequence and the one-character
+ * remedy and changes nothing. It is printed even on an otherwise-clean project,
+ * because that is precisely the project this fires on.
+ */
+function printUserLayerScalarOverrideReport(projectRoot) {
+  const overrides = confluencePublishHook.detectUserLayerScalarOverrides(projectRoot);
+  if (overrides.length === 0) return overrides;
+  console.log(chalk.yellow(
+    `\n  Confluence publish trigger — ${overrides.length} personal override(s) REPLACE it:\n`));
+  for (const o of overrides) {
+    console.log(chalk.yellow(`    ${o.file}`));
+    console.log(chalk.yellow(`      line ${o.line === null ? '?' : o.line}: ${o.detail}`));
+    console.log(chalk.gray(
+      `      => ${o.skill} does not publish to Confluence while this stands. ` +
+      `_bmad/scripts/resolve_customization.py\n` +
+      `         merges two ARRAYS by appending and falls through to "the override wins" for\n` +
+      `         everything else, so a bare string silently takes the publish instruction's place\n` +
+      `         and the merge still exits 0. Make it a TOML array in that same .user.toml file\n` +
+      `         (\`${confluencePublishHook.PUBLISH_HOOK_KEY} = [ "..." ]\`) and both will run.\n` +
+      `         This file is yours: ma-agents has not changed it and will not.`
+    ));
+  }
+  console.log('');
+  return overrides;
 }
 
 // ─── project-layout.yaml — schema v2: the two-store binding spine (Story 31.2) ──
@@ -6100,6 +6139,10 @@ module.exports = { parseFlags, selectBmadModules, promptCustomMarketplace, recon
   // it. The marker discipline, the TOML reader and the skill->store table are in
   // `lib/confluence-publish-hook.js` and exported from there.
   generateConfluencePublishHooks, printPublishHookCollisionReport,
+  // Fix round 1 — R10's detector, exported separately for the same reason
+  // `printPublishHookCollisionReport` is: a test must be able to prove it FIRES
+  // without scraping the whole `status` output around it.
+  printUserLayerScalarOverrideReport,
   handleConfluencePlan, handleConfluenceRecordRootPage, CONFLUENCE_STORE_RECORDS,
   ROOT_ID_RECORDED, ROOT_ID_UNCHANGED, ROOT_ID_TITLE_MOVED, ROOT_ID_NOT_CONFLUENCE,
   ROOT_ID_NO_BINDING, ROOT_ID_WRITE_FAILED };

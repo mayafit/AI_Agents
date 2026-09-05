@@ -71,7 +71,7 @@ const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 const hook = require(path.join(PROJECT_ROOT, 'lib', 'confluence-publish-hook.js'));
 const tree = require(path.join(PROJECT_ROOT, 'lib', 'confluence-page-tree.js'));
 
-const EXPECTED_TEST_COUNT = 81;
+const EXPECTED_TEST_COUNT = 100;
 
 let passed = 0;
 let failed = 0;
@@ -609,34 +609,127 @@ test('3.2 AC2 no `.user.toml` is CREATED when none existed — on the write path
   }
 });
 
-test('3.3 AC2 no fs mutation call anywhere in a full run names a `.user.toml` path', () => {
-  // Stronger than an after-the-fact comparison: an open-truncate-restore would
-  // leave the bytes identical and still be a touch. Every mutating fs entry point
-  // is intercepted, over BOTH the write and the removal path.
-  const fx = fixture();
-  for (const skill of hook.AUTHORING_SKILLS) {
-    fs.writeFileSync(userFile(fx, skill), '# mine\n', 'utf-8');
-  }
+/**
+ * Every mutating `fs` entry point, DERIVED rather than listed.
+ *
+ * FIX ROUND 1 (independent review, M1b). The old list named ten `*Sync`
+ * functions, so `.user.toml` clobbered and restored through `fs.cpSync` —
+ * or through ANY callback form, ANY `fs.promises.*` form, `mkdirSync`,
+ * `rmdirSync`, `utimesSync`, `linkSync`, `symlinkSync`, `writevSync`,
+ * `ftruncateSync` or `chmodSync` — passed the test untouched. The claim in the
+ * comment ("every mutating fs entry point is intercepted") was false of the code
+ * beneath it.
+ *
+ * The base verbs are enumerated ONCE and every shipped form of each is
+ * intercepted: `verb`, `verbSync` and `fs.promises.verb`. A Node release that
+ * adds a form of an existing verb is covered automatically; a Node release that
+ * adds a NEW verb is not, which is why 3.3 also proves the interception ARMED
+ * against the exact API M1b used rather than trusting the list.
+ */
+const FS_MUTATING_VERBS = Object.freeze([
+  'writeFile', 'appendFile', 'unlink', 'rm', 'rmdir', 'mkdir', 'mkdtemp',
+  'truncate', 'ftruncate', 'copyFile', 'cp', 'rename', 'link', 'symlink',
+  'chmod', 'lchmod', 'fchmod', 'chown', 'lchown', 'fchown', 'utimes', 'futimes',
+  'lutimes', 'open', 'opendir', 'write', 'writev', 'fdatasync', 'fsync',
+  'createWriteStream',
+]);
+
+/** A path argument, in every form `fs` accepts one: string, Buffer, URL. */
+function fsPathArg(v) {
+  if (typeof v === 'string') return v;
+  if (Buffer.isBuffer(v)) return v.toString('utf-8');
+  if (typeof URL === 'function' && v instanceof URL) return v.href;
+  return '';
+}
+
+/**
+ * The verbs whose SECOND argument is also a path. Everything else takes a path
+ * in position 0 only — and looking further would read CONTENT as a path, which
+ * is a false positive rather than a stricter test (ma-agents' own block text
+ * names `<skill>.user.toml` in its owner comment, so a naive all-arguments scan
+ * reports every legitimate write of the TEAM file as a touch of the personal one).
+ */
+const FS_TWO_PATH_VERBS = Object.freeze(['rename', 'copyFile', 'cp', 'link', 'symlink']);
+
+/**
+ * Run `fn` with every mutating `fs` entry point intercepted; return the calls
+ * whose ARGUMENTS — any of them, not only the first — named `.user.toml`.
+ */
+function recordUserLayerMutations(fn) {
   const touched = [];
-  const MUTATORS = ['writeFileSync', 'appendFileSync', 'unlinkSync', 'openSync', 'rmSync',
-    'truncateSync', 'copyFileSync', 'renameSync', 'createWriteStream', 'writeSync'];
-  const originals = {};
-  for (const m of MUTATORS) {
-    if (typeof fs[m] !== 'function') continue;
-    originals[m] = fs[m];
-    fs[m] = function (...args) {
-      const first = typeof args[0] === 'string' ? args[0] : '';
-      if (first.includes('.user.toml')) touched.push(`${m}(${first})`);
-      return originals[m].apply(fs, args);
+  const originals = [];
+  const wrap = (obj, label, name, pathArity) => {
+    const orig = obj[name];
+    if (typeof orig !== 'function') return;
+    originals.push([obj, name, orig]);
+    obj[name] = function (...args) {
+      const named = args.slice(0, pathArity).map(fsPathArg).filter((p) => p.includes('.user.toml'));
+      if (named.length > 0) touched.push(`${label}.${name}(${named.join(', ')})`);
+      return orig.apply(obj, args);
     };
+  };
+  for (const verb of FS_MUTATING_VERBS) {
+    const arity = FS_TWO_PATH_VERBS.includes(verb) ? 2 : 1;
+    wrap(fs, 'fs', verb, arity);
+    wrap(fs, 'fs', `${verb}Sync`, arity);
+    if (fs.promises) wrap(fs.promises, 'fs.promises', verb, arity);
   }
   try {
+    fn();
+  } finally {
+    for (const [obj, name, orig] of originals) obj[name] = orig;
+  }
+  return touched;
+}
+
+test('3.3 [harness] the fs interception is ARMED — it SEES the exact API M1b escaped through', () => {
+  // M1b's attack was a clobber-and-restore through `fs.cpSync`, which the old
+  // ten-name list did not intercept. Proving the harness armed is the whole
+  // point: a green 3.4 below means nothing unless a real mutation would show up.
+  const fx = fixture();
+  const skill = hook.AUTHORING_SKILLS[0];
+  const src = path.join(fx.root, 'src-probe.toml');
+  fs.writeFileSync(src, '# probe\n', 'utf-8');
+
+  const seen = recordUserLayerMutations(() => {
+    fs.cpSync(src, userFile(fx, skill));                        // the M1b shape
+    fs.writeFileSync(Buffer.from(userFile(fx, skill)), '# b\n'); // a Buffer path arg
+    fs.renameSync(userFile(fx, skill), userFile(fx, skill));     // a SECOND-position path arg
+  });
+  for (const needle of ['fs.cpSync', 'fs.writeFileSync', 'fs.renameSync']) {
+    assert.ok(seen.some((s) => s.startsWith(needle)),
+      `the interception did not see ${needle}; it saw ${JSON.stringify(seen)}. A list that ` +
+      `misses an fs entry point makes 3.4's negative meaningless.`);
+  }
+  // And the coverage claim is checked against `fs` itself, not against prose.
+  for (const name of ['cpSync', 'mkdirSync', 'rmdirSync', 'utimesSync', 'linkSync',
+    'symlinkSync', 'writevSync', 'ftruncateSync', 'chmodSync']) {
+    assert.ok(FS_MUTATING_VERBS.some((v) => `${v}Sync` === name),
+      `${name} exists on fs and is not covered by FS_MUTATING_VERBS`);
+  }
+  assert.ok(typeof fs.promises.writeFile === 'function' &&
+    FS_MUTATING_VERBS.includes('writeFile'),
+    'the promises surface must be covered too');
+  fs.rmSync(userFile(fx, skill), { force: true });
+});
+
+test('3.4 AC2 no fs mutation call anywhere in a full run names a `.user.toml` path', () => {
+  // Stronger than an after-the-fact comparison: an open-truncate-restore would
+  // leave the bytes identical and still be a touch. Every mutating fs entry point
+  // is intercepted (3.3 proves the interception armed), over the write path, the
+  // removal path, the collision-detection path and R10's personal-layer READ.
+  const fx = fixture();
+  for (const skill of hook.AUTHORING_SKILLS) {
+    fs.writeFileSync(userFile(fx, skill), 'workflow.on_complete = "mine"\n', 'utf-8');
+  }
+  const touched = recordUserLayerMutations(() => {
     generate(fx, BOTH_CONFLUENCE);
     generate(fx, NEITHER);
     hook.detectPublishHookCollisions(fx.root);
-  } finally {
-    for (const m of Object.keys(originals)) fs[m] = originals[m];
-  }
+    // R10's detector OPENS the personal layer. It must read it and never touch
+    // it, so it is inside the interception rather than beside it.
+    hook.detectUserLayerScalarOverrides(fx.root);
+  });
   assert.deepStrictEqual(touched, [],
     `a mutating fs call named the personal layer: ${touched.join(', ')}`);
 });
@@ -1004,6 +1097,148 @@ test('5.7 AC4 [rationale, DEMONSTRATED] a duplicate key discards the ENTIRE team
     'and the publish hook is gone with it, resolving to the skill default');
 });
 
+/**
+ * FIX ROUND 1 — the COLLISION PREDICATE, against `tomllib`'s verdict on the
+ * COMBINED file.
+ *
+ * Test 5.1 proves the READER agrees with `tomllib`. It says nothing about the
+ * PREDICATE built on top of it, and the two are different claims: the reader is
+ * asked "does this file parse", the predicate is asked "would ma-agents' block,
+ * placed beside this content, make it stop parsing". The suite had no test of
+ * the second, and the predicate was wrong — it flagged any key whose LAST DOTTED
+ * SEGMENT was `on_complete`, so `agent.on_complete` (a different key, in a
+ * different table, which `tomllib` is perfectly happy to hold beside
+ * `workflow.on_complete`) was refused as a duplicate.
+ *
+ * MEASURED CONSEQUENCE of that false refusal, before the fix: with all five
+ * override files carrying `[agent]` … `on_complete`, generation produced five
+ * `refused-collision` outcomes, `process.exitCode = 1`, a remedy instruction that
+ * did not apply, and NO hook for any skill — so `ma-agents install` exited
+ * non-zero on a healthy project and failed closed on every subsequent install and
+ * `bind`.
+ *
+ * The corpus is deliberately adversarial in the SAFE direction: fourteen of the
+ * twenty-two entries are shapes a real user or a `bmad-customize` run can
+ * legitimately produce, and every one of them must install cleanly.
+ */
+const PREDICATE_CORPUS = new Map([
+  // ── VALID beside our block. A refusal here BLOCKS AN INSTALL. ──────────────
+  ['[agent] table with its own on_complete', '[agent]\nname = "a"\non_complete = "mine"\n'],
+  ['dotted agent.on_complete at root', 'agent.on_complete = "mine"\n'],
+  ['a bare root-level on_complete', 'on_complete = "x"\n'],
+  ['on_complete inside an array-of-tables element', '[[items]]\non_complete = "x"\n'],
+  ['on_complete two levels down', '[a.b]\non_complete = "x"\n'],
+  ['a dotted workflow.on_complete UNDER [agent]', '[agent]\nworkflow.on_complete = "x"\n'],
+  ['a quoted root key spelled on_complete', '"on_complete" = 1\n'],
+  ['a [workflow.sub] SUB-table', '[workflow.sub]\nx = 1\n'],
+  ['another dotted key in our own table', 'workflow.other = 1\n'],
+  ["the suite's own user-content fixture", USER_CONTENT],
+  ['an empty file', ''],
+  ['comment only', '# just a comment\n'],
+  ['a key merely CONTAINING the word', '[agent]\nmenu_on_complete = 1\n'],
+  ['a quoted segment containing a dot', '[agent]\n"weird.on_complete" = 1\n'],
+  ['on_complete arrays in two unrelated tables', '[a]\non_complete = ["x"]\n[b]\non_complete = ["y"]\n'],
+  // ── INVALID beside our block. An acceptance here DISCARDS THE TEAM LAYER. ──
+  ['INVALID a second workflow.on_complete', 'workflow.on_complete = "x"\n'],
+  ['INVALID a [workflow] table', '[workflow]\nfoo = 1\n'],
+  ['INVALID a [workflow] table carrying on_complete', '[workflow]\non_complete = "x"\n'],
+  ['INVALID a [[workflow]] array-of-tables', '[[workflow]]\nx = 1\n'],
+  ['INVALID text that is not TOML', 'this is not toml\n'],
+  ['INVALID an unterminated string', 'a = "oops\n'],
+  ['INVALID a duplicate key of its own', '[t]\na = 1\na = 2\n'],
+]);
+
+test('5.8 AC4(b) [differential] the COLLISION PREDICATE agrees with tomllib on the COMBINED file', () => {
+  const block = hook.buildPublishHookBlock({
+    skillName: 'bmad-prd', storeCliName: 'system', storeLabel: tree.labelForStore(SYSTEM),
+  });
+  const names = [...PREDICATE_CORPUS.keys()];
+  const combined = names.map((n) => hook.injectPublishHookBlock(PREDICATE_CORPUS.get(n), block));
+  const verdicts = tomllibVerdicts(combined);
+
+  // The corpus must contain BOTH verdicts, or the equivalence below is vacuous.
+  assert.ok(verdicts.filter((v) => v !== null).length >= 7, 'the corpus needs real negatives');
+  assert.ok(verdicts.filter((v) => v === null).length >= 14, 'and real positives');
+
+  const falseRefusals = [];
+  const falseAcceptances = [];
+  names.forEach((n, i) => {
+    const blocking = hook.scanForCollisions(PREDICATE_CORPUS.get(n)).filter((c) =>
+      c.kind !== hook.COLLISION_BLOCK_NOT_AT_ROOT && c.kind !== hook.COLLISION_HALF_BLOCK);
+    const tomllibRejects = verdicts[i] !== null;
+    if (blocking.length > 0 && !tomllibRejects) {
+      falseRefusals.push(`${n} -> ${blocking.map((c) => c.kind).join(', ')}`);
+    }
+    if (blocking.length === 0 && tomllibRejects) {
+      falseAcceptances.push(`${n} -> tomllib says ${verdicts[i]}`);
+    }
+  });
+  assert.deepStrictEqual(falseRefusals, [],
+    `the predicate REFUSES over ${falseRefusals.length} file(s) that tomllib parses happily ` +
+    `beside ma-agents' block. A false refusal is the worse direction: it writes no hook for ` +
+    `ANY of the five skills, exits non-zero on a healthy project, and fails closed on every ` +
+    `install and bind after it.\n  ${falseRefusals.join('\n  ')}`);
+  assert.deepStrictEqual(falseAcceptances, [],
+    `the predicate ACCEPTS ${falseAcceptances.length} file(s) that tomllib rejects once the ` +
+    `block is beside them; writing there discards the whole team layer at exit 0.\n  ` +
+    `${falseAcceptances.join('\n  ')}`);
+});
+
+test('5.9 AC4(b) [regression] `agent.on_complete` installs cleanly — hook AND user key both resolve', () => {
+  // The predicate defect, measured end to end rather than as a unit. This is the
+  // shape a `bmad-customize` run produces when it changes an AGENT field, and
+  // before the fix it took `ma-agents install` non-zero on a healthy project.
+  const fx = fixture();
+  const theirs = 'workflow.prd_template = "assets/house.md"\n\n[agent]\nname = "House"\non_complete = "mine"\n';
+  for (const s of hook.AUTHORING_SKILLS) fs.writeFileSync(teamFile(fx, s), theirs, 'utf-8');
+
+  const out = generate(fx, BOTH_CONFLUENCE);
+  assert.deepStrictEqual(out.results.map((r) => r.outcome), Array(5).fill(hook.HOOK_WROTE),
+    `a key that is NOT ma-agents' must not refuse the write: ` +
+    `${JSON.stringify(out.results.map((r) => [r.skill, r.outcome, r.collisions.map((c) => c.kind)]))}`);
+  assert.strictEqual(out.refused, false, 'and nothing may be reported as refused');
+
+  for (const skill of hook.AUTHORING_SKILLS) {
+    const got = resolveKey(fx, skill, 'workflow.on_complete');
+    assert.strictEqual(got.stderr.trim(), '',
+      `${skill}: the resolver warned over a file this generator just wrote: ${got.stderr}`);
+    assert.ok(Array.isArray(got.value) && got.value.length === 1,
+      `${skill}: the publish hook must resolve; got ${JSON.stringify(got.value)}`);
+    assert.strictEqual(resolveKey(fx, skill, 'agent.on_complete').value, 'mine',
+      `${skill}: and the user's OWN key must be untouched and still resolve`);
+  }
+  // And the operator surface stays quiet and the exit code stays clean.
+  const prior = process.exitCode;
+  process.exitCode = 0;
+  const lines = captureLog(() => cli.generateConfluencePublishHooks({
+    projectRoot: fx.root,
+    fallbackLayout: { knowledgebase: { mode: 'same', path: '.', backend: 'confluence', spaceKey: 'X' }, sprintManagement: { mode: 'same', path: '.' } },
+  }));
+  const observed = process.exitCode;
+  process.exitCode = prior;
+  assert.strictEqual(observed, 0,
+    `a healthy project must not take the install non-zero. The run said:\n${lines.join('\n')}`);
+  assert.ok(!/refusing to generate/i.test(lines.join('\n')),
+    `and must not print a remedy for a situation the user is not in:\n${lines.join('\n')}`);
+});
+
+test('5.10 AC4(b) [read-side] the DETECTION surface is silent on the same shapes', () => {
+  // The write side and the read side share one predicate (10.5), so a false
+  // refusal was also a false ALARM on `ma-agents status` — a report telling a
+  // user their publish is dead when it is not. Checked separately because
+  // "silent on a healthy project" (10.7) only ever exercised files the generator
+  // itself had written.
+  const fx = fixture();
+  for (const s of hook.AUTHORING_SKILLS) {
+    fs.writeFileSync(teamFile(fx, s), '[agent]\nname = "a"\non_complete = "mine"\n', 'utf-8');
+  }
+  assert.deepStrictEqual(hook.detectPublishHookCollisions(fx.root), [],
+    "status must not report a collision over a key that is not ma-agents'");
+  generate(fx, BOTH_CONFLUENCE);
+  assert.deepStrictEqual(hook.detectPublishHookCollisions(fx.root), [],
+    'and must stay silent once the block is in beside it');
+});
+
 // ═════════════════════════════════════════════════════════════════════════════
 console.log('\n=== 6. AC5 — no silent skip, and the ready message is corrected ===\n');
 
@@ -1114,6 +1349,224 @@ test('6.8 AC4(b)/AC12(b) a refusal makes the process exit NON-ZERO', () => {
     'rather than as a publish that quietly stopped happening');
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX ROUND 1 — HOOK_WRITE_FAILED, REACHED RATHER THAN DECLARED.
+//
+// The outcome was declared, listed in HOOK_NO_PUBLISH_OUTCOMES, formatted in
+// `bin/cli.js` — and unreachable by every test, on all three branches that
+// produce it. Test 6.5 iterated the CONSTANT and asserted it was a non-empty
+// unique string, which is a test of the constant and not of the code path.
+//
+// The user-visible failure that made this blocking: on a read-only
+// `_bmad/custom/`, a locked file, a full disk, or an EPERM from a scanner,
+// `ma-agents install` printed "Confluence publish trigger written … for 5
+// authoring skills" and exited 0. No hook on disk. All five workflows resolve
+// `on_complete` to "", publish nothing, and tell the user the artifact is ready.
+// Replacing the write `catch` with a swallow — falling through to the
+// unconditional HOOK_WROTE — passed the whole suite.
+//
+// All three branches are now driven by a REAL OS fault wherever one is
+// deterministic (a directory where a file belongs; a file where a directory
+// belongs; a read-only file), and the ONE branch no portable OS fault can force
+// says so in its own name.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Run `fn` with `file` genuinely unwritable, by the strongest means this OS
+ * actually enforces. Returns the mechanism used, so a test can say which it got
+ * instead of quietly claiming a real fault it did not have.
+ */
+function withUnwritableFile(file, fn) {
+  const mode = fs.statSync(file).mode;
+  fs.chmodSync(file, 0o444);
+  let mechanism = 'read-only file (real OS fault)';
+  let enforced = true;
+  try {
+    // ARM THE FIXTURE, do not assume it. A read-only file is not enforced for
+    // every user on every platform (a root/Administrator process ignores it), and
+    // an unarmed fixture would make the test below pass for the wrong reason.
+    const probe = fs.readFileSync(file);
+    fs.writeFileSync(file, probe);
+    enforced = false;
+  } catch (_) { /* enforced — this is the wanted outcome */ }
+
+  const originals = [];
+  if (!enforced) {
+    mechanism = 'fs fault injection (this OS does not enforce a read-only file for this user)';
+    for (const name of ['writeFileSync', 'unlinkSync']) {
+      const orig = fs[name];
+      originals.push([name, orig]);
+      fs[name] = function (...args) {
+        if (fsPathArg(args[0]) === file) {
+          const e = new Error(`EACCES: permission denied, ${name} '${file}'`);
+          e.code = 'EACCES';
+          throw e;
+        }
+        return orig.apply(fs, args);
+      };
+    }
+  }
+  try {
+    return { mechanism, result: fn() };
+  } finally {
+    for (const [name, orig] of originals) fs[name] = orig;
+    try { fs.chmodSync(file, mode); } catch (_) { /* best effort */ }
+  }
+}
+
+test('6.9 AC5(a) a WRITE that fails is reported as write-failed, and nothing lands on disk', () => {
+  // REAL OS FAULT: `_bmad/custom` is a FILE, so `fs.mkdirSync(dirname, {recursive:true})`
+  // cannot create the directory the write needs. This is the shape a locked path,
+  // a stale file left by another tool, or a hostile scanner produces.
+  const root = tmpProject();
+  fs.mkdirSync(path.join(root, '_bmad'), { recursive: true });
+  fs.writeFileSync(path.join(root, '_bmad', 'custom'), 'not a directory\n', 'utf-8');
+
+  const out = hook.generatePublishHooks({ projectRoot: root, stores: BOTH_CONFLUENCE });
+  assert.deepStrictEqual(out.results.map((r) => r.outcome), Array(5).fill(hook.HOOK_WRITE_FAILED),
+    `a write that cannot happen must be NAMED, never reported as a success: ` +
+    `${JSON.stringify(out.results.map((r) => [r.skill, r.outcome]))}`);
+  assert.ok(out.results.every((r) => typeof r.error === 'string' && r.error.length > 0),
+    `and must carry the OS error: ${JSON.stringify(out.results.map((r) => r.error))}`);
+  assert.strictEqual(out.refused, true,
+    'and the aggregate must report it, because that is what sets the exit code');
+  assert.strictEqual(fs.readFileSync(path.join(root, '_bmad', 'custom'), 'utf-8'),
+    'not a directory\n', 'and nothing may have been clobbered on the way');
+});
+
+test('6.10 AC5(a) a READ that fails is reported as write-failed, and the file is left alone', () => {
+  // REAL OS FAULT: the override path is a DIRECTORY, so `fs.existsSync` says yes
+  // and `fs.readFileSync` raises EISDIR. This is the `:787` branch — a file the
+  // generator can see but cannot read — and it was previously unreachable.
+  const fx = fixture();
+  const skill = hook.AUTHORING_SKILLS[0];
+  fs.mkdirSync(teamFile(fx, skill), { recursive: true });
+
+  const out = generate(fx, BOTH_CONFLUENCE);
+  const r = out.results.find((x) => x.skill === skill);
+  assert.strictEqual(r.outcome, hook.HOOK_WRITE_FAILED,
+    `an unreadable override must not be treated as an absent one — that would silently ` +
+    `overwrite it; got ${r.outcome}`);
+  assert.ok(/EISDIR|illegal operation|directory/i.test(String(r.error)),
+    `and must carry the real OS error; got ${JSON.stringify(r.error)}`);
+  assert.ok(fs.statSync(teamFile(fx, skill)).isDirectory(),
+    'and must not have replaced it with anything');
+  // Per-file, not a global abort: the other four still get their hook.
+  assert.deepStrictEqual(
+    out.results.filter((x) => x.skill !== skill).map((x) => x.outcome), Array(4).fill(hook.HOOK_WROTE),
+    'one unreadable file must not stop the other four');
+});
+
+test('6.11 AC3(d)/AC5(a) a REMOVAL that fails is reported as write-failed, block still on disk', () => {
+  // The `:811` branch — a backend flipped away from confluence, and the rewrite
+  // that strips the block cannot land. Reported rather than assumed successful,
+  // because a silent failure here leaves a LIVE publish instruction in a project
+  // that no longer publishes.
+  const fx = fixture();
+  const skill = hook.AUTHORING_SKILLS[0];
+  fs.writeFileSync(teamFile(fx, skill), USER_CONTENT, 'utf-8');
+  generate(fx, BOTH_CONFLUENCE);
+  assert.ok(hook.findPublishHookBlock(fs.readFileSync(teamFile(fx, skill), 'utf-8')),
+    'precondition: the block must be there to fail to remove');
+
+  const { mechanism, result } = withUnwritableFile(teamFile(fx, skill),
+    () => generate(fx, NEITHER));
+  const r = result.results.find((x) => x.skill === skill);
+  assert.strictEqual(r.outcome, hook.HOOK_WRITE_FAILED,
+    `a removal that could not be written must say so (mechanism: ${mechanism}); got ${r.outcome}`);
+  assert.ok(typeof r.error === 'string' && r.error.length > 0,
+    'and must carry the OS error, or the operator cannot act on it');
+  const after = fs.readFileSync(teamFile(fx, skill), 'utf-8');
+  assert.ok(hook.findPublishHookBlock(after) !== null,
+    'the block is STILL there — which is exactly why the outcome may not be `removed`');
+  assert.strictEqual(hook.removePublishHookBlock(after), USER_CONTENT,
+    "and the user's own content is untouched by the failed attempt");
+});
+
+test('6.12 AC5(a) a failed write is reported to the OPERATOR by name and takes the exit NON-ZERO', () => {
+  // The end the user actually sees. Before this, `ma-agents install` printed
+  // "Confluence publish trigger written … for 5 authoring skills" and exited 0
+  // over five writes that never happened.
+  const root = tmpProject();
+  fs.mkdirSync(path.join(root, '_bmad'), { recursive: true });
+  fs.writeFileSync(path.join(root, '_bmad', 'custom'), 'not a directory\n', 'utf-8');
+
+  const prior = process.exitCode;
+  process.exitCode = 0;
+  const lines = captureLog(() => cli.generateConfluencePublishHooks({
+    projectRoot: root,
+    fallbackLayout: { knowledgebase: { mode: 'same', path: '.', backend: 'confluence', spaceKey: 'X' }, sprintManagement: { mode: 'same', path: '.' } },
+  }));
+  const observed = process.exitCode;
+  process.exitCode = prior;
+  const text = lines.join('\n');
+
+  assert.strictEqual(observed, 1,
+    `a failed write must take the process non-zero, or the install reports success over it. ` +
+    `The run said:\n${text}`);
+  assert.ok(/could not write the Confluence publish trigger/i.test(text),
+    `the failure must be stated by name:\n${text}`);
+  assert.ok(/will NOT publish to Confluence/.test(text),
+    `and the consequence must be said out loud:\n${text}`);
+  assert.ok(!/Confluence publish trigger written/.test(text),
+    `and it must NOT also claim the trigger was written — reporting success over a failed ` +
+    `write is this epic's signature defect:\n${text}`);
+  for (const skill of hook.AUTHORING_SKILLS) {
+    assert.ok(text.includes(skill), `every affected skill must be named; ${skill} was not:\n${text}`);
+  }
+});
+
+test('6.13 AC5(c) [structural] the correction clause lives in the HALT sentence and nowhere else', () => {
+  // 6.3 checked three unordered regexes against the whole instruction, so moving
+  // the clause onto the SUCCESS path — an instruction telling the agent to retract
+  // a CORRECT "ready" message on success and stay silent about a stale one on
+  // failure, the precise inversion of AC5(c) — still matched all three and the
+  // suite stayed green. Presence is not effect: what AC5(c) requires is that the
+  // correction is CONDITIONAL ON THE FAILURE, and that is a structural fact about
+  // which sentence the clause is in.
+  const sentences = HOOK_TEXT.split(/(?<=\.)\s+/).filter((s) => s.trim() !== '');
+  assert.ok(sentences.length >= 3,
+    `the instruction did not split into sentences (${sentences.length}); the structural claim ` +
+    `below cannot be made on one undivided blob`);
+
+  const CORRECTION = /correct the artifact-ready message/i;
+  const HALT = /\bSTOP\b/;
+  const FAILURE_CONDITION = /(does not report success|no Confluence MCP server is reachable)/i;
+
+  const haltSentences = sentences.filter((s) => HALT.test(s));
+  assert.strictEqual(haltSentences.length, 1,
+    `exactly one sentence may carry the halt; ${haltSentences.length} do: ` +
+    `${JSON.stringify(haltSentences)}`);
+  const halt = haltSentences[0];
+
+  assert.ok(FAILURE_CONDITION.test(halt),
+    `the halt sentence must be CONDITIONAL on a failure, or the agent is told to stop ` +
+    `unconditionally: ${JSON.stringify(halt)}`);
+  assert.ok(CORRECTION.test(halt),
+    `AC5(c)'s correction clause must sit INSIDE the halt sentence. It is in ` +
+    `${JSON.stringify(sentences.filter((s) => CORRECTION.test(s)))} instead, which makes the ` +
+    `retraction unconditional — or, worse, conditional on SUCCESS.`);
+
+  const carrying = sentences.filter((s) => CORRECTION.test(s));
+  assert.strictEqual(carrying.length, 1,
+    `and it must appear in exactly ONE sentence; it appears in ${carrying.length}`);
+  assert.strictEqual(carrying[0], halt, 'and that sentence must be the halt sentence');
+
+  // Ordering inside the sentence: the halt is announced BEFORE the retraction is
+  // asked for, so an agent reading top-to-bottom never begins correcting a
+  // message it has not yet decided to stop over.
+  assert.ok(halt.indexOf('STOP') < halt.search(CORRECTION),
+    `STOP must precede the correction clause within the halt sentence: ${JSON.stringify(halt)}`);
+
+  // And the SUCCESS path must not carry it. This is the mutant, stated as an
+  // assertion rather than left to the halt check alone.
+  const successSentence = sentences.find((s) => /confluence-plan --store/.test(s));
+  assert.ok(successSentence, 'the routing sentence could not be located');
+  assert.ok(!CORRECTION.test(successSentence),
+    `the SUCCESS path tells the agent to retract a correct message: ` +
+    `${JSON.stringify(successSentence)}`);
+});
+
 // ═════════════════════════════════════════════════════════════════════════════
 console.log('\n=== 7. AC6 — per-store routing, both directions ===\n');
 
@@ -1166,6 +1619,50 @@ test('7.5 §4.6 R2 the generator CREATES `_bmad/custom/` when it is absent but n
   assert.deepStrictEqual(out.results.map((r) => r.outcome), Array(5).fill(hook.HOOK_WROTE),
     'the directory belongs to bmad-method\'s installer and may simply not be there yet');
   assert.ok(fs.existsSync(path.join(root, '_bmad', 'custom')));
+});
+
+test('7.6 AC6 an UNRECOGNISED backend gets NO hook — the gate is an allow-list, not a denylist', () => {
+  // FIX ROUND 1 (M15). Every fixture in this suite used exactly `'confluence'` or
+  // `'file-system'`, so `wantsHook = backend !== 'file-system'` — a PERMISSIVE
+  // default that writes a Confluence publish instruction into a project bound to
+  // something else entirely — passed the whole suite. A backend added to
+  // `STORE_BACKENDS` upstream, or a hand-edited binding, reaches this.
+  const fx = fixture();
+  const out = generate(fx, storesFor('notion', 'sharepoint'));
+  assert.deepStrictEqual(out.results.map((r) => r.outcome), Array(5).fill(hook.HOOK_NOT_APPLICABLE),
+    `an unknown backend must fail CLOSED: ${JSON.stringify(out.results.map((r) => [r.skill, r.outcome]))}`);
+  for (const s of hook.AUTHORING_SKILLS) {
+    assert.ok(!fs.existsSync(teamFile(fx, s)),
+      `${s}.toml was written for a store this build does not know how to publish to`);
+  }
+
+  // And the REMOVAL half: a store that WAS confluence and is now something
+  // unrecognised must lose its hook, exactly as a flip to file-system does.
+  const fx2 = fixture();
+  for (const s of hook.AUTHORING_SKILLS) fs.writeFileSync(teamFile(fx2, s), USER_CONTENT, 'utf-8');
+  generate(fx2, BOTH_CONFLUENCE);
+  const removed = generate(fx2, storesFor('notion', 'notion'));
+  assert.deepStrictEqual(removed.results.map((r) => r.outcome), Array(5).fill(hook.HOOK_REMOVED),
+    'a flip to an unrecognised backend must remove the hook, not leave it firing');
+  for (const s of hook.AUTHORING_SKILLS) {
+    assert.strictEqual(fs.readFileSync(teamFile(fx2, s), 'utf-8'), USER_CONTENT,
+      `${s}.toml: and must leave the user's content byte-identical`);
+  }
+});
+
+test('7.7 AC6 an ABSENT or malformed store record gets NO hook either', () => {
+  // The other half of the same allow-list: `stores[storeId]` missing entirely,
+  // and a record whose `backend` is undefined/null/empty.
+  const fx = fixture();
+  for (const stores of [{}, storesFor(undefined, null), storesFor('', 'CONFLUENCE')]) {
+    const out = hook.generatePublishHooks({ projectRoot: fx.root, stores });
+    assert.deepStrictEqual(out.results.map((r) => r.outcome), Array(5).fill(hook.HOOK_NOT_APPLICABLE),
+      `${JSON.stringify(stores)} must produce no hook; got ` +
+      `${JSON.stringify(out.results.map((r) => [r.skill, r.outcome]))}`);
+  }
+  // `CONFLUENCE` is deliberately in that list: the comparison is exact, so a
+  // case-folded value is NOT confluence. If that ever becomes wrong, it must be
+  // made wrong deliberately here rather than discovered in a user's project.
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1347,6 +1844,76 @@ test('9.7 AC8 the module opens no network and no Confluence-sourced read path', 
     assert.ok(!new RegExp(`require\\((['"\`])${m}\\1\\)`).test(src),
       `the module requires ${m}; a publish trigger has no business reaching a network`);
   }
+});
+
+test('9.8 AC8 the OPERATOR-FACING output carries no mirror vocabulary beyond the adjudicated one', () => {
+  // §9 measured the emitted TOML and stopped there, so every line this story adds
+  // to `ma-agents install`, `bind` and `status` output was outside the FR266
+  // negative entirely. Those lines are shipped text too.
+  //
+  // ONE ENTRY IS ADJUDICATED AND SAID SO OUT LOUD: `/\bwrit(e|es|ing|ten)\b/i`.
+  // This surface's whole job is to say whether ma-agents WROTE a file on the
+  // user's disk, so a zero-match claim is unavailable here and pretending
+  // otherwise would be theatre. Every OTHER entry must match zero times, and every
+  // `writ*` match is additionally required to be about `_bmad/custom/` — a local
+  // file this tool owns — never about Confluence content.
+  const ADJUDICATED = /\bwrit(e|es|ing|ten)\b/i;
+  const captures = [];
+  const run = (label, fn) => captures.push([label, captureLog(fn).join('\n')]);
+
+  const prior = process.exitCode;
+  const layout = (backend) => ({
+    knowledgebase: { mode: 'same', path: '.', backend, spaceKey: 'X' },
+    sprintManagement: { mode: 'same', path: '.' },
+  });
+
+  const wrote = fixture();
+  run('wrote', () => cli.generateConfluencePublishHooks({ projectRoot: wrote.root, fallbackLayout: layout('confluence') }));
+  run('unchanged', () => cli.generateConfluencePublishHooks({ projectRoot: wrote.root, fallbackLayout: layout('confluence') }));
+  run('removed', () => cli.generateConfluencePublishHooks({ projectRoot: wrote.root, fallbackLayout: layout('file-system') }));
+  run('not-applicable', () => cli.generateConfluencePublishHooks({ projectRoot: fixture().root, fallbackLayout: layout('file-system') }));
+
+  const refused = fixture();
+  fs.writeFileSync(teamFile(refused, hook.AUTHORING_SKILLS[0]), 'workflow.on_complete = "theirs"\n', 'utf-8');
+  run('refused', () => cli.generateConfluencePublishHooks({ projectRoot: refused.root, fallbackLayout: layout('confluence') }));
+
+  const failed = tmpProject();
+  fs.mkdirSync(path.join(failed, '_bmad'), { recursive: true });
+  fs.writeFileSync(path.join(failed, '_bmad', 'custom'), 'not a directory\n', 'utf-8');
+  run('write-failed', () => cli.generateConfluencePublishHooks({ projectRoot: failed, fallbackLayout: layout('confluence') }));
+
+  const collided = fixture();
+  fs.writeFileSync(teamFile(collided, hook.AUTHORING_SKILLS[0]),
+    bmadCustomizeEndState(hook.AUTHORING_SKILLS[0]), 'utf-8');
+  run('collision report', () => cli.printPublishHookCollisionReport(collided.root));
+
+  const scalar = fixture();
+  generate(scalar, BOTH_CONFLUENCE);
+  fs.writeFileSync(userFile(scalar, hook.AUTHORING_SKILLS[0]),
+    'workflow.on_complete = "MY OWN STEP"\n', 'utf-8');
+  run('personal-override report', () => cli.printUserLayerScalarOverrideReport(scalar.root));
+  process.exitCode = prior;
+
+  // The captures must not be empty, or the check below is vacuous.
+  for (const [label, text] of captures) {
+    assert.ok(text.trim().length > 0, `the ${label} surface printed nothing to measure`);
+  }
+  const hits = [];
+  for (const [label, text] of captures) {
+    for (const re of MIRROR_VOCABULARY) {
+      if (String(re) === String(ADJUDICATED)) continue;
+      if (re.test(text)) hits.push(`${label}: ${re}`);
+    }
+    for (const line of text.split('\n')) {
+      if (!ADJUDICATED.test(line)) continue;
+      assert.ok(/_bmad\/custom|\.toml|override|that file|publish trigger/.test(line),
+        `the ${label} surface uses a mirror-vocabulary verb about something that is not the ` +
+        `local override file: ${JSON.stringify(line.trim())}`);
+    }
+  }
+  assert.deepStrictEqual(hits, [],
+    `the operator-facing output matches mirror vocabulary: ${hits.join(', ')}. These lines ship ` +
+    `and are read by agents as readily as the TOML is.`);
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1555,6 +2122,86 @@ test('10.11 AC12 [authority] the third writer is genuinely upstream, not ma-agen
     "the sparse-override rule is what produces a bare `on_complete` next to ma-agents' block");
 });
 
+test('10.12 R10 the PERSONAL layer\'s scalar override is DETECTED — the residual is no longer silent', () => {
+  // FIX ROUND 1. 8.2 demonstrated this residual and the story called R10 closed
+  // while shipping no detector for it: a scalar `workflow.on_complete` in
+  // `<skill>.user.toml` replaces the publish outright, at exit 0, with nothing
+  // anywhere saying so. The MERGE is upstream and irreducible; the SILENCE was
+  // not, because `status` already walks `_bmad/custom/`.
+  const fx = fixture();
+  generate(fx, BOTH_CONFLUENCE);
+  const skill = hook.AUTHORING_SKILLS[0];
+  fs.writeFileSync(userFile(fx, skill), '# mine\nworkflow.on_complete = "MY OWN STEP"\n', 'utf-8');
+
+  // First prove the state really IS a dead publish, through the REAL resolver —
+  // the detector must be reporting a fact, not a style preference.
+  const resolved = resolveKey(fx, skill, 'workflow.on_complete');
+  assert.strictEqual(resolved.status, 0, 'and it happens at exit 0');
+  assert.strictEqual(resolved.value, 'MY OWN STEP',
+    `the publish must actually be gone for this detector to be worth having; on_complete ` +
+    `resolved to ${JSON.stringify(resolved.value)}`);
+
+  const found = hook.detectUserLayerScalarOverrides(fx.root);
+  assert.strictEqual(found.length, 1, `expected exactly one report, got ${JSON.stringify(found)}`);
+  assert.strictEqual(found[0].skill, skill);
+  assert.strictEqual(found[0].kind, hook.USER_LAYER_SCALAR_OVERRIDE);
+  assert.ok(found[0].file.endsWith(`${skill}.user.toml`), 'it must name the PERSONAL file');
+  assert.strictEqual(found[0].line, 2, 'and the line, so the user can find it');
+});
+
+test('10.13 R10 the detector is SILENT on the array form, on absence, and on a clean project', () => {
+  // The negative half. An array override is the documented remedy and both
+  // instructions run (8.1); reporting it would train the user to ignore the
+  // report, which is the same defect as not reporting at all.
+  const fx = fixture();
+  generate(fx, BOTH_CONFLUENCE);
+  assert.deepStrictEqual(hook.detectUserLayerScalarOverrides(fx.root), [],
+    'no personal layer at all must produce no report');
+
+  const skill = hook.AUTHORING_SKILLS[0];
+  fs.writeFileSync(userFile(fx, skill), 'workflow.on_complete = [ "MY OWN STEP" ]\n', 'utf-8');
+  assert.deepStrictEqual(hook.detectUserLayerScalarOverrides(fx.root), [],
+    'the ARRAY form appends and must not be reported');
+  // …and that is demonstrated, not assumed.
+  assert.strictEqual(resolveKey(fx, skill, 'workflow.on_complete').value.length, 2,
+    'the array form must really append both instructions');
+
+  fs.writeFileSync(userFile(fx, skill), 'workflow.other = "x"\nagent.on_complete = "not ours"\n', 'utf-8');
+  assert.deepStrictEqual(hook.detectUserLayerScalarOverrides(fx.root), [],
+    'a scalar `on_complete` at a DIFFERENT key path does not replace the publish and ' +
+    'must not be reported');
+
+  fs.writeFileSync(userFile(fx, skill), 'this is not toml\n', 'utf-8');
+  assert.deepStrictEqual(hook.detectUserLayerScalarOverrides(fx.root), [],
+    'a personal layer that does not parse is DISCARDED by the resolver, which leaves the ' +
+    'publish intact — reporting it here would be a false alarm');
+});
+
+test('10.14 R10 the report reaches the shipped `status` surface, and names the remedy', () => {
+  // Same discipline as 10.8: bound to the shipped call site, not to the export.
+  const src = fs.readFileSync(path.join(PROJECT_ROOT, 'bin', 'cli.js'), 'utf-8');
+  const reporter = src.slice(src.indexOf('function printPublishHookCollisionReport('));
+  assert.ok(reporter.slice(0, reporter.indexOf('\n}')).includes('printUserLayerScalarOverrideReport('),
+    'the personal-layer report must run from the same surface `ma-agents status` already calls, ' +
+    'or it is an exported function nothing invokes');
+
+  const fx = fixture();
+  generate(fx, BOTH_CONFLUENCE);
+  const skill = hook.AUTHORING_SKILLS[0];
+  fs.writeFileSync(userFile(fx, skill), 'workflow.on_complete = "MY OWN STEP"\n', 'utf-8');
+  const text = captureLog(() => cli.printPublishHookCollisionReport(fx.root)).join('\n');
+  assert.ok(text.includes(`${skill}.user.toml`), `the report must name the file:\n${text}`);
+  assert.ok(/does not publish to Confluence while this stands/.test(text),
+    `and state the CONSEQUENCE, not merely the syntax:\n${text}`);
+  assert.ok(/array/i.test(text) && /exits 0/.test(text),
+    `and name the remedy and why nothing else will tell them:\n${text}`);
+  assert.ok(/ma-agents has not changed it and will not/.test(text),
+    `and say that the personal layer stays the user's — AC2 is a promise, and this is the one ` +
+    `place ma-agents mentions the file at all:\n${text}`);
+  assert.deepStrictEqual(captureLog(() => cli.printPublishHookCollisionReport(fixture().root)), [],
+    'and it must still print nothing at all on a healthy project');
+});
+
 // ═════════════════════════════════════════════════════════════════════════════
 console.log('\n=== 11. AC9 — the pinned invariants, re-derived here ===\n');
 
@@ -1641,6 +2288,16 @@ test('11.4 AC10 Story 31.10\'s epics.md definition is BYTE-UNCHANGED by this sto
 
 // ═════════════════════════════════════════════════════════════════════════════
 console.log('\n=== 12. The call sites, and the ordering that is load-bearing ===\n');
+// ─────────────────────────────────────────────────────────────────────────────
+// READ THIS BEFORE ADDING ANYTHING HERE. Every test in this section is a
+// SOURCE-TEXT measurement over `bin/cli.js`. That is the right instrument for
+// the two claims it makes — HOW MANY call sites there are, and WHERE they sit
+// relative to `installBmad()` and the `installScope` gate — and it is the WRONG
+// instrument for "the call happens", which is why an `if (false) ` prefix on all
+// three call sites once passed this whole suite. THE EFFECT CLAIM LIVES IN §14,
+// which spawns the shipped commands and requires the file on disk. Do not add a
+// grep here and call it coverage.
+// ─────────────────────────────────────────────────────────────────────────────
 
 const CLI_SRC = fs.readFileSync(path.join(PROJECT_ROOT, 'bin', 'cli.js'), 'utf-8');
 
@@ -1806,6 +2463,183 @@ test('13.2 §4.6 R3 an UPDATE restores the file verbatim — including a STALE b
   assert.ok(final.includes('confluence-plan --store system'), '(3) and the current one is back');
   assert.strictEqual(hook.removePublishHookBlock(final), USER_CONTENT,
     "(3) and the user's content is STILL byte-identical after all of it");
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+console.log('\n=== 14. [END TO END] the SHIPPED commands, spawned as a user runs them ===\n');
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX ROUND 1 — THE WHOLE FEATURE COULD BE INERT AND THIS SUITE STAYED GREEN.
+//
+// Prefixing `if (false) ` to all three `generateConfluencePublishHooks(...)`
+// calls in `bin/cli.js` — leaving the call text intact on the line — passed
+// 81/0. No hook was written by `install`, by `config layout` or by `bind`, which
+// is the story's entire deliverable, and nothing failed. Tests 12.1/12.2/12.3
+// are SOURCE-TEXT GREPS over `bin/cli.js` and an `if (false) ` prefix satisfies
+// every one of them. This is the exact `M30` shape the implementation says it
+// eliminated — "call site unreachable, source text unchanged" — moved from the
+// detection path to the GENERATION path, and AC1 was proved only about
+// `hook.generatePublishHooks()` called directly by a test.
+//
+// So: all three sites are now exercised through the SHIPPED command, spawned the
+// way a user runs it, and the file is required to EXIST ON DISK and to RESOLVE
+// THROUGH THE PROJECT'S OWN `resolve_customization.py` — not the vendored copy
+// this suite uses elsewhere, the one the install actually put there.
+//
+// 14.1 pays for a REAL `ma-agents install` once (~90s, offline, no package
+// manager); 14.2, 14.3 and 14.4 reuse the project it leaves behind, so each of
+// the other two call sites costs a couple of seconds.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CLI_PATH = path.join(PROJECT_ROOT, 'bin', 'cli.js');
+
+/** A committed binding with BOTH stores on Confluence. */
+const CONFLUENCE_BINDING = [
+  'schema_version: 2',
+  'system_requirements_store:', '  backend: confluence', '  space_key: "SPACE"',
+  '  root_page:', '    title: "T"', '    id: "1"',
+  'software_requirements_store:', '  backend: confluence', '  space_key: "SPACE"',
+  '  root_page:', '    title: "T"', '    id: "1"',
+  'sprint_management:', '  mode: same', '  path: "."',
+  '',
+].join('\n');
+
+/**
+ * Spawn the shipped CLI in `cwd`.
+ *
+ * `HOME`/`USERPROFILE` are redirected at `bound-projects.js`'s own suggestion so
+ * a test run never writes into the developer's real `~/.ma-agents/`.
+ */
+function runShippedCli(cwd, home, args, timeout) {
+  const r = spawnSync(process.execPath, [CLI_PATH, ...args], {
+    cwd, encoding: 'utf8', timeout: timeout || 600000,
+    env: { ...process.env, HOME: home, USERPROFILE: home },
+  });
+  return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+
+/** The project a REAL `ma-agents install` left behind. Built once, by 14.1. */
+let INSTALLED = null;
+
+/** Resolve a key using the resolver THE INSTALL PUT THERE, not the vendored one. */
+function resolveInInstalledProject(root, skill, key) {
+  const resolver = path.join(root, '_bmad', 'scripts', 'resolve_customization.py');
+  const skillDir = path.join(root, '.claude', 'skills', skill);
+  const r = python([resolver, '--skill', skillDir, '--key', key]);
+  let value;
+  try { value = JSON.parse(r.stdout)[key]; } catch (_) { value = undefined; }
+  return { status: r.status, stderr: r.stderr || '', value };
+}
+
+test('14.1 AC1 [END TO END] a REAL `ma-agents install` writes the hook, and the project resolves it', () => {
+  const home = tmpProject();
+  const root = tmpProject();
+  fs.mkdirSync(path.join(root, '_bmad-output'), { recursive: true });
+  fs.writeFileSync(path.join(root, '_bmad-output', 'project-layout.yaml'), CONFLUENCE_BINDING, 'utf-8');
+
+  const run = runShippedCli(root, home, ['install', '--yes']);
+  assert.strictEqual(run.status, 0,
+    `the shipped install failed (${run.status}):\n${run.out.slice(-2000)}`);
+  INSTALLED = { root, home };
+
+  // The binding must have survived the wizard, or this proves nothing about the
+  // confluence branch.
+  assert.ok(/backend: confluence/.test(
+    fs.readFileSync(path.join(root, '_bmad-output', 'project-layout.yaml'), 'utf-8')),
+  'the install rewrote the binding away from confluence; the fixture is not what it claims');
+
+  // ON DISK. This is the assertion the `if (false) ` mutant kills and every
+  // source grep in §12 survives.
+  for (const skill of hook.AUTHORING_SKILLS) {
+    const file = hook.customOverridePath(root, skill);
+    assert.ok(fs.existsSync(file),
+      `${skill}: the SHIPPED install command wrote no override at ${file}. The story's entire ` +
+      `deliverable is that this file exists after an install; a call site that is present in ` +
+      `source but never executed produces exactly this.\n${run.out.slice(-1500)}`);
+    assert.ok(hook.findPublishHookBlock(fs.readFileSync(file, 'utf-8')) !== null,
+      `${skill}: the file exists but carries no marker block`);
+  }
+
+  // AND IT RESOLVES — through the resolver the install itself deployed, against
+  // the skill directory the install itself deployed.
+  assert.ok(fs.existsSync(path.join(root, '_bmad', 'scripts', 'resolve_customization.py')),
+    'the install must deploy the resolver, or the channel does not exist in a real project');
+  for (const [skill, storeId] of ORACLE) {
+    const got = resolveInInstalledProject(root, skill, 'workflow.on_complete');
+    assert.strictEqual(got.status, 0, `${skill}: resolver exited ${got.status} — ${got.stderr}`);
+    assert.ok(Array.isArray(got.value) && got.value.length === 1,
+      `${skill}: on_complete resolved to ${JSON.stringify(got.value)} in a REAL installed project`);
+    assert.ok(got.value[0].includes(`--store ${storeId === SYSTEM ? 'system' : 'software'}`),
+      `${skill}: the resolved instruction routes to the wrong store: ` +
+      `${JSON.stringify(got.value[0].slice(0, 160))}`);
+    assert.strictEqual(got.stderr.trim(), '',
+      `${skill}: the resolver warned in a project the installer just built: ${got.stderr}`);
+  }
+  assert.ok(/Confluence publish trigger written/.test(run.out),
+    `and the install must SAY what it did:\n${run.out.slice(-1500)}`);
+});
+
+test('14.2 AC1 [END TO END] a REAL `ma-agents bind` regenerates the hook after it is deleted', () => {
+  assert.ok(INSTALLED, '14.1 must have produced a real installed project for this to run against');
+  const { root, home } = INSTALLED;
+  for (const skill of hook.AUTHORING_SKILLS) fs.rmSync(hook.customOverridePath(root, skill), { force: true });
+
+  const run = runShippedCli(root, home, ['bind', '--yes'], 300000);
+  assert.strictEqual(run.status, 0, `bind failed (${run.status}):\n${run.out.slice(-2000)}`);
+  for (const skill of hook.AUTHORING_SKILLS) {
+    assert.ok(fs.existsSync(hook.customOverridePath(root, skill)),
+      `${skill}: \`ma-agents bind\` wrote no override. bind is the documented remedy for §4.6 R3's ` +
+      `out-of-band case, so a bind that generates nothing makes that remedy false.\n` +
+      `${run.out.slice(-1500)}`);
+  }
+  const got = resolveInInstalledProject(root, 'bmad-prd', 'workflow.on_complete');
+  assert.ok(Array.isArray(got.value) && got.value.length === 1,
+    `and it must resolve after a bind; got ${JSON.stringify(got.value)}`);
+});
+
+test('14.3 AC1 [END TO END] a REAL `ma-agents config layout` regenerates it too', () => {
+  assert.ok(INSTALLED, '14.1 must have produced a real installed project');
+  const { root, home } = INSTALLED;
+  for (const skill of hook.AUTHORING_SKILLS) fs.rmSync(hook.customOverridePath(root, skill), { force: true });
+
+  const run = runShippedCli(root, home, ['config', 'layout', '--yes'], 300000);
+  assert.strictEqual(run.status, 0, `config layout failed (${run.status}):\n${run.out.slice(-2000)}`);
+  for (const skill of hook.AUTHORING_SKILLS) {
+    assert.ok(fs.existsSync(hook.customOverridePath(root, skill)),
+      `${skill}: the reconfigure path wrote no override:\n${run.out.slice(-1500)}`);
+  }
+  const got = resolveInInstalledProject(root, 'bmad-ux', 'workflow.on_complete');
+  assert.ok(Array.isArray(got.value) && got.value[0].includes('--store software'),
+    `and it must resolve to the software store for bmad-ux; got ${JSON.stringify(got.value)}`);
+});
+
+test('14.4 AC12(c)/R10 [END TO END] a REAL `ma-agents status` names BOTH silent-publish states', () => {
+  assert.ok(INSTALLED, '14.1 must have produced a real installed project');
+  const { root, home } = INSTALLED;
+  const collided = hook.AUTHORING_SKILLS[0];
+  const overridden = hook.AUTHORING_SKILLS[1];
+
+  const clean = runShippedCli(root, home, ['status'], 300000);
+  assert.strictEqual(clean.status, 0, `status failed:\n${clean.out.slice(-1500)}`);
+  assert.ok(!/need attention|REPLACE it/.test(clean.out),
+    `status reported a problem on a project the install had just written:\n${clean.out.slice(-1500)}`);
+
+  fs.writeFileSync(hook.customOverridePath(root, collided), bmadCustomizeEndState(collided), 'utf-8');
+  fs.writeFileSync(hook.userOverridePath(root, overridden),
+    'workflow.on_complete = "MY OWN STEP"\n', 'utf-8');
+  const userBytes = fs.readFileSync(hook.userOverridePath(root, overridden));
+
+  const run = runShippedCli(root, home, ['status'], 300000);
+  assert.strictEqual(run.status, 0,
+    `status REPORTS these states, it is not itself a failure:\n${run.out.slice(-1500)}`);
+  assert.ok(run.out.includes(`${collided}.toml`), `status did not name the collided file:\n${run.out}`);
+  assert.ok(run.out.includes(`${overridden}.user.toml`),
+    `status did not name the personal override that replaces the publish:\n${run.out}`);
+  assert.ok((run.out.match(/does not publish to Confluence while this stands/g) || []).length >= 2,
+    `both states must state the SAME consequence, or one of them reads as cosmetic:\n${run.out}`);
+  assert.ok(userBytes.equals(fs.readFileSync(hook.userOverridePath(root, overridden))),
+    'and AC2 holds through the shipped command: the personal file is byte-identical after status');
+
+  fs.rmSync(hook.userOverridePath(root, overridden), { force: true });
 });
 
 // ─── Summary ─────────────────────────────────────────────────────────────────
