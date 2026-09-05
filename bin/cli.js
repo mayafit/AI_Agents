@@ -1521,6 +1521,14 @@ function remediesFor(collisions, skill) {
     [H.COLLISION_HALF_BLOCK,
       `The BEGIN marker has no matching END. Remove the stray marker line — the next install or\n` +
       `  \`ma-agents bind\` then emits a fresh region rather than guessing where yours ended.`],
+    // FIX ROUND 4 (R1). The one kind whose remedy CANNOT be "let ma-agents sort
+    // it out": deciding which of two identical BEGIN markers was ours is exactly
+    // the guess that deletes the lines between them.
+    [H.COLLISION_AMBIGUOUS_MARKERS,
+      `There is more than one \`${H.PUBLISH_HOOK_MARKER_BEGIN}\` line in this file, so ma-agents\n` +
+      `  cannot tell which region is its own — and anything between the wrong pair of markers would\n` +
+      `  be DELETED. Delete the stray BEGIN line by hand (and its END, if it has one), keeping the\n` +
+      `  one region ma-agents generated, then re-run. ma-agents will not guess this for you.`],
   ]);
 
   const out = [];

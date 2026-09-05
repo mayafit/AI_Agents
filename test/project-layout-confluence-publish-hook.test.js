@@ -74,7 +74,11 @@ const tree = require(path.join(PROJECT_ROOT, 'lib', 'confluence-page-tree.js'));
 // FIX ROUND 3 adds seven: 4.9 (the marker data-loss fixture), 5.12 (the corpus
 // pin), 5.13/5.14 (BLOCKING-1's malformations, both directions), 6.15/6.16 (the
 // hash pins) and 6.17 (the six defeating constructions, replanted).
-const EXPECTED_TEST_COUNT = 109;
+// FIX ROUND 4 adds two: 4.10 (the marker PREFIX case and the SECOND begin
+// marker, the two data-loss shapes 4.9's mid-line fixture does not reach) and
+// 5.15 (escape sequences in basic strings, both directions, with a
+// literal-string control).
+const EXPECTED_TEST_COUNT = 111;
 
 let passed = 0;
 let failed = 0;
@@ -995,6 +999,132 @@ test('4.9 AC3(b) [DATA LOSS] a user COMMENT that merely names both markers is no
     'and removing it restores the user bytes exactly');
 });
 
+test('4.10 AC3(b) [DATA LOSS] a marker that BEGINS a line, and a SECOND begin marker', () => {
+  // FIX ROUND 4 (R1) — the data-loss fix had a data-loss hole one spelling away.
+  //
+  // Round 3 anchored the marker with `line.startsWith(marker, k)` — "BEGINS a
+  // line", not "IS the line" — and `findPublishHookBlock` took `begins[0]`
+  // unconditionally, never reporting that a second BEGIN existed. Both shapes
+  // below were measured end to end on the round-3 code: `findPublishHookBlock`
+  // spanned `{begin: 0, end: <the genuine END>}`, `scanForCollisions` returned
+  // `[]`, the outcome was `wrote`, `status` was silent, the resulting file
+  // PARSED CLEANLY — and the team's only setting was gone. Identical mechanism
+  // and identical end state to the finding round 3 elevated to blocking, and it
+  // falsifies the same promise the block itself ships at
+  // `lib/confluence-publish-hook.js:893`.
+  //
+  // 4.9 does not cover either: its fixture is MID-LINE only.
+  const SETTING = 'prd_template = "assets/house-prd.md"';
+  const B = hook.PUBLISH_HOOK_MARKER_BEGIN;
+  const genuine = hook.buildPublishHookBlock({
+    skillName: hook.AUTHORING_SKILLS[0], storeCliName: 'system',
+    storeLabel: tree.labelForStore(SYSTEM),
+  });
+
+  // ── (A) THE PREFIX CASE. A comment line that STARTS with the marker and
+  //    continues is a genuine TOML comment line — and it is not ma-agents'
+  //    region. The story's round-3 justification ("a marker at the start of a
+  //    line IS a genuine comment line by TOML's own rules") is true and
+  //    INSUFFICIENT, and this is the counterexample.
+  const prefix = `${B} — our house note about this region\n${SETTING}\n\n`;
+  const prefixFile = prefix + genuine + '\n';
+
+  const foundInPrefix = hook.findPublishHookBlock(prefixFile);
+  assert.ok(foundInPrefix && foundInPrefix.begin > 0,
+    `the region must be the GENUINE block further down, not the annotated comment at offset 0; ` +
+    `got ${JSON.stringify(foundInPrefix)}`);
+  assert.strictEqual(hook.findPublishHookBlock(prefix), null,
+    'and on its own, an annotated marker comment is no region at all');
+  assert.strictEqual(hook.removePublishHookBlock(prefix), prefix,
+    'so removing "our" block from it is a byte-for-byte no-op');
+
+  // End to end, through the real generator: `wrote`, and the setting SURVIVES.
+  {
+    const fx = fixture();
+    const skill = hook.AUTHORING_SKILLS[0];
+    fs.writeFileSync(teamFile(fx, skill), prefixFile, 'utf-8');
+    const r = generate(fx, BOTH_CONFLUENCE).results.find((x) => x.skill === skill);
+    assert.strictEqual(r.outcome, hook.HOOK_WROTE,
+      `this file is valid TOML with ONE genuine region and must simply be regenerated; got ` +
+      `${r.outcome} ${JSON.stringify(r.collisions)}`);
+    const after = fs.readFileSync(teamFile(fx, skill), 'utf-8');
+    assert.ok(after.includes(SETTING),
+      `the team's only setting was DESTROYED by the generation:\n${after}`);
+    assert.ok(after.includes(`${B} — our house note about this region`),
+      `and so was their annotated comment line:\n${after}`);
+    // "the bytes are there" is not the claim; "the team layer still works" is.
+    assert.strictEqual(resolveKey(fx, skill, 'prd_template').value, 'assets/house-prd.md',
+      "the team's setting no longer resolves through the real resolver");
+    assert.ok(Array.isArray(resolveKey(fx, skill, 'workflow.on_complete').value),
+      'and the publish hook resolves beside it');
+    // Idempotent: a second generation must not accumulate a second region.
+    generate(fx, BOTH_CONFLUENCE);
+    assert.strictEqual(fs.readFileSync(teamFile(fx, skill), 'utf-8'), after,
+      'and a second generation must be byte-identical');
+  }
+
+  // ── (B) THE MULTI-BEGIN CASE. An EXACT orphan marker line above the user's
+  //    content, with the genuine block below it. There is no safe way to pick
+  //    one of two identical markers, so this is REFUSED and NAMED — never
+  //    silently resolved by taking the first.
+  const orphanFile = `${B}\n${SETTING}\n\n` + genuine + '\n';
+  const foundInOrphan = hook.findPublishHookBlock(orphanFile);
+  assert.ok(foundInOrphan && foundInOrphan.ambiguous === true,
+    `two BEGIN markers must be reported as ambiguous, not resolved; got ` +
+    `${JSON.stringify(foundInOrphan)}`);
+  assert.strictEqual(foundInOrphan.end, null,
+    'and no region may be named, or the next write deletes what lies between the wrong pair');
+  assert.strictEqual(hook.removePublishHookBlock(orphanFile), orphanFile,
+    'so removal — the `ma-agents install` path after the store stops being Confluence — is a ' +
+    'byte-for-byte no-op too');
+
+  {
+    const fx = fixture();
+    const skill = hook.AUTHORING_SKILLS[0];
+    fs.writeFileSync(teamFile(fx, skill), orphanFile, 'utf-8');
+    const r = generate(fx, BOTH_CONFLUENCE).results.find((x) => x.skill === skill);
+    assert.strictEqual(r.outcome, hook.HOOK_REFUSED_COLLISION,
+      `an ambiguous pair of markers must REFUSE the write; got ${r.outcome}`);
+    assert.ok(r.collisions.some((c) => c.kind === hook.COLLISION_AMBIGUOUS_MARKERS),
+      `and by name; got ${JSON.stringify(r.collisions.map((c) => c.kind))}`);
+    assert.strictEqual(fs.readFileSync(teamFile(fx, skill), 'utf-8'), orphanFile,
+      "and nothing may be written over the user's bytes");
+    // The READ side — `status` — names it without the generator running.
+    const detected = hook.detectPublishHookCollisions(fx.root);
+    assert.ok(detected.some((e) => e.collisions.some((c) => c.kind === hook.COLLISION_AMBIGUOUS_MARKERS)),
+      `status must name it too; got ` +
+      `${JSON.stringify(detected.map((e) => e.collisions.map((c) => c.kind)))}`);
+    // And the removal path leaves the file alone rather than deleting into it.
+    const away = generate(fx, NEITHER).results.find((x) => x.skill === skill);
+    assert.strictEqual(fs.readFileSync(teamFile(fx, skill), 'utf-8'), orphanFile,
+      `a flip AWAY from Confluence must not delete between the wrong pair either; outcome ` +
+      `${away.outcome}`);
+  }
+
+  // ── (C) ARMED. Every assertion above could pass because nothing is ever
+  //    found. 4.9 keeps its own arming half; this repeats it here so the two
+  //    halves of THIS fix cannot be satisfied by a `findPublishHookBlock` that
+  //    simply returns `null`.
+  const real = hook.injectPublishHookBlock(`${SETTING}\n`, genuine);
+  const found = hook.findPublishHookBlock(real);
+  assert.ok(found && found.end !== null && found.ambiguous === false,
+    'the genuine block must still be found, or this fix has traded data loss for a block that ' +
+    'can never be replaced and accumulates on every install');
+  assert.strictEqual(found.begin, 0, 'and it is at the top of the file');
+  assert.strictEqual(hook.removePublishHookBlock(real), `${SETTING}\n`,
+    'and removing it restores the user bytes exactly');
+  assert.deepStrictEqual(hook.scanForCollisions(real), [],
+    'and a healthy file with exactly one region collides with nothing');
+  // Leading and trailing whitespace around an otherwise-exact marker line is
+  // still OUR marker — an editor may add or strip it without the user meaning
+  // anything by it, and treating it as foreign would accumulate a second block.
+  const spaced = real.replace(hook.PUBLISH_HOOK_MARKER_END, `  ${hook.PUBLISH_HOOK_MARKER_END}  `);
+  const foundSpaced = hook.findPublishHookBlock(spaced);
+  assert.ok(foundSpaced && foundSpaced.end !== null,
+    `an END marker an editor re-indented is still the END marker; got ` +
+    `${JSON.stringify(foundSpaced)}`);
+});
+
 // ═════════════════════════════════════════════════════════════════════════════
 console.log('\n=== 5. AC4 — TOML validity, measured against real tomllib ===\n');
 
@@ -1112,6 +1242,28 @@ function differentialCorpus() {
     // legal bare words and is not one of them.
     ['a bare value beginning like a keyword (invalid)',
       'a = templates/prd.md\nb = falsey\nc = interactive\nd = none\n'],
+    // ── FIX ROUND 4 (R2). ESCAPE SEQUENCES in basic strings were never looked
+    //    at. Round 3's corpus carried the UNQUOTED Windows path and stopped
+    //    there; this is the half a user who DID remember the quotes writes, and
+    //    `tomllib` rejects it, so ma-agents wrote the block and the resolver
+    //    then discarded the entire team layer at exit 0.
+    ['a QUOTED Windows path in a basic string (invalid)',
+      'prd_template = "C:\\team\\templates\\prd.md"\n'],
+    ['a quoted Windows user path, where \\U looks like an escape (invalid)',
+      'prd_template = "C:\\Users\\alon\\prd.md"\n'],
+    ['a stray backslash in a basic string (invalid)', 'pct = "50% \\q done"\n'],
+    ['a truncated \\u escape (invalid)', 'x = "\\u12"\n'],
+    ['a bad escape in a MULTI-LINE basic string (invalid)', 'x = """C:\\team\\prd.md"""\n'],
+    ['a bad escape in a QUOTED KEY (invalid)', '"a\\qb" = 1\n'],
+    //    …and the LEGAL half, in the same commit as the check, because a closed
+    //    set is one careless character away from refusing a valid file.
+    ['the same Windows path in a LITERAL string (valid)', "prd_template = 'C:\\team\\prd.md'\n"],
+    ['every legal basic-string escape (valid)',
+      'x = "\\b\\t\\n\\f\\r \\" \\\\ \\u00e9 \\U0001F600"\n'],
+    ['a line-ending backslash in a multi-line basic string (valid)', 'x = """a\\\n  b"""\n'],
+    ['a line-ending backslash with trailing whitespace (valid)', 'x = """a\\   \n  b"""\n'],
+    ['a legal escape in a quoted key (valid)', '"a\\tb" = 1\n'],
+    ['backslashes in a multi-line LITERAL string (valid)', "x = '''C:\\team\\prd.md'''\n"],
   ]);
   // Every shipped upstream customize.toml, raw and with the block prepended.
   const bmm = path.join(PROJECT_ROOT, 'node_modules', 'bmad-method', 'src');
@@ -1455,6 +1607,32 @@ const PREDICATE_CORPUS = new Map([
   ['INVALID a bare value beginning f, not `false`', 'flag = falsey\n'],
   ['INVALID a bare value beginning i, not `inf`', 'mode = interactive\n'],
   ['INVALID a bare value beginning n, not `nan`', 'prd_template = none\n'],
+  // ── FIX ROUND 4 (R2). The quoted half of the Windows-path family, and the
+  //    rest of the escape shapes. Round 3 closed the UNQUOTED spelling and the
+  //    record read as though the family were closed; the more likely half — the
+  //    user who DID remember the quotes — was wide open. `tomllib` rejects each
+  //    of these beside our block; the shipped predicate accepted every one.
+  ['INVALID a QUOTED Windows path in a basic string',
+    'prd_template = "C:\\team\\templates\\prd.md"\n'],
+  ['INVALID a quoted Windows user path, where \\U looks like an escape',
+    'prd_template = "C:\\Users\\alon\\prd.md"\n'],
+  ['INVALID a stray backslash in a basic string', 'pct = "50% \\q done"\n'],
+  ['INVALID a truncated \\u escape', 'x = "\\u12"\n'],
+  ['INVALID a \\U escape with only four hex digits', 'x = "\\U0001"\n'],
+  ['INVALID a bad escape in a MULTI-LINE basic string', 'x = """C:\\team\\prd.md"""\n'],
+  ['INVALID a bad escape in a QUOTED KEY', '"a\\qb" = 1\n'],
+  ['INVALID a \\e escape (TOML 1.1 draft, not 1.0)', 'x = "a\\e b"\n'],
+  ['INVALID a \\xHH escape (TOML 1.1 draft, not 1.0)', 'x = "a\\x41 b"\n'],
+  ['INVALID a JSON-habit \\/ escape', 'x = "a\\/b"\n'],
+  //    …and the FALSE-REFUSAL direction for the same check. Every one of these
+  //    is valid TOML and must still install cleanly.
+  ['the same Windows path in a LITERAL string', "prd_template = 'C:\\team\\prd.md'\n"],
+  ['every legal basic-string escape', 'x = "\\b\\t\\n\\f\\r \\" \\\\ \\u00e9 \\U0001F600"\n'],
+  ['a line-ending backslash in a multi-line basic string', 'x = """a\\\n  b"""\n'],
+  ['a line-ending backslash with trailing whitespace', 'x = """a\\   \n  b"""\n'],
+  ['a legal escape in a quoted key', '"a\\tb" = 1\n'],
+  ['backslashes in a multi-line LITERAL string', "x = '''C:\\team\\prd.md'''\n"],
+  ['a backslash in a single-line literal string', "x = 'C:\\team\\prd.md'\n"],
 ]);
 
 /**
@@ -1465,11 +1643,14 @@ const PREDICATE_CORPUS = new Map([
  * silently is a warrant that can shrink silently. Deleting any single entry used
  * to move a `>=` floor without moving a test.
  */
-const PREDICATE_CORPUS_SIZE = 82;
-const PREDICATE_CORPUS_NEGATIVES = 51;
-const PREDICATE_CORPUS_POSITIVES = 31;
+// FIX ROUND 4 (R2): 82 -> 99. Seventeen escape-family entries, ten of them
+// `tomllib` negatives (51 -> 61) and seven positives (31 -> 38). The three pins
+// move together, deliberately, and the digest is recomputed from the content.
+const PREDICATE_CORPUS_SIZE = 99;
+const PREDICATE_CORPUS_NEGATIVES = 61;
+const PREDICATE_CORPUS_POSITIVES = 38;
 const PREDICATE_CORPUS_DIGEST =
-  '42e813fd3a2a361933e23d5c450cfb3715e46afa54d2501d4bd4626f648744f4';
+  '85983da187d0122d3e698d6f86542d990c157d6bf95c93cb476bf9a317dfe6e0';
 
 test('5.12 AC4(b) [pin] the predicate corpus is pinned by exact COUNT and by CONTENT', () => {
   assert.strictEqual(PREDICATE_CORPUS.size, PREDICATE_CORPUS_SIZE,
@@ -1770,6 +1951,140 @@ test('5.14 AC4(a) [BLOCKING-1, the other direction] the new key/value checks ref
     `the new key/value validation REFUSES ${falseRefusals.length} file(s) that tomllib parses ` +
     `happily. A false refusal is the worse direction — it blocks the install for all five ` +
     `skills.\n  ${falseRefusals.join('\n  ')}`);
+});
+
+test('5.15 AC4/AC12 [R2] a QUOTED Windows path is refused — with a literal-string control', () => {
+  // FIX ROUND 4 (R2). Round 3 closed the UNQUOTED Windows path
+  // (`prd_template = C:\team\...`) and the record read as though the family were
+  // shut. The more likely half — the user who DID remember the quotes — was
+  // wide open, because ESCAPE SEQUENCES in a basic string were never validated
+  // at all. Measured on the round-3 code, against the real
+  // `resolve_customization.py`, beside a literal-string control that behaves
+  // correctly at every step:
+  //
+  //                  control 'C:\team\prd.md'   attack "C:\team\templates\prd.md"
+  //   generator      wrote, refused=false       wrote, refused=false
+  //   status         []                         []
+  //   resolver exit  0                          0  (a stderr warning only)
+  //   on_complete    array, len 1               ""      — NO PUBLISH
+  //   prd_template   correct                    undefined — the team layer, gone
+  //
+  // The CONTROL is the point of this test as much as the attack: it is what
+  // proves the refusal is about the escape and not about Windows paths, quotes,
+  // or backslashes in general.
+  const CONTROL = "prd_template = 'C:\\team\\prd.md'\n";       // literal string — legal
+  const ATTACK = 'prd_template = "C:\\team\\templates\\prd.md"\n';  // basic string — illegal
+
+  // (0) The premise, through real tomllib: exactly one of the two is invalid.
+  const block = hook.buildPublishHookBlock({
+    skillName: hook.AUTHORING_SKILLS[0], storeCliName: 'system',
+    storeLabel: tree.labelForStore(SYSTEM),
+  });
+  const verdicts = tomllibVerdicts([
+    hook.injectPublishHookBlock(CONTROL, block),
+    hook.injectPublishHookBlock(ATTACK, block),
+  ]);
+  assert.strictEqual(verdicts[0], null,
+    `the literal-string control must be VALID TOML beside our block, or this test proves ` +
+    `nothing about the escape: ${verdicts[0]}`);
+  assert.notStrictEqual(verdicts[1], null,
+    'and the basic-string attack must really be invalid, or the refusal is a false alarm');
+
+  // (1) THE CONTROL INSTALLS CLEANLY, end to end, through the real resolver.
+  {
+    const fx = fixture();
+    for (const s of hook.AUTHORING_SKILLS) fs.writeFileSync(teamFile(fx, s), CONTROL, 'utf-8');
+    const out = generate(fx, BOTH_CONFLUENCE);
+    assert.deepStrictEqual(out.results.map((r) => r.outcome), Array(5).fill(hook.HOOK_WROTE),
+      `a Windows path in a LITERAL string is perfectly valid and must install: ` +
+      `${JSON.stringify(out.results.map((r) => [r.skill, r.outcome, r.collisions]))}`);
+    assert.strictEqual(out.refused, false, 'and nothing may be reported as refused');
+    assert.deepStrictEqual(hook.detectPublishHookCollisions(fx.root), [],
+      'and status must be silent about a healthy file');
+    for (const skill of hook.AUTHORING_SKILLS) {
+      const hookValue = resolveKey(fx, skill, 'workflow.on_complete');
+      assert.ok(Array.isArray(hookValue.value) && hookValue.value.length === 1,
+        `${skill}: the publish must resolve; got ${JSON.stringify(hookValue.value)}`);
+      assert.strictEqual(resolveKey(fx, skill, 'prd_template').value, 'C:\\team\\prd.md',
+        `${skill}: and the team's own setting beside it`);
+    }
+  }
+
+  // (2) THE ATTACK IS REFUSED, on BOTH surfaces, with nothing written.
+  {
+    const fx = fixture();
+    for (const s of hook.AUTHORING_SKILLS) fs.writeFileSync(teamFile(fx, s), ATTACK, 'utf-8');
+    const out = generate(fx, BOTH_CONFLUENCE);
+    assert.deepStrictEqual(out.results.map((r) => r.outcome),
+      Array(5).fill(hook.HOOK_REFUSED_INVALID_TOML),
+      `every skill must refuse; got ${JSON.stringify(out.results.map((r) => [r.skill, r.outcome]))}`);
+    assert.strictEqual(out.refused, true, 'and the aggregate must set the exit code');
+    for (const r of out.results) {
+      assert.ok(r.collisions.every((c) => Number.isInteger(c.line) && c.line > 0),
+        `${r.skill}: the refusal must name the line: ${JSON.stringify(r.collisions)}`);
+      assert.ok(r.collisions.some((c) => /escape/i.test(c.detail)),
+        `${r.skill}: and say what is wrong: ${JSON.stringify(r.collisions)}`);
+      assert.strictEqual(fs.readFileSync(teamFile(fx, r.skill), 'utf-8'), ATTACK,
+        `${r.skill}: nothing may be written over the user's bytes`);
+    }
+    const detected = hook.detectPublishHookCollisions(fx.root);
+    assert.strictEqual(detected.length, 5, `status must fire on all five; got ${detected.length}`);
+    assert.ok(detected.every((e) => e.collisions.some((c) => c.kind === hook.COLLISION_UNPARSEABLE)),
+      `and by name: ${JSON.stringify(detected.map((e) => e.collisions.map((c) => c.kind)))}`);
+
+    const prior = process.exitCode;
+    process.exitCode = 0;
+    const text = captureLog(() => cli.generateConfluencePublishHooks({
+      projectRoot: fx.root,
+      fallbackLayout: { knowledgebase: { mode: 'same', path: '.', backend: 'confluence', spaceKey: 'X' }, sprintManagement: { mode: 'same', path: '.' } },
+    })).join('\n');
+    const observed = process.exitCode;
+    process.exitCode = prior;
+    assert.strictEqual(observed, 1, `the install must go non-zero:\n${text}`);
+    assert.ok(!/Confluence publish trigger written/.test(text),
+      `and must NOT claim it wrote the trigger:\n${text}`);
+  }
+
+  // (3) BOTH DIRECTIONS, over the whole escape family, as a differential against
+  //     tomllib. A closed set is one careless character away from refusing a
+  //     legal file, and a false refusal blocks the install for ALL FIVE skills.
+  const FAMILY = new Map([
+    ['a stray backslash', 'pct = "50% \\q done"\n'],
+    ['a Windows user path', 'prd_template = "C:\\Users\\alon\\prd.md"\n'],
+    ['a truncated \\u', 'x = "\\u12"\n'],
+    ['a \\U with four hex digits', 'x = "\\U0001"\n'],
+    ['a bad escape in a multi-line basic string', 'x = """C:\\team\\prd.md"""\n'],
+    ['a bad escape in a quoted key', '"a\\qb" = 1\n'],
+    ['\\e (TOML 1.1 draft only)', 'x = "a\\e b"\n'],
+    ['\\xHH (TOML 1.1 draft only)', 'x = "a\\x41 b"\n'],
+    ['the JSON habit \\/', 'x = "a\\/b"\n'],
+    ['every legal escape', 'x = "\\b\\t\\n\\f\\r \\" \\\\ \\u00e9 \\U0001F600"\n'],
+    ['a legal escape in a quoted key', '"a\\tb" = 1\n'],
+    ['a line-ending backslash', 'x = """a\\\n  b"""\n'],
+    ['a line-ending backslash with trailing whitespace', 'x = """a\\   \n  b"""\n'],
+    ['a single-line literal string', "x = 'C:\\team\\prd.md'\n"],
+    ['a multi-line literal string', "x = '''C:\\team\\prd.md'''\n"],
+    ['a backslash inside a comment', '# C:\\team\\prd.md\nx = 1\n'],
+  ]);
+  const labels = [...FAMILY.keys()];
+  const famVerdicts = tomllibVerdicts(labels.map((n) => FAMILY.get(n)));
+  const disagreements = [];
+  labels.forEach((n, i) => {
+    const oursRejects = hook.tomlProblems(FAMILY.get(n)).length > 0;
+    const theirsRejects = famVerdicts[i] !== null;
+    if (oursRejects !== theirsRejects) {
+      disagreements.push(`${n}: ma-agents ${oursRejects ? 'REFUSES' : 'accepts'}, ` +
+        `tomllib ${theirsRejects ? `rejects (${famVerdicts[i]})` : 'accepts'}`);
+    }
+  });
+  assert.deepStrictEqual(disagreements, [],
+    `the escape check disagrees with tomllib on ${disagreements.length} shape(s). A false ` +
+    `ACCEPTANCE discards the team layer at exit 0; a false REFUSAL blocks the install for all ` +
+    `five skills, which this module names as the worse direction.\n  ` +
+    `${disagreements.join('\n  ')}`);
+  // And the differential must not be vacuous in either direction.
+  assert.ok(famVerdicts.filter((v) => v !== null).length >= 9, 'the family needs real negatives');
+  assert.ok(famVerdicts.filter((v) => v === null).length >= 7, 'and real positives');
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -2454,6 +2769,7 @@ test('6.14 AC5(a) [N2] the printed REMEDY is specific to the collision KIND, for
     hook.COLLISION_DUPLICATE_KEY, hook.COLLISION_DUPLICATE_TABLE, hook.COLLISION_UNPARSEABLE,
     hook.COLLISION_BLOCK_NOT_AT_ROOT, hook.COLLISION_HALF_BLOCK,
     hook.COLLISION_TABLE_IS_VALUE, hook.COLLISION_KEY_USED_AS_TABLE,
+    hook.COLLISION_AMBIGUOUS_MARKERS,
   ];
   const exported = Object.keys(hook).filter((k) => /^COLLISION_/.test(k)).map((k) => hook[k]);
   assert.deepStrictEqual([...KINDS].sort(), [...exported].sort(),
@@ -2473,6 +2789,12 @@ test('6.14 AC5(a) [N2] the printed REMEDY is specific to the collision KIND, for
     // header here would leave the key loop's `under` branch resting on 5.8
     // alone. The header spelling is asserted separately below.
     [hook.COLLISION_KEY_USED_AS_TABLE, 'workflow.on_complete.mine = 1\n'],
+    // FIX ROUND 4 (R1). Two BEGIN markers. Its remedy is the one that CANNOT be
+    // "re-run and let ma-agents sort it out" — picking one of the two is exactly
+    // the guess that deletes everything between them.
+    [hook.COLLISION_AMBIGUOUS_MARKERS,
+      `${hook.PUBLISH_HOOK_MARKER_BEGIN}\nprd_template = "assets/house.md"\n` +
+      `${hook.PUBLISH_HOOK_MARKER_BEGIN}\n${hook.PUBLISH_HOOK_MARKER_END}\n`],
   ]);
   const seenTexts = new Map();
   for (const [kind, content] of FILES) {
@@ -2523,6 +2845,10 @@ test('6.14 AC5(a) [N2] the printed REMEDY is specific to the collision KIND, for
   assert.ok(/ARRAY of instructions/.test(remedies.get(hook.COLLISION_KEY_USED_AS_TABLE)),
     `nesting under our key is fixed by not nesting under it:\n` +
     `${remedies.get(hook.COLLISION_KEY_USED_AS_TABLE)}`);
+  assert.ok(/more than one/i.test(remedies.get(hook.COLLISION_AMBIGUOUS_MARKERS)) &&
+    /by hand/i.test(remedies.get(hook.COLLISION_AMBIGUOUS_MARKERS)),
+  `two BEGIN markers are fixed by the USER deleting the stray one — ma-agents guessing is the ` +
+  `data loss:\n${remedies.get(hook.COLLISION_AMBIGUOUS_MARKERS)}`);
 
   // The HEADER spellings of that same kind, including the EMPTY ones a mutation
   // run showed were reachable only through the table branch.
