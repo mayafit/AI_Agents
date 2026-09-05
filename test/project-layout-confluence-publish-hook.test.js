@@ -1263,6 +1263,11 @@ function differentialCorpus() {
     ['a bad escape on a CONTINUED line of a multi-line basic string (invalid)',
       'x = """\nC:\\team\\prd.md\n"""\n'],
     ['a truncated \\u on a CONTINUED line (invalid)', 'x = """\na\\u12 b\n"""\n'],
+    // The E10b gap, found by a SECOND mutant after E10's entries were added:
+    // here the bad escape is the LAST thing on the line, so an OFF-BY-ONE in
+    // the line-ending guard (`slice(i + 2)` where the code says `slice(i + 1)`)
+    // reads the remainder as empty and calls it a line-ending backslash.
+    ['a bad escape at the END of a continued line (invalid)', 'x = """\na\\q\n"""\n'],
     ['a bad escape in a QUOTED KEY (invalid)', '"a\\qb" = 1\n'],
     //    …and the LEGAL half, in the same commit as the check, because a closed
     //    set is one careless character away from refusing a valid file.
@@ -1637,6 +1642,10 @@ const PREDICATE_CORPUS = new Map([
   ['INVALID a bad escape on a CONTINUED line of a multi-line basic string',
     'x = """\nC:\\team\\prd.md\n"""\n'],
   ['INVALID a truncated \\u on a CONTINUED line', 'x = """\na\\u12 b\n"""\n'],
+  // A SECOND mutant, E10b, survived even against the two entries above: it is
+  // an OFF-BY-ONE in the same guard (`slice(i + 2)` for `slice(i + 1)`), which
+  // only shows when the bad escape is the LAST thing on the line.
+  ['INVALID a bad escape at the END of a continued line', 'x = """\na\\q\n"""\n'],
   ['INVALID a bad escape in a QUOTED KEY', '"a\\qb" = 1\n'],
   ['INVALID a \\e escape (TOML 1.1 draft, not 1.0)', 'x = "a\\e b"\n'],
   ['INVALID a \\xHH escape (TOML 1.1 draft, not 1.0)', 'x = "a\\x41 b"\n'],
@@ -1661,16 +1670,16 @@ const PREDICATE_CORPUS = new Map([
  * silently is a warrant that can shrink silently. Deleting any single entry used
  * to move a `>=` floor without moving a test.
  */
-// FIX ROUND 4 (R2): 82 -> 102. Twenty escape-family entries, twelve of them
-// `tomllib` negatives (51 -> 63) and eight positives (31 -> 39). Three of the
-// twenty were added only after mutant `E10` SURVIVED against the first
-// seventeen. The three pins move together, deliberately, and the digest is
-// recomputed from the content.
-const PREDICATE_CORPUS_SIZE = 102;
-const PREDICATE_CORPUS_NEGATIVES = 63;
+// FIX ROUND 4 (R2): 82 -> 103. Twenty-one escape-family entries, thirteen of
+// them `tomllib` negatives (51 -> 64) and eight positives (31 -> 39). FOUR of
+// the twenty-one exist only because mutants survived the ones before them: three
+// after `E10`, and a fourth after `E10b` survived even those. The three pins
+// move together, deliberately, and the digest is recomputed from the content.
+const PREDICATE_CORPUS_SIZE = 103;
+const PREDICATE_CORPUS_NEGATIVES = 64;
 const PREDICATE_CORPUS_POSITIVES = 39;
 const PREDICATE_CORPUS_DIGEST =
-  '0924ff2a2af8a459fcd1b69086aa80741996848ac916cb91898c431c98860deb';
+  '08d8ffc5380113ed3bf59dd36f3a43dea964b93a1f8de3590d4aff8d1916a36c';
 
 test('5.12 AC4(b) [pin] the predicate corpus is pinned by exact COUNT and by CONTENT', () => {
   assert.strictEqual(PREDICATE_CORPUS.size, PREDICATE_CORPUS_SIZE,
@@ -2078,6 +2087,7 @@ test('5.15 AC4/AC12 [R2] a QUOTED Windows path is refused — with a literal-str
     // line-ending backslash's guard is ever consulted in.
     ['a bad escape on a CONTINUED line', 'x = """\nC:\\team\\prd.md\n"""\n'],
     ['a truncated \\u on a continued line', 'x = """\na\\u12 b\n"""\n'],
+    ['a bad escape at the END of a continued line', 'x = """\na\\q\n"""\n'],
     ['legal escapes on a continued line', 'x = """\na\\t\\n\\u00e9\n"""\n'],
     ['a bad escape in a quoted key', '"a\\qb" = 1\n'],
     ['\\e (TOML 1.1 draft only)', 'x = "a\\e b"\n'],
