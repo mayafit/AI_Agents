@@ -1,6 +1,6 @@
 # Bug: Jira operations have no user-identity context — "assigned to me" is unresolvable
 
-Status: ready-for-dev
+Status: done
 
 ## Summary
 
@@ -134,3 +134,27 @@ widening is precisely the reported symptom.
   repopulate `.claude/skills/`; no code change is implied.
 
 ## Change Log
+
+- **2026-09-03 — reported.** Surfaced from live use: "Get the most important issue to
+  work on" returned project-wide results, and the agent could not narrow them to the
+  operator. Filed with both defects (A: no identity anywhere; B: no user-scoped
+  selection operation) after tracing them to source.
+
+- **2026-09-04 — fixed and shipped.** PR
+  [#148](https://github.com/mayafit/AI_Agents/pull/148), merged as `46e2a3c`.
+  Identity clause added to all 43 Jira routing blocks (`assignee = currentUser()`,
+  with the OS-login and silent-widening prohibitions); new read-only skill
+  `my-next-issue` closes defect B; registered across all four pipelines with
+  `ma-skills` `module_version` 3.7.0 → 3.8.0 and the plugin bundle rebuilt.
+  Regression guard `test/jira-identity-clause.test.js` (6 tests, mutation-verified)
+  wired into the `npm test` chain. All 7 CI checks passed, Bundle Drift Guard
+  included. No config key was added — identity is never stored.
+
+  Verification: 90 of 91 test files pass run individually. The single failure,
+  `migration-validation.test.js`, is pre-existing and fails identically on clean
+  `origin/main`; its root cause was folded into
+  `bug-npm-test-windows-suite-health-chain` rather than fixed here.
+
+  Two defects found while tracing this one remain OPEN and unfixed — see "Notes":
+  `start-feature.sh` requiring a nonexistent `origin/dev`, and the
+  `build-plugin.js` staging-dir leak (gitignore mitigation only, in this PR).
