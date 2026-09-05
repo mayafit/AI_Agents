@@ -203,6 +203,40 @@ emitted as a **TOML array**, which the field explicitly supports (*"Accepts eith
 run. The residual — a user who writes a scalar `on_complete` in `.user.toml` still replaces the
 hook — is **irreducible in this merge model** and must be disclosed, not hidden (AC7).
 
+**Hazard C — the third writer is ACTIVELY INSTRUCTED to produce Hazard B's exact form.**
+*(Added in fix round 1 at an independent review's direction. RECORDED, NOT FIXED — it is upstream
+text this story may not edit, and no defence in this story's control changes it.)*
+
+AC12(d)'s owner comment tells a customizer to write an **array** so both instructions run. The
+upstream skill that customizer is running tells it the opposite, in its own merge-rule table:
+
+> **Scalars** (`icon`, `role`, `*_template`, `on_complete`) — override wins.
+> — `node_modules/bmad-method/src/core-skills/bmad-customize/SKILL.md:67`
+
+and again where it names the surgical edits it prefers:
+
+> …or a named scalar already exposed (`*_template`, `on_complete`). Surgical, reliable.
+> — the same file, `:55`
+
+So the mitigation in §4.6 R5(d) argues against an instruction the agent has *just been given by its
+own skill*, and the form upstream calls "surgical, reliable" is precisely the form that replaces the
+publish and stops it happening, at exit 0, with no warning anywhere. This is not a defect in the
+block comment and not something a stronger comment fixes: it is a **conflict of instructions between
+two packages**, and the only party who can resolve it is upstream.
+
+What this story does about it, since it cannot remove it:
+
+- the residual is **disclosed** (AC7), and demonstrated through the real resolver at test 8.2;
+- as of fix round 1 the resulting state is **detected and named on `ma-agents status`**
+  (`detectUserLayerScalarOverrides` / `printUserLayerScalarOverrideReport`; tests 10.12–10.14 and
+  14.4), so the window between a `bmad-customize` run and someone noticing is no longer silent;
+- nothing writes to, and nothing refuses over, the personal layer to achieve that — a refusal would
+  be a false rejection blocking an install over a choice the user is entitled to make.
+
+**Open, and owned by a human rather than by this story:** whether to ask upstream to exempt
+`on_complete` from its scalar-override guidance, or to expose an append-only field for terminal
+instructions.
+
 ### 4.5 What the hook text may NOT be
 
 The hook must **not** restate Story 31.9's gate block. That block is pinned at nine byte-identical
@@ -696,6 +730,79 @@ negative for that text is carried instead by the new suite's §9, which **extrac
 whole emitted block match **zero** entries. That is a mitigation in a second suite, not coverage in
 the gate; widening the gate's scan to `.js` would subsume it and is worth a reviewer's consideration.
 
+#### FIX ROUND 1 — closing an independent review's REJECT
+
+No verdict is claimed here and the status stays `review`. The review planted eleven mutants against
+the 81-test suite and **seven survived**. What changed, and the mutant that now dies for each:
+
+**BLOCKING-1 — the whole feature could be inert and the suite stayed green.** `if (false) ` on all
+three `generateConfluencePublishHooks(...)` call sites passed 81/0: no hook written by `install`, by
+`config layout` or by `bind`, and nothing failed. Tests 12.1/12.2/12.3 are **source-text greps** and
+an `if (false) ` prefix satisfies every one — the `M30` shape the implementation claimed to have
+eliminated, moved from the detection path to the generation path. New **§14** spawns the shipped
+commands: 14.1 runs a REAL `ma-agents install --yes` (~90s, offline, no package manager,
+`HOME`/`USERPROFILE` sandboxed) in a confluence-bound temp project and requires all five override
+files **on disk** and resolving through **the project's own `resolve_customization.py`** — the one
+the install deployed; 14.2 does the same for `bind`, 14.3 for `config layout`, 14.4 for `status`.
+Replanted: all three sites → 14.1/14.2/14.3 red (97/3); install site alone → only 14.1 red (99/1).
+Proved to be more than an existence check: writing a well-formed block under a one-character-off key
+takes 14.1/14.2/14.3 red on the resolver assertion.
+
+**BLOCKING-2 — success reported over a failed write.** `HOOK_WRITE_FAILED` was declared, listed and
+formatted, and unreachable by every test on **all three** branches; 6.5 tested the constant. New
+6.9–6.12 drive all three with real OS faults where one is deterministic — `_bmad/custom` as a FILE
+(mkdirSync cannot run), the override path as a DIRECTORY (readFileSync raises EISDIR), a read-only
+file for the removal path (fixture **armed**: a control write must throw, and named fs injection is
+the fallback when the OS does not enforce it) — plus one injected read fault on a file whose write
+would have succeeded, because that is the branch's real hazard: swallow it and the generator writes
+over content it never saw. 6.12 pins the operator surface: exit 1, the failure named, the
+consequence stated, and **no** "trigger written" line beside it. Replanted: write catch → 6.9+6.12
+red; removal catch → 6.11 red; read catch → 6.10 red.
+
+**BLOCKING-3 — AC5(c) proved present, not effective.** Moving the correction clause onto the
+**success** path — an instruction to retract a correct message on success and stay silent about a
+stale one on failure — matched all three of 6.3's unordered regexes. New 6.13 is structural: exactly
+one sentence carries `STOP`, it must be conditional on a failure, it must contain the correction
+clause, it must be the **only** sentence that does, `STOP` must precede it, and the routing sentence
+must not carry it. Replanted: 6.13 red while **6.3 stays green**.
+
+**A live false refusal, fixed (filed non-blocking; treated as required).** `scanForCollisions`
+flagged any key whose **last dotted segment** was `on_complete`, so `agent.on_complete` was treated
+as a duplicate of `workflow.on_complete`. Measured: five `refused-collision` outcomes,
+`process.exitCode = 1`, a remedy that did not apply, no hook for any skill, and `ma-agents install`
+exiting non-zero on a healthy project — failing closed on every subsequent install and `bind`. The
+predicate now compares **resolved key paths** (`PUBLISH_HOOK_KEY_PATH`). New 5.8 measures the
+predicate against `tomllib`'s verdict on the **combined** file over 22 shapes (15 valid, 7 invalid),
+in both directions — 0 disagreements; 5.9 is the end-to-end regression; 5.10 covers the read side,
+which shared the same false alarm. Replanting the old predicate: 5.8/5.9/5.10 red.
+
+**Named survivors.** M1b closed — 3.3 rebuilt around `FS_MUTATING_VERBS`, which derives
+`verb`/`verbSync`/`fs.promises.verb` for 30 base verbs (`cpSync`, `mkdirSync`, `rmdirSync`,
+`utimesSync`, `linkSync`, `symlinkSync`, `writevSync`, `ftruncateSync`, `chmodSync` included),
+handles `Buffer`/`URL` path arguments and second-position paths, and is proved **armed** against the
+exact `fs.cpSync` shape M1b used; old 3.3 is now 3.4, and the M1b mutant takes it red while 3.1/3.2
+stay green. M15 closed — 7.6/7.7 fail closed on an unrecognised backend, an absent record,
+`undefined`/`null`/`''` and a case-folded `CONFLUENCE`. R10 closed — see Hazard C above. §9 extended
+to the operator surface (9.8) with one adjudicated vocabulary entry, named as adjudicated. **No
+widening of the FR266 gate scan**, and the gate's corpus is unchanged.
+
+**M6 — DECLINED, with the reason.** Deleting AC4(a)'s post-write `tomlProblems(next)` guard still
+survives, and this fix round does not close it. The guard is an assertion about **this module's own
+output**, not about any input: every input-driven invalidity is caught earlier by
+`scanForCollisions`, which 5.8 now shows covers exactly the set `tomllib` rejects on the combined
+file. No input reaches the guard, so no input-driven test can kill that mutant, and the only way to
+make one reachable would be to weaken the bundled reader (so a control character in a store label
+became a rejection rather than an escape) — a change that trades a real property for a mutation
+score. The guard is kept as a defence against a defect in `buildPublishHookBlock`; that it is
+unreachable from outside is the correct state, and is recorded here rather than dressed up.
+
+**Suites and invariants re-derived at fix-round HEAD.** Story suite 100/0 exit 0. `release-gate-epic-31`
+43/0, `story-15-5-workflow-skills` 157/0, `project-layout-confluence-routing` 97/0,
+`project-layout-confluence-page-tree` 157/0, `project-layout-artifact-routing` 59/0 (with
+`_bmad-output/methodology/` absent), `project-layout-staleness-guard` 64/0 — all exit 0. I1 preflight
+41 copies, split 13-14-14, one sha256; I2 gate 9 copies, split 3-3-3, one sha256. Nothing under
+`skills/`, `lib/bmad-extension/skills/` or `lib/bmad-extension-plugin/` changed.
+
 #### Not done, deliberately
 
 No push, no PR, no publish. No skill document touched. `epics.md` untouched (the Story 31.15 entry
@@ -708,10 +815,16 @@ existing story definition unedited.
 
 ```
 lib/confluence-publish-hook.js                             NEW  the generator, markers, TOML reader, detection
+                                                           FIX1 resolved-key-path collision predicate
+                                                                (PUBLISH_HOOK_KEY_PATH / samePath);
+                                                                readTomlStructure carries each key's raw value;
+                                                                detectUserLayerScalarOverrides (R10, read-only)
 bin/cli.js                                                 MOD  generateConfluencePublishHooks + its 3 call sites,
                                                                 the operator report, the status detection surface,
                                                                 the require and the exports
-test/project-layout-confluence-publish-hook.test.js        NEW  81 tests
+                                                           FIX1 printUserLayerScalarOverrideReport, called from
+                                                                printPublishHookCollisionReport and exported
+test/project-layout-confluence-publish-hook.test.js        NEW  81 tests -> FIX1 100 tests
 test/release-gate-epic-31.test.js                          MOD  AC7.5h population 3249->3250, remainder 535->536
 package.json                                               MOD  new suite at chain position 37
 .gitattributes                                             MOD  LF pin for the two new files
