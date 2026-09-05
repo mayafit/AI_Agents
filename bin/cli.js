@@ -1460,8 +1460,7 @@ function reportPublishHookOutcome(outcome, stores) {
         `  invalid TOML, and _bmad/scripts/resolve_customization.py answers a parse failure in\n` +
         `  this layer with a warning, an empty table and exit 0 — discarding your customization\n` +
         `  AND the publish together, silently.\n` +
-        `  Move your override into _bmad/custom/${r.skill}.user.toml as a TOML array\n` +
-        `  (\`workflow.on_complete = [ "..." ]\`), which appends instead of replacing, then re-run.\n` +
+        remediesFor(r.collisions, r.skill).map((line) => `  ${line}\n`).join('') +
         `  ${r.skill} will NOT publish to Confluence until this is resolved.`
       ));
     } else if (r.outcome === H.HOOK_WRITE_FAILED) {
@@ -1472,6 +1471,71 @@ function reportPublishHookOutcome(outcome, stores) {
       ));
     }
   }
+}
+
+/**
+ * THE REMEDY, PER COLLISION KIND.
+ *
+ * FIX ROUND 2 (N2). Both surfaces used to print ONE fixed sentence — "Move your
+ * override into `<skill>.user.toml` as a TOML array (`workflow.on_complete =
+ * [ "..." ]`)" — for every collision kind. For a `[workflow]` table holding
+ * `prd_template`, or for a file that simply does not parse, that instruction is
+ * not merely unhelpful: it does not apply, and following it leaves the user in
+ * exactly the state they started in. This is the same shape as the false-refusal
+ * remedy fix round 1 closed once already, and it is closed here as a MAP FROM
+ * KIND rather than as a longer paragraph, so a kind added to the module without
+ * a remedy is a visible hole rather than a wrong sentence.
+ *
+ * @param {Array<{kind: string}>} collisions
+ * @param {string} skill
+ * @returns {string[]} one remedy per DISTINCT kind present, in a stable order
+ */
+function remediesFor(collisions, skill) {
+  const H = confluencePublishHook;
+  const userFile = `_bmad/custom/${skill}.user.toml`;
+  const arrayForm = `\`${H.PUBLISH_HOOK_KEY} = [ "..." ]\``;
+  const REMEDIES = new Map([
+    [H.COLLISION_DUPLICATE_KEY,
+      `Move your own \`${H.PUBLISH_HOOK_KEY}\` into ${userFile} as a TOML array\n` +
+      `  (${arrayForm}), which APPENDS to the publish instead of replacing it, then re-run.`],
+    [H.COLLISION_DUPLICATE_TABLE,
+      `Delete the \`[${H.PUBLISH_HOOK_TABLE}]\` header and express its fields as DOTTED KEYS at the\n` +
+      `  top level instead (\`${H.PUBLISH_HOOK_TABLE}.prd_template = "..."\`) — those sit beside\n` +
+      `  ma-agents' key without re-declaring the table. An \`on_complete\` of your own belongs in\n` +
+      `  ${userFile} as a TOML array (${arrayForm}).`],
+    [H.COLLISION_TABLE_IS_VALUE,
+      `\`${H.PUBLISH_HOOK_TABLE}\` is assigned a VALUE at the top level, so it cannot also be the\n` +
+      `  table ma-agents' key lives in. Express its fields as DOTTED KEYS instead\n` +
+      `  (\`${H.PUBLISH_HOOK_TABLE}.prd_template = "..."\`). An \`on_complete\` of your own belongs\n` +
+      `  in ${userFile} as a TOML array (${arrayForm}).`],
+    [H.COLLISION_KEY_USED_AS_TABLE,
+      `Nothing may be declared at or under \`${H.PUBLISH_HOOK_KEY}\` — ma-agents defines it as an\n` +
+      `  ARRAY of instructions. Move that content to a key of its own, and put an \`on_complete\`\n` +
+      `  of your own in ${userFile} as a TOML array (${arrayForm}).`],
+    [H.COLLISION_UNPARSEABLE,
+      `This file does not parse as TOML on its own. Fix the error at the line named above and\n` +
+      `  re-run — ma-agents will not add to a file the resolver is already discarding.`],
+    [H.COLLISION_BLOCK_NOT_AT_ROOT,
+      `Move ma-agents' BEGIN/END region back to the TOP of the file, or run \`ma-agents bind\`,\n` +
+      `  which re-anchors it there. A dotted key inherits the table above it.`],
+    [H.COLLISION_HALF_BLOCK,
+      `The BEGIN marker has no matching END. Remove the stray marker line — the next install or\n` +
+      `  \`ma-agents bind\` then emits a fresh region rather than guessing where yours ended.`],
+  ]);
+
+  const out = [];
+  const seen = new Set();
+  for (const c of collisions) {
+    if (seen.has(c.kind)) continue;
+    seen.add(c.kind);
+    out.push(REMEDIES.has(c.kind)
+      ? REMEDIES.get(c.kind)
+      // A kind with no remedy is a defect in this map, said out loud rather than
+      // papered over with an instruction that may not apply.
+      : `ma-agents has no specific remedy recorded for \`${c.kind}\`; please report this. The\n` +
+        `  general form is an override in ${userFile} as a TOML array (${arrayForm}).`);
+  }
+  return out;
 }
 
 /**
@@ -1502,8 +1566,9 @@ function printPublishHookCollisionReport(projectRoot) {
       `      => ${entry.skill} does not publish to Confluence while this stands. ` +
       `_bmad/scripts/resolve_customization.py\n` +
       `         answers a parse failure in this layer with a warning, an empty table and exit 0,\n` +
-      `         so the whole team layer is discarded and nothing else reports it. Put your own\n` +
-      `         override in _bmad/custom/${entry.skill}.user.toml as a TOML array instead.`
+      `         so the whole team layer is discarded and nothing else reports it.\n` +
+      remediesFor(entry.collisions, entry.skill)
+        .map((line) => `         ${line.replace(/\n {2}/g, '\n         ')}\n`).join('').replace(/\n$/, '')
     ));
   }
   console.log('');

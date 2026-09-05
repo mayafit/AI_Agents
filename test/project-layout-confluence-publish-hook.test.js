@@ -71,7 +71,7 @@ const cli = require(path.join(PROJECT_ROOT, 'bin', 'cli.js'));
 const hook = require(path.join(PROJECT_ROOT, 'lib', 'confluence-publish-hook.js'));
 const tree = require(path.join(PROJECT_ROOT, 'lib', 'confluence-page-tree.js'));
 
-const EXPECTED_TEST_COUNT = 100;
+const EXPECTED_TEST_COUNT = 102;
 
 let passed = 0;
 let failed = 0;
@@ -610,7 +610,26 @@ test('3.2 AC2 no `.user.toml` is CREATED when none existed — on the write path
 });
 
 /**
- * Every mutating `fs` entry point, DERIVED rather than listed.
+ * Every mutating `fs` PROPERTY, derived rather than listed.
+ *
+ * WHAT THIS COVERS, STATED EXACTLY (FIX ROUND 2, N3). The interception is
+ * PROPERTY PATCHING on the `fs` and `fs.promises` objects, so it sees a call
+ * made THROUGH those objects — `fs.writeFileSync(...)`, `fs.promises.rm(...)` —
+ * and nothing else. Two things escape it, and neither is a hole this suite may
+ * claim to have closed:
+ *
+ *   · a module that captured the function at LOAD time
+ *     (`const { cpSync } = require('fs')`) calls the original binding, which
+ *     3.3/3.4 never observe;
+ *   · a DIRECTORY-level operation — `fs.rmSync(dirname)`,
+ *     `fs.renameSync(dir, dir2)` — names no `.user.toml` path, so it is
+ *     intercepted and correctly not reported, while still destroying the file.
+ *
+ * Behaviour is right regardless: 3.1 proves the personal file byte-identical
+ * after a full run and 3.2 proves none is created, and both would fail on either
+ * escape. So 3.4 is a check on HOW the code reaches the file, not the proof that
+ * the file survives — that proof is 3.1/3.2, and the old comment's "every
+ * mutating fs entry point is intercepted" over-claimed it.
  *
  * FIX ROUND 1 (independent review, M1b). The old list named ten `*Sync`
  * functions, so `.user.toml` clobbered and restored through `fs.cpSync` —
@@ -714,10 +733,13 @@ test('3.3 [harness] the fs interception is ARMED — it SEES the exact API M1b e
 });
 
 test('3.4 AC2 no fs mutation call anywhere in a full run names a `.user.toml` path', () => {
-  // Stronger than an after-the-fact comparison: an open-truncate-restore would
-  // leave the bytes identical and still be a touch. Every mutating fs entry point
-  // is intercepted (3.3 proves the interception armed), over the write path, the
-  // removal path, the collision-detection path and R10's personal-layer READ.
+  // Stronger than an after-the-fact comparison for the calls it SEES: an
+  // open-truncate-restore would leave the bytes identical and still be a touch.
+  // Every mutating `fs` PROPERTY call site is intercepted (3.3 proves the
+  // interception armed) over the write path, the removal path, the
+  // collision-detection path and R10's personal-layer READ. It is not a claim
+  // about calls that bypass the `fs` object or that name only a directory —
+  // see the note above `FS_MUTATING_VERBS`; 3.1 and 3.2 are what cover those.
   const fx = fixture();
   for (const skill of hook.AUTHORING_SKILLS) {
     fs.writeFileSync(userFile(fx, skill), 'workflow.on_complete = "mine"\n', 'utf-8');
@@ -913,6 +935,15 @@ function tomllibVerdicts(texts) {
   return texts.map((_, i) => map[`c${i}`]);
 }
 
+/**
+ * A byte-order mark, built from its code point rather than typed.
+ *
+ * An invisible character in a source file is a line nobody can review, and this
+ * repository pins line endings per file; a literal U+FEFF in a fixture would be
+ * both. Every BOM case below is therefore composed.
+ */
+const BOM = String.fromCharCode(0xFEFF);
+
 /** The differential corpus: hand-built edge cases plus every shipped customize.toml. */
 function differentialCorpus() {
   const block = hook.buildPublishHookBlock({
@@ -945,6 +976,19 @@ function differentialCorpus() {
     ['scalars of every kind', 'a = true\nb = 1\nc = 1.5\nd = 1979-05-27T07:32:00Z\n'],
     ['nested tables', '[a]\nx = 1\n[a.b]\ny = 2\n'],
     ['CRLF throughout', hook.injectPublishHookBlock('foo = 1\n', block).replace(/\n/g, '\r\n')],
+    // FIX ROUND 2 — the counterexamples to the OLD "equivalence" claim. A BOM in
+    // BARE position is "Invalid statement" to `tomllib` wherever it sits, and
+    // `injectPublishHookBlock` prepends our region, so a team file a Windows
+    // editor wrote with a BOM has that BOM moved INTO THE MIDDLE of the file.
+    // The reader accepted every one of these.
+    ['BOM at offset 0 (invalid)', `${BOM}foo = 1\n`],
+    ['BOM mid-file (invalid)', `foo = 1\n${BOM}bar = 2\n`],
+    ['BOM + block, so the BOM moves inward (invalid)',
+      hook.injectPublishHookBlock(`${BOM}foo = 1\n`, block)],
+    ['BOM inside a basic string (valid)', `a = "x${BOM}y"\n`],
+    ['BOM inside a literal string (valid)', `a = 'x${BOM}y'\n`],
+    ['BOM inside a comment (valid)', `# c${BOM}mt\nfoo = 1\n`],
+    ['BOM inside a quoted key (valid)', `"a${BOM}b" = 1\n`],
   ]);
   // Every shipped upstream customize.toml, raw and with the block prepended.
   const bmm = path.join(PROJECT_ROOT, 'node_modules', 'bmad-method', 'src');
@@ -968,12 +1012,18 @@ function differentialCorpus() {
 
 const CORPUS = differentialCorpus();
 
-test('5.1 AC4(a) [equivalence] the bundled TOML reader agrees with real `tomllib` on the whole corpus', () => {
+test('5.1 AC4(a) [equivalence] the bundled TOML reader agrees with real `tomllib` OVER THIS CORPUS', () => {
   // The warrant for the deviation from AC4(a)'s letter. Node ships no TOML
   // parser and this package carries no TOML dependency, so the install-time
-  // check cannot BE tomllib. It is proved EQUIVALENT to tomllib here instead,
-  // over a corpus that includes every shipped customize.toml in the vendored
-  // tree — the population a real project's file actually resembles.
+  // check cannot BE tomllib.
+  //
+  // WHAT THIS TEST DOES AND DOES NOT SAY (FIX ROUND 2, N4). It says the reader
+  // and `tomllib` agree ON THE ENTRIES BELOW. It does NOT say they are
+  // equivalent in general, and the story record used to claim that they were.
+  // Fix round 2 found a counterexample the corpus did not contain — a byte-order
+  // mark, which `tomllib` rejects in bare position anywhere in the file and the
+  // reader accepted — so the absolute claim was false as well as unwarranted.
+  // The corpus is the whole warrant; widening it is how this claim grows.
   const names = [...CORPUS.keys()];
   assert.ok(names.length >= 60,
     `the corpus is ${names.length} entries; too small to be evidence of anything`);
@@ -1006,15 +1056,55 @@ test('5.2 AC4(a) [harness] the corpus really does contain both verdicts', () => 
   assert.ok(verdicts.filter((v) => v === null).length >= 40, 'and real positives');
 });
 
+/**
+ * FIX ROUND 2 (B1) — the shape 5.3 was one fixture line away from catching.
+ *
+ * A team layer that spells `workflow` as a VALUE rather than as a table. It is
+ * what an editor or a `bmad-customize` run produces when it sets one workflow
+ * field and reaches for an inline table to do it, and on the shipped code it was
+ * the whole failure: `scanForCollisions` said `[]`, the AC4(a) post-write guard
+ * said `[]`, the generator reported `wrote` and exit 0 — and the file it had
+ * just written did not parse, so the resolver discarded the entire team layer,
+ * the publish AND `prd_template` together, at exit 0, with `status` silent.
+ */
+const WORKFLOW_AS_VALUE = 'workflow = { prd_template = "assets/house-prd.md" }\n';
+
 test('5.3 AC4(a) every file this generator writes PARSES under real tomllib', () => {
   const fx = fixture();
-  for (const s of hook.AUTHORING_SKILLS) fs.writeFileSync(teamFile(fx, s), USER_CONTENT, 'utf-8');
-  generate(fx, BOTH_CONFLUENCE);
+  // Four skills carry ordinary user content; the fifth carries the B1 shape. The
+  // claim is stated per skill and per OUTCOME, because "it parses" is only a
+  // meaningful assertion about a file the generator actually wrote — a refusal
+  // leaves the user's own bytes, whose validity is not this generator's claim.
+  const collided = hook.AUTHORING_SKILLS[2];
+  for (const s of hook.AUTHORING_SKILLS) {
+    fs.writeFileSync(teamFile(fx, s), s === collided ? WORKFLOW_AS_VALUE : USER_CONTENT, 'utf-8');
+  }
+  const out = generate(fx, BOTH_CONFLUENCE);
   const texts = hook.AUTHORING_SKILLS.map((s) => fs.readFileSync(teamFile(fx, s), 'utf-8'));
   const verdicts = tomllibVerdicts(texts);
+
   hook.AUTHORING_SKILLS.forEach((s, i) => {
-    assert.strictEqual(verdicts[i], null, `${s}.toml does not parse under tomllib: ${verdicts[i]}`);
+    const r = out.results.find((x) => x.skill === s);
+    if (r.outcome === hook.HOOK_WROTE || r.outcome === hook.HOOK_UNCHANGED) {
+      assert.strictEqual(verdicts[i], null,
+        `${s}.toml was WRITTEN by this generator and does not parse under tomllib: ${verdicts[i]}`);
+    }
   });
+
+  // The four ordinary files must really have been written, or the assertion
+  // above is vacuous.
+  assert.deepStrictEqual(
+    out.results.filter((r) => r.skill !== collided).map((r) => r.outcome),
+    Array(4).fill(hook.HOOK_WROTE),
+    'the four healthy files must be written, or this test proves nothing about writes');
+  // And the fifth must have been REFUSED rather than written. Before the fix it
+  // was written, and `verdicts` for it read "Cannot overwrite a value".
+  const bad = out.results.find((r) => r.skill === collided);
+  assert.strictEqual(bad.outcome, hook.HOOK_REFUSED_COLLISION,
+    `a root-scope \`workflow = <value>\` must be refused, not written beside; got ${bad.outcome} ` +
+    `with collisions ${JSON.stringify(bad.collisions)}`);
+  assert.strictEqual(fs.readFileSync(teamFile(fx, collided), 'utf-8'), WORKFLOW_AS_VALUE,
+    'and the refusal must leave the user\'s bytes exactly as they were');
 });
 
 test('5.4 AC4(b) a pre-existing `on_complete` outside the markers REFUSES, loudly, writing nothing', () => {
@@ -1138,6 +1228,12 @@ const PREDICATE_CORPUS = new Map([
   ['a key merely CONTAINING the word', '[agent]\nmenu_on_complete = 1\n'],
   ['a quoted segment containing a dot', '[agent]\n"weird.on_complete" = 1\n'],
   ['on_complete arrays in two unrelated tables', '[a]\non_complete = ["x"]\n[b]\non_complete = ["y"]\n'],
+  // Valid spellings that merely LOOK like ours (fix round 2 additions).
+  ['a whole-quoted key literally named workflow.on_complete', '"workflow.on_complete" = "x"\n'],
+  ['a sibling under our own table', 'workflow.prd_template = "assets/house.md"\n'],
+  ['a [[workflow.sub]] array-of-tables', '[[workflow.sub]]\nx = 1\n'],
+  ['a root workflow = 1 UNDER a table', '[agent]\nworkflow = 1\n'],
+  ['a BOM inside a comment', `# c${BOM}mt\nfoo = 1\n`],
   // ── INVALID beside our block. An acceptance here DISCARDS THE TEAM LAYER. ──
   ['INVALID a second workflow.on_complete', 'workflow.on_complete = "x"\n'],
   ['INVALID a [workflow] table', '[workflow]\nfoo = 1\n'],
@@ -1146,9 +1242,37 @@ const PREDICATE_CORPUS = new Map([
   ['INVALID text that is not TOML', 'this is not toml\n'],
   ['INVALID an unterminated string', 'a = "oops\n'],
   ['INVALID a duplicate key of its own', '[t]\na = 1\na = 2\n'],
+  // ── FIX ROUND 2 (B1). Every one of these was ACCEPTED by the shipped
+  //    predicate, and `tomllib` rejects every one of them beside our block. The
+  //    first three are the family the reviewer named; the rest are the same
+  //    blind spot found in the opposite direction and in its other spellings.
+  ['INVALID workflow assigned an integer', 'workflow = 1\n'],
+  ['INVALID workflow assigned a string', 'workflow = "off"\n'],
+  ['INVALID workflow assigned an inline table', WORKFLOW_AS_VALUE],
+  ['INVALID workflow assigned an inline table holding on_complete',
+    'workflow = { on_complete = "MINE" }\n'],
+  ['INVALID workflow assigned an ARRAY', 'workflow = []\n'],
+  ['INVALID workflow assigned a boolean', 'workflow = true\n'],
+  ['INVALID workflow = 1 with a leading tab', '\tworkflow = 1\n'],
+  ['INVALID workflow = 1 with no trailing newline', 'workflow = 1'],
+  ['INVALID workflow = 1 with CRLF', 'workflow = 1\r\n'],
+  ['INVALID a [workflow.on_complete] table', '[workflow.on_complete]\nx = 1\n'],
+  ['INVALID a [[workflow.on_complete]] array-of-tables', '[[workflow.on_complete]]\nx = 1\n'],
+  ['INVALID a [workflow.on_complete.deep] table', '[workflow.on_complete.deep]\nx = 1\n'],
+  ['INVALID a key nested under our own', 'workflow.on_complete.x = 1\n'],
+  ['INVALID a quoted spelling of our key', 'workflow."on_complete" = "x"\n'],
+  ['INVALID a spaced dotted spelling of our key', 'workflow . on_complete = "x"\n'],
+  ['INVALID a BOM in bare position', `${BOM}foo = 1\n`],
 ]);
 
-test('5.8 AC4(b) [differential] the COLLISION PREDICATE agrees with tomllib on the COMBINED file', () => {
+test('5.8 AC4(b) [differential] the COLLISION PREDICATE agrees with tomllib OVER THIS CORPUS', () => {
+  // WHAT THIS TEST DOES AND DOES NOT SAY (FIX ROUND 2, N4). Agreement over the
+  // entries below — not equivalence in general. The story record claimed the
+  // latter, and fix round 2 found the counterexample: the predicate compared key
+  // paths for EQUALITY only, so `workflow = { … }` — a STRICT PREFIX of
+  // `workflow.on_complete` — was not seen to collide at all, and the corpus
+  // contained no shape that would have shown it. Every such shape is in the
+  // corpus now, and the corpus remains the whole warrant.
   const block = hook.buildPublishHookBlock({
     skillName: 'bmad-prd', storeCliName: 'system', storeLabel: tree.labelForStore(SYSTEM),
   });
@@ -1157,8 +1281,8 @@ test('5.8 AC4(b) [differential] the COLLISION PREDICATE agrees with tomllib on t
   const verdicts = tomllibVerdicts(combined);
 
   // The corpus must contain BOTH verdicts, or the equivalence below is vacuous.
-  assert.ok(verdicts.filter((v) => v !== null).length >= 7, 'the corpus needs real negatives');
-  assert.ok(verdicts.filter((v) => v === null).length >= 14, 'and real positives');
+  assert.ok(verdicts.filter((v) => v !== null).length >= 22, 'the corpus needs real negatives');
+  assert.ok(verdicts.filter((v) => v === null).length >= 19, 'and real positives');
 
   const falseRefusals = [];
   const falseAcceptances = [];
@@ -1237,6 +1361,60 @@ test('5.10 AC4(b) [read-side] the DETECTION surface is silent on the same shapes
   generate(fx, BOTH_CONFLUENCE);
   assert.deepStrictEqual(hook.detectPublishHookCollisions(fx.root), [],
     'and must stay silent once the block is in beside it');
+});
+
+test('5.11 AC4/AC12 [B1] a root-scope `workflow = <value>` is refused, and BOTH surfaces say so', () => {
+  // FIX ROUND 2 — the defect, end to end, in the exact shape it was measured in.
+  //
+  // On the shipped code this file produced five `wrote` outcomes, `refused:
+  // false`, "Confluence publish trigger written … for 5 authoring skills" and
+  // exit 0 — and the file ma-agents had just written ended with the user's
+  // `workflow = { … }` line under our `# END:` marker, which real `tomllib`
+  // answers with "Cannot overwrite a value". `resolve_customization.py` then
+  // warned to stderr, returned `{}` and exited 0: the publish and the user's
+  // own `prd_template` discarded together. `detectPublishHookCollisions` — the
+  // `status` surface built for exactly that state — returned `[]`.
+  const fx = fixture();
+  for (const s of hook.AUTHORING_SKILLS) fs.writeFileSync(teamFile(fx, s), WORKFLOW_AS_VALUE, 'utf-8');
+
+  // (1) THE WRITE SIDE refuses, per skill, by kind, with a line, writing nothing.
+  const out = generate(fx, BOTH_CONFLUENCE);
+  assert.deepStrictEqual(out.results.map((r) => r.outcome), Array(5).fill(hook.HOOK_REFUSED_COLLISION),
+    `every skill must refuse; got ${JSON.stringify(out.results.map((r) => [r.skill, r.outcome]))}`);
+  assert.strictEqual(out.refused, true, 'and the aggregate must report it, because that sets the exit code');
+  for (const r of out.results) {
+    assert.ok(r.collisions.some((c) => c.kind === hook.COLLISION_TABLE_IS_VALUE),
+      `${r.skill}: the refusal must name this kind, not collapse into "unparseable": ` +
+      `${JSON.stringify(r.collisions)}`);
+    assert.ok(r.collisions.every((c) => Number.isInteger(c.line) && c.line > 0),
+      `${r.skill}: and must name the line`);
+    assert.strictEqual(fs.readFileSync(teamFile(fx, r.skill), 'utf-8'), WORKFLOW_AS_VALUE,
+      `${r.skill}: nothing may be written over the user's bytes`);
+  }
+
+  // (2) THE READ SIDE — `status` — names it too, without the generator running.
+  const detected = hook.detectPublishHookCollisions(fx.root);
+  assert.strictEqual(detected.length, 5,
+    `the detection surface must fire on all five; it reported ${detected.length}`);
+  assert.ok(detected.every((e) => e.collisions.some((c) => c.kind === hook.COLLISION_TABLE_IS_VALUE)),
+    `and by the same kind: ${JSON.stringify(detected.map((e) => e.collisions.map((c) => c.kind)))}`);
+
+  // (3) THE FACT THE REFUSAL IS ABOUT, through the REAL resolver: had ma-agents
+  //     written, the whole team layer would be gone at exit 0.
+  const skill = hook.AUTHORING_SKILLS[0];
+  const wouldHaveWritten = hook.injectPublishHookBlock(WORKFLOW_AS_VALUE,
+    hook.buildPublishHookBlock({
+      skillName: skill, storeCliName: 'system', storeLabel: tree.labelForStore(SYSTEM),
+    }));
+  assert.strictEqual(tomllibVerdicts([wouldHaveWritten])[0] === null, false,
+    'the file the old code produced must really be invalid TOML, or this refusal is a false alarm');
+  fs.writeFileSync(teamFile(fx, skill), wouldHaveWritten, 'utf-8');
+  const resolved = resolveKey(fx, skill, 'workflow.prd_template');
+  assert.strictEqual(resolved.status, 0, 'THE POINT: the resolver EXITS ZERO over it');
+  assert.strictEqual(resolved.value, undefined,
+    "and the user's OWN team-layer key is gone — the whole layer, not just the publish");
+  assert.strictEqual(resolveKey(fx, skill, 'workflow.on_complete').value, '',
+    'and so is the publish instruction ma-agents had just written');
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1552,6 +1730,97 @@ test('6.12 AC5(a) a failed write is reported to the OPERATOR by name and takes t
   }
 });
 
+/**
+ * FIX ROUND 2 (N1) — POLARITY, PINNED BY A CLOSED SET.
+ *
+ * 6.13 measured SHAPE: one STOP sentence, a failure-condition regex somewhere
+ * inside it, the correction clause inside it and nowhere else, STOP before the
+ * correction, the routing sentence clean. An independent review inverted the
+ * halt sentence's MEANING while satisfying every one of those and got 100/0:
+ *
+ *   "… If no Confluence MCP server is reachable, or any operation does not
+ *    report success, THAT IS EXPECTED AND YOU SHOULD PROCEED AS NORMAL; ONLY
+ *    ONCE EVERY OPERATION SUCCEEDS, STOP: name what failed, …"
+ *
+ * — which tells the agent to continue silently on failure (the AC5(a)/(b)
+ * violation this story exists to prevent) and to retract a CORRECT message on
+ * success. 9.4's denylist does not match "proceed as normal", and adding it
+ * there would be the denylist-where-a-closed-set-was-needed shape this epic has
+ * been bitten by repeatedly.
+ *
+ * So this measures two things a denylist cannot:
+ *
+ *   (a) THE GOVERNING GAP. Between the last failure condition named in the halt
+ *       sentence and the halt token there may be NOTHING but an optional comma
+ *       and whitespace. That is a CLOSED SET of two characters, not a list of
+ *       forbidden phrases: any clause inserted there — "that is expected and you
+ *       should proceed as normal;", "but only if you feel it is warranted,",
+ *       anything at all — fails, whatever words it is made of.
+ *   (b) THE SENTENCE PARTITION. Every sentence of the instruction must fill
+ *       exactly one NAMED role, and every role must be filled exactly once. An
+ *       extra sentence granting permission to continue has no role and fails,
+ *       again without anyone having to guess its wording in advance.
+ *
+ * @param {string} text a candidate instruction
+ * @returns {string[]} the polarity problems; empty means the polarity is right
+ */
+function haltPolarityProblems(text) {
+  const problems = [];
+  const sentences = text.split(/(?<=\.)\s+/).filter((s) => s.trim() !== '');
+
+  // (b) THE CLOSED ROLE PARTITION.
+  const ROLES = [
+    ['directive', /^Publish this workflow's artifacts to /],
+    ['routing', /confluence-plan --store /],
+    ['halt', /\bSTOP\b/],
+    ['prohibition', /^Do not proceed\b/],
+  ];
+  const byRole = new Map(ROLES.map(([name]) => [name, []]));
+  for (const s of sentences) {
+    const matched = ROLES.filter(([, re]) => re.test(s)).map(([name]) => name);
+    if (matched.length === 0) {
+      problems.push(`a sentence fills no named role: ${JSON.stringify(s)}`);
+    } else if (matched.length > 1) {
+      problems.push(`a sentence fills ${matched.length} roles (${matched.join(', ')}): ${JSON.stringify(s)}`);
+    } else {
+      byRole.get(matched[0]).push(s);
+    }
+  }
+  for (const [name, found] of byRole) {
+    if (found.length !== 1) problems.push(`role "${name}" is filled by ${found.length} sentence(s), not 1`);
+  }
+  if (byRole.get('halt').length !== 1) return problems; // nothing left to measure
+
+  // (a) THE GOVERNING GAP.
+  const halt = byRole.get('halt')[0];
+  const FAILURE_CONDITION = /(does not report success|no Confluence MCP server is reachable)/gi;
+  const stopAt = halt.indexOf('STOP');
+  let last = -1;
+  let m;
+  FAILURE_CONDITION.lastIndex = 0;
+  while ((m = FAILURE_CONDITION.exec(halt)) !== null) {
+    if (m.index < stopAt) last = m.index + m[0].length;
+  }
+  if (last === -1) {
+    problems.push(`no failure condition precedes STOP in the halt sentence: ${JSON.stringify(halt)}`);
+  } else {
+    const gap = halt.slice(last, stopAt);
+    if (!/^,?\s*$/.test(gap)) {
+      problems.push(
+        `the failure condition does not GOVERN the halt: ${JSON.stringify(gap)} sits between them. ` +
+        `Only a comma and whitespace may — anything else turns the failure into a condition for ` +
+        `something OTHER than stopping, which is the AC5(a)/(b) inversion.`);
+    }
+  }
+  return problems;
+}
+
+/** The independent review's inversion, verbatim, kept as the arming fixture. */
+const INVERTED_HOOK_TEXT = HOOK_TEXT.replace(
+  'If no Confluence MCP server is reachable, or any operation does not report success, STOP:',
+  'If no Confluence MCP server is reachable, or any operation does not report success, that is ' +
+  'expected and you should proceed as normal; only once every operation succeeds, STOP:');
+
 test('6.13 AC5(c) [structural] the correction clause lives in the HALT sentence and nowhere else', () => {
   // 6.3 checked three unordered regexes against the whole instruction, so moving
   // the clause onto the SUCCESS path — an instruction telling the agent to retract
@@ -1601,6 +1870,143 @@ test('6.13 AC5(c) [structural] the correction clause lives in the HALT sentence 
   assert.ok(!CORRECTION.test(successSentence),
     `the SUCCESS path tells the agent to retract a correct message: ` +
     `${JSON.stringify(successSentence)}`);
+
+  // FIX ROUND 2 (N1). Everything above is SHAPE, and shape survived a semantic
+  // inversion. POLARITY, measured by a closed set — see `haltPolarityProblems`.
+  assert.deepStrictEqual(haltPolarityProblems(HOOK_TEXT), [],
+    `the shipped instruction's halt polarity is wrong:\n  ${haltPolarityProblems(HOOK_TEXT).join('\n  ')}` +
+    `\n  halt sentence: ${JSON.stringify(halt)}`);
+
+  // ARMED, not merely present: the exact inversion that defeated the shape
+  // checks must be REJECTED by the polarity check, and it must still satisfy
+  // every shape check above — which is what made it dangerous.
+  assert.ok(haltPolarityProblems(INVERTED_HOOK_TEXT).length > 0,
+    `the polarity check does not reject the inversion, so it measures nothing new. The ` +
+    `inversion's halt sentence reads: ${JSON.stringify(
+      INVERTED_HOOK_TEXT.split(/(?<=\.)\s+/).find((s) => /\bSTOP\b/.test(s)))}`);
+  const invertedSentences = INVERTED_HOOK_TEXT.split(/(?<=\.)\s+/).filter((s) => s.trim() !== '');
+  const invertedHalt = invertedSentences.filter((s) => HALT.test(s));
+  assert.strictEqual(invertedHalt.length, 1,
+    'the inversion must still satisfy the one-halt-sentence check, or it is not the mutant ' +
+    'that got through');
+  assert.ok(FAILURE_CONDITION.test(invertedHalt[0]) && CORRECTION.test(invertedHalt[0]) &&
+    invertedHalt[0].indexOf('STOP') < invertedHalt[0].search(CORRECTION),
+    'and the failure-condition, correction-inside-halt and STOP-first checks too — those are ' +
+    'exactly the checks it defeated, and the fixture is only evidence while it still passes them');
+});
+
+test('6.14 AC5(a) [N2] the printed REMEDY is specific to the collision KIND, for every kind', () => {
+  // FIX ROUND 2. Both operator surfaces printed ONE fixed sentence for EVERY
+  // collision — "Move your override into `<skill>.user.toml` as a TOML array
+  // (`workflow.on_complete = [ "..." ]`)". For a `[workflow]` table holding
+  // `prd_template`, for a `workflow = { … }` value, or for a file that simply
+  // does not parse, that instruction does not apply: following it leaves the
+  // user exactly where they started. 6.7 only ever exercised the ONE case for
+  // which it happened to be right. This is the same "remedy that did not apply"
+  // shape fix round 1 closed once already, on the false-refusal path.
+  //
+  // Every kind the module can emit is enumerated FROM THE MODULE, so a kind
+  // added without a remedy fails here rather than silently getting the wrong
+  // sentence.
+  const KINDS = [
+    hook.COLLISION_DUPLICATE_KEY, hook.COLLISION_DUPLICATE_TABLE, hook.COLLISION_UNPARSEABLE,
+    hook.COLLISION_BLOCK_NOT_AT_ROOT, hook.COLLISION_HALF_BLOCK,
+    hook.COLLISION_TABLE_IS_VALUE, hook.COLLISION_KEY_USED_AS_TABLE,
+  ];
+  const exported = Object.keys(hook).filter((k) => /^COLLISION_/.test(k)).map((k) => hook[k]);
+  assert.deepStrictEqual([...KINDS].sort(), [...exported].sort(),
+    'the list above must be every collision kind the module exports, or a new kind can ship ' +
+    'with no remedy and nothing will say so');
+
+  // Each kind is driven through the GENERATOR by a real file, not asserted of a
+  // hand-made object, so "this kind is reachable" and "this kind has a remedy"
+  // are one claim.
+  const FILES = new Map([
+    [hook.COLLISION_DUPLICATE_KEY, 'workflow.on_complete = "theirs"\n'],
+    [hook.COLLISION_DUPLICATE_TABLE, '[workflow]\nprd_template = "assets/house.md"\n'],
+    [hook.COLLISION_UNPARSEABLE, 'this is not toml at all\n'],
+    [hook.COLLISION_TABLE_IS_VALUE, WORKFLOW_AS_VALUE],
+    [hook.COLLISION_KEY_USED_AS_TABLE, '[workflow.on_complete]\nx = 1\n'],
+  ]);
+  const seenTexts = new Map();
+  for (const [kind, content] of FILES) {
+    const fx = fixture();
+    const skill = hook.AUTHORING_SKILLS[0];
+    fs.writeFileSync(teamFile(fx, skill), content, 'utf-8');
+    const r = generate(fx, BOTH_CONFLUENCE).results.find((x) => x.skill === skill);
+    assert.ok(r.collisions.some((c) => c.kind === kind),
+      `${kind} is not reachable through the generator with ${JSON.stringify(content)}; got ` +
+      `${JSON.stringify(r.collisions.map((c) => c.kind))}`);
+
+    const prior = process.exitCode;
+    const lines = captureLog(() => cli.generateConfluencePublishHooks({
+      projectRoot: fx.root,
+      fallbackLayout: { knowledgebase: { mode: 'same', path: '.', backend: 'confluence', spaceKey: 'X' }, sprintManagement: { mode: 'same', path: '.' } },
+    }));
+    process.exitCode = prior;
+    const text = lines.join('\n');
+    assert.ok(text.includes(`${skill}.toml`), `${kind}: the report must name the file:\n${text}`);
+    seenTexts.set(kind, text);
+  }
+
+  // THE POINT: the remedies must DIFFER. One fixed sentence for every kind is
+  // precisely the defect, and identical output for two kinds reproduces it.
+  const remedyOf = (text) => {
+    const m = /discarding your customization\n[\s\S]*?silently\.\n([\s\S]*?)\n\s+\S+ will NOT publish/.exec(text);
+    assert.ok(m, `could not locate the remedy paragraph in:\n${text}`);
+    return m[1].trim();
+  };
+  const remedies = new Map([...seenTexts].map(([k, t]) => [k, remedyOf(t)]));
+  assert.strictEqual(new Set(remedies.values()).size, remedies.size,
+    `two collision kinds printed the SAME remedy, which is the defect this test exists for:\n` +
+    `${[...remedies].map(([k, v]) => `  ${k}:\n    ${v}`).join('\n')}`);
+
+  // And each remedy must be ABOUT its own kind, not merely different.
+  assert.ok(/user\.toml/.test(remedies.get(hook.COLLISION_DUPLICATE_KEY)) &&
+    /array/i.test(remedies.get(hook.COLLISION_DUPLICATE_KEY)),
+  `the duplicate-key remedy is the personal-layer array:\n${remedies.get(hook.COLLISION_DUPLICATE_KEY)}`);
+  assert.ok(/dotted/i.test(remedies.get(hook.COLLISION_DUPLICATE_TABLE)),
+    `a \`[workflow]\` table holding prd_template is fixed by DOTTED KEYS, not by a personal-layer ` +
+    `array:\n${remedies.get(hook.COLLISION_DUPLICATE_TABLE)}`);
+  assert.ok(/dotted/i.test(remedies.get(hook.COLLISION_TABLE_IS_VALUE)),
+    `\`workflow = { … }\` is fixed by DOTTED KEYS too:\n${remedies.get(hook.COLLISION_TABLE_IS_VALUE)}`);
+  assert.ok(/does not parse/i.test(remedies.get(hook.COLLISION_UNPARSEABLE)) &&
+    !/^Move your own/.test(remedies.get(hook.COLLISION_UNPARSEABLE)),
+  `a file that does not parse is fixed by fixing the TOML, not by moving an override:\n` +
+  `${remedies.get(hook.COLLISION_UNPARSEABLE)}`);
+  assert.ok(/ARRAY of instructions/.test(remedies.get(hook.COLLISION_KEY_USED_AS_TABLE)),
+    `nesting under our key is fixed by not nesting under it:\n` +
+    `${remedies.get(hook.COLLISION_KEY_USED_AS_TABLE)}`);
+
+  // The two NON-BLOCKING kinds never reach the generator's report (they heal on
+  // generation), so their remedies are proved on the `status` surface, which is
+  // where a user actually meets them.
+  for (const [kind, content] of [
+    [hook.COLLISION_BLOCK_NOT_AT_ROOT, null],
+    [hook.COLLISION_HALF_BLOCK, `${hook.PUBLISH_HOOK_MARKER_BEGIN}\nfoo = 1\n`],
+  ]) {
+    const fx = fixture();
+    const skill = hook.AUTHORING_SKILLS[0];
+    if (kind === hook.COLLISION_BLOCK_NOT_AT_ROOT) {
+      generate(fx, BOTH_CONFLUENCE);
+      const withBlock = fs.readFileSync(teamFile(fx, skill), 'utf-8');
+      fs.writeFileSync(teamFile(fx, skill), `[agent]\nname = "a"\n${withBlock}`, 'utf-8');
+    } else {
+      fs.writeFileSync(teamFile(fx, skill), content, 'utf-8');
+    }
+    const found = hook.detectPublishHookCollisions(fx.root);
+    assert.ok(found.some((e) => e.collisions.some((c) => c.kind === kind)),
+      `${kind} must be reachable on the detection surface; got ` +
+      `${JSON.stringify(found.map((e) => e.collisions.map((c) => c.kind)))}`);
+    const text = captureLog(() => cli.printPublishHookCollisionReport(fx.root)).join('\n');
+    if (kind === hook.COLLISION_BLOCK_NOT_AT_ROOT) {
+      assert.ok(/TOP of the file/.test(text) && /ma-agents bind/.test(text),
+        `a block under a table is fixed by re-anchoring it, not by a personal-layer array:\n${text}`);
+    } else {
+      assert.ok(/BEGIN marker has no matching END/.test(text),
+        `a half-block is fixed by removing the stray marker:\n${text}`);
+    }
+  }
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -2183,6 +2589,42 @@ test('10.12 R10 the PERSONAL layer\'s scalar override is DETECTED — the residu
   assert.strictEqual(found[0].kind, hook.USER_LAYER_SCALAR_OVERRIDE);
   assert.ok(found[0].file.endsWith(`${skill}.user.toml`), 'it must name the PERSONAL file');
   assert.strictEqual(found[0].line, 2, 'and the line, so the user can find it');
+
+  // FIX ROUND 2 (B2) — THE THIRD LEGAL SPELLING, which the detector did not see.
+  //
+  // The `[workflow]` header form and the dotted form were both detected; the
+  // INLINE TABLE form of the identical thing was not, because the detector
+  // compared key paths for equality and `readTomlStructure` records
+  // `workflow = { on_complete = "MINE" }` as one key at path `['workflow']`.
+  // Measured on the shipped code: the resolver returned "MINE", the publish was
+  // dead, exit 0, and `detectUserLayerScalarOverrides` returned `[]` — so the
+  // single state R10 exists to name went unnamed.
+  //
+  // All three spellings are asserted TOGETHER, so a fix for one that misses
+  // another cannot pass.
+  const SPELLINGS = new Map([
+    ['dotted', 'workflow.on_complete = "MY OWN STEP"\n'],
+    ['table header', '[workflow]\non_complete = "MY OWN STEP"\n'],
+    ['inline table', 'workflow = { on_complete = "MY OWN STEP" }\n'],
+  ]);
+  for (const [label, text] of SPELLINGS) {
+    fs.writeFileSync(userFile(fx, skill), text, 'utf-8');
+    // First the FACT, through the real resolver: this spelling really does kill
+    // the publish, at exit 0. The detector must report a fact, not a preference.
+    const got = resolveKey(fx, skill, 'workflow.on_complete');
+    assert.strictEqual(got.status, 0, `${label}: and it happens at exit 0`);
+    assert.strictEqual(got.value, 'MY OWN STEP',
+      `${label}: the publish must actually be gone; on_complete resolved to ` +
+      `${JSON.stringify(got.value)}`);
+
+    const reported = hook.detectUserLayerScalarOverrides(fx.root);
+    assert.strictEqual(reported.length, 1,
+      `${label}: this spelling replaces the publish and must be reported exactly once; got ` +
+      `${JSON.stringify(reported)}`);
+    assert.strictEqual(reported[0].kind, hook.USER_LAYER_SCALAR_OVERRIDE, label);
+    assert.ok(reported[0].file.endsWith(`${skill}.user.toml`), label);
+  }
+  fs.rmSync(userFile(fx, skill), { force: true });
 });
 
 test('10.13 R10 the detector is SILENT on the array form, on absence, and on a clean project', () => {
@@ -2206,6 +2648,27 @@ test('10.13 R10 the detector is SILENT on the array form, on absence, and on a c
   assert.deepStrictEqual(hook.detectUserLayerScalarOverrides(fx.root), [],
     'a scalar `on_complete` at a DIFFERENT key path does not replace the publish and ' +
     'must not be reported');
+
+  // FIX ROUND 2 (B2). The inline-table spelling is now DETECTED when it holds a
+  // scalar (10.12), so its negatives have to hold too, or the fix has bought a
+  // false alarm on the personal layer — a report telling a user their publish is
+  // dead when it is not, which trains them to ignore the report.
+  const INLINE_NEGATIVES = new Map([
+    ['an inline table holding an ARRAY', 'workflow = { on_complete = ["MY OWN STEP"] }\n'],
+    ['an inline table with no on_complete at all', 'workflow = { prd_template = "mine.md" }\n'],
+    ['an inline table under a DIFFERENT key', 'agent = { on_complete = "not ours" }\n'],
+  ]);
+  for (const [label, text] of INLINE_NEGATIVES) {
+    fs.writeFileSync(userFile(fx, skill), text, 'utf-8');
+    assert.deepStrictEqual(hook.detectUserLayerScalarOverrides(fx.root), [],
+      `${label} does not replace the publish and must not be reported`);
+  }
+  // …and the first of those is demonstrated, not assumed: the array inside an
+  // inline table appends exactly as the dotted array form does.
+  fs.writeFileSync(userFile(fx, skill), 'workflow = { on_complete = ["MY OWN STEP"] }\n', 'utf-8');
+  assert.strictEqual(resolveKey(fx, skill, 'workflow.on_complete').value.length, 2,
+    'an ARRAY inside an inline table must really append both instructions, or reporting it ' +
+    'would have been correct after all');
 
   fs.writeFileSync(userFile(fx, skill), 'this is not toml\n', 'utf-8');
   assert.deepStrictEqual(hook.detectUserLayerScalarOverrides(fx.root), [],
@@ -2236,6 +2699,15 @@ test('10.14 R10 the report reaches the shipped `status` surface, and names the r
     `place ma-agents mentions the file at all:\n${text}`);
   assert.deepStrictEqual(captureLog(() => cli.printPublishHookCollisionReport(fixture().root)), [],
     'and it must still print nothing at all on a healthy project');
+
+  // FIX ROUND 2 (B2) — the inline-table spelling reaches the SAME shipped
+  // surface. Detected but never printed would be the presence-not-effect shape.
+  fs.writeFileSync(userFile(fx, skill), 'workflow = { on_complete = "MY OWN STEP" }\n', 'utf-8');
+  const inlineText = captureLog(() => cli.printPublishHookCollisionReport(fx.root)).join('\n');
+  assert.ok(inlineText.includes(`${skill}.user.toml`),
+    `\`status\` must name the inline-table spelling too:\n${inlineText}`);
+  assert.ok(/does not publish to Confluence while this stands/.test(inlineText),
+    `and state the same consequence for it:\n${inlineText}`);
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -2627,9 +3099,21 @@ test('14.2 AC1 [END TO END] a REAL `ma-agents bind` regenerates the hook after i
       `out-of-band case, so a bind that generates nothing makes that remedy false.\n` +
       `${run.out.slice(-1500)}`);
   }
-  const got = resolveInInstalledProject(root, 'bmad-prd', 'workflow.on_complete');
-  assert.ok(Array.isArray(got.value) && got.value.length === 1,
-    `and it must resolve after a bind; got ${JSON.stringify(got.value)}`);
+  // FIX ROUND 2 (§14 gap). `existsSync` for all five but a resolve for ONE meant
+  // a `bind` that mis-routed four of the five — the exact regression §1's oracle
+  // exists for — still passed here. All five are resolved, and each is required
+  // to route to ITS OWN store.
+  for (const [skill, storeId] of ORACLE) {
+    const got = resolveInInstalledProject(root, skill, 'workflow.on_complete');
+    assert.strictEqual(got.status, 0, `${skill}: resolver exited ${got.status} — ${got.stderr}`);
+    assert.ok(Array.isArray(got.value) && got.value.length === 1,
+      `${skill}: on_complete must resolve after a bind; got ${JSON.stringify(got.value)}`);
+    assert.ok(got.value[0].includes(`--store ${storeId === SYSTEM ? 'system' : 'software'}`),
+      `${skill}: bind regenerated a hook routed to the wrong store: ` +
+      `${JSON.stringify(got.value[0].slice(0, 160))}`);
+    assert.strictEqual(got.stderr.trim(), '',
+      `${skill}: the resolver warned over a file \`bind\` just wrote: ${got.stderr}`);
+  }
 });
 
 test('14.3 AC1 [END TO END] a REAL `ma-agents config layout` regenerates it too', () => {
@@ -2643,9 +3127,20 @@ test('14.3 AC1 [END TO END] a REAL `ma-agents config layout` regenerates it too'
     assert.ok(fs.existsSync(hook.customOverridePath(root, skill)),
       `${skill}: the reconfigure path wrote no override:\n${run.out.slice(-1500)}`);
   }
-  const got = resolveInInstalledProject(root, 'bmad-ux', 'workflow.on_complete');
-  assert.ok(Array.isArray(got.value) && got.value[0].includes('--store software'),
-    `and it must resolve to the software store for bmad-ux; got ${JSON.stringify(got.value)}`);
+  // FIX ROUND 2 (§14 gap) — all five, each to its own store, for the same reason
+  // as 14.2. A `config layout` that routed everything to `software` passed the
+  // old single-skill check.
+  for (const [skill, storeId] of ORACLE) {
+    const got = resolveInInstalledProject(root, skill, 'workflow.on_complete');
+    assert.strictEqual(got.status, 0, `${skill}: resolver exited ${got.status} — ${got.stderr}`);
+    assert.ok(Array.isArray(got.value) && got.value.length === 1,
+      `${skill}: on_complete must resolve after a reconfigure; got ${JSON.stringify(got.value)}`);
+    assert.ok(got.value[0].includes(`--store ${storeId === SYSTEM ? 'system' : 'software'}`),
+      `${skill}: the reconfigure path routed the hook to the wrong store: ` +
+      `${JSON.stringify(got.value[0].slice(0, 160))}`);
+    assert.strictEqual(got.stderr.trim(), '',
+      `${skill}: the resolver warned over a file \`config layout\` just wrote: ${got.stderr}`);
+  }
 });
 
 test('14.4 AC12(c)/R10 [END TO END] a REAL `ma-agents status` names BOTH silent-publish states', () => {
