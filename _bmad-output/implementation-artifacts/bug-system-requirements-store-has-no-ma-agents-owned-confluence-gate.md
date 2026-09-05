@@ -97,6 +97,43 @@ are decisions for a human, not for a story.
    31.14's traceability reflects it.
 3. Story 31.9's existing gate is not weakened in the process.
 
+## Disposition note — Story 31.15 (2026-09-04). STATUS STAYS **OPEN**.
+
+Story 31.15 is a **fifth candidate resolution**, not one of the four above: **own the *trigger*
+without owning the *document*.** ma-agents does not edit the five upstream BMM authoring workflows —
+it generates `_bmad/custom/<skill>.toml`, the **team** layer of the three-layer customization merge
+all five resolve at activation, setting `on_complete` to run
+`ma-agents confluence-plan --store <store>` when that skill's store is Confluence-backed. The
+channel is upstream-sanctioned and the documents stay untouched.
+
+**What that closes.** The blast radius named above is closed **for the five authoring skills**
+(`bmad-product-brief`, `bmad-prd` → system store; `bmad-architecture`, `bmad-ux`,
+`bmad-create-epics-and-stories` → software store). A Confluence-backed system requirements store is
+no longer a setting that quietly does nothing: the workflows that produce its artifacts now carry a
+fail-loud publish directive, delivered through a file ma-agents owns rather than through a document
+it does not.
+
+**What that does NOT close, and must not be read as closing.**
+
+1. **The FR262-scope question stays OPEN and is a decision for a human**, exactly as this file says.
+   Options 1–3 above are still live; nothing here amends the PRD.
+2. The trigger is a **directive to an agent**, not an enforced gate. It carries FR262's fail-loud
+   obligation in its text — including an instruction to correct the "artifact is ready" message the
+   workflow has *already* emitted — but the guarantee is an agent obeying an instruction, which is
+   weaker than Story 31.9's embedded gate. Story 31.15 §2's mock-verification limit applies: no live
+   Confluence MCP was reachable, so that obedience is unproven.
+3. It covers only the **five** artifacts FR264 enumerates. Any other consumer of a Confluence-backed
+   store is unaffected.
+4. It introduces a **new** consequence of its own: the three-writer collision on
+   `_bmad/custom/<skill>.toml` (Story 31.15 AC12). An agent running the upstream `bmad-customize`
+   skill can leave that file with a duplicate declaration, at which point `resolve_customization.py`
+   discards the **entire team layer** — the customizer's change and the publish hook together — with
+   a stderr warning and **exit 0**. Mitigated by a write-side refusal at install/`bind`, a
+   `ma-agents status` detection path, and an in-file owner comment; the silent discard itself is
+   upstream and cannot be fixed here.
+
+Story 31.14's disposition of this bug should record the above and leave the status **OPEN**.
+
 ## Provenance
 
 - Raised by Story 31.9's implementer against its own work; confirmed by its independent reviewer as

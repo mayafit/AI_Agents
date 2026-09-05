@@ -36,3 +36,12 @@ lib/mil498-templates/** text eol=lf
 # mutation-testing.
 lib/confluence-page-tree.js text eol=lf
 test/project-layout-confluence-page-tree.test.js text eol=lf
+
+# Story 31.15 — the publish trigger. Same reason as the two Story 31.10 pins
+# above: the generated TOML block is compared byte-for-byte across regenerations
+# and the suite asserts a user's file survives byte-identical, so a checkout that
+# rewrote either file's line endings would turn a real invariant into a platform
+# coin-flip. `bin/cli.js` around them stays CRLF, which is exactly the mixed-EOL
+# pair Story 31.10 recorded as a live failure mode.
+lib/confluence-publish-hook.js text eol=lf
+test/project-layout-confluence-publish-hook.test.js text eol=lf
