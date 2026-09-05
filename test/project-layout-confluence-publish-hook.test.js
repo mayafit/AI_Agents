@@ -1434,10 +1434,12 @@ test('6.9 AC5(a) a WRITE that fails is reported as write-failed, and nothing lan
     'not a directory\n', 'and nothing may have been clobbered on the way');
 });
 
-test('6.10 AC5(a) a READ that fails is reported as write-failed, and the file is left alone', () => {
-  // REAL OS FAULT: the override path is a DIRECTORY, so `fs.existsSync` says yes
-  // and `fs.readFileSync` raises EISDIR. This is the `:787` branch — a file the
-  // generator can see but cannot read — and it was previously unreachable.
+test('6.10 AC5(a) a READ that fails is write-failed — and the unreadable file is NOT overwritten', () => {
+  // The `:787` branch: a file the generator can SEE but cannot READ. Two faults,
+  // because they prove different halves of the same obligation.
+  //
+  // (a) REAL OS FAULT — the override path is a DIRECTORY, so `fs.existsSync`
+  //     says yes and `fs.readFileSync` raises EISDIR.
   const fx = fixture();
   const skill = hook.AUTHORING_SKILLS[0];
   fs.mkdirSync(teamFile(fx, skill), { recursive: true });
@@ -1445,8 +1447,7 @@ test('6.10 AC5(a) a READ that fails is reported as write-failed, and the file is
   const out = generate(fx, BOTH_CONFLUENCE);
   const r = out.results.find((x) => x.skill === skill);
   assert.strictEqual(r.outcome, hook.HOOK_WRITE_FAILED,
-    `an unreadable override must not be treated as an absent one — that would silently ` +
-    `overwrite it; got ${r.outcome}`);
+    `an unreadable override must not be treated as an absent one; got ${r.outcome}`);
   assert.ok(/EISDIR|illegal operation|directory/i.test(String(r.error)),
     `and must carry the real OS error; got ${JSON.stringify(r.error)}`);
   assert.ok(fs.statSync(teamFile(fx, skill)).isDirectory(),
@@ -1455,6 +1456,41 @@ test('6.10 AC5(a) a READ that fails is reported as write-failed, and the file is
   assert.deepStrictEqual(
     out.results.filter((x) => x.skill !== skill).map((x) => x.outcome), Array(4).fill(hook.HOOK_WROTE),
     'one unreadable file must not stop the other four');
+
+  // (b) THE HAZARD THE BRANCH ACTUALLY EXISTS FOR, which (a) cannot show: a read
+  //     that fails on a file whose WRITE would have succeeded. Swallow this
+  //     branch and the generator treats "I could not read it" as "there is
+  //     nothing there" and writes a fresh block over content it never saw —
+  //     destroying a user's file silently, which is the one thing AC3(b)
+  //     forbids outright. No portable OS fault makes a file unreadable and
+  //     writable at once, so this one is INJECTED, and it is named as injected.
+  const fx2 = fixture();
+  const skill2 = hook.AUTHORING_SKILLS[1];
+  const target = teamFile(fx2, skill2);
+  fs.writeFileSync(target, USER_CONTENT, 'utf-8');
+  const before = fs.readFileSync(target);
+
+  const origRead = fs.readFileSync;
+  let injected;
+  try {
+    fs.readFileSync = function (p, ...rest) {
+      if (fsPathArg(p) === target) {
+        const e = new Error(`EACCES: permission denied, open '${target}'`);
+        e.code = 'EACCES';
+        throw e;
+      }
+      return origRead.call(fs, p, ...rest);
+    };
+    injected = hook.generatePublishHooks({ projectRoot: fx2.root, stores: BOTH_CONFLUENCE });
+  } finally {
+    fs.readFileSync = origRead;
+  }
+  const r2 = injected.results.find((x) => x.skill === skill2);
+  assert.strictEqual(r2.outcome, hook.HOOK_WRITE_FAILED,
+    `a file that could not be READ must be reported, not written over; got ${r2.outcome}`);
+  assert.ok(before.equals(fs.readFileSync(target)),
+    "the user's file was REWRITTEN after a failed read. The generator saw nothing, assumed " +
+    'nothing was there, and replaced it — the exact silent corruption AC3(b) forbids.');
 });
 
 test('6.11 AC3(d)/AC5(a) a REMOVAL that fails is reported as write-failed, block still on disk', () => {
