@@ -1123,6 +1123,27 @@ test('4.10 AC3(b) [DATA LOSS] a marker that BEGINS a line, and a SECOND begin ma
   assert.ok(foundSpaced && foundSpaced.end !== null,
     `an END marker an editor re-indented is still the END marker; got ` +
     `${JSON.stringify(foundSpaced)}`);
+
+  // ── (D) A STRAY *END* MARKER ABOVE THE GENUINE BLOCK. Found by mutant `M17`,
+  //    which relaxed `ends.find((o) => o >= begin)` to `>= 0` and SURVIVED at
+  //    111/0 — the guard was load-bearing and nothing exercised it.
+  //
+  //    An END matched from ABOVE the BEGIN gives `end < begin`, and
+  //    `removePublishHookBlock` then splices `slice(0, begin) + slice(after)`
+  //    with `after < begin`: it DUPLICATES the bytes between them instead of
+  //    removing anything, and leaves the whole block in place. A stray END is
+  //    also the residue of the half-block AC3(c) deliberately tolerates, so this
+  //    is a state the module can be handed by its own earlier behaviour.
+  const strayEnd = `${hook.PUBLISH_HOOK_MARKER_END}\n${SETTING}\n`;
+  const withStray = hook.injectPublishHookBlock(strayEnd, genuine);
+  const foundStray = hook.findPublishHookBlock(withStray);
+  assert.ok(foundStray && foundStray.end !== null,
+    `the genuine region must still be located past a stray END; got ${JSON.stringify(foundStray)}`);
+  assert.ok(foundStray.end > foundStray.begin,
+    `an END matched from ABOVE the BEGIN gives end < begin, and removal then DUPLICATES the ` +
+    `bytes between them instead of excising a region; got ${JSON.stringify(foundStray)}`);
+  assert.strictEqual(hook.removePublishHookBlock(withStray), strayEnd,
+    "and removal must restore the user's bytes — stray marker and all — exactly");
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
