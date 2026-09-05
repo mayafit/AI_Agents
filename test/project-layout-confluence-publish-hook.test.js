@@ -78,7 +78,7 @@ const tree = require(path.join(PROJECT_ROOT, 'lib', 'confluence-page-tree.js'));
 // marker, the two data-loss shapes 4.9's mid-line fixture does not reach) and
 // 5.15 (escape sequences in basic strings, both directions, with a
 // literal-string control).
-const EXPECTED_TEST_COUNT = 111;
+const EXPECTED_TEST_COUNT = 112;
 
 let passed = 0;
 let failed = 0;
@@ -1149,6 +1149,180 @@ test('4.10 AC3(b) [DATA LOSS] a marker that BEGINS a line, and a SECOND begin ma
     `bytes between them instead of excising a region; got ${JSON.stringify(foundStray)}`);
   assert.strictEqual(hook.removePublishHookBlock(withStray), strayEnd,
     "and removal must restore the user's bytes — stray marker and all — exactly");
+});
+
+/**
+ * The whitespace `String.prototype.trim()` strips but TOML does NOT accept,
+ * composed from code points for the same reason the BOM is at `:1186` — a
+ * literal U+00A0 or U+3000 in this file is invisible in review and is exactly
+ * the character a copy-paste normaliser would silently rewrite.
+ *
+ * U+2007 (FIGURE SPACE) and U+3000 (IDEOGRAPHIC SPACE) are included beside
+ * U+00A0 because they are not the same code point and a fix that special-cases
+ * one of them is not a fix. The plain space and tab beside them are CONTROLS:
+ * they are legal TOML on a line of their own, and a fix that starts rejecting
+ * them has traded a silent failure for a false refusal.
+ */
+const NBSP = String.fromCharCode(0x00A0);
+const TRAILING_ON_END_MARKER = [
+  ['a plain space [control — legal TOML]', ' ', true],
+  ['a tab [control — legal TOML]', '\t', true],
+  ['U+00A0 NO-BREAK SPACE', NBSP, false],
+  ['U+2007 FIGURE SPACE', String.fromCharCode(0x2007), false],
+  ['U+3000 IDEOGRAPHIC SPACE', String.fromCharCode(0x3000), false],
+];
+
+test('4.11 AC3(b)/AC4 [SILENT PUBLISH FAILURE] trailing UNICODE whitespace on OUR OWN END marker', () => {
+  // FIX ROUND 5 (B1). The marker's region was closed with
+  // `end + PUBLISH_HOOK_MARKER_END.length` — "the marker is the last thing on
+  // its line". `markerCommentOffsets` never promised that: it recognises a
+  // marker with `line.trim() === marker`, and `trim()` strips the FULL Unicode
+  // WhiteSpace set. So `# END:…publish<U+00A0>` was recognised as OUR marker and
+  // the region then stopped BEFORE the character `trim()` had just forgiven.
+  //
+  // `removePublishHookBlock` saw `content[end]` was not `\n`, swallowed no
+  // newline, and spliced — leaving A LINE CONTAINING ONLY U+00A0. It parses
+  // inside a comment; it does not parse as a statement. Measured end to end on
+  // the round-4 code, against the real resolver, on BOTH paths:
+  //
+  //                  generator      refused  collisions  after     on_complete
+  //   space/tab      wrote/removed  false    []          OK        array / removed
+  //   U+00A0         wrote/removed  false    []          INVALID   "" — layer dead
+  //   U+2007         wrote/removed  false    []          INVALID   "" — layer dead
+  //   U+3000         wrote/removed  false    []          INVALID   "" — layer dead
+  //
+  // The write path's own proof-before-disk (`tomlProblems(next)`) did not catch
+  // it: a bare NBSP line is a FALSE ACCEPT in the bundled reader. U+FEFF is the
+  // one member of this family that reader does catch, which is why round 2's
+  // BOM work closed one spelling of this and stopped.
+  //
+  // Reachability is low — it takes non-ASCII whitespace appended to ma-agents'
+  // OWN generated marker, which is what a paste through a rendered Confluence
+  // page, a browser or Word produces. The consequence is SILENT: `wrote`,
+  // `refused: false`, `status` empty, and no publish ever fires again.
+  const SETTING = 'prd_template = "assets/house-prd.md"';
+  const skill = hook.AUTHORING_SKILLS[0];
+  const genuine = hook.buildPublishHookBlock({
+    skillName: skill, storeCliName: 'system', storeLabel: tree.labelForStore(SYSTEM),
+  });
+
+  /** The genuine block with `suffix` glued to its END marker, plus a user setting. */
+  const planted = (suffix) => {
+    const mangled = genuine.slice(0, -hook.PUBLISH_HOOK_MARKER_END.length) +
+      hook.PUBLISH_HOOK_MARKER_END + suffix;
+    assert.ok(mangled.endsWith(hook.PUBLISH_HOOK_MARKER_END + suffix) &&
+      mangled.length === genuine.length + suffix.length,
+      'the fixture must glue the suffix to the block\'s LAST characters — the END marker');
+    return { user: `${SETTING}\n`, file: mangled + '\n' + SETTING + '\n' };
+  };
+
+  // Each fixture is judged INDEPENDENTLY and EVERY failure is reported, rather
+  // than the first one aborting the run. This is the M17 lesson from round 4
+  // applied to a test rather than to the code: with a plain `assert` per
+  // fixture, a regression in the U+3000 case hides behind a failure in the
+  // plain-space case, and the arming run that is supposed to prove this test
+  // bites can only ever name one of the five. Measured on the round-4
+  // arithmetic, all five fixtures fail and all five are named.
+  const failures = [];
+  const check = (label, fn) => {
+    try { fn(); } catch (e) { failures.push(`${label}: ${e.message}`); }
+  };
+
+  const attacks = TRAILING_ON_END_MARKER.filter(([, , legal]) => !legal);
+  assert.strictEqual(attacks.length, 3,
+    'the three non-ASCII fixtures must all be present — U+00A0 alone is not this family');
+  assert.strictEqual(TRAILING_ON_END_MARKER.length - attacks.length, 2,
+    'and both legal controls must be present, or a fix that rejects legal whitespace passes');
+
+  for (const [name, suffix] of TRAILING_ON_END_MARKER) {
+    const f = planted(suffix);
+
+    // ── ARMED. Every claim below is vacuous if the mangled marker simply stops
+    //    being recognised: an unrecognised END makes the block a half-block, the
+    //    write becomes a fresh insert and the removal a no-op, and no assertion
+    //    about "no debris" can fail. Round 4 chose to KEEP recognising these
+    //    lines (`4.10 (C)`), so this pins that they are still ours.
+    check(name, () => {
+      const found = hook.findPublishHookBlock(f.file);
+      assert.ok(found && found.end !== null && found.ambiguous === false,
+        `an END marker an editor appended whitespace to is still OUR END marker — ` +
+        `${JSON.stringify(found)}. If this is ever deliberately narrowed, this test must be ` +
+        `rewritten, not deleted: an unrecognised END silently turns every claim below vacuous.`);
+    });
+
+    // ── THE ARITHMETIC ITSELF. The region must close at the END OF THE MARKER'S
+    //    LINE, not at `marker start + marker length`. This names the defect
+    //    rather than only its consequence.
+    check(name, () => {
+      const found = hook.findPublishHookBlock(f.file);
+      assert.ok(found.end === f.file.length || f.file[found.end] === '\n',
+        `the region closes at offset ${found.end}, which holds ` +
+        `${JSON.stringify(f.file[found.end])} — not a newline. Whatever lies between there and ` +
+        `the newline is whitespace \`trim()\` forgave, and the splice strands it on a line of ` +
+        `its own.`);
+    });
+    check(name, () => {
+      assert.strictEqual(hook.removePublishHookBlock(f.file), f.user,
+        `removal must restore the user's bytes EXACTLY — no whitespace-only line left behind`);
+    });
+    check(name, () => {
+      assert.deepStrictEqual(hook.scanForCollisions(f.file), [],
+        `the file must collide with nothing — the scan BLANKS our region, so a marker line it ` +
+        `fails to blank in full is read as user content`);
+    });
+
+    // ── (a) THE WRITE PATH, through the real generator and the REAL resolver.
+    //    The claim is not "our reader is happy" — our reader is what missed this.
+    check(`${name} [write]`, () => {
+      const fx = fixture();
+      fs.writeFileSync(teamFile(fx, skill), f.file, 'utf-8');
+      const out = generate(fx, BOTH_CONFLUENCE);
+      const r = out.results.find((x) => x.skill === skill);
+      const after = fs.readFileSync(teamFile(fx, skill), 'utf-8');
+      assert.ok(r.outcome === hook.HOOK_WROTE || r.outcome === hook.HOOK_UNCHANGED,
+        `a file with ONE genuine region must simply be regenerated; got ${r.outcome} ` +
+        `${JSON.stringify(r.collisions)}`);
+      const verdict = tomllibVerdicts([after])[0];
+      assert.strictEqual(verdict, null,
+        `REAL tomllib rejects the file ma-agents just wrote — ${verdict}`);
+      // The end state, not the bytes: the publish still fires and the team layer lives.
+      const oc = resolveKey(fx, skill, 'workflow.on_complete');
+      assert.ok(Array.isArray(oc.value) && oc.value.length === 1,
+        `on_complete resolved to ${JSON.stringify(oc.value)} — the publish is DEAD and the ` +
+        `generator reported ${r.outcome} with refused=${out.refused}`);
+      assert.strictEqual(resolveKey(fx, skill, 'prd_template').value, 'assets/house-prd.md',
+        "the team's own setting no longer resolves");
+      assert.strictEqual(oc.stderr.trim(), '',
+        `the resolver WARNED over a file this generator wrote: ${oc.stderr}`);
+      // Idempotent: the mangled marker must not accumulate a second region.
+      generate(fx, BOTH_CONFLUENCE);
+      assert.strictEqual(fs.readFileSync(teamFile(fx, skill), 'utf-8'), after,
+        'a second generation must be byte-identical');
+    });
+
+    // ── (b) THE REMOVAL PATH — `ma-agents install` after the store stops being
+    //    Confluence. It writes `stripped` with NO validation at all, which is
+    //    why a write-side reader rule could never have covered this half.
+    check(`${name} [removal]`, () => {
+      const fx = fixture();
+      fs.writeFileSync(teamFile(fx, skill), f.file, 'utf-8');
+      const r = generate(fx, NEITHER).results.find((x) => x.skill === skill);
+      assert.strictEqual(r.outcome, hook.HOOK_REMOVED, `the block must be removed; got ${r.outcome}`);
+      const after = fs.readFileSync(teamFile(fx, skill), 'utf-8');
+      assert.strictEqual(after, f.user,
+        `AC3(d) — the block goes and everything else stays BYTE-IDENTICAL. Got ` +
+        `${JSON.stringify(after)}`);
+      const verdict = tomllibVerdicts([after])[0];
+      assert.strictEqual(verdict, null,
+        `REAL tomllib rejects what was left on disk — ${verdict}`);
+      assert.strictEqual(resolveKey(fx, skill, 'prd_template').value, 'assets/house-prd.md',
+        "the team's setting no longer resolves after the block was removed");
+    });
+  }
+
+  assert.strictEqual(failures.length, 0,
+    `${failures.length} checks failed across ${new Set(failures.map((m) => m.split(':')[0])).size} ` +
+    `of ${TRAILING_ON_END_MARKER.length} fixtures:\n  - ` + failures.join('\n  - '));
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
