@@ -1177,7 +1177,10 @@ loss under a false promise is worse than either alone.
 `markerCommentOffsets` now requires a marker to **begin a line** (leading whitespace allowed, as TOML
 permits before a comment) and carries multi-line-string state across lines, so a marker quoted inside
 a value is a string rather than a region. Because every marker itself starts with `#`, a marker at
-the start of a line **is** a genuine comment line by TOML's own rules. Test `4.9` uses the reviewer's
+the start of a line **is** a genuine comment line by TOML's own rules. **→ CORRECTED IN FIX ROUND 4
+(R1). That justification is true and INSUFFICIENT: a comment line that *starts with* the marker and
+then CONTINUES is also a genuine comment line, and is not ma-agents' region. The identical data loss,
+one spelling away. See "Fix round 4" below.** Test `4.9` uses the reviewer's
 exact fixture and asserts five things: the comment is not a region; removal over it is a byte-level
 no-op; the setting survives generation and still **resolves** through the real resolver; a marker
 inside a multi-line string is likewise not a region; and — the arming half — the *genuine* block is
@@ -1211,6 +1214,9 @@ five-character key `u0061` rather than to `a`. Measured on the fixed code:
 So the predicate accepts a file that reproduces B1's end state. Contrived (nobody writes a BMAD
 override that way), and closing it means implementing TOML's escape grammar inside a scanner whose
 whole warrant is that it is small. **Known residual, with its mechanism — not a closed item.**
+**→ CORRECTED IN FIX ROUND 4 (N1). This residual was recorded as producing false ACCEPTANCES only.
+It produces false REFUSALS too — the direction this module itself names as the worse one — and that
+direction was unrecorded. See "Fix round 4" below.**
 
 **M-m is withdrawn as a mutation survivor.** Deleting a test's own assertion is a **test-oracle**
 mutation, not a code mutant: no suite can catch the deletion of one of its own assertions, and
@@ -1286,6 +1292,241 @@ MOCK-VERIFIED: the Atlassian Rovo MCP is still unauthorised and cannot be author
 non-interactively. (8) Linux was never run; `npm test` was not run end to end (chain positions 1 and
 20 are the two hazardous suites). **Ten attacks have landed across this epic. This is not predicted
 to be the last.**
+
+#### Fix round 4 — two blocking findings, and four corrections to this record
+
+*(A fourth independent review. No verdict is claimed here; status stays `review`.)*
+
+**R1 (BLOCKING) — the data-loss fix had a data-loss hole one spelling away.** Round 3 anchored the
+marker with `line.startsWith(marker, k)` — **"BEGINS a line", not "IS the line"** — and
+`findPublishHookBlock` took `begins[0]` unconditionally, never reporting that a second BEGIN existed.
+Two shapes follow from that, and both were measured end to end on the round-3 code, through the real
+`generatePublishHooks` and `detectPublishHookCollisions`:
+
+| shape | `findPublishHookBlock` | `scanForCollisions` | outcome | `status` | parses? | result |
+| --- | --- | --- | --- | --- | --- | --- |
+| a marker line that CONTINUES: `# BEGIN:… — our house note about this region` | `{begin: 0, end: 2298}` | `[]` | `wrote` | silent | yes | `prd_template` **gone** |
+| an exact ORPHAN `# BEGIN:…` above user content, genuine block below | `{begin: 0, end: 2263}` | `[]` | `wrote` | silent | yes | `prd_template` **gone** |
+
+Identical mechanism and identical end state to the finding round 3 elevated to blocking, and it
+falsifies the same promise the block ships at `lib/confluence-publish-hook.js:893` — *"Anything
+OUTSIDE them is yours and is kept exactly as you left it"*. `4.9`'s fixture is **mid-line only**, so
+nothing in the suite reached either; `M2` tested the opposite direction.
+
+Both halves are closed:
+
+1. **`line.trim() === marker`** — equality, not prefix. Leading whitespace is allowed because TOML
+   permits it before a comment; trailing whitespace because an editor may add or strip it without
+   the user meaning anything by it.
+2. **`COLLISION_AMBIGUOUS_MARKERS`** (`more-than-one-begin-marker`) — a new, **blocking** collision
+   kind, named on `status` with a remedy of its own in `bin/cli.js`. Ambiguity is answered by
+   *refusing to name a region at all*: `end` stays `null`, so `removePublishHookBlock` is a
+   byte-for-byte no-op and the **removal** path (a flip away from Confluence) cannot destroy anything
+   either. It is blocking on purpose — the two non-blocking kinds are non-blocking because generation
+   *heals* them, and this one cannot be healed without making the guess that is the data loss.
+
+Test `4.10` carries the reviewer's exact fixtures for both, end to end through the real resolver,
+plus the removal path, idempotence, the `status` surface, and its own arming half. **`4.9`'s arming
+half is untouched and still green**: the genuine block is still found at offset 0 and still
+round-trips.
+
+**R2 (BLOCKING) — escape sequences in basic strings were never validated at all.** Round 3 closed the
+**unquoted** Windows path and stopped there. The other half — what a user who *did* remember the
+quotes writes — was wide open. Measured against the real `resolve_customization.py`, beside a
+literal-string control that behaves correctly at every step:
+
+| | control `'C:\team\prd.md'` | attack `"C:\team\templates\prd.md"` |
+| --- | --- | --- |
+| generator | `wrote`, `refused=false` | `wrote`, `refused=false` |
+| `status` | `[]` | `[]` |
+| resolver exit | 0 | **0** (a stderr warning only) |
+| `workflow.on_complete` | array, len 1 | **`""` — no publish** |
+| `prd_template` | correct | **`undefined` — the whole team layer, gone** |
+
+`basicStringEscapeProblem` closes it as a **closed set**: `\` must be followed by one of `btnfr"\`,
+or `u` + 4 hex, or `U` + 8 hex — plus the **line-ending backslash**, legal only inside a multi-line
+basic string and only when nothing but whitespace follows it on the line. The set was *measured*
+against `tomllib`, not assumed: `\e`, `\xHH` (TOML 1.1 drafts), `\0` and `\/` are all rejected by it.
+It is applied to single-line basic strings — which is also where a **quoted key** is validated, since
+a quoted key *is* a basic string on the same scan — and to multi-line basic strings. **Literal
+strings are deliberately untouched**: they have no escapes, so every backslash in one is a backslash,
+and validating them would be the false refusal this module names as the worse direction.
+
+Twenty-two entries were added to `PREDICATE_CORPUS` (**82 → 104**; negatives 51 → 65, positives
+31 → 39, digest `42e813fd…` → `5458c8ce…`) and the same family to the `5.1` reader corpus,
+**including the quoted Windows path specifically**. New `5.15` runs the control and the attack end to
+end on both surfaces, then a **19-shape both-directions differential** against `tomllib`: **zero
+disagreements**, with real negatives and real positives on each side, so no false refusal was
+introduced. `5.14` — the false-refusal test over 31 hand-built legal files and every shipped upstream
+`customize.toml` — is unchanged and still green.
+
+**N3 — recorded, not fixed, because it needs separate machinery.** `a = {\n b = 1\n}` (an inline
+table written across lines) is accepted; `tomllib` rejects it. It does **not** fall out of the escape
+work: closing it needs a brace-only depth tracker that exempts bracket spans, because `tomllib`
+**accepts** `a = { b = [1,\n 2] }` and a naive "braces open at end of line" rule would falsely refuse
+that. Also still accepted: a **raw control character** inside a string (`"a\x07b"`), which is an
+illegal-literal-character rule rather than an escape rule. Both are false acceptances in the
+already-known direction, both recorded here with their mechanism.
+
+##### The four record corrections
+
+**N1 — the `\uXXXX`-in-quoted-keys residual produces false REFUSALS too, and that direction was
+unrecorded.** It was written up as false *acceptances* only. Measured on the current code:
+
+```
+"a\nb" = 1
+anb = 2
+```
+
+→ `tomlProblems` reports *"cannot define anb twice"*, `scanForCollisions` returns
+`file-does-not-parse`, the generator answers `refused-invalid-toml`, and **`ma-agents install` writes
+no hook for any of the five skills and exits non-zero — on a file `tomllib` parses happily.** Same
+root cause (`splitDottedKey`, `:437`, which copies the character after a backslash literally, so
+`"a\nb"` resolves to the three-character key `anb`), opposite direction. `"a\tb" = 1` beside
+`atb = 2` behaves identically. **This is the direction the module itself calls the worse one
+(`:221-223`), and it is now recorded as such.**
+
+**N2 — `tomlStatements` closes a multi-line basic string on `\"""`, and `markerCommentOffsets` is
+blind in exactly the same way.** `:311-315` uses a plain `indexOf('"""')`, so an **escaped quote**
+before the delimiter ends the string three characters early. Measured:
+
+```
+x = """a\""""        tomllib: OK        ma-agents: REFUSES
+```
+
+A legal file, refused, install blocked for all five skills. This is **pre-existing — not round 3 and
+not round 4**; the old code reached the same verdict by the same mis-split with a different message
+("unterminated basic string"). It is left alone because closing it means teaching the multi-line
+scanner about escapes, which is the machinery this reader exists to avoid. **And the part that
+matters:** `markerCommentOffsets:985` carries the *identical* blindness — it too closes a multi-line
+string with a plain `indexOf`, so on that same file it would place ma-agents' region **inside a
+string**. It is saved only because the reader errors out first and the generator refuses before the
+marker scan is ever consulted. **That is agreement by luck, not by construction**, and it should be
+read as one defect with two faces rather than as one defect and one safe function.
+
+**N4 — `6.15`'s anti-tautology guard is value-based, not provenance-based.** The record said *"a
+digest derived at run time fails"*. That is true **only when the text has also moved.** The guard is
+`self.includes("'" + digest + "'")`: it asserts that the digest's **value** appears somewhere in the
+suite's own source as a 64-hex literal. It does **not** assert that the comparison's expected side
+came from that literal. Measured — mutant `P6` replaced `assert.strictEqual(sha256(text), digest, …)`
+with `assert.strictEqual(sha256(text), sha256(text), …)`, leaving the literal declaration in place,
+and the suite was green at **111/0**. With the text unchanged, a derived digest equals the literal
+that is still there and the guard sees nothing wrong; it bites only once the text moves and the
+derived value no longer matches any literal in the file. That is still the right guard for the
+mutation it was built for (`P5`, which *removes* the literal), and the clarification is a correction
+to the claim, not to the code.
+
+**The "Still open" framing was wrong about the Windows-path family.** Round 3's list named only the
+`\uXXXX`-in-keys residual, so both the pin and the record read as though the Windows-path family were
+closed — when in fact only its **less likely half** (the unquoted spelling) was closed and the more
+likely half (the quoted one, R2 above) was wide open. That framing is corrected here, and it is
+corrected **even though R2 is now fixed**: the defect in the record was claiming closure over a
+family on the strength of one member of it, and that habit is what the next round will find again.
+
+##### The fix-round-4 mutation battery
+
+Every mutant was applied, the suite run, and the file restored **in the same step**; blob hashes were
+printed before and after each run and are identical (`lib=637ec8b45263`, `cli=5142fdf37ff4`, the test
+blob moving only where a fix was committed between runs), with `git status --porcelain` clean
+afterwards. The battery attacks the two NEW mechanisms specifically, as directed.
+
+| mutant | what it changes | verdict |
+| --- | --- | --- |
+| `M4` | revert the marker test to round 3's `startsWith(marker, k)` | **KILLED** — 4.10 |
+| `M5` | `trimStart() === marker` (trailing whitespace becomes foreign) | **KILLED** — 4.10 |
+| `M6` | `trim().startsWith(marker)` — the subtler prefix | **KILLED** — 4.10 |
+| `M7` | `line.includes(marker)` — a marker anywhere on the line | **KILLED** — 4.9, 4.10 |
+| `M8` | delete the `begins.length > 1` branch entirely | **KILLED** — 4.10, 6.14 |
+| `M9` | detect the ambiguity but name a region anyway | **KILLED** — 4.10 |
+| `M10` | make `AMBIGUOUS_MARKERS` non-blocking in the generator | **KILLED** — 4.10, 6.14 |
+| `M11` | remove the new kind's CLI remedy (fall to the generic one) | **KILLED** — 6.14 |
+| `M13` | ambiguity threshold `> 2` instead of `> 1` | **KILLED** — 4.10, 6.14 |
+| `M16` | count markers inside multi-line strings | **KILLED** — 4.9 |
+| `M17` | `ends.find(o => o >= begin)` relaxed to `>= 0` | **SURVIVED ×2 → gap closed → KILLED** |
+| `E3` | no escape validation at all | **KILLED** — 5.1, 5.8, 5.15 |
+| `E4` | widen the escape set to every lowercase letter | **KILLED** — 5.1, 5.8, 5.15 |
+| `E5` | drop the hex check on `\u` / `\U` | **KILLED** — 5.1, 5.8, 5.15 |
+| `E6` | `\U` takes four hex digits instead of eight | **KILLED** — 5.8, 5.15 |
+| `E7` | apply the escape rule to LITERAL strings too (false refusal) | **KILLED** — 5.1, 5.8, 5.15 |
+| `E8` | drop the line-ending-backslash exemption (false refusal) | **KILLED** — 5.1, 5.8, 5.15 |
+| `E9` | stop validating multi-line basic strings | **KILLED** — 5.1, 5.8, 5.15 |
+| `E10` | drop the line-ending guard's "nothing but whitespace follows" | **SURVIVED → gap closed → KILLED** |
+| `E10b` | the same guard, off by one (`slice(i+2)`) | **SURVIVED → gap closed → KILLED** |
+| `E14` | `indexOf` for `includes` — `\b` at index 0 becomes falsy | **KILLED** — 5.1, 5.8, 5.15 |
+| `E16` | accept a short `\u` (`hex.length` check dropped) | **KILLED** — 5.1, 5.8, 5.15 |
+| `E17` | skip a backslash that is the LAST character of a body | **SURVIVED → gap closed → KILLED** |
+
+**Four mutants found real gaps, and all four are recorded above rather than quietly patched.** `E10`,
+`E10b` and `E17` each found a corpus that did not reach a branch of the escape validator (the
+continued-line branch; the same branch with the backslash last on the line; a backslash last in the
+body) — five corpus entries and three pin moves between them. `M17` found a **load-bearing guard with
+no test at all**, and then survived a *second* time because the first fixture built its file with
+`injectPublishHookBlock`, which re-anchors the block to offset 0 and put the stray END marker on the
+harmless side. That second survival is the more useful of the two: it is a test that looked like it
+covered a guard and did not.
+
+**Five survivors, all analysed, none closed — and each is a deliberate decision, not an omission.**
+
+| survivor | why it is not closed |
+| --- | --- |
+| `M12` `out.push(offset)` for `offset + k` | Near-equivalent **by construction**: `line.trim() === marker` means only whitespace can precede a marker, so it can only mis-place an offset inside indentation, never touch user content. Measured on a hand-indented block, the real code leaves ma-agents' own two spaces glued to the following user line and the mutant does not — the mutant's output is arguably the tidier one. The suite is not contorted to pin the less tidy behaviour. |
+| `M18` tabs not skipped in the leading-whitespace scan | The same thing by another route; same class, same bound. |
+| `M15` drop the trailing-CR strip | Equivalent: `trim()` already removes `\r`. Measured on a CRLF file — region found at offset 0, round-trip exact. The strip is now redundant for the equality test. |
+| `M14` don't blank the candidate span when markers are ambiguous | Report-quality only. Without the blanking an extra `on_complete-outside-markers` is reported *alongside* the ambiguity — a true statement about the wrong thing — but the write is still refused and `status` still names the ambiguity. No safety difference. |
+| `E15` lowercase the hex before testing it | Equivalent: the test is `/^[0-9a-fA-F]+$/` and the hex string is not used for anything else. |
+| `P6` derive the digest at the comparison site | **Not a defect — it is the N4 finding above**, and it is what establishes that `6.15`'s guard is value-based. Recorded, not closed. |
+
+**What was tried and is NOT in the battery**, so its reach can be judged: mutations of the suite's own
+assertions (a test-oracle mutation — see `M-m`, withdrawn in round 3); editing shipped text together
+with its digest, which the pin is designed to permit; and the `tomlStatements`/`markerCommentOffsets`
+`\"""` blindness (N2), which is recorded rather than mutated because it is a known open defect and a
+mutant there would be measuring a hole already named. **This is not offered as a clean sweep.** Four
+gaps were found by mutants in this round alone, three of them in code written in this round.
+
+##### Suites and invariants re-derived at fix-round-4 HEAD
+
+Story suite **111/0**, exit 0 (`EXPECTED_TEST_COUNT` 109 → 111, deliberately: `4.10` and `5.15` are
+new; nothing was weakened or deleted and no existing assertion was relaxed). `release-gate-epic-31`
+**43/0**, `story-15-5-workflow-skills` **157/0**, `project-layout-confluence-routing` **97/0**,
+`project-layout-confluence-page-tree` **157/0**, `project-layout-artifact-routing` **59/0**,
+`project-layout-staleness-guard` **64/0** — all exit 0. I1 preflight **41 copies, split 13-14-14, one
+sha256 `ca9bf25b…`**; I2 gate **9 copies, split 3-3-3, one sha256 `cda3d3d9…`** — both re-derived
+independently of the suite as well as by tests `11.2`/`11.3`. **No pinned number moved.**
+
+**The hash pins did NOT move.** `6.15`'s two instruction digests (`9ddcc790…`, `11a34b51…`) and
+`6.16`'s block digest (`338b0be6…`) are unchanged, because neither `publishHookInstruction` nor
+`buildPublishHookBlock` was touched: R1 and R2 are both changes to how a file is *read*, not to what
+is *emitted*. The only digest that moved is `PREDICATE_CORPUS_DIGEST`, deliberately and three times,
+each move paired with its count and split and each recorded in its own commit. Nothing under
+`skills/`, `lib/bmad-extension/skills/` or `lib/bmad-extension-plugin/` changed.
+
+##### Still open after this round
+
+1. **The escape family is closed for basic strings; two neighbours are not.** `a = {\n b = 1\n}` (N3,
+   needs a brace-depth tracker that exempts bracket spans) and a **raw control character** inside a
+   string are both still accepted where `tomllib` refuses.
+2. **`\uXXXX` in quoted keys — in BOTH directions.** False acceptances (recorded in round 3) *and*
+   false refusals that block the install (N1, recorded here).
+3. **The `\"""` blindness (N2), in `tomlStatements` AND in `markerCommentOffsets`.** A legal file is
+   refused; and the marker scanner would place ma-agents' region inside a string on that same file,
+   saved only by the reader failing first.
+4. **`steps = - one`** — a value whose first character is legal and whose remainder is not is still
+   accepted; the safer direction, closable only by parsing the number grammar.
+5. **The reader is still not `tomllib`.** `5.1`, `5.8` and `5.15` say agreement *over their corpora*
+   and nothing more. The corpora are pinned so the warrant cannot shrink silently — and this round
+   showed three times that a pinned corpus can still fail to reach a branch.
+6. **The hash pin binds a human to re-read the text**; it cannot stop someone who edits text and
+   digest together (by design), and — N4 — it does not detect a derivation while the text is
+   unchanged.
+7. **Hazard C is unchanged.** Upstream `bmad-customize` still instructs the third writer to use the
+   exact scalar form that replaces the publish; only upstream can resolve that.
+8. **Everything about a live Confluence remains MOCK-VERIFIED** — the Atlassian Rovo MCP is still
+   unauthorised and cannot be authorised non-interactively.
+9. **Linux was never run**; `npm test` was not run end to end (chain positions 1 and 20 are the two
+   hazardous suites).
+
+**Eleven attacks have landed across this epic, and this round found four more gaps by mutation after
+the fixes were written. This is not predicted to be the last.**
 
 #### Not done, deliberately
 
