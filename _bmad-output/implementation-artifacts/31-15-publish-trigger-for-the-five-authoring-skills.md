@@ -796,12 +796,250 @@ became a rejection rather than an escape) — a change that trades a real proper
 score. The guard is kept as a defence against a defect in `buildPublishHookBlock`; that it is
 unreachable from outside is the correct state, and is recorded here rather than dressed up.
 
+> **SUPERSEDED BY FIX ROUND 2 — the disposition stands, the reason above does not.** The second
+> independent review accepted the declination as fact and rejected its reasoning, and it was right
+> to: "`scanForCollisions` … covers exactly the set `tomllib` rejects on the combined file" was
+> **false when it was written**, and B1 is the counterexample. See **M6, RE-ARGUED** in the fix
+> round 2 section below for the reason that actually holds.
+
 **Suites and invariants re-derived at fix-round HEAD.** Story suite 100/0 exit 0. `release-gate-epic-31`
 43/0, `story-15-5-workflow-skills` 157/0, `project-layout-confluence-routing` 97/0,
 `project-layout-confluence-page-tree` 157/0, `project-layout-artifact-routing` 59/0 (with
 `_bmad-output/methodology/` absent), `project-layout-staleness-guard` 64/0 — all exit 0. I1 preflight
 41 copies, split 13-14-14, one sha256; I2 gate 9 copies, split 3-3-3, one sha256. Nothing under
 `skills/`, `lib/bmad-extension/skills/` or `lib/bmad-extension-plugin/` changed.
+
+#### FIX ROUND 2 — closing a second, independent REJECT
+
+No verdict is claimed here and the status stays `review`. This round did not write the story, the
+implementation or fix round 1. The second review re-verified fix round 1's three blockers as
+genuinely closed, and then filed **two new blockers and four non-blocking findings**. B1 was a
+**live defect in shipped code at HEAD `793b9bd`**, not a test weakness.
+
+**B1 (BLOCKING) — ma-agents wrote a file that killed the whole team layer, reported success, and
+exited 0.** `readTomlStructure` records `workflow = { … }` as a key at path `['workflow']`, and
+nothing compared a key path against a **strict prefix** of `PUBLISH_HOOK_KEY_PATH`. Measured on
+pristine HEAD, no mutation, with `_bmad/custom/<skill>.toml` containing
+`workflow = { prd_template = "assets/house-prd.md" }`:
+
+| surface | shipped behaviour |
+| --- | --- |
+| `scanForCollisions` | `[]` — no refusal |
+| `tomlProblems(next)` (the AC4(a) post-write guard) | `[]` — never fires |
+| `generatePublishHooks` | five `wrote`, `refused: false` |
+| the operator surface | *"Confluence publish trigger written … for 5 authoring skills"*, **exit 0** |
+| real `tomllib`, on the file ma-agents had just written | `Cannot overwrite a value (at line 29, column 52)` |
+| real `resolve_customization.py` | `warning:` to stderr, `{"workflow.on_complete": ""}`, **exit 0** — and the user's own `workflow.prd_template` **gone** |
+| `detectPublishHookCollisions` (the `status` surface) | `[]` — silent |
+
+That is **AC12(a)'s end state verbatim** — the entire team layer discarded at exit 0, publish and
+customization together — except ma-agents' own write created it, and every surface this story built
+to catch it said nothing.
+
+**B2 (BLOCKING) — the same blind spot in the R10 detector.** `<skill>.user.toml` containing
+`workflow = { on_complete = "MINE" }`: the resolver returns `"MINE"`, the publish is dead, exit 0,
+and `detectUserLayerScalarOverrides` returned `[]`. The `[workflow]` header and dotted spellings of
+the identical thing *were* detected; this one legal spelling was not — so the single state R10
+exists to name went unnamed.
+
+**THE FIX — a relation, not a longer list.** TOML has one namespace per file, so
+`workflow.on_complete = [ … ]` fixes **two** facts: `workflow` is a TABLE and `on_complete` is a
+VALUE. There are three ways to contradict them and the predicate covered one. `keyPathRelation(p)`
+now classifies a resolved path as `same` / strict-`prefix` / `under`, and both the key loop and the
+table loop branch on it. Two new kinds, so the remedy can be specific: `COLLISION_TABLE_IS_VALUE`
+(`workflow = <value>`) and `COLLISION_KEY_USED_AS_TABLE` (`[workflow.on_complete]`,
+`[[workflow.on_complete]]`, `workflow.on_complete.x`). R10 resolves its key path **through
+inline-table values** (`valueAtKeyPath` / `inlineTableEntries`), so array-vs-scalar is judged where
+the value actually is.
+
+**A third counterexample, found by the same differential and fixed.** A byte-order mark in **bare**
+position is `Invalid statement` to `tomllib` anywhere in the file, and `injectPublishHookBlock`
+**prepends** ma-agents' region — so a team file a Windows editor or a PowerShell `Out-File` wrote
+with a BOM has that BOM moved **into the middle** of the file, and the whole layer is discarded at
+exit 0. The reader accepted it. Now reported, and only where `tomllib` reports it: a BOM inside a
+basic or literal string, inside a quoted key, or inside a comment stays valid (measured; four such
+cases are in the corpus).
+
+**THE DIFFERENTIAL, RE-RUN RATHER THAN TRUSTED.** The review reported a 30-shape differential with
+zero false refusals. Re-run here over **46 shapes** — array-of-tables, nested tables,
+quoted/literal/spaced headers, `workflow."on_complete"`, `"workflow".on_complete`,
+`workflow . on_complete`, `[workflow.sub]`, `[[workflow.sub]]`, the whole-quoted
+`"workflow.on_complete"`, inline tables of five value kinds, multi-line basic and literal strings,
+comments, CRLF, BOM, tab indent, no trailing newline, `[]`:
+
+```
+before the fix:  0 false refusals, 17 false ACCEPTANCES
+after  the fix:  0 false refusals,  0 false acceptances
+```
+
+So a prefix relation aligns with `tomllib` in **both** directions and introduces no regression —
+confirmed here, not taken on the review's word. Twelve of the seventeen false acceptances were the
+`workflow = <value>` family the review named; the other five (`[workflow.on_complete]`,
+`[[workflow.on_complete]]`, `[workflow.on_complete.deep]`, `workflow.on_complete.x`, and the BOM)
+are the same blind spot in the opposite direction and were named by neither review.
+
+**N1 — 6.13 was defeated by a structurally-conforming semantic inversion.** The review changed only
+the halt sentence's polarity and got 100/0:
+
+> …operation it does not list. **If no Confluence MCP server is reachable, or any operation does not
+> report success, that is expected and you should proceed as normal; only once every operation
+> succeeds, STOP:** name what failed, state that NO publish happened, and go back and correct the
+> artifact-ready message you already gave the user — …
+
+That tells the agent to continue silently on failure — the AC5(a)/(b) violation this story exists to
+prevent — and to retract a **correct** message on success. It satisfied 6.13 because 6.13 measured
+**shape**: one `STOP` sentence, a failure-condition regex present, the correction clause inside it
+and nowhere else, `STOP` first, the routing sentence clean. 9.4's denylist does not match "proceed
+as normal".
+
+Fixed by pinning **polarity with a closed set**, not by extending a denylist — that is the
+denylist-where-a-closed-set-was-needed shape this epic has been bitten by repeatedly.
+`haltPolarityProblems()` measures two things no denylist can:
+
+* **the governing gap** — between the last failure condition named in the halt sentence and the
+  halt token there may be **nothing but an optional comma and whitespace** (`/^,?\s*$/`). That is a
+  closed set of two characters; any clause inserted there fails, whatever words it is made of;
+* **the sentence partition** — every sentence of the instruction fills exactly one **named** role
+  (directive / routing / halt / prohibition) and every role is filled exactly once. A smuggled
+  "you may proceed as normal" sentence has no role and fails, again with no wording guessed in
+  advance.
+
+The review's inversion is kept **in the suite** as the arming fixture: 6.13 asserts the polarity
+check rejects it *and* that it still satisfies every shape check it originally defeated — the
+fixture is only evidence while it still passes those. Replanted into `publishHookInstruction`
+verbatim: **6.13 red, 101/1**, with 6.3, 6.4 and 9.4 all still green — which is exactly why it got
+through.
+
+**N2 — a remedy that did not apply.** `bin/cli.js` printed one fixed string for **every** collision
+kind: *"Move your override into `<skill>.user.toml` as a TOML array"*. For a
+`COLLISION_DUPLICATE_TABLE` holding `prd_template`, or for `COLLISION_UNPARSEABLE`, that is not
+merely unhelpful — following it leaves the user exactly where they started. 6.7 exercised only the
+one case for which it happened to be right; this is the "remedy that did not apply" shape fix
+round 1 closed once already on the false-refusal path. `remediesFor(collisions, skill)` is now a
+**map from kind**, shared by the install/bind reporter and the `status` reporter, with a named
+fallback so a kind added without a remedy says so instead of getting a wrong sentence. New **6.14**
+enumerates the kinds **from the module's own exports** (a new kind fails there), drives each through
+the **generator** with a real file, asserts the printed remedies are pairwise **distinct**, and
+asserts each is about its own kind — dotted keys for the table and value cases, "fix the TOML" for
+the unparseable case, "not under our key" for the nesting case, re-anchoring for
+`BLOCK_NOT_AT_ROOT`, marker removal for `HALF_BLOCK` (the last two proved on the `status` surface,
+since generation heals them and they never reach the refusal).
+
+**N3 — the `fs` interception's CLAIM corrected, not the code.** The interception is **property
+patching** on `fs` / `fs.promises`, so a module that captured a function at load time
+(`const { cpSync } = require('fs')`) escapes it, and a directory-level operation
+(`fs.rmSync(dirname)`, `fs.renameSync(dir, dir2)`) names no `.user.toml` path. Behaviour is right
+either way — 3.1 proves the personal file byte-identical after a full run and 3.2 proves none is
+created, and both fail on either escape. The comment now says what 3.4 covers (`fs`-property call
+sites) and what carries the guarantee (3.1/3.2), instead of claiming "every mutating fs entry
+point".
+
+**N4 — two absolutes reworded, because both were false.** 5.1 and 5.8 are **corpus-bounded** and the
+record stated their agreement with `tomllib` as unconditional. B1 is a counterexample to 5.8 and the
+BOM is a counterexample to 5.1 — the claims were wrong, not merely over-stated. Both test headers
+now say what the test does and does not say, name the counterexample that proved it, and name the
+corpus as the whole warrant. `PREDICATE_CORPUS` grows 22 → **48** shapes and `CORPUS`'s hand-built
+set 26 → **33** (seven BOM cases, four of them VALID), so the reworded claim is also a wider one.
+
+**§14.2 / §14.3 — closed.** Both asserted `existsSync` for all five and then resolved **one** skill,
+so a `bind` or `config layout` regression that mis-routed four of five would pass both. Both now
+resolve **all five** against the `ORACLE`, require each to route to **its own** store, and require a
+clean resolver stderr. The review is right that this is redundancy rather than new coverage given
+14.1 — but §14 is the load-bearing test in this story and the redundancy is cheap: it runs against
+the project 14.1 already leaves behind. Measured value: mutant **M-l** (every skill routed to the
+system store) is caught by 14.3 either way, and by 14.2 **only** because of this change — 14.2's old
+single resolve used `bmad-prd`, whose correct store is `system`.
+
+**M6, RE-ARGUED — still DECLINED, on a reason that does not generalise.** The review accepted the
+declination as fact and rejected its reasoning, and it was right to. Fix round 1 said the guard is
+dead because `scanForCollisions` "covers exactly the set `tomllib` rejects on the combined file".
+**That was false when it was written**, and B1 is the proof. The reason that actually holds is a
+code-path one:
+
+* `tomlProblems(next)` is `readTomlStructure(next).problems`;
+* `scanForCollisions(existing)` has already run **the same reader** over the same text with only
+  ma-agents' own marker region blanked, and turns **every** problem it finds into a **blocking**
+  `COLLISION_UNPARSEABLE`. A syntactic defect in the user's own bytes therefore never reaches the
+  guard — the generator refuses first and returns;
+* what is left is text `buildPublishHookBlock` produced. Its only inputs are `skillName`,
+  `storeCliName` and `storeLabel`, and all three are ma-agents' own constants (`AUTHORING_SKILLS`,
+  and `CONFLUENCE_STORE_RECORDS[…].cliName` / `.label`, `bin/cli.js:1393-1396`). No path carries
+  user text into them, so no INPUT can make the block malformed and no input-driven test can kill
+  the mutant.
+
+Note what this argument does **not** claim: it says nothing about whether `scanForCollisions` is
+complete. That is the point. An incomplete predicate makes the guard **less** reachable, not more —
+the failure it produces is a file written and broken, which is what B1 measured, not a guard that
+fires. So B1 does not change M6's disposition. The guard is kept as the one defence against a defect
+in `buildPublishHookBlock`, the only thing upstream of it that this module owns.
+
+**MUTATION — RUN, NOT CLAIMED, AND ONE SURVIVOR TAUGHT SOMETHING.** Twenty-one mutants, each applied
+to a single file, run against the whole suite, and reverted in the same step; `git status
+--porcelain` and blob hashes checked after every batch (`lib` and `bin` end byte-identical to their
+committed blobs). The battery deliberately attacks the NEW prefix check from **both** sides —
+reverting it, over-widening it, and spelling it as a string prefix rather than a segment prefix.
+
+| mutant | verdict | killed by |
+| --- | --- | --- |
+| M-a `keyPathRelation`: drop the STRICT-PREFIX branch (B1's fix reverted) | KILLED | 96/6 — 5.3, 5.5, 5.8, 5.11, 6.14, 10.3 |
+| M-b drop the UNDER branch | KILLED | 5.8 → after hardening, 5.8 + 6.14 (M-b2) |
+| M-c relate EVERYTHING (segment comparison removed) | KILLED | 90/12 — 4.3, 4.5, 4.6, 4.7, 5.3, 5.8, 5.9, 5.10, 6.11, 7.6, 10.7, 13.2 |
+| M-d STRING prefix instead of SEGMENT prefix | KILLED | 5.8 |
+| M-e table loop back to the old `length === 1` check | **SURVIVED**, then KILLED (M-e2: 5.8 + 6.14) | see below |
+| M-f key loop back to EQUALITY only | KILLED | 98/4 — 5.3, 5.8, 5.11, 6.14 |
+| M-g exempt INLINE TABLE values from the prefix check | KILLED | 98/4 — 5.3, 5.8, 5.11, 6.14 |
+| M-h delete the BOM check | KILLED | 5.1, 5.8 |
+| M-i R10: no inline-table descent (B2's fix reverted) | KILLED | 10.12, 10.14 |
+| M-j R10: `inlineTableEntries` always returns null | KILLED | 10.12, 10.14 |
+| M-n R10: report an ARRAY inside an inline table as a scalar (over-report) | KILLED | 10.13 |
+| M-o flag any SIBLING under our table (over-refusal) | KILLED | 99/3 — 5.8, 5.9, 6.14 |
+| M-k3 ONE fixed remedy for every collision kind (N2 reverted) | KILLED | 6.14 |
+| M-q remedy map keyed by kind, every value identical | KILLED | 6.14 |
+| M-l every skill routed to the SYSTEM store (the §14 mis-route) | KILLED | 14.1, **14.2**, 14.3 |
+| the review's own N1 inversion, replanted verbatim | KILLED | 6.13 (101/1), with 6.3, 6.4 and 9.4 still green |
+| M-p relax 6.13's governing gap to "anything without a period" | KILLED | 6.13's arming assertion |
+| M-m delete 6.13's positive polarity assertion | SURVIVED — see below | — |
+
+**M-e SURVIVED, reported rather than tidied away.** Restoring the table loop's old
+`t.path.length === 1 && t.path[0] === 'workflow'` check passed **102/0**. The reason:
+`[workflow.on_complete]` followed by `x = 1` *also* produces a KEY at
+`['workflow','on_complete','x']`, which the key loop catches as `under` — so every header shape in
+the corpus was still refused through the other branch. The table branch is load-bearing only for a
+header with **nothing under it**. `tomllib` rejects all three of those beside our block
+("Cannot declare … twice" / "Cannot mutate immutable namespace"), and the corpus contained none of
+them. Three entries added, 6.14 given the header spellings explicitly, and M-e replanted: **red on
+5.8 and 6.14**.
+
+**M-m is a null result, and is labelled one.** Deleting a test's own assertion cannot be caught by
+the suite that contains it; no test asserts another test's assertions. It is listed for
+completeness, not as an open gap. What *can* be measured is whether the assertion is doing work,
+and M-p answers that: relaxing the closed set to "anything without a period" — a plausible
+loosening — is killed by 6.13's arming fixture.
+
+**Two other mutants were only caught because of corpus work done in this round**, which is a thin
+margin and is named as one. **M-d** (a `joined.startsWith()` relation) dies only because
+`workflow.on_complete_extra`, `[workflow.on_complete_extra]` and `workflowX` were added as VALID
+entries — a segment-boundary relation and a string-prefix relation are indistinguishable without
+them. **M-b** died to 5.8 alone until 6.14's nesting fixture was changed from a header to a key
+(`workflow.on_complete.mine = 1`), because a header also produces a nested key.
+
+**Suites and invariants re-derived at fix-round-2 HEAD.** Story suite **102/0** exit 0
+(`EXPECTED_TEST_COUNT` 100 → 102, deliberately: 5.11 and 6.14 are new; nothing was weakened or
+deleted). `release-gate-epic-31` 43/0, `story-15-5-workflow-skills` 157/0,
+`project-layout-confluence-routing` 97/0, `project-layout-confluence-page-tree` 157/0,
+`project-layout-artifact-routing` 59/0 (with `_bmad-output/methodology/` absent),
+`project-layout-staleness-guard` 64/0 — all exit 0. I1 preflight **41 copies, split 13-14-14, one
+sha256 `ca9bf25b…`**; I2 gate **9 copies, split 3-3-3, one sha256 `cda3d3d9…`** — both re-derived
+independently of the suite as well as by tests 11.2/11.3. No pinned number moved in this round.
+Nothing under `skills/`, `lib/bmad-extension/skills/` or `lib/bmad-extension-plugin/` changed.
+
+**Still open after this round.** (1) M-m, above — inherent, not a gap. (2) The `fs` interception's
+two escapes (N3) are documented rather than closed; 3.1/3.2 carry the guarantee. (3) Hazard C is
+unchanged: upstream `bmad-customize` still instructs the third writer to use the exact scalar form
+that replaces the publish, and only upstream can resolve that. (4) Everything about a live
+Confluence remains MOCK-VERIFIED — the Atlassian Rovo MCP is still unauthorised and cannot be
+authorised non-interactively. (5) Linux was never run; `npm test` was not run end to end (its chain
+position 1 and 20 are the two hazardous suites).
 
 #### Not done, deliberately
 
@@ -819,12 +1057,31 @@ lib/confluence-publish-hook.js                             NEW  the generator, m
                                                                 (PUBLISH_HOOK_KEY_PATH / samePath);
                                                                 readTomlStructure carries each key's raw value;
                                                                 detectUserLayerScalarOverrides (R10, read-only)
+                                                           FIX2 keyPathRelation (same / strict-prefix / under) and
+                                                                both scanForCollisions loops branching on it;
+                                                                COLLISION_TABLE_IS_VALUE (B1) and
+                                                                COLLISION_KEY_USED_AS_TABLE; valueAtKeyPath /
+                                                                inlineTableEntries so R10 resolves through an
+                                                                inline table (B2); a bare-position U+FEFF is a
+                                                                reader problem, as tomllib has it
 bin/cli.js                                                 MOD  generateConfluencePublishHooks + its 3 call sites,
                                                                 the operator report, the status detection surface,
                                                                 the require and the exports
                                                            FIX1 printUserLayerScalarOverrideReport, called from
                                                                 printPublishHookCollisionReport and exported
-test/project-layout-confluence-publish-hook.test.js        NEW  81 tests -> FIX1 100 tests
+                                                           FIX2 remediesFor() — a remedy per collision KIND,
+                                                                shared by the install/bind reporter and the
+                                                                status reporter, with a named fallback (N2)
+test/project-layout-confluence-publish-hook.test.js        NEW  81 tests -> FIX1 100 -> FIX2 102 tests
+                                                           FIX2 new 5.11 (B1 end to end) and 6.14 (per-kind
+                                                                remedies); 5.3 carries the B1 shape and states
+                                                                its claim per outcome; 6.13 gains a closed-set
+                                                                polarity check armed against the review's own
+                                                                inversion; 10.12/10.13/10.14 cover all three
+                                                                spellings of the personal override; 14.2/14.3
+                                                                resolve all five to their own stores;
+                                                                PREDICATE_CORPUS 22->48, CORPUS 26->33;
+                                                                the 3.4 and 5.1/5.8 claims corrected (N3/N4)
 test/release-gate-epic-31.test.js                          MOD  AC7.5h population 3249->3250, remainder 535->536
 package.json                                               MOD  new suite at chain position 37
 .gitattributes                                             MOD  LF pin for the two new files

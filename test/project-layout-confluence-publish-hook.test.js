@@ -1234,6 +1234,13 @@ const PREDICATE_CORPUS = new Map([
   ['a [[workflow.sub]] array-of-tables', '[[workflow.sub]]\nx = 1\n'],
   ['a root workflow = 1 UNDER a table', '[agent]\nworkflow = 1\n'],
   ['a BOM inside a comment', `# c${BOM}mt\nfoo = 1\n`],
+  // SEGMENT boundaries, not string prefixes. A relation implemented with
+  // `joined.startsWith(ours)` or `startsWith(ours + '.')` relates these to
+  // `workflow.on_complete`; `tomllib` does not, and refusing over one blocks an
+  // install.
+  ['a sibling whose NAME extends ours', 'workflow.on_complete_extra = 1\n'],
+  ['a table whose name extends ours', '[workflow.on_complete_extra]\nx = 1\n'],
+  ['a root key whose name extends the table', 'workflowX = 1\n'],
   // ── INVALID beside our block. An acceptance here DISCARDS THE TEAM LAYER. ──
   ['INVALID a second workflow.on_complete', 'workflow.on_complete = "x"\n'],
   ['INVALID a [workflow] table', '[workflow]\nfoo = 1\n'],
@@ -1259,6 +1266,16 @@ const PREDICATE_CORPUS = new Map([
   ['INVALID a [workflow.on_complete] table', '[workflow.on_complete]\nx = 1\n'],
   ['INVALID a [[workflow.on_complete]] array-of-tables', '[[workflow.on_complete]]\nx = 1\n'],
   ['INVALID a [workflow.on_complete.deep] table', '[workflow.on_complete.deep]\nx = 1\n'],
+  // EMPTY headers, added because a MUTANT SURVIVED without them. Restoring the
+  // table loop's old `t.path.length === 1` check passed 102/0: a header WITH a
+  // key under it ALSO produces a key at `workflow.on_complete.<x>`, which the
+  // key loop catches as `under`, so every header shape above was still refused
+  // through the other branch. The table branch is load-bearing only for a header
+  // with NOTHING under it — and `tomllib` rejects all three of these beside our
+  // block ("Cannot declare … twice" / "Cannot mutate immutable namespace").
+  ['INVALID an EMPTY [workflow.on_complete] table', '[workflow.on_complete]\n'],
+  ['INVALID an EMPTY [[workflow.on_complete]] array-of-tables', '[[workflow.on_complete]]\n'],
+  ['INVALID an EMPTY [workflow.on_complete.deep] table', '[workflow.on_complete.deep]\n'],
   ['INVALID a key nested under our own', 'workflow.on_complete.x = 1\n'],
   ['INVALID a quoted spelling of our key', 'workflow."on_complete" = "x"\n'],
   ['INVALID a spaced dotted spelling of our key', 'workflow . on_complete = "x"\n'],
@@ -1926,7 +1943,11 @@ test('6.14 AC5(a) [N2] the printed REMEDY is specific to the collision KIND, for
     [hook.COLLISION_DUPLICATE_TABLE, '[workflow]\nprd_template = "assets/house.md"\n'],
     [hook.COLLISION_UNPARSEABLE, 'this is not toml at all\n'],
     [hook.COLLISION_TABLE_IS_VALUE, WORKFLOW_AS_VALUE],
-    [hook.COLLISION_KEY_USED_AS_TABLE, '[workflow.on_complete]\nx = 1\n'],
+    // A KEY nested under ours, not a header: the header spelling is also caught
+    // by the key loop (a header with a key under it produces one), so using a
+    // header here would leave the key loop's `under` branch resting on 5.8
+    // alone. The header spelling is asserted separately below.
+    [hook.COLLISION_KEY_USED_AS_TABLE, 'workflow.on_complete.mine = 1\n'],
   ]);
   const seenTexts = new Map();
   for (const [kind, content] of FILES) {
@@ -1977,6 +1998,21 @@ test('6.14 AC5(a) [N2] the printed REMEDY is specific to the collision KIND, for
   assert.ok(/ARRAY of instructions/.test(remedies.get(hook.COLLISION_KEY_USED_AS_TABLE)),
     `nesting under our key is fixed by not nesting under it:\n` +
     `${remedies.get(hook.COLLISION_KEY_USED_AS_TABLE)}`);
+
+  // The HEADER spellings of that same kind, including the EMPTY ones a mutation
+  // run showed were reachable only through the table branch.
+  for (const header of ['[workflow.on_complete]\nx = 1\n', '[workflow.on_complete]\n',
+    '[[workflow.on_complete]]\n', '[workflow.on_complete.deep]\n']) {
+    const fx = fixture();
+    const skill = hook.AUTHORING_SKILLS[0];
+    fs.writeFileSync(teamFile(fx, skill), header, 'utf-8');
+    const r = generate(fx, BOTH_CONFLUENCE).results.find((x) => x.skill === skill);
+    assert.strictEqual(r.outcome, hook.HOOK_REFUSED_COLLISION,
+      `${JSON.stringify(header)} must be refused; got ${r.outcome}`);
+    assert.ok(r.collisions.some((c) => c.kind === hook.COLLISION_KEY_USED_AS_TABLE),
+      `${JSON.stringify(header)} must be reported as the nesting kind; got ` +
+      `${JSON.stringify(r.collisions.map((c) => c.kind))}`);
+  }
 
   // The two NON-BLOCKING kinds never reach the generator's report (they heal on
   // generation), so their remedies are proved on the `status` surface, which is
