@@ -283,13 +283,25 @@ repository's changelog — which is **not** part of the npm package.
   exercised against a stubbed tool context. The MCP-*absent* branch — the
   fail-loud path described above — is the default state and was exercised for
   real.
-- **No shipped skill's purpose is to publish a knowledge store to Confluence.**
-  `confluence-plan` enumerates what a publish would do, and the shipped routing
-  block tells an agent how to perform one, but the skills that would author the
-  artifacts (`bmad-prd`, `bmad-architecture`, `bmad-create-epics-and-stories`,
-  `bmad-ux`, `bmad-product-brief`) are not shipped by this package, and there is
-  no publish command. Page *creation* is therefore not demonstrable from this
-  package alone.
+- **The publish trigger reaches the authoring skills through a file three
+  parties can write.** `_bmad/custom/<skill>.toml` is written by ma-agents, by a
+  human, and by the upstream `bmad-customize` skill. TOML forbids duplicate
+  keys, and the upstream resolver treats a parse error in that layer as a
+  *warning* — it returns an empty layer and **exits 0** — so a second writer
+  adding its own `on_complete` silently discards the publish hook and every
+  other override in the file. ma-agents refuses to write over a collision it can
+  detect and `ma-agents status` names it, but **that check is a partial scanner,
+  not a full TOML parser**: it can miss a malformation and stay silent. The
+  durable fix belongs upstream in `resolve_customization.py`, which is replaced
+  on every install, so it cannot be patched from here.
+- **A bare non-ASCII-whitespace line authored by a user is not detected.** A
+  line containing only U+00A0, U+2007 or U+3000 makes the file invalid to the
+  real parser while ma-agents' reader accepts it; the customization layer is
+  then dead at exit 0 with nothing reported. Such a file is already invalid
+  before ma-agents touches it — this is a detection gap, not corruption. A
+  byte-order mark in the same position *is* caught.
+- **This release was verified on Windows only.** Linux and CI were never run, so
+  every cross-platform claim is inference rather than a result.
 - **`_bmad-output/project-layout.yaml` carries a `generated:` date**, so two
   runs of the same answers are byte-identical only within the same calendar day.
   `ma-agents bind` declines to rewrite the file on a no-edit re-run precisely so

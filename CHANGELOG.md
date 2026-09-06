@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.18.0] - 2026-08-24
+## [3.18.0] - 2026-09-06
 
 Federated knowledge stores, an authoritative committed project binding, and a
 global install that does no project-scoped work (Epic 31 / PRD capability F26 /
@@ -57,6 +57,24 @@ close.
   to a root page it created, so later runs address the page directly instead of
   re-resolving it by title. It refuses to record when the binding was retitled
   between the plan and the write-back, and reports the refusal by name.
+- **The five BMAD authoring skills now publish to a Confluence-backed store.**
+  On install or `bind`, ma-agents generates `_bmad/custom/<skill>.toml` for
+  `bmad-prd`, `bmad-architecture`, `bmad-create-epics-and-stories`, `bmad-ux`
+  and `bmad-product-brief`, setting the upstream-sanctioned `on_complete` hook
+  to run the publish path for the store that owns each artifact. This uses the
+  customization channel those skills already resolve at activation, so **no
+  skill document is edited** — the 41-copy preflight and the 9-copy routing gate
+  are untouched. A `file-system` store gets no hook, no prompt and no message.
+  The generated block is marker-delimited and idempotent: anything outside the
+  markers is yours and is preserved, and a re-run changes nothing. Because the
+  hook runs *after* a workflow has already told the user the artifact is ready,
+  its text instructs the agent to correct that message if the publish halts.
+  (FR255, FR256, FR262, FR264)
+- **`ma-agents status` names two silent-failure states** it can detect in the
+  customization layer: a collision that would make the team layer unparseable
+  (which would discard the publish hook *and* the user's own overrides), and a
+  scalar `on_complete` override in the personal layer that replaces the hook.
+  Both otherwise fail silently at exit 0. (FR262)
 - **`ma-agents status` reports the active install scope**, and for a global
   install lists which projects on this machine have been bound and whether a
   readable `project-layout.yaml` was found at each root. (FR253)
@@ -160,21 +178,35 @@ close.
   the implementation or to any review, so the MCP-present branches were
   exercised against a stubbed tool context. The MCP-*absent* branch — the
   fail-loud path — is the default state and was exercised for real.
-- **No shipped skill's purpose is to publish a knowledge store to Confluence.**
-  `confluence-plan` enumerates what a publish would do, and the shipped routing
-  block tells an agent how to perform one, but the skills that would author the
-  artifacts (`bmad-prd`, `bmad-architecture`, `bmad-create-epics-and-stories`,
-  `bmad-ux`, `bmad-product-brief`) are not shipped by this package, and there is
-  no publish command. Page *creation* is therefore not demonstrable from this
-  package alone.
+- **The publish trigger reaches the authoring skills through a file three
+  parties can write.** `_bmad/custom/<skill>.toml` is written by ma-agents, by a
+  human, and by the upstream `bmad-customize` skill. TOML forbids duplicate
+  keys, and the upstream resolver treats a parse error in that layer as a
+  *warning* — it returns an empty layer and **exits 0** — so a second writer
+  adding its own `on_complete` silently discards the publish hook and every
+  other override in the file. ma-agents refuses to write over a collision it can
+  detect and `ma-agents status` names it, but **that check is a partial scanner,
+  not a full TOML parser**: it can miss a malformation and stay silent. The
+  durable fix belongs upstream in `resolve_customization.py`, which is replaced
+  on every install, so it cannot be patched from here.
+- **A bare non-ASCII-whitespace line authored by a user is not detected.** A
+  line containing only U+00A0, U+2007 or U+3000 makes the file invalid to the
+  real parser while ma-agents' reader accepts it; the customization layer is
+  then dead at exit 0 with nothing reported. Such a file is already invalid
+  before ma-agents touches it — this is a detection gap, not corruption. A
+  byte-order mark in the same position *is* caught.
 - **`_bmad-output/project-layout.yaml` carries a `generated:` date**, so two
   runs of the same answers are byte-identical only within the same calendar day.
   `ma-agents bind` declines to rewrite the file on a no-edit re-run precisely so
   that this cannot present as a spurious change.
 - **`npm test` is not green on Windows**, for nine reasons that predate this
-  release and one that does not. See
-  `_bmad-output/implementation-artifacts/bug-npm-test-windows-suite-health-chain.md`
-  and `_bmad-output/implementation-artifacts/bug-31-4-preflight-block-breaks-story-15-5-verbatim-invariant.md`.
+  release. The one this epic introduced — the Story 31.4 preflight block
+  breaking Story 15.5's verbatim invariant — **is resolved**: the block now
+  lives in the source workflow files, so the converted and source copies agree
+  and that suite is green. See
+  `_bmad-output/implementation-artifacts/bug-npm-test-windows-suite-health-chain.md`.
+- **This release was verified on Windows only.** Linux and CI were never run, so
+  every cross-platform claim here is inference rather than a result.
 
 ## [3.17.1] - 2026-07-16
 
