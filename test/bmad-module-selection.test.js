@@ -13,6 +13,12 @@
  *   - lib/bmad.getInstalledBmadModules() — _bmad/<id>/ presence detection
  *   - lib/bmad.resolveBmadModules() — bmm-force, dedupe, validation
  *   - bin/cli.parseFlags(--bmad-modules ...) — CSV capture, default empty
+ *
+ * FR123 (amended 2026-08-02) then narrowed the DEFAULT install set from "every
+ * non-retired bundled module" to bmm+tea+bmb+cis, leaving gds and wds bundled
+ * but not installed unless asked for. The final section covers that, with the
+ * expectation parsed out of the PRD shard rather than restated here — see the
+ * long note above it for why a restated expectation is worth nothing.
  */
 'use strict';
 
@@ -443,16 +449,297 @@ test('CSV with whitespace from --bmad-modules normalises correctly', () => {
     }
   });
 
-  await testAsync('27.13 no-flag run with no persisted set installs everything (back-compat default)', async () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-27-13-'));
+  // ─── FR123 (amended 2026-08-02) — the DEFAULT INSTALL SET ───────────────────
+  //
+  // WHY THE ORACLE IS PARSED OUT OF THE PRD AND NOT WRITTEN DOWN HERE.
+  //
+  // The assertion this section replaces was, in effect,
+  // `deepStrictEqual(selectBmadModules(), getInstallableBmadModules())` — the
+  // test asked the code what the answer was and then checked the code against
+  // its own answer. It passed for every possible default set, which is why
+  // `wds` reached a Copilot+Cline user's project root as a five-folder
+  // `design-artifacts/` tree with a green suite standing behind it.
+  //
+  // The oracle below is the requirement itself, read from the PRD shard at
+  // runtime. The PRD is authored by the PM, lives outside `lib/` and `bin/`,
+  // and nothing in the product reads it — so it cannot be edited by a change to
+  // the implementation, and the expectation cannot drift into agreement with a
+  // wrong default. Change `DEFAULT_BMAD_MODULE_IDS` without changing FR123 and
+  // these tests go red; that is the whole point of the arrangement.
+  //
+  // The parser takes MEMBERSHIP from the PRD prose. The CANDIDATE UNIVERSE (the
+  // ids it is willing to recognise) comes from the bundle, because prose has no
+  // other way to be tokenised — but a module the PRD does not name is never
+  // admitted, so the direction that matters is not derived from the code.
+
+  const PRD_SHARD = path.join(
+    __dirname, '..', '_bmad-output', 'planning-artifacts', 'prd',
+    'capabilities', 'bmad-integration-and-bundling.md'
+  );
+
+  function readFrLine(id) {
+    const text = fs.readFileSync(PRD_SHARD, 'utf8');
+    const line = text.split(/\r?\n/).find(l => l.trim().startsWith(`- ${id}:`));
+    assert.ok(line, `${id} not found in ${PRD_SHARD} — the oracle for this suite is missing`);
+    return line;
+  }
+
+  // Every module id this bundle knows about — the tokens the parser may find.
+  const BUNDLED_IDS = bmad.getInstallableBmadModules().map(m => m.id);
+
+  function idsIn(span) {
+    return BUNDLED_IDS.filter(id => new RegExp(`\\b${id}\\b`).test(span));
+  }
+
+  /** The set FR123 names as the default INSTALL set. */
+  function fr123DefaultSet() {
+    const fr123 = readFrLine('FR123');
+
+    // Guard against a stale PRD: if the pre-amendment wording is still there,
+    // the oracle is not the one this suite exists to enforce and every
+    // assertion below would be meaningless.
+    assert.ok(
+      !/default install set is \*\*every non-retired module\*\*/.test(fr123),
+      'FR123 still carries the pre-amendment "every non-retired module" default — ' +
+      'the PRD amendment this suite depends on has been reverted'
+    );
+
+    const span = fr123.match(
+      /the default install set is (.*?) from the bundled cache manifest/
+    );
+    assert.ok(span, 'FR123 no longer states the default install set in a parseable form');
+    const found = idsIn(span[1]);
+    assert.ok(found.length >= 2,
+      `FR123's default-set clause named ${found.length} known module(s) — parser is not matching`);
+    return found;
+  }
+
+  /** The modules FR123 names as bundled-but-not-default. */
+  function fr123NonDefaultSet() {
+    const fr123 = readFrLine('FR123');
+    const span = fr123.match(
+      /The two design-studio modules (.*?) are \*\*bundled but not installed by default\*\*/
+    );
+    assert.ok(span, 'FR123 no longer states the bundled-but-not-default modules in a parseable form');
+    const found = idsIn(span[1]);
+    assert.strictEqual(found.length, 2,
+      `FR123 says "the two design-studio modules" but named ${found.length}: ${found.join(', ')}`);
+    return found;
+  }
+
+  await testAsync('AC1 a fresh no-flag install resolves exactly the set FR123 names', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-'));
     try {
-      const installable = bmad.getInstallableBmadModules().filter(m => !m.retired).map(m => m.id);
+      const expected = fr123DefaultSet();
       const result = await selectBmadModules({ projectRoot: tmp });
-      assert.deepStrictEqual([...result].sort(), [...installable].sort(),
-        'no persisted set → install every available module');
+      assert.deepStrictEqual([...result].sort(), [...expected].sort(),
+        `a fresh default install must resolve exactly FR123's default set ` +
+        `(${expected.join(', ')}), got ${result.join(', ')}`);
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }
+  });
+
+  await testAsync("AC1 the shipped DEFAULT_BMAD_MODULE_IDS constant is FR123's set", async () => {
+    // Same oracle, applied one layer lower: catches a divergence between the
+    // constant and what selectBmadModules actually hands to bmad-method.
+    assert.deepStrictEqual(
+      [...bmad.DEFAULT_BMAD_MODULE_IDS].sort(),
+      [...fr123DefaultSet()].sort()
+    );
+    assert.deepStrictEqual(
+      [...bmad.NON_DEFAULT_BMAD_MODULE_IDS].sort(),
+      [...fr123NonDefaultSet()].sort()
+    );
+  });
+
+  await testAsync('AC1 every bundled module is either default or explicitly non-default', async () => {
+    // Closes the gap a two-set check leaves open: a newly bundled module that
+    // FR123 classifies neither way would otherwise slip through unnoticed —
+    // exactly the silent growth the old "everything in the manifest" default
+    // produced.
+    const classified = [...fr123DefaultSet(), ...fr123NonDefaultSet()].sort();
+    const installable = bmad.getInstallableBmadModules()
+      .filter(m => !m.retired).map(m => m.id).sort();
+    assert.deepStrictEqual(classified, installable,
+      'a bundled module is not classified by FR123 (or FR123 names one that is not bundled)');
+  });
+
+  await testAsync('AC2 no module in the default set scaffolds design-artifacts/', async () => {
+    // The `design-artifacts/` tree is materialised by upstream's
+    // createModuleDirectories() from a module.yaml `directories:` block. Check
+    // the declaration, which is the actual cause, rather than the module name.
+    const cacheRoot = path.join(__dirname, '..', 'lib', 'bmad-cache');
+
+    function directoriesBlock(id) {
+      for (const rel of [path.join(id, 'src', 'module.yaml'), path.join(id, 'skills', 'module.yaml')]) {
+        const p = path.join(cacheRoot, rel);
+        if (fs.existsSync(p)) {
+          const m = fs.readFileSync(p, 'utf8').match(/^directories:\r?\n((?:[ \t]+-[ \t]+.*\r?\n)+)/m);
+          return m ? m[1] : '';
+        }
+      }
+      return ''; // bmm ships inside bmad-method, not in the bundled cache
+    }
+
+    const scaffolders = bmad.getInstallableBmadModules()
+      .map(m => m.id)
+      .filter(id => /design_artifacts|design-artifacts/.test(directoriesBlock(id)));
+
+    // Teeth: if nothing in the bundle declares it, the filter above proves
+    // nothing and the assertion below would pass vacuously.
+    assert.ok(scaffolders.length > 0,
+      'no bundled module declares a design-artifacts directory — the AC2 check has no teeth');
+
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-'));
+    try {
+      const resolved = await selectBmadModules({ projectRoot: tmp });
+      const offenders = resolved.filter(id => scaffolders.includes(id));
+      assert.deepStrictEqual(offenders, [],
+        `a default install resolves ${offenders.join(', ')}, which scaffold design-artifacts/`);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC4 --yes with no --bmad-modules lands on the default set, prompt-free', async () => {
+    // Drives the real flag parser with the real non-interactive argv, then
+    // feeds exactly what the installer feeds selectBmadModules (bin/cli.js
+    // Step 3.5). Targeted on purpose: test/yes-flag.test.js drives a full
+    // install and dirties hundreds of paths.
+    const flags = parseFlags(['install', '--yes', '--force']);
+    assert.strictEqual(flags.yesFlag, true);
+    assert.strictEqual(flags.bmadModulesFlag, '', '--yes must not synthesise a module CSV');
+    assert.strictEqual(flags.bmadModulesPrompt, false,
+      '--yes must not reach the multiselect branch — that branch is the only one that prompts');
+
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-yes-'));
+    try {
+      const result = await selectBmadModules({
+        bmadModulesFlag: flags.bmadModulesFlag,
+        bmadModulesPrompt: flags.bmadModulesPrompt,
+        projectRoot: tmp,
+      });
+      assert.deepStrictEqual([...result].sort(), [...fr123DefaultSet()].sort(),
+        "--yes must resolve FR123's default set");
+      assert.deepStrictEqual([...getBmadModules(tmp)].sort(), [...fr123DefaultSet()].sort(),
+        'the --yes resolution is persisted like any other');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC3 an explicit --bmad-modules selection naming wds still wins', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-wds-'));
+    try {
+      const flags = parseFlags(['install', '--bmad-modules', 'wds', '--yes']);
+      assert.strictEqual(flags.bmadModulesFlag, 'wds');
+      const result = await selectBmadModules({
+        bmadModulesFlag: flags.bmadModulesFlag,
+        bmadModulesPrompt: flags.bmadModulesPrompt,
+        projectRoot: tmp,
+      });
+      assert.deepStrictEqual(result, ['bmm', 'wds'],
+        'an explicit selection overrides the default, bmm force-included');
+
+      // The literal argv the installer hands to bmad-method.
+      const cmd = bmad.buildBmadArgs({
+        projectRoot: tmp,
+        modules: result,
+        tools: ['claude-code'],
+      });
+      assert.ok(/--modules bmm,wds\b/.test(cmd),
+        `the bmad-method command must carry --modules bmm,wds, got: ${cmd}`);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC3 selecting a non-default module still installs it from the bundle, offline', async () => {
+    // NOT "the cache directory contains a wds folder". This runs the installer's
+    // real cache-staging step — lib/bmad.prePopulateBmadCache(), the step that
+    // makes an air-gapped install possible — with HOME redirected at a temp
+    // directory, and then asserts the selected module arrived with a usable
+    // payload. No network is reachable from that function: it is fs copy only.
+    const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-home-'));
+    const realHomedir = os.homedir;
+    try {
+      os.homedir = () => tmpHome;
+      await bmad.prePopulateBmadCache();
+      const staged = path.join(tmpHome, '.bmad', 'cache', 'external-modules');
+
+      for (const id of bmad.NON_DEFAULT_BMAD_MODULE_IDS) {
+        const modDir = path.join(staged, id);
+        assert.ok(fs.existsSync(modDir),
+          `${id} is bundled-but-not-default; it must still stage for an offline install`);
+        const payload = fs.readdirSync(modDir).filter(e => !e.startsWith('.'));
+        assert.ok(payload.length > 0, `${id} staged as an empty directory — not installable`);
+      }
+
+      // And the same step stages the default set, so this is not an assertion
+      // that everything trivially lands.
+      for (const id of bmad.DEFAULT_BMAD_MODULE_IDS.filter(m => m !== 'bmm')) {
+        assert.ok(fs.existsSync(path.join(staged, id)), `${id} must stage too`);
+      }
+    } finally {
+      os.homedir = realHomedir;
+      fs.rmSync(tmpHome, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC6 a project that already has wds keeps it on a no-flag re-run', async () => {
+    // Non-destructive migration. The narrowed default applies to NEW installs;
+    // an update run over an existing project passes this same resolved list to
+    // bmad.updateBmad, so dropping wds here is how an existing user would lose
+    // it. This project predates bug 27.13's persistence — `_bmad/` on disk is
+    // the only record of what was chosen.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-existing-'));
+    try {
+      for (const id of ['bmm', 'tea', 'bmb', 'cis', 'gds', 'wds']) {
+        fs.mkdirSync(path.join(tmp, '_bmad', id), { recursive: true });
+      }
+      assert.strictEqual(getBmadModules(tmp), undefined, 'no persisted selection, by construction');
+
+      const result = await selectBmadModules({ projectRoot: tmp });
+      assert.ok(result.includes('wds'),
+        'an existing wds install must not be narrowed away by the new default');
+      assert.ok(result.includes('gds'), 'nor an existing gds install');
+      assert.deepStrictEqual([...result].sort(), ['bmb', 'bmm', 'cis', 'gds', 'tea', 'wds']);
+
+      // And the run migrates the project onto 27.13's durable record.
+      assert.ok(getBmadModules(tmp).includes('wds'), 'the on-disk set is now persisted');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC6 an explicit deselection still beats the on-disk set', async () => {
+    // The disk probe must not become a second install-everything default: a
+    // user who explicitly drops wds must have it stay dropped even though
+    // `_bmad/wds/` is still on disk from the previous install.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-deselect-'));
+    try {
+      for (const id of ['bmm', 'tea', 'wds']) {
+        fs.mkdirSync(path.join(tmp, '_bmad', id), { recursive: true });
+      }
+      const first = await selectBmadModules({ bmadModulesFlag: 'tea', projectRoot: tmp });
+      assert.deepStrictEqual(first, ['bmm', 'tea']);
+
+      const second = await selectBmadModules({ projectRoot: tmp });
+      assert.ok(!second.includes('wds'),
+        'persisted deselection must win over the on-disk probe');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC1 a degraded bundle falls back to bmm rather than throwing', async () => {
+    // getInstallableBmadModules() returns [bmm] alone when the cache manifest
+    // is unreadable. A default set naming tea/bmb/cis would then be rejected by
+    // resolveBmadModules as unknown ids and take the installer down in the
+    // module-selection step.
+    assert.deepStrictEqual(bmad.getDefaultBmadModules([{ id: 'bmm' }]), ['bmm']);
+    assert.deepStrictEqual(bmad.getDefaultBmadModules(['bmm', 'tea']), ['bmm', 'tea']);
   });
 
   // ─── Summary ──────────────────────────────────────────────────────────────
