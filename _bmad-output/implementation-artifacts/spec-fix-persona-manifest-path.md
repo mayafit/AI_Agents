@@ -2,7 +2,7 @@
 title: 'Restore the sqa/ segment and the "if it exists" guard in ma-agent-* Critical Action 1'
 type: 'bugfix'
 created: '2026-09-12'
-status: 'ready-for-dev' # draft | ready-for-dev | in-progress | in-review | done
+status: 'in-review' # draft | ready-for-dev | in-progress | in-review | done
 review_loop_iteration: 0
 context: []
 ---
