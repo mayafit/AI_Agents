@@ -6,7 +6,7 @@ title: The default --modules set installs every bundled module, so wds installs 
 
 # Bug: The default `--modules` set installs every bundled module, so `wds` installs for everyone and scaffolds `design-artifacts/` in projects that never asked for UX tooling
 
-**Status:** ready-for-dev (PRD amendment landed 2026-08-02)
+**Status:** review (implemented 2026-09-12 on `fix/wds-default-module-set`; no verdict claimed — an independent review follows)
 **Severity:** medium
 **Affected Component:** `bin/cli.js#selectBmadModules` (the no-flag default branch); `lib/bmad.js#getInstallableBmadModules`; requirement **FR123** (and **FR249**, which reuses FR123's set)
 **Classification:** REQUIREMENTS CHANGE (needs a PRD amendment) + a follow-on code change
@@ -290,6 +290,58 @@ wds's three agents, its skills, its Cline workflow wrappers, and its config.
 - Severity rationale: **Medium**. No data loss and no broken install, but it installs
   substantial unwanted surface area into every project by default, leaves untracked
   litter at the repo root, and can only be corrected by a requirements change.
+
+## Implementation record — 2026-09-12, branch `fix/wds-default-module-set`
+
+Implemented; **no verdict claimed**, an independent review follows. Spec:
+`spec-bug-wds-default-module-set.md`.
+
+**Changed**
+
+- `lib/bmad.js:530-590` — `DEFAULT_BMAD_MODULE_IDS = ['bmm','tea','bmb','cis']`,
+  `NON_DEFAULT_BMAD_MODULE_IDS = ['gds','wds']`, `getDefaultBmadModules(available)`
+  (intersected with the installable set, so a missing cache manifest degrades to `[bmm]`
+  instead of throwing out of `resolveBmadModules`). All three exported.
+- `bin/cli.js#selectBmadModules` branch 3 — resolution order is now: persisted selection
+  (27.13) → modules already present under `_bmad/` → FR123's default set.
+- `bin/cli.js#selectBmadModules` branch 2 — the multiselect still offers **every** bundled
+  module; only its initial check state narrowed to the default set, so Enter equals the
+  no-flag default instead of silently reinstating install-everything.
+- `--help`, the flag-parse comment, the function contract and the call-site comment.
+- `test/bmad-module-selection.test.js` — 37 → 46 tests; the expectation is parsed from
+  FR123 in the PRD shard at runtime, not restated in the test.
+
+**Disposition of the ACs in this file**
+
+- AC1, AC2, AC3, AC6, AC7, AC8, AC10 — covered.
+- **AC4 partially**: bare `--bmad-modules` still opens the multiselect and still offers
+  every bundled module, but the initial check state derives from FR123's default set, **not**
+  from each module's `default_selected` field. Honouring `default_selected` literally would
+  pre-check `bmm` alone and contradict FR123's amended default. `default_selected` is still
+  read nowhere in `bin/`, `lib/` or `scripts/`.
+- **AC5 NOT DONE — deferred.** "Interactive installs get the module question without needing
+  a CLI flag" (Recommended Direction Part B) is a new wizard question: a separate,
+  independently shippable deliverable, not required by FR123's amended text, and out of
+  scope for this fix. The multiselect remains reachable only via bare `--bmad-modules`.
+- **AC9 partially**: an air-gapped `--bmad-modules wds` install is covered as far as the
+  bundled-cache staging step (`prePopulateBmadCache` run for real against a redirected HOME,
+  an fs-only path). A full `--network none` container install was not re-run.
+
+**Two defects found in this file and in FR123 while implementing** — see the review report;
+neither changes the decision:
+
+1. FR123's rationale says gds and wds "are the only bundled modules that scaffold
+   directories at the project root (`design-artifacts/` via **their** `directories:`
+   blocks)". Only `wds` declares `{design_artifacts}`
+   (`lib/bmad-cache/wds/src/module.yaml:126-128`). `gds`'s block
+   (`lib/bmad-cache/gds/src/module.yaml`) lists `{planning_artifacts}`,
+   `{implementation_artifacts}` and `{project_knowledge}` — all of which `bmm` declares too,
+   so `gds` adds no root directory that a default install does not already get. Excluding
+   `gds` is still sound (it is a domain-specific game-dev module), but the stated reason is
+   wrong for it.
+2. This file's "Affected Files" section cites `bin/cli.js:889-961` and
+   `lib/bmad.js:526-545`. On `feature/epic-31` those are `bin/cli.js:3687-3757` and
+   `lib/bmad.js:546-565` — the line numbers date from the branch the bug was filed against.
 
 ## Notes
 
