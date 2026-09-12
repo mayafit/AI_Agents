@@ -2,7 +2,7 @@
 title: 'Antigravity path divergence — one skill tree, and no tree the patcher cannot see'
 type: 'bugfix'
 created: '2026-09-12'
-status: 'in-progress'
+status: 'in-review'
 review_loop_iteration: 0
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/bug-antigravity-path-divergence-creates-a-second-unpatched-skill-tree.md'

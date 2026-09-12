@@ -6,7 +6,7 @@ title: ma-agents and bmad-method disagree on Antigravity's skills directory, so 
 
 # Bug: two Antigravity skill trees, and the second one is not patched
 
-**Status:** backlog
+**Status:** review
 **Severity:** high (a shipped behaviour — the on-prem phase prefix — is silently absent from a tree agents actually read)
 **Affected Component:** `lib/agents.js:245` (`skillsDir: '.antigravity/skills'`); upstream `node_modules/bmad-method/tools/installer/ide/platform-codes.yaml:35` (`target_dir: .agent/skills`); `lib/bmad.js:1386-1466` (`applyOnPremPhasePrefixToDeployedSkills`)
 **Classification:** CODE FIX. Same shape as bug 27.16, one directory over.
