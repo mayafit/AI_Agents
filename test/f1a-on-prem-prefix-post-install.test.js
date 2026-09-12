@@ -17,6 +17,15 @@
  *   7. Source customize file missing → skip that persona only.
  *   8. Persona without on_prem_phase_prefix key → skip (the pass is opt-in).
  *   9. SKILL.md without YAML frontmatter → block prepended.
+ *
+ * Bug `antigravity-path-divergence` extends the contract:
+ *  10. The target set is derived from the deployed trees ON DISK, not from the
+ *      TOOL_SKILL_DIRS registry list — a tree ma-agents' registry does not name
+ *      (upstream bmad-method wrote `.agent/skills` for Antigravity while our
+ *      registry said `.antigravity/skills`) is patched like any other, proven
+ *      by injection count AND per-persona sha256 digest across every tree.
+ *  11. Discovery is confined to dot-prefixed tool containers, so a SOURCE
+ *      checkout's own `lib/.../skills/` can never be rewritten by the patcher.
  */
 'use strict';
 
@@ -24,9 +33,11 @@ const assert = require('assert');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 
 const {
     applyOnPremPhasePrefixToDeployedSkills,
+    discoverDeployedSkillTrees,
     injectOnPremPrefixBlock,
     buildOnPremPrefixBlock,
     PERSONA_SKILL_MAP,
@@ -34,6 +45,15 @@ const {
     ON_PREM_PREFIX_MARKER_BEGIN,
     ON_PREM_PREFIX_MARKER_END,
 } = require('../lib/bmad');
+const { getAllAgents } = require('../lib/agents');
+
+// A deployed tree named by NOTHING in ma-agents — the shape of the bug: BMAD
+// (or any other writer) creates it, our registry has never heard of it.
+const UNREGISTERED_TREE = path.join('.some-unregistered-tool', 'skills');
+
+function sha256(filePath) {
+    return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
 
 // ── Test harness ──────────────────────────────────────────────────────────
 let passed = 0;
@@ -431,6 +451,141 @@ async function runAll() {
             'bmm-pm.customize.yaml must ship a non-empty on_prem_phase_prefix');
         assert.ok(doc.on_prem_phase_prefix.includes('/no_think'),
             'planning persona prefix must contain /no_think');
+    });
+
+    // ── Bug `antigravity-path-divergence` — disk-derived patch targets ──────
+
+    // 16. AC2: every deployed persona in EVERY tree that exists carries the
+    //     prefix — including a tree ma-agents' registry has never heard of.
+    //     Proven by injection count per tree AND by per-persona sha256 digest,
+    //     not by spot check.
+    await test('AC2 an UNREGISTERED deployed tree is patched — count + digest across every tree', async () => {
+        const allTrees = [...TOOL_SKILL_DIRS, UNREGISTERED_TREE];
+        const { projectRoot, customizeSrc } = buildFixture({ tools: allTrees });
+        try {
+            // Precondition — the extra tree really is named by nothing of ours.
+            const normalized = UNREGISTERED_TREE.replace(/\\/g, '/');
+            assert.ok(
+                !TOOL_SKILL_DIRS.map(d => d.replace(/\\/g, '/')).includes(normalized),
+                'fixture tree must NOT be in TOOL_SKILL_DIRS or the test proves nothing',
+            );
+            assert.ok(
+                !getAllAgents().some(a => String(a.skillsDir).replace(/\\/g, '/') === normalized),
+                'fixture tree must NOT be any agent skillsDir or the test proves nothing',
+            );
+
+            const results = await applyOnPremPhasePrefixToDeployedSkills(
+                projectRoot, 'on-prem', customizeSrc,
+            );
+            const injected = results.filter(r => r.injected);
+            const personaDirs = Object.values(PERSONA_SKILL_MAP);
+
+            // Count — every tree, every persona.
+            assert.strictEqual(injected.length, allTrees.length * personaDirs.length,
+                `expected ${allTrees.length * personaDirs.length} injections across ` +
+                `${allTrees.length} trees, got ${injected.length}`);
+            for (const toolRel of allTrees) {
+                const n = injected.filter(r => r.tool === toolRel).length;
+                assert.strictEqual(n, personaDirs.length,
+                    `${toolRel}: expected ${personaDirs.length} injections, got ${n}`);
+            }
+
+            // Digest — the same persona is byte-identical in every tree, so the
+            // unregistered tree cannot be "present but differently patched".
+            for (const dirName of personaDirs) {
+                const digests = new Set(allTrees.map(
+                    t => sha256(path.join(projectRoot, t, dirName, 'SKILL.md'))));
+                assert.strictEqual(digests.size, 1,
+                    `${dirName}: ${digests.size} distinct digests across ${allTrees.length} trees ` +
+                    `(expected 1) — [${[...digests].map(d => d.slice(0, 8)).join(', ')}]`);
+            }
+
+            // Anti-vacuity — the shared digest is of a file that really carries
+            // the block (identical-but-unpatched would also give one digest).
+            const sample = readSkill(projectRoot, UNREGISTERED_TREE, 'bmad-agent-pm');
+            assert.ok(sample.includes(ON_PREM_PREFIX_MARKER_BEGIN),
+                'the unregistered tree was not actually patched');
+            assert.ok(sample.includes('/no_think prefix for bmm-pm'),
+                'the unregistered tree is missing the prefix text');
+        } finally { cleanup(projectRoot); }
+    });
+
+    // 17. Nested dot container (the `.github/copilot/skills` shape).
+    await test('a nested dot-container tree (.github/copilot/skills) is discovered and patched', async () => {
+        const nested = path.join('.github', 'copilot', 'skills');
+        const { projectRoot, customizeSrc } = buildFixture({ tools: [nested] });
+        try {
+            const results = await applyOnPremPhasePrefixToDeployedSkills(
+                projectRoot, 'on-prem', customizeSrc,
+            );
+            assert.strictEqual(results.filter(r => r.injected).length,
+                Object.keys(PERSONA_SKILL_MAP).length,
+                'every persona in the nested tree should have been injected');
+            assert.ok(readSkill(projectRoot, nested, 'bmad-agent-pm')
+                .includes(ON_PREM_PREFIX_MARKER_BEGIN));
+        } finally { cleanup(projectRoot); }
+    });
+
+    // 18. Source-tree protection — discovery must never reach a non-dot
+    //     container, so a SOURCE checkout's shipped skills (which carry pinned
+    //     digests in the release gate) can never be rewritten by an install.
+    await test('a non-dot container with personas is NOT patched (source-tree protection)', async () => {
+        const { projectRoot, customizeSrc } = buildFixture({ tools: ['.claude/skills'] });
+        try {
+            const sourceSkill = path.join(
+                projectRoot, 'lib', 'bmad-extension', 'skills', 'bmad-agent-pm');
+            fs.mkdirSync(sourceSkill, { recursive: true });
+            const sourceFile = path.join(sourceSkill, 'SKILL.md');
+            fs.writeFileSync(sourceFile,
+                '---\nname: bmad-agent-pm\n---\n\n# shipped source artifact\n', 'utf8');
+            const before = sha256(sourceFile);
+
+            await applyOnPremPhasePrefixToDeployedSkills(projectRoot, 'on-prem', customizeSrc);
+
+            assert.strictEqual(sha256(sourceFile), before,
+                'the patcher reached into a non-dot SOURCE skills tree');
+            assert.ok(!fs.readFileSync(sourceFile, 'utf8').includes(ON_PREM_PREFIX_MARKER_BEGIN),
+                'the on-prem block leaked into a source artifact');
+            // Anti-vacuity — the deployed tree next to it WAS patched.
+            assert.ok(readSkill(projectRoot, '.claude/skills', 'bmad-agent-pm')
+                .includes(ON_PREM_PREFIX_MARKER_BEGIN),
+                'nothing was patched at all — the assertion above is vacuous');
+        } finally { cleanup(projectRoot); }
+    });
+
+    // 19. The discovery primitive itself.
+    await test('discoverDeployedSkillTrees: unknown trees in, persona-less and non-dot dirs out', async () => {
+        const { projectRoot } = buildFixture({
+            tools: [path.join('.claude', 'skills'), UNREGISTERED_TREE],
+        });
+        try {
+            // A dot container with a `skills` dir but no personas — not a target.
+            fs.mkdirSync(path.join(projectRoot, '.empty-tool', 'skills', 'some-workflow'),
+                { recursive: true });
+            // A non-dot container that DOES hold a persona — still not a target.
+            const nonDot = path.join(projectRoot, 'lib', 'bmad-extension', 'skills', 'bmad-agent-pm');
+            fs.mkdirSync(nonDot, { recursive: true });
+            fs.writeFileSync(path.join(nonDot, 'SKILL.md'), '# source\n', 'utf8');
+
+            const trees = discoverDeployedSkillTrees(projectRoot)
+                .map(t => t.replace(/\\/g, '/')).sort();
+            assert.deepStrictEqual(
+                trees,
+                ['.claude/skills', UNREGISTERED_TREE.replace(/\\/g, '/')].sort(),
+                `unexpected discovery result: ${JSON.stringify(trees)}`,
+            );
+        } finally { cleanup(projectRoot); }
+    });
+
+    // 20. Discovery degrades safely.
+    await test('discoverDeployedSkillTrees: invalid root or empty marker list returns []', async () => {
+        assert.deepStrictEqual(discoverDeployedSkillTrees(null), []);
+        assert.deepStrictEqual(discoverDeployedSkillTrees(''), []);
+        const empty = mktemp();
+        try {
+            assert.deepStrictEqual(discoverDeployedSkillTrees(empty), []);
+            assert.deepStrictEqual(discoverDeployedSkillTrees(empty, []), []);
+        } finally { cleanup(empty); }
     });
 
     // ── Summary ──

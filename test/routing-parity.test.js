@@ -93,7 +93,14 @@ function test(name, fn) {
   }
 }
 
-const { getAgent, getBmadPlatformCode } = require('../lib/agents');
+const {
+  getAgent,
+  getBmadPlatformCode,
+  PLATFORM_PATH_DIVERGENCES,
+} = require('../lib/agents');
+// Seed list the on-prem/deployed-skill patchers start from (lib/bmad.js). Test
+// 5.4 keeps it in step with the IDE registry for EVERY tool, not just flagships.
+const { TOOL_SKILL_DIRS } = require('../lib/bmad');
 
 // Load bmad-method's platform-codes.yaml so we can compare each flagship's
 // ma-agents `skillsDir` against bmad-method's authoritative target_dir.
@@ -413,6 +420,236 @@ test(
     }
   }
 );
+
+// ─── Section 5 — full two-table reconciliation ──────────────────────────────
+//
+// Bug `antigravity-path-divergence`. Section 1 only compares the five flagship
+// tools. Antigravity is not flagship, so nothing compared `.antigravity/skills`
+// (ours) against `.agent/skills` (upstream) and a whole skill tree was created
+// in real projects that ma-agents' post-deploy patchers could not see.
+//
+// These tests enumerate EVERY tool in BOTH tables. A divergence is allowed only
+// when it is declared in `lib/agents.js::PLATFORM_PATH_DIVERGENCES` with the
+// exact paths on both sides and a reason — so the next divergence surfaces here
+// at build time instead of in a user's project, and a declaration cannot rot
+// into cover for a different divergence.
+
+/**
+ * Pure auditor over the two path tables. Extracted so the tests can run it
+ * against a synthetic registry and prove the check actually fires (5.5) —
+ * a guard that never goes red proves nothing.
+ *
+ * @param {Array} registry     agent objects ({ id, category, skillsDir })
+ * @param {Object} platforms   bmad-method platform map (code -> { installer })
+ * @param {Object} divergences declared divergences, keyed by bmad platform code
+ * @param {Function} codeFor   agent id -> bmad platform code
+ * @returns {{findings: string[], compared: number, unmapped: string[]}}
+ */
+function auditPathTables(registry, platforms, divergences, codeFor) {
+  const findings = [];
+  const unmapped = [];
+  let compared = 0;
+  const seenCodes = new Set();
+  const allAgentCodes = new Set(registry.map((a) => codeFor(a.id)));
+
+  for (const agent of registry) {
+    const code = codeFor(agent.id);
+    const upstream = platforms[code] && platforms[code].installer;
+    if (!upstream || !upstream.target_dir) {
+      // No upstream platform for this agent (the `bmm-*` BMAD personas). There
+      // is nothing to diverge FROM — but a declaration for it would be bogus.
+      unmapped.push(agent.id);
+      if (Object.prototype.hasOwnProperty.call(divergences, code)) {
+        findings.push(
+          `${agent.id}: PLATFORM_PATH_DIVERGENCES declares '${code}' but bmad-method has no such platform`
+        );
+      }
+      continue;
+    }
+    seenCodes.add(code);
+    compared++;
+
+    const ours = String(agent.skillsDir).replace(/\\/g, '/');
+    const theirs = String(upstream.target_dir).replace(/\\/g, '/');
+    const declared = divergences[code];
+
+    if (ours === theirs) {
+      if (declared) {
+        findings.push(
+          `${agent.id}: paths now AGREE ('${ours}') but a divergence is still declared for '${code}' — delete the stale entry`
+        );
+      }
+      continue;
+    }
+
+    if (!declared) {
+      findings.push(
+        `${agent.id}: UNRECORDED path divergence — lib/agents.js skillsDir='${ours}' vs ` +
+          `bmad-method platform '${code}' target_dir='${theirs}'. Align the paths, or declare ` +
+          `the divergence in lib/agents.js::PLATFORM_PATH_DIVERGENCES with a reason.`
+      );
+      continue;
+    }
+    if (declared.maSkillsDir !== ours) {
+      findings.push(
+        `${agent.id}: stale declaration — records maSkillsDir='${declared.maSkillsDir}' but registry says '${ours}'`
+      );
+    }
+    if (declared.bmadTargetDir !== theirs) {
+      findings.push(
+        `${agent.id}: stale declaration — records bmadTargetDir='${declared.bmadTargetDir}' but upstream says '${theirs}'`
+      );
+    }
+    if (typeof declared.reason !== 'string' || declared.reason.trim().length < 40) {
+      findings.push(
+        `${agent.id}: declared divergence needs a real reason (>=40 chars), got ${JSON.stringify(declared.reason)}`
+      );
+    }
+  }
+
+  // A declaration keyed to a platform no agent in the registry maps to is dead
+  // weight that would silently excuse a future entry of the same name.
+  for (const code of Object.keys(divergences)) {
+    if (!allAgentCodes.has(code)) {
+      findings.push(`PLATFORM_PATH_DIVERGENCES has an orphan entry '${code}' — no registered agent maps to it`);
+    }
+  }
+
+  return { findings, compared, unmapped };
+}
+
+test(
+  '5.1: every registered tool matches its bmad-method target_dir, or the divergence is declared',
+  () => {
+    const { findings, compared } = auditPathTables(
+      getAllAgents(),
+      bmadPlatforms,
+      PLATFORM_PATH_DIVERGENCES,
+      getBmadPlatformCode
+    );
+    assert.ok(
+      compared >= 8,
+      `anti-vacuity: expected at least 8 tools to be compared against upstream, got ${compared}`
+    );
+    if (findings.length > 0) {
+      throw new Error(
+        'ma-agents and bmad-method path tables disagree:\n  ' + findings.join('\n  ')
+      );
+    }
+  }
+);
+
+test('5.2: every declared divergence names a registered agent and is still real', () => {
+  const codes = new Set(getAllAgents().map((a) => getBmadPlatformCode(a.id)));
+  for (const [code, entry] of Object.entries(PLATFORM_PATH_DIVERGENCES)) {
+    assert.ok(codes.has(code), `PLATFORM_PATH_DIVERGENCES key '${code}' matches no registered agent`);
+    assert.ok(
+      bmadPlatforms[code] && bmadPlatforms[code].installer,
+      `PLATFORM_PATH_DIVERGENCES key '${code}' matches no bmad-method platform`
+    );
+    assert.ok(entry.maSkillsDir && entry.bmadTargetDir, `${code}: divergence must record BOTH paths`);
+    assert.notStrictEqual(
+      entry.maSkillsDir,
+      entry.bmadTargetDir,
+      `${code}: a "divergence" whose two paths are equal is not a divergence`
+    );
+  }
+});
+
+test('5.3: Antigravity resolves to exactly ONE skill tree (both writers agree)', () => {
+  const ours = getAgent('antigravity').skillsDir.replace(/\\/g, '/');
+  const theirs = bmadPlatforms[getBmadPlatformCode('antigravity')].installer.target_dir;
+  assert.strictEqual(
+    ours,
+    theirs,
+    `Antigravity must not be split across two trees: ma-agents writes '${ours}', ` +
+      `bmad-method writes '${theirs}'. Upstream platform-codes.yaml is the authority ` +
+      `on which directory the tool reads.`
+  );
+  assert.ok(
+    !PLATFORM_PATH_DIVERGENCES.antigravity,
+    'antigravity must not carry a declared divergence — it is aligned'
+  );
+});
+
+test('5.4: lib/bmad.js TOOL_SKILL_DIRS seeds EVERY IDE tool tree, not just the flagships', () => {
+  const seed = new Set(TOOL_SKILL_DIRS.map((d) => d.replace(/\\/g, '/')));
+  const expected = new Set(
+    getAllAgents()
+      .filter((a) => a.category === 'ide')
+      .map((a) => a.skillsDir.replace(/\\/g, '/'))
+  );
+  const missing = [...expected].filter((d) => !seed.has(d));
+  const extra = [...seed].filter((d) => !expected.has(d));
+  if (missing.length || extra.length) {
+    throw new Error(
+      'lib/bmad.js TOOL_SKILL_DIRS drifted from the lib/agents.js IDE registry:\n' +
+        (missing.length ? `  missing from TOOL_SKILL_DIRS: ${missing.join(', ')}\n` : '') +
+        (extra.length ? `  not an IDE skillsDir:          ${extra.join(', ')}` : '')
+    );
+  }
+});
+
+test('5.5: the divergence auditor actually fires (mutation control)', () => {
+  const fakePlatforms = { widget: { installer: { target_dir: '.widget/skills' } } };
+  const codeFor = (id) => id;
+
+  // (a) undeclared divergence must be reported
+  const undeclared = auditPathTables(
+    [{ id: 'widget', category: 'ide', skillsDir: '.wid/skills' }],
+    fakePlatforms,
+    {},
+    codeFor
+  );
+  assert.strictEqual(undeclared.findings.length, 1, 'an undeclared divergence must produce exactly one finding');
+  assert.ok(/UNRECORDED path divergence/.test(undeclared.findings[0]));
+
+  // (b) a declaration whose recorded paths have gone stale must be reported
+  const stale = auditPathTables(
+    [{ id: 'widget', category: 'ide', skillsDir: '.wid/skills' }],
+    fakePlatforms,
+    { widget: { maSkillsDir: '.OLD/skills', bmadTargetDir: '.widget/skills', reason: 'x'.repeat(40) } },
+    codeFor
+  );
+  assert.ok(
+    stale.findings.some((f) => /stale declaration/.test(f)),
+    'a declaration whose recorded ma path no longer matches must be reported'
+  );
+
+  // (c) a declaration left behind after the paths were aligned must be reported
+  const resolved = auditPathTables(
+    [{ id: 'widget', category: 'ide', skillsDir: '.widget/skills' }],
+    fakePlatforms,
+    { widget: { maSkillsDir: '.wid/skills', bmadTargetDir: '.widget/skills', reason: 'x'.repeat(40) } },
+    codeFor
+  );
+  assert.ok(
+    resolved.findings.some((f) => /paths now AGREE/.test(f)),
+    'a stale declaration over aligned paths must be reported'
+  );
+
+  // (d) the aligned, undeclared case is clean — the auditor is not just "always red"
+  const clean = auditPathTables(
+    [{ id: 'widget', category: 'ide', skillsDir: '.widget/skills' }],
+    fakePlatforms,
+    {},
+    codeFor
+  );
+  assert.deepStrictEqual(clean.findings, [], 'an aligned tool must produce no findings');
+});
+
+// Informational — upstream ships far more platforms than ma-agents registers.
+// Those are deliberate non-adoptions (see the DEFERRED note at the bottom of
+// lib/agents.js), not divergences: a tool we do not register has no ma-agents
+// path to disagree with. Printed so the gap is visible, never asserted on.
+{
+  const registered = new Set(getAllAgents().map((a) => getBmadPlatformCode(a.id)));
+  const notAdopted = Object.keys(bmadPlatforms).filter((k) => !registered.has(k));
+  console.log(
+    `  i upstream platforms not registered in lib/agents.js: ${notAdopted.length} ` +
+      `(informational — not a divergence)`
+  );
+}
 
 // ─── Summary ───────────────────────────────────────────────────────────────
 
