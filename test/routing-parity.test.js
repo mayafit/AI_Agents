@@ -572,6 +572,25 @@ test('5.3: Antigravity resolves to exactly ONE skill tree (both writers agree)',
   );
 });
 
+test('5.3b: every agent\'s getProjectPath() agrees with its own skillsDir', () => {
+  // The other half of "exactly one tree": the standalone install loop writes to
+  // getProjectPath() while every drift guard, patcher and reconciler reasons
+  // about skillsDir. If those two disagree the registry splits a tool across two
+  // trees all by itself — the same failure mode as the upstream divergence, one
+  // layer in. (This is how `.antigravity/skills` had to be changed in two places.)
+  const drift = [];
+  for (const agent of getAllAgents()) {
+    const fromString = path.join(process.cwd(), ...agent.skillsDir.split(/[\\/]/));
+    const fromFn = agent.getProjectPath();
+    if (fromFn !== fromString) {
+      drift.push(`${agent.id}: skillsDir -> '${fromString}' but getProjectPath() -> '${fromFn}'`);
+    }
+  }
+  if (drift.length > 0) {
+    throw new Error('lib/agents.js splits a tool across two project paths:\n  ' + drift.join('\n  '));
+  }
+});
+
 test('5.4: lib/bmad.js TOOL_SKILL_DIRS seeds EVERY IDE tool tree, not just the flagships', () => {
   const seed = new Set(TOOL_SKILL_DIRS.map((d) => d.replace(/\\/g, '/')));
   const expected = new Set(
