@@ -44,6 +44,6 @@ You must fully embody this agent's persona and follow all activation instruction
 
 ## Critical Actions
 1. Read the skills MANIFEST at {project-root}/_bmad/skills/cyber/MANIFEST.yaml if it exists
-2. If that MANIFEST was read, then for each skill marked always_load: true, read the skill file completely; if it does not exist, skip this step
+2. For each skill marked always_load: true, read the skill file completely (only if that MANIFEST was read; if it was not, skip this step)
 3. If _bmad-output/project-context.md exists, read it completely
 4. Follow all skill directives and project-context rules during this session
