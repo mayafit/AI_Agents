@@ -6,7 +6,7 @@ title: ma-agent-sqa's Critical Action 1 cites _bmad/skills/MANIFEST.yaml, missin
 
 > ## CORRECTION NOTICE — 2026-09-12
 >
-> This report was filed from a `D:\Code\Workshop` install and **three of its central
+> This report was filed from a `D:\Code\Workshop` install and **five of its central
 > claims were wrong**. They are struck through in place below rather than deleted, per this
 > repository's convention. Read the corrections before acting on anything here.
 >
@@ -14,7 +14,12 @@ title: ma-agent-sqa's Critical Action 1 cites _bmad/skills/MANIFEST.yaml, missin
 > |---|---|---|
 > | 1 | All four personas carry the bare path; "16 deployed copies carrying a dead reference" | **WRONG** — only `ma-agent-sqa` carries the bare path. 4 copies have a wrong path; 16 have an unguarded one. |
 > | 2 | "`_bmad/skills/` does not exist at all" | **WRONG as written** — true of `D:\Code\Workshop`, false of this repository. |
-> | 3 | "the cited path is wrong for a second reason: it is absolute-from-project-root" | **NOT A DEFECT** — this is Story 8.3's deliberate design. Demoted to an open design question. |
+> | 3 | "the cited path is wrong for a second reason: it is absolute-from-project-root" | **NOT A DEFECT** — this is Story 8.3's deliberate design. Demoted to an open design question (ODQ-1). |
+> | 4 | "`always_load: true` … whatever depends on it is not happening" | **OVERSTATED** — the chain is fully wired and works in a normal install. It is not happening *in `D:\Code\Workshop`*, for a much larger reason filed separately. |
+> | 5 | `BLOCKING-4` "currently fails on" the `open-presentation` `.pptx` | **WRONG as written** — its redness is worktree-dependent, because the guard skips citations whose target is absent and `_bmad-output/` is gitignored. Green here, red on `main`. |
+>
+> All five are numbered **CORRECTION 1–5** in the body. An earlier revision of this notice
+> counted only three and tabled only three; the count and the table now match the body.
 >
 > **The investigation that produced these corrections also settled the "Two readings"
 > question: the instruction was stale, not the installer.** Fixed on branch
@@ -253,7 +258,7 @@ personas and is filed separately as
 - **Not caused by Epic 31.** The install predates the 3.18.0-beta.1 publish and no Epic 31 story touches these personas or the manifest generator.
 - **Corrected 2026-09-12** on `fix/persona-manifest-path` after a history investigation
   (`1458029` → `bffe2bd` → `d9d795e`) and a read-only re-audit of `D:\Code\Workshop`.
-  Three central claims were wrong; see the Correction Notice at the top.
+  Five central claims were wrong; see the Correction Notice at the top.
 - See also `bug-antigravity-path-divergence-creates-a-second-unpatched-skill-tree.md`, found in the same investigation.
 - Discoverable via glob: `_bmad-output/implementation-artifacts/bug-*.md`
 - To add to a sprint, run `/add-to-sprint`
