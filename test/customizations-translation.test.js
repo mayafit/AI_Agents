@@ -602,6 +602,32 @@ async function runAllTests() {
         );
     });
 
+    await testAsync('win32: a case-differing container is ONE tree, not two', async () => {
+        // Review finding N6. On Windows `.Claude/skills` and `.claude/skills` are
+        // the same physical directory: the registry seed stats its own spelling
+        // and succeeds, then the on-disk scan reports the real casing, so an
+        // un-folded Set enumerates one tree twice. Idempotent, but it double-
+        // counts in every caller's result list.
+        if (process.platform !== 'win32') {
+            console.log('    (skipped: case-insensitive collision is a win32 condition)');
+            return;
+        }
+        const projectRoot = path.join(tmpRoot, 'discovery-5');
+        // Create the container with NON-canonical casing on purpose.
+        const dir = path.join(projectRoot, '.Claude', 'skills', 'bmad-agent-pm');
+        fs.ensureDirSync(dir);
+        fs.writeFileSync(path.join(dir, 'SKILL.md'), '# pm\n', 'utf-8');
+
+        const roots = bmad.getDeployedSkillsRoots(projectRoot);
+        const claudeRoots = roots.filter(p => /[\\/]\.claude[\\/]skills$/i.test(p));
+        assert.strictEqual(
+            claudeRoots.length, 1,
+            `one physical tree must appear once, got ${claudeRoots.length}: ${claudeRoots.join(', ')}`
+        );
+        // …and the discovery scan must still have found it at all.
+        assert.ok(claudeRoots.length > 0, 'the tree must be discovered');
+    });
+
     await testAsync('SKILL.md as a DIRECTORY does not mark a tree as deployed', async () => {
         // `existsSync` cannot tell a file from a directory; every consumer then
         // fails on EISDIR reading it. Review finding N5.

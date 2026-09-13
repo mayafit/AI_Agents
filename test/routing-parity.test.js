@@ -467,8 +467,8 @@ function reasonProblem(entry) {
   const words = trimmed.toLowerCase().match(/[a-z][a-z'’-]{2,}/g) || [];
   const distinct = new Set(words);
   if (distinct.size < REASON_MIN_DISTINCT_WORDS) {
-    return `only ${distinct.size} distinct words — filler, not an explanation ` +
-      `(need >=${REASON_MIN_DISTINCT_WORDS})`;
+    return `only ${distinct.size} distinct word${distinct.size === 1 ? '' : 's'} — ` +
+      `filler, not an explanation (need >=${REASON_MIN_DISTINCT_WORDS})`;
   }
   const paths = [entry.maSkillsDir, entry.bmadTargetDir]
     .filter((p) => typeof p === 'string' && p.length > 0);
@@ -756,7 +756,7 @@ test('5.5: the divergence auditor actually fires (mutation control)', () => {
     codeFor
   );
   assert.ok(
-    filler.findings.some((f) => /distinct words/.test(f)),
+    filler.findings.some((f) => /distinct word/.test(f)),
     "40 literal 'x's must NOT pass as a reason — this is the MX1 mutant"
   );
 
@@ -794,16 +794,25 @@ test('5.6: every upstream target_dir is a dot-prefixed container (the confinemen
   // upstream platform with a non-dot or depth-3 target_dir would escape BOTH the
   // section-5 audit (which only compares tools WE register — 35 upstream
   // platforms are not registered) and the disk scan, silently.
+  const reachable = (target) => {
+    const parts = String(target).replace(/\\/g, '/').replace(/\/+$/, '').split('/');
+    return parts[0].startsWith('.') && parts.length <= 3;
+  };
+
+  // Mutation control: the predicate must actually reject, or this test is a
+  // rubber stamp over data that happens to be uniform today.
+  assert.ok(reachable('.claude/skills'), 'a dot container must be reachable');
+  assert.ok(reachable('.github/copilot/skills'), 'a depth-2 dot container must be reachable');
+  assert.ok(!reachable('skills'), 'a non-dot container must be rejected');
+  assert.ok(!reachable('tools/ide/plugins/skills'), 'a depth-3 container must be rejected');
+
   const offenders = [];
   let checked = 0;
   for (const [code, platform] of Object.entries(bmadPlatforms)) {
     const target = platform && platform.installer && platform.installer.target_dir;
     if (!target) continue;
     checked++;
-    const parts = String(target).replace(/\\/g, '/').replace(/\/+$/, '').split('/');
-    if (!parts[0].startsWith('.') || parts.length > 3) {
-      offenders.push(`${code} -> '${target}'`);
-    }
+    if (!reachable(target)) offenders.push(`${code} -> '${target}'`);
   }
   assert.ok(checked >= 40, `anti-vacuity: expected >=40 upstream target_dirs, got ${checked}`);
   if (offenders.length > 0) {
