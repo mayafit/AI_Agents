@@ -216,7 +216,32 @@ personas and is filed separately as
 
 1. ~~The intended reading is **stated and recorded** before any code or text changes.~~ **DONE** — reading 2, recorded above with the commit evidence.
 2. `BLOCKING-4`'s guard is widened to cover `_bmad/` paths, so a shipped skill citing a non-existent project path fails at build time. It must be shown red against the current text before the fix, or the guard proves nothing. **STILL OPEN** — and see Correction 5: the guard must also stop depending on whether a gitignored file happens to exist in the working tree.
-3. After a fresh install, every path cited in a Critical Actions block resolves in the installed project — asserted over **all** shipped skills, not only these four. **STILL OPEN.**
+3. After a fresh install, every path cited in a Critical Actions block resolves in the installed project — asserted over **all** shipped skills, not only these four. **CLOSED for these four; the generalisation moves to AC 2.**
+
+   The fix originally shipped with **no test that could detect its own regression.**
+   `test/convert-agents-to-skills.test.js`'s existing assertion is path-agnostic —
+   `content.includes('Read the skills MANIFEST')` — so restoring the pre-fix bare unguarded
+   path leaves the suite fully green. That is precisely how `bffe2bd` stripped the `sqa/`
+   segment in the first place without anything noticing.
+
+   Now pinned. `test/convert-agents-to-skills.test.js` asserts the **full** Critical Action 1
+   line for each `ma-agent-*` persona, with the expected path **derived from the `lib/agents.js`
+   registry** (`getAgentsByCategory('bmad')` → `skillsDir`), never restated — so the text and
+   the registry cannot disagree again even if a `skillsDir` moves. Coverage is all three trees
+   that ship a copy: `lib/bmad-extension/skills/`, `lib/bmad-extension-plugin/skills/` and the
+   committed `.agents/skills/` deployed tree. A companion assertion pins Critical Action 2
+   against `STANDARD_CRITICAL_ACTIONS[1]`, read out of `lib/bmad.js` rather than restated.
+
+   **Shown red before it was trusted.** Replanting the pre-fix bare path
+   (`_bmad/skills/MANIFEST.yaml`) in `ma-agent-sqa` across all three trees takes the suite from
+   **146/0 to 143/3** — and the three pre-existing path-agnostic assertions still pass, which is
+   the demonstration that they never could have caught this. Replanting the lowercased-`for`
+   step 2 takes it to **145/1**. Both probes reverted; blob hashes identical before and after.
+
+   **Residual:** "asserted over **all** shipped skills, after a fresh install" is *not* closed by
+   this pin, which covers the four `ma-agent-*` personas in the repository trees only. That
+   generalisation belongs to AC 2 (`BLOCKING-4`'s guard, widened to `_bmad/` paths and made
+   independent of gitignored working-tree accidents) and remains **STILL OPEN** there.
 4. ~~If reading 1 is chosen: `_bmad/skills/MANIFEST.yaml` exists after install and lists the `always_load` skills, proven by reading the file rather than by asserting the call site was reached.~~ **N/A — reading 1 was not chosen.**
 5. ~~If reading 2 is chosen:~~ **DONE** — the four documents are corrected on `fix/persona-manifest-path`; no digest moved (none of the four carries a pinned block), and the plugin mirrors were regenerated with `npm run build:plugin`.
 
