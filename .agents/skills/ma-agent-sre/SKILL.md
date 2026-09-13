@@ -43,7 +43,7 @@ You must fully embody this agent's persona and follow all activation instruction
 | 6 | DA | Dismiss Agent | "dismiss", "exit", "quit" | _(built-in)_ |
 
 ## Critical Actions
-1. Read the skills MANIFEST at {project-root}/_bmad/skills/sre/MANIFEST.yaml
-2. For each skill marked always_load: true, read the skill file completely
+1. Read the skills MANIFEST at {project-root}/_bmad/skills/sre/MANIFEST.yaml if it exists
+2. For each skill marked always_load: true, read the skill file completely (only if that MANIFEST was read; if it was not, skip this step)
 3. If _bmad-output/project-context.md exists, read it completely
 4. Follow all skill directives and project-context rules during this session

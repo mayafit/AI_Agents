@@ -244,6 +244,114 @@ for (const agent of AGENTS) {
   });
 }
 
+// ─── Critical Action 1 is pinned to the lib/agents.js registry ────────────────
+// bug-ma-agent-personas-cite-a-manifest-path-that-is-never-created, AC 3.
+//
+// The three assertions above are PATH-AGNOSTIC: they check only that the
+// substring 'Read the skills MANIFEST' appears. That is exactly how `bffe2bd`
+// was able to strip the `sqa/` segment out of ma-agent-sqa's Critical Action 1
+// while the suite stayed green, and the defect then survived until it was found
+// by hand in a real install eighteen months later.
+//
+// These tests pin the FULL line and DERIVE the expected path from the registry
+// in lib/agents.js rather than restating it, so the text and the registry can
+// never disagree again. Coverage is every tree that ships a copy: the source
+// bundle, the generated plugin mirror, and the committed .agents/ deployed tree.
+console.log('\n Critical Action 1 pinned to lib/agents.js registry\n');
+
+const { getAgentsByCategory } = require('../lib/agents');
+
+const PERSONA_TREES = [
+  { label: 'source', dir: path.join(PROJECT_ROOT, 'lib', 'bmad-extension', 'skills') },
+  { label: 'plugin mirror', dir: path.join(PROJECT_ROOT, 'lib', 'bmad-extension-plugin', 'skills') },
+  { label: '.agents mirror', dir: path.join(PROJECT_ROOT, '.agents', 'skills') },
+];
+
+// Derived, not restated: the registry's `bmad`-category agents each declare
+// `_bmad/skills/<slug>`, and the persona that cites it is `ma-agent-<slug>`.
+// If a registry skillsDir moves, the expected string moves with it.
+const REGISTRY_SKILLS_DIRS = new Map(
+  getAgentsByCategory('bmad').map(a => [`ma-agent-${path.posix.basename(a.skillsDir)}`, a])
+);
+
+/** Return the Nth numbered line of a SKILL.md's `## Critical Actions` block. */
+function criticalActionLine(content, n) {
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const start = lines.findIndex(l => /^##\s+Critical Actions\s*$/.test(l));
+  if (start === -1) return null;
+  const numbered = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^##\s/.test(lines[i])) break;
+    if (/^\s*\d+\.\s/.test(lines[i])) numbered.push(lines[i].trim());
+  }
+  return numbered[n - 1] ?? null;
+}
+
+test('lib/agents.js registers a skillsDir for every ma-agent-* persona under test', () => {
+  const missing = AGENTS.map(a => a.folder).filter(f => !REGISTRY_SKILLS_DIRS.has(f));
+  assert.deepStrictEqual(
+    missing, [],
+    `No lib/agents.js bmad-category registry entry maps to: ${missing.join(', ')}`
+  );
+});
+
+for (const tree of PERSONA_TREES) {
+  for (const agent of AGENTS) {
+    test(`${agent.folder} (${tree.label}): Critical Action 1 matches its lib/agents.js skillsDir`, () => {
+      const registryEntry = REGISTRY_SKILLS_DIRS.get(agent.folder);
+      assert.ok(registryEntry, `No registry entry for ${agent.folder}`);
+
+      const skillMdPath = path.join(tree.dir, agent.folder, 'SKILL.md');
+      assert.ok(fs.existsSync(skillMdPath), `Missing ${skillMdPath}`);
+
+      const actual = criticalActionLine(fs.readFileSync(skillMdPath, 'utf8'), 1);
+      const expected =
+        `1. Read the skills MANIFEST at {project-root}/${registryEntry.skillsDir}/MANIFEST.yaml if it exists`;
+
+      assert.strictEqual(
+        actual, expected,
+        `Critical Action 1 does not match registry entry '${registryEntry.id}' ` +
+        `(skillsDir: '${registryEntry.skillsDir}')\n` +
+        `      expected: ${expected}\n` +
+        `      actual:   ${actual}`
+      );
+    });
+  }
+}
+
+// The ` if it exists` guard above is a suffix on STANDARD_CRITICAL_ACTIONS[0],
+// so step 1 keeps classifying STANDARD. Step 2 is the fragile one: its
+// conditional wording must still contain STANDARD_CRITICAL_ACTIONS[1]
+// *verbatim*, because lib/bmad.js's isStandardCriticalAction matches with a
+// case-sensitive `trimmed.includes()`. A lowercased `for` silently reclassifies
+// every persona's step 2 as a user customization. Derived from the constant.
+test('Critical Action 2 still contains STANDARD_CRITICAL_ACTIONS[1] verbatim in every tree', () => {
+  const bmadSrc = fs.readFileSync(path.join(PROJECT_ROOT, 'lib', 'bmad.js'), 'utf8');
+  const block = bmadSrc.match(/const STANDARD_CRITICAL_ACTIONS = \[([\s\S]*?)\n\];/);
+  assert.ok(block, 'Could not locate STANDARD_CRITICAL_ACTIONS in lib/bmad.js');
+
+  const needles = [...block[1].matchAll(/'([^']*)'/g)].map(m => m[1]);
+  assert.strictEqual(needles.length, 4, `Expected 4 standard critical actions, got ${needles.length}`);
+  const alwaysLoadNeedle = needles[1];
+
+  const offenders = [];
+  for (const tree of PERSONA_TREES) {
+    for (const agent of AGENTS) {
+      const skillMdPath = path.join(tree.dir, agent.folder, 'SKILL.md');
+      if (!fs.existsSync(skillMdPath)) continue;
+      const line = criticalActionLine(fs.readFileSync(skillMdPath, 'utf8'), 2);
+      if (line === null || !line.includes(alwaysLoadNeedle)) {
+        offenders.push(`${tree.label}/${agent.folder}: ${line}`);
+      }
+    }
+  }
+  assert.deepStrictEqual(
+    offenders, [],
+    `Critical Action 2 would classify as CUSTOM (missing '${alwaysLoadNeedle}'):\n      ` +
+    offenders.join('\n      ')
+  );
+});
+
 // ─── Results ──────────────────────────────────────────────────────────────────
 console.log(`\n  ${passed} passed, ${failed} failed\n`);
 if (failed > 0) {
