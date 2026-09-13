@@ -279,3 +279,38 @@ The new `11.1` reads **only the tree** — no `git` subprocess at all — so the
 its complete input. Since every other test in the suite already passed on
 `fix/persona-manifest-path` (its measured result was 111/1 with `11.1` the sole failure),
 that branch goes to **112/0** under the fixed suite. The same holds for the other two.
+
+### E5 — the pinned suite results, re-derived after the reverts
+
+| suite | expected | measured | exit |
+|---|---|---|---|
+| `project-layout-confluence-publish-hook` | 112 | **112 passed, 0 failed** | 0 |
+| `release-gate-epic-31` | 43/0 | **43 passed, 0 failed** | 0 |
+| `story-15-5-workflow-skills` | 157/0 | **157 passed, 0 failed** | 0 |
+| `project-layout-confluence-routing` | 97 | **97 passed, 0 failed** | 0 |
+| `project-layout-confluence-page-tree` | 157 | **157 passed, 0 failed** | 0 |
+| `project-layout-staleness-guard` | 64 | **64 passed, 0 failed** | 0 |
+
+Every pinned number is unmoved. `release-gate-epic-31` green is the independent confirmation
+that the digests and distributions `11.1` now restates are the ones AC7.1/AC7.2 hold.
+
+### Not run, and why
+
+- `test/project-layout-two-store-round-trip.test.js` and `test/yes-flag.test.js` — excluded by
+  the brief.
+- `npm test` end to end — its first suite is the known repository-mutating one (see the
+  standing note on the Windows CRLF/stale-skill-count halt). Not run, not claimed.
+- Linux — never run. Every result above is Windows 11 / Git Bash.
+- Confluence — unchanged from Story 31.15: the Rovo MCP cannot be authorised
+  non-interactively, so every MCP-present claim in this suite remains MOCK-VERIFIED. This fix
+  does not touch that boundary.
+
+### A correction to the brief this was implemented from
+
+The brief stated the gate invariant as "**9 / `cda3d3d9` / 3-3-3**" and the preflight as
+"**41 / `ca9bf25b` / 13-14-14**", and said "tests `11.2`/`11.3` already assert them". The
+counts and the uniformity are asserted by `11.2`/`11.3`; **the digests and the distributions
+are not** — `11.2`/`11.3` assert only `digests.size === 1`, never the digest VALUE, and say
+nothing about distribution. Those literals live in `release-gate-epic-31.test.js`
+AC7.1/AC7.2, a different suite. That gap is precisely why option 3 (retire `11.1`) was wrong
+and option 2 had to add the pins rather than merely delete the diff.
