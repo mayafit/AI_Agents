@@ -3913,12 +3913,90 @@ function changedFiles() {
     .split('\n').map((s) => s.trim()).filter(Boolean);
 }
 
-test('11.1 AC9(c) this story modifies NO file under skills/, lib/bmad-extension/skills/ or the plugin mirror', () => {
-  const guarded = ['skills/', 'lib/bmad-extension/skills/', 'lib/bmad-extension-plugin/'];
-  const offenders = changedFiles().filter((f) => guarded.some((g) => f.startsWith(g)));
-  assert.deepStrictEqual(offenders, [],
-    `this story touches no skill document by design; it changed ${JSON.stringify(offenders)}. ` +
-    `Every one of the shipped-copy invariants is measured over those trees.`);
+// ─────────────────────────────────────────────────────────────────────────────
+// A STORY-SCOPED CLAIM MUST NOT BE MADE IN A SUITE THAT RUNS FOREVER.
+//
+// 11.1 was, until this fix, a `git diff --name-only $(merge-base HEAD
+// feature/epic-31)..HEAD` tripwire asserting that "THIS STORY" modified no file
+// under the three shipped skill trees. That is a scope constraint on Story
+// 31.15, not a property of the product, and encoding it as a branch-relative
+// diff in a permanently-running suite failed in BOTH directions at once:
+//
+//   · VACUOUS where it mattered. On `feature/epic-31` itself the merge base IS
+//     HEAD, the diff is empty, and the test passed by construction rather than
+//     by evidence. It could never have caught the thing it was written about.
+//   · FALSE-POSITIVE everywhere else. On any branch off the epic that
+//     legitimately edits a skill document it fired and listed exactly the files
+//     that change was supposed to change. Three live fix branches were red on
+//     it, and every future one would have been.
+//
+// The INTENT is kept and the INSTRUMENT is replaced. What Story 31.15 actually
+// wanted to claim is that the shipped-copy invariants did not move — so assert
+// the invariants, over the tree as it stands, on whatever branch this runs.
+// That claim is true on the epic branch for a real reason, stays true on a
+// branch that legitimately edits a skill document, and goes red the moment a
+// skill-document change moves a count, a digest, or a distribution.
+//
+// This is deliberately NOT a duplicate of 11.2/11.3. Those pin the COUNT and
+// byte-UNIFORMITY only (`digests.size === 1`), which a coordinated edit to all
+// 41 or all 9 copies satisfies, and which says nothing about how the copies are
+// distributed across the two deploy pipelines. This pins the two things a
+// count-only check cannot see: WHICH BYTES (the literal digests) and WHERE
+// (13/14/14 and 3/3/3). Those were the only invariant breaks the retired diff
+// could have caught that 11.2/11.3 miss; they are now caught directly.
+//
+// The digests and distributions are the same literals `test/release-gate-epic-
+// 31.test.js` AC7.1/AC7.2 pin. Restated here rather than imported, because this
+// suite's own §11 is the place a publish-hook change would break them.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PINNED_BLOCKS = [
+  {
+    heading: '## Knowledge Store Binding Preflight',
+    label: "Story 31.4's preflight",
+    digest: 'ca9bf25ba475f11ac760e8c92a2d41f92a21298d9f11df55881527673e67051f',
+    distribution: { 'skills/': 13, 'lib/bmad-extension/skills/': 14, 'lib/bmad-extension-plugin/': 14 },
+  },
+  {
+    heading: '## Knowledge Store Backend Routing',
+    label: "Story 31.9's gate",
+    digest: 'cda3d3d99cff06edb3b7bbb00bc1399d6a060fc153829fba7108cdfb91b09cfb',
+    distribution: { 'skills/': 3, 'lib/bmad-extension/skills/': 3, 'lib/bmad-extension-plugin/': 3 },
+  },
+];
+
+test('11.1 AC9(c) a skill-document change cannot move the pinned blocks: both are at their PINNED DIGEST and PINNED DISTRIBUTION', () => {
+  // Longest prefix first: the plugin mirror must not be mistaken for the
+  // extension tree. `collectHeadingBlocks` yields host-native separators, so
+  // normalise before matching — a backslash here would silently zero every
+  // bucket on Windows and turn this pin into another vacuous pass.
+  const BUCKETS = ['lib/bmad-extension-plugin/', 'lib/bmad-extension/skills/', 'skills/'];
+
+  for (const { heading, label, digest, distribution } of PINNED_BLOCKS) {
+    const copies = collectHeadingBlocks(
+      ['skills', 'lib/bmad-extension/skills', 'lib/bmad-extension-plugin'], heading);
+
+    const digests = new Set(copies.map((c) => crypto.createHash('sha256').update(c.block).digest('hex')));
+    assert.deepStrictEqual([...digests], [digest],
+      `${label} is no longer the pinned block. Expected all ${copies.length} shipped copies at ` +
+      `${digest}; got ${JSON.stringify([...digests])}. A digest move is a DEFECT to re-adjudicate ` +
+      `against the shipped instruction text, NOT a rebaseline.`);
+
+    const dist = Object.fromEntries(BUCKETS.map((b) => [b, 0]));
+    const unclassified = [];
+    for (const c of copies) {
+      const rel = c.file.replace(/\\/g, '/');
+      const bucket = BUCKETS.find((b) => rel.startsWith(b));
+      if (bucket) dist[bucket] += 1; else unclassified.push(rel);
+    }
+    assert.deepStrictEqual(unclassified, [],
+      `every copy of ${label} must fall in a known shipped tree, or this pin is measuring a ` +
+      `population it cannot name: ${JSON.stringify(unclassified)}`);
+    assert.deepStrictEqual(dist, distribution,
+      `${label} has moved between the shipped trees: ${JSON.stringify(dist)}. Both deploy ` +
+      `pipelines must carry it, and the totals (${Object.values(distribution).reduce((a, b) => a + b, 0)}) ` +
+      `can stay right while the split goes wrong — which is why the split is pinned too.`);
+  }
 });
 
 /** Extract a marker-delimited or heading-delimited block, as the pinning suites do. */
