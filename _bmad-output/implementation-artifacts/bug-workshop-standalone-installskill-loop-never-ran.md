@@ -168,6 +168,25 @@ if (!fs.existsSync(path.join(PROJECT_ROOT, token))) continue; // not a repo docu
 A guard that is green or red for the same source depending on a gitignored file is not a guard.
 Fix both: record the offender, and make the check independent of working-tree accidents.
 
+**A second, independent way the same guard goes red — test-order coupling.** Measured
+2026-09-13 in the `fix/persona-manifest-path` worktree. Running `test/build-plugin.test.js`
+leaves an untracked staging tree behind at `lib/.bmad-extension-plugin.build-<pid>-<ms>/`, which
+contains `skills/`. `BLOCKING-4`'s companion assertion — *"the guard has real reach: it inspects
+every shipped skill tree"* — enumerates skill trees **from disk**, finds four where three are
+pinned, and fails:
+
+```
+the guard scans ["skills","lib/bmad-extension/skills","lib/bmad-extension-plugin/skills"]
+but this repository ships skill trees at ["lib/.bmad-extension-plugin.build-18780-1789298891730/skills", ...]
+```
+
+Same tree, same commit: **58/1 with the leftover present, 59/0 once it is removed.** The leftover
+is not gitignored, so `git status` does show it — but a reviewer who runs the suites in
+`npm test` order and reads only the pass/fail counts sees a failure that has nothing to do with
+the code under review. Two defects, both pre-existing and both cheap: the builder should clean up
+its staging tree (this is the same Windows `prepare` leak that puts a temp build dir in the
+published tarball), and the reach assertion should exclude dot-prefixed build staging trees.
+
 ### RF-3 — `11.1 AC9(c)` in `project-layout-confluence-publish-hook.test.js` is mis-scoped
 
 `changedFiles()` (`:3908-3914`) computes
