@@ -55,6 +55,39 @@ async function testAsync(name, fn) {
   }
 }
 
+// ─── The prompts stub ────────────────────────────────────────────────────────
+//
+// Installed in the require cache BEFORE cli.js is loaded, so cli.js's own
+// `require('prompts')` (bin/cli.js:31) binds to it. Branch 2 of
+// selectBmadModules — the bare `--bmad-modules` multiselect — is the ONLY
+// branch that prompts, and without this seam it is unreachable from a test:
+// every other case in this file passes `bmadModulesPrompt: false` and the
+// branch is never executed.
+//
+// The default answer THROWS rather than returning `{}`. Returning `{}` would
+// read back as `chosenModules === undefined` and drive cli.js into
+// `process.exit(0)`, taking the whole suite down mid-run having reported
+// nothing. Throwing turns an unexpected prompt into an ordinary named failure
+// — and doubles as the assertion that the no-flag and `--yes` branches never
+// prompt at all.
+const promptsModulePath = require.resolve('prompts');
+require('prompts');
+
+function unexpectedPrompt(question) {
+  const name = (question && question.name) || '(unnamed)';
+  const message = (question && question.message) || '';
+  throw new Error(
+    `selectBmadModules asked a question this test did not expect — prompt ` +
+    `${JSON.stringify(name)} (${JSON.stringify(message)}). Only the bare ` +
+    `--bmad-modules branch may prompt.`
+  );
+}
+
+let promptAnswer = unexpectedPrompt;
+require.cache[promptsModulePath].exports = async function stubPrompts(question) {
+  return promptAnswer(question);
+};
+
 const bmad = require('../lib/bmad');
 const { parseFlags, selectBmadModules } = require('../bin/cli.js');
 const { getBmadModules, setBmadModules } = require('../lib/profile');
@@ -491,6 +524,21 @@ test('CSV with whitespace from --bmad-modules normalises correctly', () => {
     return BUNDLED_IDS.filter(id => new RegExp(`\\b${id}\\b`).test(span));
   }
 
+  // Same membership, but in the order the PRD PROSE names them rather than the
+  // order the bundle happens to enumerate. `idsIn` above filters BUNDLED_IDS,
+  // so its order comes from the cache manifest — i.e. from the code — and can
+  // never contradict a reordered DEFAULT_BMAD_MODULE_IDS. This one can: the
+  // sequence is read out of FR123's sentence.
+  function idsInOrder(span) {
+    const re = new RegExp(`\\b(${BUNDLED_IDS.join('|')})\\b`, 'g');
+    const found = [];
+    let m;
+    while ((m = re.exec(span)) !== null) {
+      if (!found.includes(m[1])) found.push(m[1]);
+    }
+    return found;
+  }
+
   /** The set FR123 names as the default INSTALL set. */
   function fr123DefaultSet() {
     const fr123 = readFrLine('FR123');
@@ -511,6 +559,23 @@ test('CSV with whitespace from --bmad-modules normalises correctly', () => {
     const found = idsIn(span[1]);
     assert.ok(found.length >= 2,
       `FR123's default-set clause named ${found.length} known module(s) — parser is not matching`);
+    return found;
+  }
+
+  /**
+   * The same set, in FR123's own written order — the oracle for the ORDER of
+   * the emitted `--modules` value (NFR21 determinism), which every other
+   * assertion in this file sorts away.
+   */
+  function fr123DefaultOrder() {
+    const fr123 = readFrLine('FR123');
+    const span = fr123.match(
+      /the default install set is (.*?) from the bundled cache manifest/
+    );
+    assert.ok(span, 'FR123 no longer states the default install set in a parseable form');
+    const found = idsInOrder(span[1]);
+    assert.deepStrictEqual([...found].sort(), [...fr123DefaultSet()].sort(),
+      'the ordered and unordered parsers disagree about FR123 membership');
     return found;
   }
 
@@ -625,6 +690,105 @@ test('CSV with whitespace from --bmad-modules normalises correctly', () => {
       assert.deepStrictEqual([...getBmadModules(tmp)].sort(), [...fr123DefaultSet()].sort(),
         'the --yes resolution is persisted like any other');
     } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  // ─── Branch 2 — the bare `--bmad-modules` multiselect ───────────────────────
+  //
+  // WHY THIS SECTION EXISTS. Branch 2 had no behavioural coverage at all:
+  // `bmadModulesPrompt` was asserted only inside the parseFlags tests, and every
+  // call into selectBmadModules passed it `false`. Changing the initial check
+  // state at bin/cli.js from `selected: isCore || defaultIds.has(m.id)` back to
+  // `selected: true` left this suite at 46 passed / 0 failed — and
+  // `selected: true` is LITERALLY the pre-change value, so a careless revert or
+  // a bad merge silently restores "installs everything", the regression this
+  // whole change exists to remove.
+  //
+  // Both halves of FR123's claim about this prompt are pinned here, because
+  // both were unverified: the initial check state IS the default set, and every
+  // bundled module is STILL OFFERED — the second is what FR123's air-gap
+  // argument rests on ("they remain fully available offline through the
+  // `--bmad-modules` multiselect").
+
+  await testAsync('AC4 bare --bmad-modules pre-checks exactly FR123 default set, bmm forced', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-multi-'));
+    const asked = [];
+    try {
+      // Answer by confirming whatever the prompt arrived pre-checked with —
+      // i.e. the user pressing Enter and touching nothing, which is the case
+      // FR123 says must land on the same modules as the no-flag branch.
+      promptAnswer = (question) => {
+        asked.push(question);
+        return { chosenModules: question.choices.filter(c => c.selected).map(c => c.value) };
+      };
+
+      const flags = parseFlags(['install', '--bmad-modules']);
+      assert.strictEqual(flags.bmadModulesPrompt, true, 'bare flag must reach branch 2');
+      assert.strictEqual(flags.bmadModulesFlag, '');
+
+      const result = await selectBmadModules({
+        bmadModulesFlag: flags.bmadModulesFlag,
+        bmadModulesPrompt: flags.bmadModulesPrompt,
+        projectRoot: tmp,
+      });
+
+      assert.strictEqual(asked.length, 1, 'branch 2 must ask exactly one question');
+      const question = asked[0];
+      assert.strictEqual(question.type, 'multiselect');
+
+      const expectedChecked = [...new Set(['bmm', ...fr123DefaultOrder()])];
+      const preChecked = question.choices.filter(c => c.selected).map(c => c.value);
+      assert.deepStrictEqual([...preChecked].sort(), [...expectedChecked].sort(),
+        `the multiselect must arrive pre-checked with FR123's default set ` +
+        `(${expectedChecked.join(', ')}), got ${preChecked.join(', ')} — ` +
+        `pre-checking everything is the pre-change "installs everything" default`);
+
+      // Pressing Enter changes nothing, so branch 2 and branch 3 agree.
+      assert.deepStrictEqual([...result].sort(), [...fr123DefaultSet()].sort(),
+        'a no-op confirmation must resolve exactly what the no-flag branch resolves');
+    } finally {
+      promptAnswer = unexpectedPrompt;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC4 bare --bmad-modules still OFFERS every bundled module (the air-gap half)', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-offer-'));
+    const asked = [];
+    try {
+      promptAnswer = (question) => {
+        asked.push(question);
+        return { chosenModules: ['bmm'] };
+      };
+
+      await selectBmadModules({ bmadModulesPrompt: true, projectRoot: tmp });
+      assert.strictEqual(asked.length, 1);
+
+      // The oracle is FR123's two classifications, not the bundle: a module the
+      // PRD names must be offered, whatever the code enumerates.
+      const classified = [...fr123DefaultOrder(), ...fr123NonDefaultSet()];
+      const offered = asked[0].choices.map(c => c.value);
+      assert.deepStrictEqual([...offered].sort(), [...classified].sort(),
+        `every module FR123 classifies — default and non-default alike — must be ` +
+        `offered by the multiselect; got ${offered.join(', ')}`);
+
+      // Teeth: the offer set must be STRICTLY LARGER than the check set, or
+      // "still offered" says nothing. This is what keeps gds/wds reachable
+      // offline once the default no longer installs them.
+      const preChecked = asked[0].choices.filter(c => c.selected).map(c => c.value);
+      assert.ok(offered.length > preChecked.length,
+        `the multiselect offers ${offered.length} module(s) and pre-checks ` +
+        `${preChecked.length} — nothing is reachable that the default does not already install`);
+
+      for (const id of fr123NonDefaultSet()) {
+        assert.ok(offered.includes(id),
+          `${id} is bundled-but-not-default: it must still be OFFERED`);
+        assert.ok(!preChecked.includes(id),
+          `${id} is bundled-but-not-default: it must NOT be pre-checked`);
+      }
+    } finally {
+      promptAnswer = unexpectedPrompt;
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
