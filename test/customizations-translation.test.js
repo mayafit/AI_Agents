@@ -19,6 +19,9 @@
  *      noTargetFound warning and preserves the original.
  *   7. bmm-* filename mapping: `bmm-pm.customize.yaml` lands on
  *      `bmad-agent-pm/SKILL.md` (the v6.3.0 deployed persona skill).
+ *   8. getDeployedSkillsRoots discovery half (section 11): a deployed tree that
+ *      NO registry entry names is still enumerated. Everything above builds its
+ *      fixture from the registry and therefore cannot reach this branch.
  */
 'use strict';
 
@@ -516,6 +519,126 @@ async function runAllTests() {
         const content = fs.readFileSync(skillFile, 'utf-8');
         assert.ok(content.includes('new'));
         assert.ok(!content.includes('old'));
+    });
+
+    cleanupTmpDir();
+
+    // ── 11. getDeployedSkillsRoots: the DISCOVERY half of the union ────
+    //
+    // Bug `antigravity-path-divergence`, review finding N1. `getDeployedSkillsRoots`
+    // unions two sources: the lib/agents.js registry, and `discoverDeployedSkillTrees()`.
+    // Every other test in this file builds its fixture from `IDE_SKILL_DIRS` —
+    // i.e. FROM THE REGISTRY — so the fixture can never contain a tree the
+    // registry does not name, and the discovery half was structurally
+    // unreachable by test: deleting it left this suite, routing-parity, f1a and
+    // bmad.test all green. That is the exact shape of the bug being fixed — a
+    // patcher that can only ever see the directories we already named.
+    //
+    // These tests use a tree that is in NO registry entry, asserted to be so.
+    console.log('\ngetDeployedSkillsRoots: trees the registry does not name');
+    setupTmpDir();
+
+    // `.agent/skills` is the real-world case, but it is now a registered
+    // skillsDir, so it would be found by the registry half alone and could not
+    // fail this test. Use a container no table names, and PROVE that.
+    const UNREGISTERED_TREE = path.join('.futuretool', 'skills');
+
+    await testAsync('an unregistered container really is absent from both path tables', () => {
+        const registrySkillDirs = new Set(
+            agents.getAllAgents().map(a => String(a.skillsDir || '').replace(/\\/g, '/'))
+        );
+        const seedDirs = new Set(bmad.TOOL_SKILL_DIRS.map(d => d.replace(/\\/g, '/')));
+        const rel = UNREGISTERED_TREE.replace(/\\/g, '/');
+        assert.ok(!registrySkillDirs.has(rel), `${rel} must not be a registered skillsDir`);
+        assert.ok(!seedDirs.has(rel), `${rel} must not be a TOOL_SKILL_DIRS seed`);
+    });
+
+    await testAsync('a deployed tree NO registry entry names is still enumerated', async () => {
+        const projectRoot = path.join(tmpRoot, 'discovery-1');
+        // One registered tree (the registry half) …
+        const registered = path.join(projectRoot, '.claude', 'skills', 'bmad-agent-pm');
+        fs.ensureDirSync(registered);
+        fs.writeFileSync(path.join(registered, 'SKILL.md'), '# pm\n', 'utf-8');
+        // … and one tree written by a pipeline our registry has never heard of.
+        const unknown = path.join(projectRoot, UNREGISTERED_TREE, 'bmad-agent-pm');
+        fs.ensureDirSync(unknown);
+        fs.writeFileSync(path.join(unknown, 'SKILL.md'), '# pm\n', 'utf-8');
+
+        const roots = bmad.getDeployedSkillsRoots(projectRoot).map(p => path.resolve(p));
+        assert.ok(
+            roots.includes(path.resolve(projectRoot, UNREGISTERED_TREE)),
+            `getDeployedSkillsRoots must return ${UNREGISTERED_TREE} — no registry entry ` +
+            `names it, so ONLY discoverDeployedSkillTrees() can produce it. Got: ${roots.join(', ')}`
+        );
+        assert.ok(
+            roots.includes(path.resolve(projectRoot, '.claude', 'skills')),
+            'the registry half must still contribute .claude/skills'
+        );
+    });
+
+    await testAsync('a NESTED unregistered tree is enumerated too (depth-2 scan)', async () => {
+        const projectRoot = path.join(tmpRoot, 'discovery-2');
+        const nested = path.join(projectRoot, '.futuretool', 'ide', 'skills', 'ma-agent-sqa');
+        fs.ensureDirSync(nested);
+        fs.writeFileSync(path.join(nested, 'SKILL.md'), '# sqa\n', 'utf-8');
+
+        const roots = bmad.getDeployedSkillsRoots(projectRoot).map(p => path.resolve(p));
+        assert.ok(
+            roots.includes(path.resolve(projectRoot, '.futuretool', 'ide', 'skills')),
+            `nested tree must be discovered; got: ${roots.join(', ')}`
+        );
+    });
+
+    await testAsync('a NON-DOT source tree is never enumerated (source-tree protection)', async () => {
+        const projectRoot = path.join(tmpRoot, 'discovery-3');
+        const source = path.join(projectRoot, 'lib', 'bmad-extension', 'skills', 'bmad-agent-pm');
+        fs.ensureDirSync(source);
+        fs.writeFileSync(path.join(source, 'SKILL.md'), '# pm\n', 'utf-8');
+
+        const roots = bmad.getDeployedSkillsRoots(projectRoot).map(p => path.resolve(p));
+        assert.ok(
+            !roots.includes(path.resolve(projectRoot, 'lib', 'bmad-extension', 'skills')),
+            'a non-dot source checkout tree carries pinned digests and must stay unreachable'
+        );
+    });
+
+    await testAsync('win32: a case-differing container is ONE tree, not two', async () => {
+        // Review finding N6. On Windows `.Claude/skills` and `.claude/skills` are
+        // the same physical directory: the registry seed stats its own spelling
+        // and succeeds, then the on-disk scan reports the real casing, so an
+        // un-folded Set enumerates one tree twice. Idempotent, but it double-
+        // counts in every caller's result list.
+        if (process.platform !== 'win32') {
+            console.log('    (skipped: case-insensitive collision is a win32 condition)');
+            return;
+        }
+        const projectRoot = path.join(tmpRoot, 'discovery-5');
+        // Create the container with NON-canonical casing on purpose.
+        const dir = path.join(projectRoot, '.Claude', 'skills', 'bmad-agent-pm');
+        fs.ensureDirSync(dir);
+        fs.writeFileSync(path.join(dir, 'SKILL.md'), '# pm\n', 'utf-8');
+
+        const roots = bmad.getDeployedSkillsRoots(projectRoot);
+        const claudeRoots = roots.filter(p => /[\\/]\.claude[\\/]skills$/i.test(p));
+        assert.strictEqual(
+            claudeRoots.length, 1,
+            `one physical tree must appear once, got ${claudeRoots.length}: ${claudeRoots.join(', ')}`
+        );
+        // …and the discovery scan must still have found it at all.
+        assert.ok(claudeRoots.length > 0, 'the tree must be discovered');
+    });
+
+    await testAsync('SKILL.md as a DIRECTORY does not mark a tree as deployed', async () => {
+        // `existsSync` cannot tell a file from a directory; every consumer then
+        // fails on EISDIR reading it. Review finding N5.
+        const projectRoot = path.join(tmpRoot, 'discovery-4');
+        fs.ensureDirSync(path.join(projectRoot, '.futuretool', 'skills', 'bmad-agent-pm', 'SKILL.md'));
+
+        const roots = bmad.getDeployedSkillsRoots(projectRoot).map(p => path.resolve(p));
+        assert.ok(
+            !roots.includes(path.resolve(projectRoot, UNREGISTERED_TREE)),
+            'a directory named SKILL.md is not a deployed persona skill'
+        );
     });
 
     cleanupTmpDir();
