@@ -191,6 +191,29 @@ So the suite is **green here and red there for the same source**, and
 red on an unrecorded item wherever the file happens to exist. Recorded in
 `bug-workshop-standalone-installskill-loop-never-ran.md`; **not** fixed here.
 
+## Lesson for the next reviewer: the commit message is not the evidence
+
+`bffe2bd` made **two** changes to `ma-agent-sqa` and described **both** as fixes:
+
+| change | described as | actually |
+| --- | --- | --- |
+| removed two Activation Sequence steps | a fix | **correct** — both steps are genuine no-ops |
+| stripped `sqa/` and the ` if it exists` guard from Critical Action 1 | *"Fix phantom MANIFEST path"* | **the regression this branch reverts** |
+
+Escalating the second change was right. But the *reasoning* must not be "the commit message
+called it deliberate, so the other change was deliberate too" — that signal is worthless in both
+directions here, because the same message asserted intent over one correct change and one
+defect. What made the escalation sound was the **history**: `d9d795e` registered
+`skillsDir: '_bmad/skills/sqa'` the following day and edited that very block without restoring
+the segment. What makes the *other* change defensible is that the two removed steps are
+**demonstrably redundant when read** — step 1 says *"(already in context)"* of itself, and step 3
+restates a variable the preceding step has just stored.
+
+**Rest the judgement on the text, never on the message's claim of intent.** Concretely: the
+resolution for those two steps runs the *opposite* way from a naive "revert everything `bffe2bd`
+touched" — they should be dropped from the other three personas, not restored to `sqa`. Filed as
+`bug-ma-agent-activation-sequence-carries-two-no-op-steps.md`; **not** done here.
+
 ## Blast radius
 
 - ~~Four personas, 16 deployed copies, every project installed with this layout.~~

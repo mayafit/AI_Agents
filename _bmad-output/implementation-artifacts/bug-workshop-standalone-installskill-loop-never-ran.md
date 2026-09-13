@@ -183,6 +183,37 @@ the same position.
 The assertion should be pinned to Story 31.15's own commit range (or moved into that story's
 review record), not re-evaluated on every branch that shares its merge base.
 
+### RF-4 — `lib/installer.js:772` asserts something that is false, and was false when written
+
+The docblock above `GLOBAL_BIND_OFFER_HEADER` states, in capitals, what the header does *not* do:
+
+```
+ * WHAT THIS HEADER DOES NOT DO, stated plainly because Story 31.11's reviewer
+ * established it and Story 31.13 did not fix it: NOTHING DIRECTS AN AGENT TO READ
+ * MANIFEST.yaml AT SKILL-ACTIVATION TIME. Zero of the shipped SKILL.md files
+ * mention this file.
+```
+
+**"Zero of the shipped SKILL.md files mention this file" is false.** All four `ma-agent-*`
+personas name `MANIFEST.yaml` as **Critical Action 1** — the literal first instruction in the
+document an agent loads at activation. Measured in this repository: eight shipped `SKILL.md`
+files match `MANIFEST.yaml` (four personas × the source bundle and the plugin mirror), plus the
+four committed `.agents/` copies.
+
+**Pre-existing and unrelated to `fix/persona-manifest-path`.** It was false before that branch
+and is false after it — the branch changed the path *inside* those citations, never whether they
+exist. The broader sentence it supports ("nothing directs an agent to read MANIFEST.yaml at
+skill-activation time") is *also* wrong for these four personas, though it may hold for the
+`bmad-agent-*` and tool-skill documents the Story 31.11 reviewer was looking at.
+
+The likely mechanism is a scope slip: a claim measured over one family of skill documents,
+written down as a claim over *all* of them. The four `ma-agent-*` personas are the counter-example
+that was not enumerated.
+
+**Fix is documentary, not behavioural** — no code depends on the sentence. Either scope it to the
+family it was measured over, or delete it. Whichever, do not leave a capitalised absolute
+standing next to a counter-example that ships in the same package.
+
 ## Provenance
 
 - Found while investigating the four `ma-agent-*` personas' Critical Action 1; the Workshop
