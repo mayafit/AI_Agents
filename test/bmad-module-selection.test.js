@@ -906,6 +906,83 @@ test('CSV with whitespace from --bmad-modules normalises correctly', () => {
     assert.deepStrictEqual(bmad.getDefaultBmadModules(['bmm', 'tea']), ['bmm', 'tea']);
   });
 
+  await testAsync('AC1 a degraded bundle degrades THROUGH selectBmadModules, not only in the helper', async () => {
+    // The test above exercises the intersection as a UNIT. Mutant M-D — deleting
+    // the intersection so `getDefaultBmadModules` returns `[...DEFAULT_BMAD_MODULE_IDS]`
+    // verbatim — survived that at 46/0, because nothing drove the CALL SITE that
+    // consumes it. With the intersection gone, branch 3c hands `tea, bmb, cis` to
+    // `resolveBmadModules` against an available set of `[bmm]` alone and the
+    // documented crash returns:
+    //
+    //   Unknown BMAD module(s): tea, bmb, cis. Available: bmm
+    //
+    // — thrown out of the installer's module-selection step, which is exactly the
+    // failure the intersection exists to prevent. Branch 3c has no try/catch.
+    //
+    // The degradation is induced at its documented source: `getInstallableBmadModules()`
+    // returns `[bmm]` alone when `lib/bmad-cache/cache-manifest.json` is missing or
+    // unreadable. Patching the export (bin/cli.js:48 holds the same module object and
+    // calls it as `bmad.getInstallableBmadModules()`) reproduces that without moving
+    // the shipped cache out from under a parallel suite.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-degraded-'));
+    const realGetInstallable = bmad.getInstallableBmadModules;
+    try {
+      bmad.getInstallableBmadModules = () => [
+        { id: 'bmm', retired: false, description: 'BMad Method core' },
+      ];
+
+      let result;
+      try {
+        result = await selectBmadModules({ projectRoot: tmp });
+      } catch (err) {
+        assert.fail(
+          `a degraded bundle must degrade to a minimal install, not take the ` +
+          `module-selection step down: ${err.message}`
+        );
+      }
+      assert.deepStrictEqual(result, ['bmm'],
+        'a bundle that can only install bmm must resolve exactly [bmm]');
+      assert.deepStrictEqual(getBmadModules(tmp), ['bmm'],
+        'and the degraded resolution is persisted like any other');
+    } finally {
+      bmad.getInstallableBmadModules = realGetInstallable;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('NFR21 the default path emits --modules in the order FR123 writes it', async () => {
+    // Mutant M-C — reordering DEFAULT_BMAD_MODULE_IDS to ['cis','bmb','tea','bmm'] —
+    // survived at 46/0. Every AC1/AC4 assertion sorts before comparing, so order was
+    // caught only incidentally by a 2-element deepStrictEqual in the degraded-bundle
+    // test. The installer would have emitted `--modules cis,bmb,tea,bmm`, and the
+    // NFR21 determinism claim in the `getDefaultBmadModules` docblock ("the resolved
+    // --modules value is deterministic regardless of manifest key order") was pinned
+    // by nothing that names it.
+    //
+    // The explicit path already asserts its literal `--modules` string (AC3, below);
+    // this is the same assertion for the DEFAULT path, with the expected order read
+    // out of FR123's own sentence rather than restated here.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-order-'));
+    try {
+      const expected = fr123DefaultOrder();
+      const result = await selectBmadModules({ projectRoot: tmp });
+      assert.deepStrictEqual(result, expected,
+        `the default set must resolve in FR123's written order (${expected.join(', ')}), ` +
+        `got ${result.join(', ')} — membership alone is not determinism`);
+
+      // The literal argv the installer hands to bmad-method.
+      const cmd = bmad.buildBmadArgs({
+        projectRoot: tmp,
+        modules: result,
+        tools: ['claude-code'],
+      });
+      assert.ok(new RegExp(`--modules ${expected.join(',')}(\\s|$)`).test(cmd),
+        `the bmad-method command must carry --modules ${expected.join(',')}, got: ${cmd}`);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   // ─── Summary ──────────────────────────────────────────────────────────────
   console.log(`\n${passed} passed, ${failed} failed`);
   if (errors.length > 0) {
