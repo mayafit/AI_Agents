@@ -68,6 +68,14 @@ or publish. Do not set any status to `done`. Do not run
 - [ ] `bug-workshop-standalone-installskill-loop-never-ran.md` -- file new high-severity bug -- larger defect
 - [ ] `sprint-status.yaml` -- register the new bug; re-validate with `js-yaml`
 
+**Nit round (2026-09-13, independent review — APPROVE-WITH-NITS, nothing blocking):**
+- [x] `test/convert-agents-to-skills.test.js` -- pin the full Critical Action 1 line per persona, path **derived** from `lib/agents.js` `getAgentsByCategory('bmad')`, across all three trees; companion pin of Critical Action 2 against `STANDARD_CRITICAL_ACTIONS[1]` read out of `lib/bmad.js` -- the fix shipped with no test able to detect its own regression
+- [x] `.agents/skills/ma-agent-{sre,devops,cyber,sqa}/SKILL.md` -- sync the two Critical Action lines with source, CRLF preserved -- the drift was **introduced** by this change (lockstep with source at `0f03e4f`), not inherited
+- [x] `bug-workshop-standalone-installskill-loop-never-ran.md` -- correct RF-1's stated reason with the commit evidence; add RF-4 (`lib/installer.js:772`'s false absolute)
+- [x] `lib/bmad-extension/skills/ma-agent-*/SKILL.md` -- reword step 2 to keep the capital `For`; `lib/bmad.js:2642` matches case-sensitively, so step 2 was classifying CUSTOM in all four personas
+- [x] `bug-ma-agent-personas-...md` -- header said "three" while the body carries five corrections; close AC 3; record the `bffe2bd` caution
+- [x] `bug-ma-agent-activation-sequence-carries-two-no-op-steps.md` -- new backlog bug; the Activation Sequence resolution runs the **other** way (drop from the other three, do not restore to `sqa`)
+
 **Acceptance Criteria:**
 - Given the four persona SKILL.md files, when Critical Action 1 is read, then each cites
   `{project-root}/_bmad/skills/<slug>/MANIFEST.yaml if it exists` with `<slug>` matching its `lib/agents.js` `skillsDir`.
@@ -78,6 +86,24 @@ or publish. Do not set any status to `done`. Do not run
 - Given the changes, when the named suites run, then every invariant in the brief re-derives unchanged.
 
 ## Spec Change Log
+
+- **2026-09-13 — nit round.** An independent review returned APPROVE-WITH-NITS (nothing
+  blocking) on four items, all closed on this branch. Two corrections to what the original
+  execution recorded:
+  - The **`Always` constraint was necessary but not sufficient.** It required only that
+    `content.includes('always_load: true')` keep passing. Step 2's new conditional prefix
+    satisfied that while lowercasing the leading `For`, which is what `lib/bmad.js:2642`
+    substring-matches — so every persona's step 2 silently reclassified as CUSTOM. The Design
+    Notes reasoned correctly about the **suffix** on `STANDARD_CRITICAL_ACTIONS[0]` and did not
+    apply the same reasoning to the **prefix** on `[1]`.
+  - The **Code Map's tree list was incomplete.** It named the source bundle and the generated
+    plugin mirror. A third tree ships a copy — the committed, tracked, non-gitignored
+    `.agents/skills/` — and it had moved in lockstep with source (`0f03e4f`) up to this branch.
+    Scoping the change to "source bundles and their generated mirrors" therefore *created* the
+    drift rather than leaving pre-existing drift alone.
+
+  Both were caught by **executing** the shipped code, not by reading it. The new tests in
+  `test/convert-agents-to-skills.test.js` exist so neither can recur silently.
 
 ## Design Notes
 
