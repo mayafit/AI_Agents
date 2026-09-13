@@ -110,11 +110,37 @@ registration"*) deleted `ma-agent-ml` from all three source bundles. **Verified 
 `{project-root}/_bmad/skills/demerzel/MANIFEST.yaml` — an agent host `lib/agents.js` no longer
 registers. The deployed tree was never reconciled with the source bundles.
 
-**Related:** the same `.agents/` tree still carries the **pre-fix** Critical Actions text for
-all four `ma-agent-*` personas (including `ma-agent-sqa`'s bare `_bmad/skills/MANIFEST.yaml`).
-Deliberately **not** updated on `fix/persona-manifest-path`, which is scoped to the source
-bundles and their generated mirrors — but it confirms that this committed deployed tree drifts
-from source and nothing notices.
+**Related — and the original justification here was wrong.** An earlier revision of this
+finding said the same `.agents/` tree's four `ma-agent-*` personas were pre-existing drift,
+"deliberately **not** updated on `fix/persona-manifest-path`, which is scoped to the source
+bundles and their generated mirrors." **That reasoning does not hold for those four files**,
+and leaving them would have made this change the *author* of the drift rather than its
+inheritor. Two measurements settle it:
+
+| file | last commit before `fix/persona-manifest-path` |
+| --- | --- |
+| `.agents/skills/ma-agent-{sre,devops,cyber,sqa}/SKILL.md` | `0f03e4f` |
+| `lib/bmad-extension/skills/ma-agent-{sre,devops,cyber,sqa}/SKILL.md` | `0f03e4f` |
+| `.agents/skills/ma-agent-ml/SKILL.md` | `98cb888` |
+
+The four personas moved in **lockstep with source** — same commit, and byte-identical to their
+source counterparts modulo CRLF line endings (verified by CR-normalised `diff`: zero differing
+lines before this branch). Nothing regenerates `.agents/`: `npm run build:plugin`
+(`scripts/build-plugin.js`) writes only `lib/bmad-extension-plugin/`, and the tree is **tracked
+and not gitignored** (`git check-ignore` reports no match). It is a committed deployed copy that
+has always been hand-maintained alongside source.
+
+**Therefore the four were updated on `fix/persona-manifest-path`** — the same two Critical Action
+lines, nothing else (8 insertions, 8 deletions across four files), CRLF preserved.
+
+`ma-agent-ml` is the genuinely stale one and remains RF-1's actual subject: last touched by
+`98cb888`, three commits of source history behind, and deleted from all three source bundles by
+`5b11f2b` without ever being reconciled here. It is **not** touched by this branch — removing an
+orphaned deployed tree is a separate decision from keeping a live one in sync.
+
+The finding that survives: **nothing notices when `.agents/` drifts from source.** There is no
+build step and no test that compares them. That gap is what let `ma-agent-ml` rot, and it is why
+the four personas had to be caught by review rather than by CI.
 
 ### RF-2 — `CITABLE_RUNTIME_ARTIFACTS` does not record the `open-presentation` offender
 
