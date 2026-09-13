@@ -435,6 +435,50 @@ test(
 // into cover for a different divergence.
 
 /**
+ * What a declared divergence's `reason` must satisfy. Returns null when the
+ * reason is acceptable, else a short description of the problem.
+ *
+ * A pure length floor is NOT a quality rule: `'x'.repeat(40)` passes one, and a
+ * mutant that replaced a real reason with exactly that survived the suite. A
+ * rule that looks like it enforces substance and does not is worse than no rule,
+ * so this asks for three independent, mechanically checkable properties:
+ *
+ *   1. at least MIN_CHARS characters — an explanation is not a sentence fragment;
+ *   2. at least MIN_DISTINCT_WORDS distinct word tokens — kills filler, repeated
+ *      tokens, and lorem-ipsum padding, which a length check cannot see;
+ *   3. it names at least one of the two paths it is excusing — a reason that
+ *      cannot be traced back to the divergence it explains is boilerplate, and
+ *      this is what stops one entry rotting into cover for another.
+ *
+ * What it deliberately does NOT claim: that the prose is true, current, or
+ * persuasive. Only a human review can establish that. This is a floor against
+ * mechanical filler, and 5.5(f)/(g) pin exactly that boundary.
+ */
+const REASON_MIN_CHARS = 40;
+const REASON_MIN_DISTINCT_WORDS = 8;
+
+function reasonProblem(entry) {
+  const reason = entry && entry.reason;
+  if (typeof reason !== 'string') return `not a string (${JSON.stringify(reason)})`;
+  const trimmed = reason.trim();
+  if (trimmed.length < REASON_MIN_CHARS) {
+    return `shorter than ${REASON_MIN_CHARS} chars (${trimmed.length})`;
+  }
+  const words = trimmed.toLowerCase().match(/[a-z][a-z'’-]{2,}/g) || [];
+  const distinct = new Set(words);
+  if (distinct.size < REASON_MIN_DISTINCT_WORDS) {
+    return `only ${distinct.size} distinct words — filler, not an explanation ` +
+      `(need >=${REASON_MIN_DISTINCT_WORDS})`;
+  }
+  const paths = [entry.maSkillsDir, entry.bmadTargetDir]
+    .filter((p) => typeof p === 'string' && p.length > 0);
+  if (paths.length > 0 && !paths.some((p) => trimmed.includes(p))) {
+    return `never names either recorded path (${paths.join(' / ')}) — untraceable boilerplate`;
+  }
+  return null;
+}
+
+/**
  * Pure auditor over the two path tables. Extracted so the tests can run it
  * against a synthetic registry and prove the check actually fires (5.5) —
  * a guard that never goes red proves nothing.
@@ -500,10 +544,9 @@ function auditPathTables(registry, platforms, divergences, codeFor) {
         `${agent.id}: stale declaration — records bmadTargetDir='${declared.bmadTargetDir}' but upstream says '${theirs}'`
       );
     }
-    if (typeof declared.reason !== 'string' || declared.reason.trim().length < 40) {
-      findings.push(
-        `${agent.id}: declared divergence needs a real reason (>=40 chars), got ${JSON.stringify(declared.reason)}`
-      );
+    const problem = reasonProblem(declared);
+    if (problem) {
+      findings.push(`${agent.id}: declared divergence needs a real reason — ${problem}`);
     }
   }
 
@@ -613,6 +656,13 @@ test('5.5: the divergence auditor actually fires (mutation control)', () => {
   const fakePlatforms = { widget: { installer: { target_dir: '.widget/skills' } } };
   const codeFor = (id) => id;
 
+  // A reason that satisfies the real rule, so the branches under test are the
+  // only thing each case can trip. Names a path on purpose (see reasonProblem).
+  const goodReason =
+    'Upstream routes this tool to .widget/skills while the registry keeps its own ' +
+    'workspace tree; both are patched, so nothing goes unseen and realigning is a ' +
+    'compatibility call for its own story.';
+
   // (a) undeclared divergence must be reported
   const undeclared = auditPathTables(
     [{ id: 'widget', category: 'ide', skillsDir: '.wid/skills' }],
@@ -627,7 +677,7 @@ test('5.5: the divergence auditor actually fires (mutation control)', () => {
   const stale = auditPathTables(
     [{ id: 'widget', category: 'ide', skillsDir: '.wid/skills' }],
     fakePlatforms,
-    { widget: { maSkillsDir: '.OLD/skills', bmadTargetDir: '.widget/skills', reason: 'x'.repeat(40) } },
+    { widget: { maSkillsDir: '.OLD/skills', bmadTargetDir: '.widget/skills', reason: goodReason } },
     codeFor
   );
   assert.ok(
@@ -639,7 +689,7 @@ test('5.5: the divergence auditor actually fires (mutation control)', () => {
   const resolved = auditPathTables(
     [{ id: 'widget', category: 'ide', skillsDir: '.widget/skills' }],
     fakePlatforms,
-    { widget: { maSkillsDir: '.wid/skills', bmadTargetDir: '.widget/skills', reason: 'x'.repeat(40) } },
+    { widget: { maSkillsDir: '.wid/skills', bmadTargetDir: '.widget/skills', reason: goodReason } },
     codeFor
   );
   assert.ok(
@@ -655,6 +705,115 @@ test('5.5: the divergence auditor actually fires (mutation control)', () => {
     codeFor
   );
   assert.deepStrictEqual(clean.findings, [], 'an aligned tool must produce no findings');
+
+  // (e) ORPHAN-KEY branch — a declaration keyed to a platform no registered
+  // agent maps to. Previously unexercised: 5.5 claimed to cover "each" branch
+  // and covered three of them. An orphan silently pre-excuses a future entry of
+  // the same name, which is exactly the rot this section exists to stop.
+  const orphan = auditPathTables(
+    [{ id: 'widget', category: 'ide', skillsDir: '.widget/skills' }],
+    fakePlatforms,
+    { gizmo: { maSkillsDir: '.giz/skills', bmadTargetDir: '.gizmo/skills', reason: goodReason } },
+    codeFor
+  );
+  assert.ok(
+    orphan.findings.some((f) => /orphan entry 'gizmo'/.test(f)),
+    'a declaration matching no registered agent must be reported as an orphan'
+  );
+
+  // (e2) the neighbouring unmapped-agent branch: an agent upstream has never
+  // heard of cannot diverge, but a declaration for it is bogus and must fire.
+  const bogus = auditPathTables(
+    [{ id: 'ghost', category: 'ide', skillsDir: '.ghost/skills' }],
+    fakePlatforms,
+    { ghost: { maSkillsDir: '.ghost/skills', bmadTargetDir: '.ghostly/skills', reason: goodReason } },
+    codeFor
+  );
+  assert.ok(
+    bogus.findings.some((f) => /bmad-method has no such platform/.test(f)),
+    'a declaration naming a platform bmad-method does not ship must be reported'
+  );
+  assert.deepStrictEqual(bogus.unmapped, ['ghost'], 'the unmapped agent must still be reported as unmapped');
+
+  // (f) SHORT-REASON branch — also previously unexercised.
+  const shortReason = auditPathTables(
+    [{ id: 'widget', category: 'ide', skillsDir: '.wid/skills' }],
+    fakePlatforms,
+    { widget: { maSkillsDir: '.wid/skills', bmadTargetDir: '.widget/skills', reason: 'because' } },
+    codeFor
+  );
+  assert.ok(
+    shortReason.findings.some((f) => /needs a real reason — shorter than/.test(f)),
+    'a one-word reason must be reported'
+  );
+
+  // (g) FILLER branch — the mutation that survived before this round. A reason
+  // of exactly 40 literal `x`s clears every length floor and explains nothing.
+  const filler = auditPathTables(
+    [{ id: 'widget', category: 'ide', skillsDir: '.wid/skills' }],
+    fakePlatforms,
+    { widget: { maSkillsDir: '.wid/skills', bmadTargetDir: '.widget/skills', reason: 'x'.repeat(40) } },
+    codeFor
+  );
+  assert.ok(
+    filler.findings.some((f) => /distinct words/.test(f)),
+    "40 literal 'x's must NOT pass as a reason — this is the MX1 mutant"
+  );
+
+  // (g2) …and a long, well-formed sentence that never names either path is
+  // boilerplate: it cannot be traced to the divergence it claims to excuse.
+  const untraceable = auditPathTables(
+    [{ id: 'widget', category: 'ide', skillsDir: '.wid/skills' }],
+    fakePlatforms,
+    {
+      widget: {
+        maSkillsDir: '.wid/skills',
+        bmadTargetDir: '.widget/skills',
+        reason: 'This divergence is intentional and has been reviewed by the team at length.',
+      },
+    },
+    codeFor
+  );
+  assert.ok(
+    untraceable.findings.some((f) => /never names either recorded path/.test(f)),
+    'a reason that names neither path must be reported'
+  );
+
+  // (h) every declaration SHIPPED in lib/agents.js clears the strengthened rule —
+  // the rule is a floor on real entries, not a bar only synthetic ones can clear.
+  for (const [code, entry] of Object.entries(PLATFORM_PATH_DIVERGENCES)) {
+    assert.strictEqual(reasonProblem(entry), null, `shipped divergence '${code}' has a weak reason`);
+  }
+});
+
+test('5.6: every upstream target_dir is a dot-prefixed container (the confinement invariant)', () => {
+  // `discoverDeployedSkillTrees` scans DOT-prefixed containers only, at most one
+  // level of nesting deep. That confinement is what keeps a source checkout's own
+  // `lib/bmad-extension/skills/` and `skills/` trees permanently out of reach of
+  // an install-time patcher. Nothing asserted the property it rests on: a future
+  // upstream platform with a non-dot or depth-3 target_dir would escape BOTH the
+  // section-5 audit (which only compares tools WE register — 35 upstream
+  // platforms are not registered) and the disk scan, silently.
+  const offenders = [];
+  let checked = 0;
+  for (const [code, platform] of Object.entries(bmadPlatforms)) {
+    const target = platform && platform.installer && platform.installer.target_dir;
+    if (!target) continue;
+    checked++;
+    const parts = String(target).replace(/\\/g, '/').replace(/\/+$/, '').split('/');
+    if (!parts[0].startsWith('.') || parts.length > 3) {
+      offenders.push(`${code} -> '${target}'`);
+    }
+  }
+  assert.ok(checked >= 40, `anti-vacuity: expected >=40 upstream target_dirs, got ${checked}`);
+  if (offenders.length > 0) {
+    throw new Error(
+      'bmad-method ships a target_dir outside the dot-container convention that\n' +
+        'lib/bmad.js discoverDeployedSkillTrees() is confined to, so a tree there would\n' +
+        'never be discovered (and section 5 only compares tools ma-agents registers):\n  ' +
+        offenders.join('\n  ')
+    );
+  }
 });
 
 // Informational — upstream ships far more platforms than ma-agents registers.
