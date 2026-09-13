@@ -171,6 +171,28 @@ test('detects installed modules from _bmad/<id>/ directories', () => {
   }
 });
 
+test('a stray FILE named _bmad/<id> does not count as an installed module', () => {
+  // Reviewer probe P4. The probe is documented as detecting
+  // "`_bmad/<id>/` DIRECTORIES" and its result feeds branch 3b of
+  // selectBmadModules, where it is treated as the user's own module selection
+  // and then PERSISTED. `fs.existsSync` answers yes for a regular file, so a
+  // stray `_bmad/wds` file was enough to make the probe report wds installed —
+  // and the persisted record would then carry it forever.
+  // `prePopulateBmadCache` checks `stat.isDirectory()` in the analogous place
+  // (lib/bmad.js, the cache-source walk); this matches it.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-bmad-test-'));
+  try {
+    fs.mkdirSync(path.join(tmp, '_bmad', 'bmm'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, '_bmad', 'wds'), 'not a module, just a file\n');
+    const result = bmad.getInstalledBmadModules(tmp);
+    assert.ok(result.includes('bmm'), `expected bmm in: ${result.join(', ')}`);
+    assert.ok(!result.includes('wds'),
+      `a regular file named _bmad/wds is not an installed module, got: ${result.join(', ')}`);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('ignores _bmad/<id>/ entries that are not in the cache manifest', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-bmad-test-'));
   try {
@@ -872,6 +894,28 @@ test('CSV with whitespace from --bmad-modules normalises correctly', () => {
 
       // And the run migrates the project onto 27.13's durable record.
       assert.ok(getBmadModules(tmp).includes('wds'), 'the on-disk set is now persisted');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC6 a stray FILE on disk does not migrate a project onto a module it never installed', async () => {
+    // The same defect one layer up, where it actually bites. Branch 3b treats
+    // the on-disk probe as the pre-27.13 project's own module selection and
+    // PERSISTS the result, so a stray file promotes itself into a durable
+    // "explicit user selection" that no future default change can undo.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-strayfile-'));
+    try {
+      for (const id of ['bmm', 'tea']) {
+        fs.mkdirSync(path.join(tmp, '_bmad', id), { recursive: true });
+      }
+      fs.writeFileSync(path.join(tmp, '_bmad', 'wds'), 'not a module, just a file\n');
+
+      const result = await selectBmadModules({ projectRoot: tmp });
+      assert.ok(!result.includes('wds'),
+        `a regular file named _bmad/wds must not put wds in the resolved set, got ${result.join(', ')}`);
+      assert.ok(!getBmadModules(tmp).includes('wds'),
+        'and it must not be persisted as if the user had chosen it');
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }
