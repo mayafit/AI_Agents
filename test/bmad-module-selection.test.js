@@ -188,6 +188,17 @@ test('a stray FILE named _bmad/<id> does not count as an installed module', () =
     assert.ok(result.includes('bmm'), `expected bmm in: ${result.join(', ')}`);
     assert.ok(!result.includes('wds'),
       `a regular file named _bmad/wds is not an installed module, got: ${result.join(', ')}`);
+
+    // The statSync guard must FAIL CLOSED. `statSync` throws ENOENT for an id
+    // with no `_bmad/<id>` entry at all — the common case — so a catch arm that
+    // returned true would report every installable module as installed, and
+    // branch 3b would then persist that. Flipping `return false` to
+    // `return true` in that catch otherwise survived the whole suite.
+    for (const absent of ['gds', 'cis', 'bmb']) {
+      assert.ok(!result.includes(absent),
+        `${absent} has no _bmad/${absent} entry at all and must be absent — ` +
+        `the statSync guard must fail closed; got: ${result.join(', ')}`);
+    }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -769,7 +780,119 @@ test('CSV with whitespace from --bmad-modules normalises correctly', () => {
       // Pressing Enter changes nothing, so branch 2 and branch 3 agree.
       assert.deepStrictEqual([...result].sort(), [...fr123DefaultSet()].sort(),
         'a no-op confirmation must resolve exactly what the no-flag branch resolves');
+
+      // Bug 27.13 — branch 2's answer must be as durable as every other
+      // branch's. Without this, dropping `persist()` from the multiselect
+      // return survived the whole suite, and the user's explicit choice would
+      // quietly revert to the default on the next no-flag run.
+      assert.deepStrictEqual([...getBmadModules(tmp)].sort(), [...fr123DefaultSet()].sort(),
+        'the multiselect result must be persisted to .ma-agents.json');
     } finally {
+      promptAnswer = unexpectedPrompt;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC4 the multiselect forces bmm back in when the user unchecks it', async () => {
+    // The "(required)" tag and the belt-and-suspenders comment beside the
+    // branch-2 return both claim this, and nothing tested it: replacing
+    // `persist(bmad.resolveBmadModules({ requested: chosenModules, ... }))`
+    // with `persist(chosenModules)` survived the whole suite. That mutant
+    // removes BOTH the bmm force and the validation of what came back from the
+    // prompt — the multiselect is the one branch whose input is not the
+    // installer's own, so it is the branch that most needs both.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-nobmm-'));
+    try {
+      promptAnswer = () => ({ chosenModules: ['tea'] });   // bmm deliberately unchecked
+      const result = await selectBmadModules({ bmadModulesPrompt: true, projectRoot: tmp });
+      assert.deepStrictEqual(result, ['bmm', 'tea'],
+        'bmm must be force-prepended even when the prompt comes back without it — ' +
+        'the BMad core agents live there and downstream skills break without them');
+      assert.ok(getBmadModules(tmp).includes('bmm'),
+        'and the forced bmm is what gets persisted, not the raw prompt answer');
+
+      // The same force is what makes the prompt's `min: 1` a UX nicety rather
+      // than a correctness property: even an EMPTY answer resolves to a usable
+      // install. Stated as a test because `min: 1` is enforced inside the
+      // `prompts` library's TUI, which a stubbed prompt never executes — so
+      // relaxing it is unkillable through this seam, and this is what makes
+      // that survivor harmless rather than merely unobserved.
+      promptAnswer = () => ({ chosenModules: [] });
+      const empty = await selectBmadModules({ bmadModulesPrompt: true, projectRoot: tmp });
+      assert.deepStrictEqual(empty, ['bmm'],
+        'an empty multiselect answer must still resolve to the BMad core alone');
+    } finally {
+      promptAnswer = unexpectedPrompt;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC4 cancelling the multiselect aborts — it does not install the pre-checked default', async () => {
+    // `prompts` returns `{}` when the user cancels (Ctrl-C / Esc), so
+    // `chosenModules` reads back as undefined and branch 2 must
+    // `process.exit(0)`. Deleting that guard survived the whole suite, and the
+    // consequence is the worst possible reading of a cancel: the run would
+    // carry on and install whatever the prompt happened to arrive pre-checked
+    // with — the default set — as though the user had confirmed it.
+    //
+    // `process.exit` is stubbed to throw a sentinel so the abort is observable
+    // without taking the suite down, and restored in `finally`.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-cancel-'));
+    const realExit = process.exit;
+    let exitCode;
+    try {
+      promptAnswer = () => ({});
+      process.exit = (code) => { exitCode = code; throw new Error('__stub_process_exit__'); };
+
+      let resolved;
+      try {
+        resolved = await selectBmadModules({ bmadModulesPrompt: true, projectRoot: tmp });
+      } catch (err) {
+        if (err.message !== '__stub_process_exit__') throw err;
+      }
+
+      assert.strictEqual(exitCode, 0,
+        'a cancelled module prompt must exit(0), not fall through into an install');
+      assert.strictEqual(resolved, undefined, 'and must not resolve a module set');
+      assert.strictEqual(getBmadModules(tmp), undefined,
+        'and must not persist a selection the user never made');
+    } finally {
+      process.exit = realExit;
+      promptAnswer = unexpectedPrompt;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC4 bmm is pre-checked by the (required) force, not by its membership of the default set', async () => {
+    // `selected: isCore || defaultIds.has(m.id)` — the `isCore` half is
+    // redundant TODAY only because FR123's default set happens to open with
+    // bmm, so dropping it survives. It is the half that carries the
+    // "(required)" tag's promise, and it is the half that keeps the prompt
+    // honest if the default set is ever amended again. Pinned by removing
+    // bmm from what the default-set helper reports, which is the only
+    // circumstance under which the two halves differ.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-isCore-'));
+    const realGetDefault = bmad.getDefaultBmadModules;
+    const asked = [];
+    try {
+      bmad.getDefaultBmadModules = (available) =>
+        realGetDefault(available).filter(id => id !== 'bmm');
+      promptAnswer = (question) => {
+        asked.push(question);
+        return { chosenModules: question.choices.filter(c => c.selected).map(c => c.value) };
+      };
+
+      await selectBmadModules({ bmadModulesPrompt: true, projectRoot: tmp });
+      assert.strictEqual(asked.length, 1);
+
+      const bmmChoice = asked[0].choices.find(c => c.value === 'bmm');
+      assert.ok(bmmChoice, 'bmm must be offered');
+      assert.strictEqual(bmmChoice.selected, true,
+        'bmm is pre-checked because it is REQUIRED, not because the default set lists it');
+      assert.ok(/\(required\)/.test(bmmChoice.title),
+        `and the prompt must say so; got title ${JSON.stringify(bmmChoice.title)}`);
+    } finally {
+      bmad.getDefaultBmadModules = realGetDefault;
       promptAnswer = unexpectedPrompt;
       fs.rmSync(tmp, { recursive: true, force: true });
     }
