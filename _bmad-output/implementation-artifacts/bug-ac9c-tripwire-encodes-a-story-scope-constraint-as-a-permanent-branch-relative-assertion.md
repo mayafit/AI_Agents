@@ -174,3 +174,108 @@ legitimately edits Story 31.10's section of `epics.md`. It should get the same t
 the section's sha, or drop it. **Filed here rather than fixed, so it is not lost.**
 
 `changedFiles()` is retained solely because `11.4` still calls it.
+
+## Evidence
+
+All runs in worktree `D:\Code\AI_Agents-epic-31\.worktrees\fix-ac9c-tripwire`, branch
+`fix/ac9c-branch-scoped-tripwire`, off `cf96366`. The worktree lacked `node_modules`; a
+directory junction to `d:\Code\AI_Agents\node_modules` was created, as the sibling fix
+worktrees use.
+
+### E1 — the defect, both halves
+
+```
+HEAD=cf96366827391959e3c8c3ed946d0b8cc28736b5
+mergebase=cf96366827391959e3c8c3ed946d0b8cc28736b5
+diff count: 0
+```
+
+Baseline suite run at `cf96366` with the ORIGINAL `11.1`: **112 passed, 0 failed, exit 0** —
+`✓ 11.1 AC9(c) this story modifies NO file under skills/, …`, green over an empty diff.
+
+`fix/persona-manifest-path` vs its merge base lists eight skill documents
+(`lib/bmad-extension/skills/ma-agent-{cyber,devops,sqa,sre}/SKILL.md` and the four plugin
+mirrors), each of which the original `11.1` reported as an offender.
+
+### E2 — the suite after the fix
+
+**112 passed, 0 failed, exit 0**, with:
+
+```
+✓ 11.1 AC9(c) a skill-document change cannot move the pinned blocks: both are at their PINNED DIGEST and PINNED DISTRIBUTION
+```
+
+`EXPECTED_TEST_COUNT` unchanged at 112, so the suite's own count guard is satisfied without
+being touched.
+
+### E3 — the planted invariant breaks, shown RED
+
+Two breaks were planted into the shipped trees and reverted in the same step. Both were
+chosen to be **invisible to `11.2`/`11.3`**, which is the point.
+
+**Plant A — a coordinated edit to all 41 preflight carriers.** Count stays 41, `digests.size`
+stays 1, the digest moves.
+
+```
+planted a coordinated edit into 41 carriers
+✗ 11.1 … Story 31.4's preflight is no longer the pinned block. Expected all 41 shipped
+  copies at ca9bf25b…67051f; got ["520db7c142a91a4c8fb39c5ee2f034bcb3d474ffdc72157637a493e19a38a59b"]
+✓ 11.2 …  ✓ 11.3 …  ✓ 11.4 …
+111 passed, 1 failed          EXIT=1
+```
+
+**Plant B — one preflight copy relocated from `skills/` to the plugin mirror.** Total stays
+41, `digests.size` stays 1, the split moves.
+
+```
+relocated the block out of skills/add-sprint/SKILL.md into lib/bmad-extension-plugin/skills/_planted_relocated_copy.md
+✗ 11.1 … Story 31.4's preflight has moved between the shipped trees:
+  {"lib/bmad-extension-plugin/":15,"lib/bmad-extension/skills/":14,"skills/":12}
+✓ 11.2 …  ✓ 11.3 …  ✓ 11.4 …
+```
+
+**In both plants `11.2` and `11.3` stayed GREEN.** That is the direct evidence that retiring
+`11.1` would have lost real coverage, and the reason option 3 was rejected.
+
+**Revert proved, not asserted.** After each plant the three shipped trees were restored with
+`git checkout -- <trees>` + `git clean -fd -- <trees>` — verified beforehand to contain no
+untracked and no ignored files, so the clean could remove nothing of value.
+
+A note on the instrument, because getting this wrong is the same class of error as the bug
+being fixed. The proof script's fingerprint helper used `git ls-files -s`, which reads the
+**index**, not the working tree — it would have printed identical hashes whether or not the
+revert worked, and it did. It proves nothing and is recorded here as a flawed probe rather
+than quietly dropped. The authoritative check is `git diff HEAD` / `git status --porcelain`,
+which compare **working-tree content** against `HEAD`, and both are empty over all three
+trees after the reverts:
+
+```
+$ git diff --stat HEAD -- skills lib/bmad-extension/skills lib/bmad-extension-plugin
+[empty]
+$ git status --porcelain --untracked-files=all -- skills lib/bmad-extension/skills lib/bmad-extension-plugin
+[empty]
+```
+
+and the invariants re-derived from the restored working tree are back at
+`41 / ca9bf25b… / 13-14-14` and `9 / cda3d3d9… / 3-3-3`. **`git archive` was not used at any
+point.**
+
+### E4 — the three blocked fix branches, checked read-only
+
+Reconstructed from each branch's **committed git objects** — no working tree was read or
+written, no index was locked, and none of those branches was modified:
+
+| branch | preflight | gate |
+|---|---|---|
+| `feature/epic-31` | 41 / `ca9bf25b…` / 13-14-14 | 9 / `cda3d3d9…` / 3-3-3 |
+| `fix/persona-manifest-path` | 41 / `ca9bf25b…` / 13-14-14 | 9 / `cda3d3d9…` / 3-3-3 |
+| `fix/antigravity-path-divergence` | 41 / `ca9bf25b…` / 13-14-14 | 9 / `cda3d3d9…` / 3-3-3 |
+| `fix/wds-default-module-set` | 41 / `ca9bf25b…` / 13-14-14 | 9 / `cda3d3d9…` / 3-3-3 |
+
+`unclassified` was empty in every case. None of the eight `ma-agent-*` SKILL.md files that
+`fix/persona-manifest-path` changes carries either pinned block.
+
+The new `11.1` reads **only the tree** — no `git` subprocess at all — so these four rows are
+its complete input. Since every other test in the suite already passed on
+`fix/persona-manifest-path` (its measured result was 111/1 with `11.1` the sole failure),
+that branch goes to **112/0** under the fixed suite. The same holds for the other two.
