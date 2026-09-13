@@ -6,7 +6,7 @@ title: The default --modules set installs every bundled module, so wds installs 
 
 # Bug: The default `--modules` set installs every bundled module, so `wds` installs for everyone and scaffolds `design-artifacts/` in projects that never asked for UX tooling
 
-**Status:** ready-for-dev (PRD amendment landed 2026-08-02)
+**Status:** review (implemented 2026-09-12 on `fix/wds-default-module-set`; **fix round 1 landed 2026-09-13** closing an independent review's REJECT — see the fix-round record below. No verdict claimed; the reviewer owns the verdict)
 **Severity:** medium
 **Affected Component:** `bin/cli.js#selectBmadModules` (the no-flag default branch); `lib/bmad.js#getInstallableBmadModules`; requirement **FR123** (and **FR249**, which reuses FR123's set)
 **Classification:** REQUIREMENTS CHANGE (needs a PRD amendment) + a follow-on code change
@@ -111,7 +111,9 @@ creates its output scaffold at install time.
 
 ## Root Cause
 
-**FR123** (`_bmad-output/planning-artifacts/prd/capabilities/bmad-integration-and-bundling.md:29`):
+**FR123** (`_bmad-output/planning-artifacts/prd/capabilities/bmad-integration-and-bundling.md`,
+`:29` when this was filed, **`:30` today** — quoted below as it read *before* the
+2026-08-02 amendment):
 
 > "For the `--modules` value, the default install set is **every non-retired module**
 > from the bundled cache manifest (`lib/bmad-cache/cache-manifest.json`) … all stable
@@ -207,7 +209,7 @@ wds's three agents, its skills, its Cline workflow wrappers, and its config.
 ## Blast Radius
 
 - **Every default Project-scope install**, and — per FR249
-  (`prd/capabilities/bmad-integration-and-bundling.md:38`, "the same default set
+  (`prd/capabilities/bmad-integration-and-bundling.md:39`, "the same default set
   FR123 defines for project installs") — every future global install too.
 - Users receive five modules' worth of agents, skills, and generated Cline/Copilot
   wrappers they did not ask for. On the Workshop install this is a large share of
@@ -236,7 +238,8 @@ wds's three agents, its skills, its Cline workflow wrappers, and its config.
 - upstream `bmad-method@6.10.0 tools/installer/modules/official-modules.js` —
   `createModuleDirectories` (`:595`), `fs.ensureDir` (`:738`), wds subfolders (`:742-746`)
 - `_bmad-output/planning-artifacts/prd/capabilities/bmad-integration-and-bundling.md`
-  — FR123 (`:29`), FR249 (`:38`) — **the text that must be amended, NOT edited here**
+  — FR123 (`:30`), FR249 (`:39`) — **the text that must be amended, NOT edited here**
+  (both were `:29`/`:38` when this report was filed; the amendment itself shifted them)
 
 ## Acceptance Criteria
 
@@ -264,10 +267,10 @@ wds's three agents, its skills, its Cline workflow wrappers, and its config.
 
 **YES — this is the defining characteristic of this bug.**
 
-- **FR123** (`prd/capabilities/bmad-integration-and-bundling.md:29`) must be amended:
-  the "default install set is every non-retired module from the bundled cache
-  manifest" clause is precisely the behaviour being rejected.
-- **FR249** (`:38`) inherits FR123's set by reference for global installs and must be
+- **FR123** (`prd/capabilities/bmad-integration-and-bundling.md:29` when filed, `:30`
+  after the amendment) must be amended: the "default install set is every non-retired
+  module from the bundled cache manifest" clause is precisely the behaviour being rejected.
+- **FR249** (`:38` when filed, `:39` today) inherits FR123's set by reference for global installs and must be
   re-read after the amendment (it may need no text change, but it must not be left
   pointing at a definition that has silently shifted meaning).
 - Not affected, confirmed: **FR235** (bundle allowlist), **NFR56** and **NFR73**
@@ -290,6 +293,133 @@ wds's three agents, its skills, its Cline workflow wrappers, and its config.
 - Severity rationale: **Medium**. No data loss and no broken install, but it installs
   substantial unwanted surface area into every project by default, leaves untracked
   litter at the repo root, and can only be corrected by a requirements change.
+
+## Implementation record — 2026-09-12, branch `fix/wds-default-module-set`
+
+Implemented; **no verdict claimed**, an independent review follows. Spec:
+`spec-bug-wds-default-module-set.md`.
+
+**Changed**
+
+- `lib/bmad.js:530-591` — `DEFAULT_BMAD_MODULE_IDS = ['bmm','tea','bmb','cis']`,
+  `NON_DEFAULT_BMAD_MODULE_IDS = ['gds','wds']`, `getDefaultBmadModules(available)`
+  (intersected with the installable set, so a missing cache manifest degrades to `[bmm]`
+  instead of throwing out of `resolveBmadModules`). All three exported.
+- `bin/cli.js#selectBmadModules` branch 3 — resolution order is now: persisted selection
+  (27.13) → modules already present under `_bmad/` → FR123's default set.
+- `bin/cli.js#selectBmadModules` branch 2 — the multiselect still offers **every** bundled
+  module; only its initial check state narrowed to the default set, so Enter equals the
+  no-flag default instead of silently reinstating install-everything.
+- `--help`, the flag-parse comment, the function contract and the call-site comment.
+- `test/bmad-module-selection.test.js` — 37 → 46 tests; the expectation is parsed from
+  FR123 in the PRD shard at runtime, not restated in the test.
+
+**Disposition of the ACs in this file**
+
+- AC1, AC2, AC3, AC6, AC7, AC8, AC10 — covered.
+- **AC4 partially**: bare `--bmad-modules` still opens the multiselect and still offers
+  every bundled module, but the initial check state derives from FR123's default set, **not**
+  from each module's `default_selected` field. Honouring `default_selected` literally would
+  pre-check `bmm` alone and contradict FR123's amended default. `default_selected` is still
+  read nowhere in `bin/`, `lib/` or `scripts/`.
+- **AC5 NOT DONE — deferred.** "Interactive installs get the module question without needing
+  a CLI flag" (Recommended Direction Part B) is a new wizard question: a separate,
+  independently shippable deliverable, not required by FR123's amended text, and out of
+  scope for this fix. The multiselect remains reachable only via bare `--bmad-modules`.
+- **AC9 partially**: an air-gapped `--bmad-modules wds` install is covered as far as the
+  bundled-cache staging step (`prePopulateBmadCache` run for real against a redirected HOME,
+  an fs-only path). A full `--network none` container install was not re-run.
+
+**Two defects found in this file and in FR123 while implementing** — see the review report;
+neither changes the decision:
+
+1. FR123's rationale says gds and wds "are the only bundled modules that scaffold
+   directories at the project root (`design-artifacts/` via **their** `directories:`
+   blocks)". Only `wds` declares `{design_artifacts}`
+   (`lib/bmad-cache/wds/src/module.yaml:126-128`). `gds`'s block
+   (`lib/bmad-cache/gds/src/module.yaml`) lists `{planning_artifacts}`,
+   `{implementation_artifacts}` and `{project_knowledge}` — all of which `bmm` declares too,
+   so `gds` adds no root directory that a default install does not already get. Excluding
+   `gds` is still sound (it is a domain-specific game-dev module), but the stated reason is
+   wrong for it.
+2. This file's "Affected Files" section cites `bin/cli.js:889-961` and
+   `lib/bmad.js:526-545`. Those line numbers date from the branch the bug was filed
+   against. **Corrected in the fix round below** — the mapping given here was itself
+   stale.
+
+## Fix round — 2026-09-13 (closing an independent review's REJECT)
+
+The production code was found **correct**: the reviewer could not make the default set
+wrong in a way the FR123 oracle missed. The REJECT was a **test-coverage** rejection, on
+the one surface where the change's own thesis ("pin it with a test, not an assertion")
+had not been applied. No verdict is claimed here either.
+
+### Closed — one blocking, three non-blocking
+
+| id | what survived | closed by |
+|---|---|---|
+| **M-E** (blocking) | `bin/cli.js` branch 2, `selected: isCore \|\| defaultIds.has(m.id)` → `selected: true` — **literally the pre-change value** — survived 46/0. Branch 2 had *zero* behavioural coverage: `bmadModulesPrompt` was asserted only in the `parseFlags` tests and every call passed it `false`. | Two tests driving `selectBmadModules({ bmadModulesPrompt: true })` with `prompts` stubbed in the require cache. Both halves of FR123's claim pinned: the initial check state **is** the default set (bmm forced), and **every module FR123 classifies is still OFFERED** — the half the air-gap argument rests on — with teeth requiring the offer set to be strictly larger than the check set. Replanted: **46 passed, 2 failed**. |
+| **M-D** | The branch-3c intersection was tested only as a UNIT. Replacing `bmad.getDefaultBmadModules(installable)` with `[...bmad.DEFAULT_BMAD_MODULE_IDS]` at the call site left the helper's own test green — 46/0 — while restoring the documented crash `Unknown BMAD module(s): tea, bmb, cis. Available: bmm`. | A degraded-bundle test through `selectBmadModules`, inducing the degradation at its documented source. Replanted (call-site form): **49 passed, 1 failed**, with that message verbatim. |
+| **M-C** | Order was unpinned. Every AC1/AC4 assertion sorts, so reordering `DEFAULT_BMAD_MODULE_IDS` to `['cis','bmb','tea','bmm']` was caught only *incidentally*. The installer would have emitted `--modules cis,bmb,tea,bmm`; the NFR21 determinism claim in the `getDefaultBmadModules` docblock was pinned by nothing that names it. | The emitted `--modules` string asserted for the **default** path, as it already was for the explicit path, with the expected ORDER parsed out of FR123's own sentence (`fr123DefaultOrder`, a prose-ordered parser — the existing `idsIn` filters BUNDLED_IDS and so takes its order from the code). Replanted: **48 passed, 2 failed**. |
+| **probe P4** | `lib/bmad.js#getInstalledBmadModules` used `fs.existsSync`, not a directory check, so a stray **file** named `_bmad/wds` made the probe report `bmm,wds`. Branch 3b **persists** what it finds, so the misreading became a durable "explicit user selection". | `fs.statSync(...).isDirectory()` in a try/catch, matching `prePopulateBmadCache`'s check in the analogous place. Tests at both layers were **red before the fix (50/2)** and green after. |
+
+`test/bmad-module-selection.test.js` 46 → **52 tests, 52/0**.
+
+### Stale citations corrected
+
+- FR123 is at `prd/capabilities/bmad-integration-and-bundling.md:30` and FR249 at `:39`.
+  This file cited `:29` and `:38` throughout — the pre-amendment positions; the amendment
+  itself shifted them by one. Corrected at every occurrence.
+- The FR249 / global-scope code the analysis points at: the `if (installScope === 'global')`
+  BMAD-agent filter is **`bin/cli.js:4429-4441`** and the Step 3.5 project guard is
+  **`:4444`** (the `// Step 3.5: BMAD-METHOD Integration` comment is `:4443`). Before this
+  change they were `:4376-4388` and `:4391`; the 53 lines this change inserts into
+  `selectBmadModules` are the whole difference. **Note:** the strings `4376`, `4388` and
+  `4391` appear in **no committed file in this repository** (verified by a full-tree search) —
+  they exist only in the review report, so there was nothing to correct in place. The
+  current numbers are recorded here instead so the record carries them going forward.
+- On this branch `selectBmadModules` is **`bin/cli.js:3703-3812`**, `getInstallableBmadModules`
+  is **`lib/bmad.js:609-628`**, and `getInstalledBmadModules` is **`lib/bmad.js:649-661`**.
+  Defect 2 above claimed `bin/cli.js:3687-3757` / `lib/bmad.js:546-565`; that correction was
+  itself computed against the pre-change tree and is superseded by these.
+
+### Recorded, deliberately NOT implemented in this round
+
+**V3 — branch 3b freezes an old bug.** A pre-27.13 project holding only `bmm` under `_bmad/`
+keeps only `bmm`, and because the probe result is **persisted**, that becomes an
+indistinguishable "explicit user selection". It will never acquire `tea`/`bmb`/`cis` — not
+now and not after any future default change. The *only* way to be in that cohort is the era
+when `bin/cli.js` hardcoded `['bmm']`, i.e. the very bug this line of work exists to fix, so
+branch 3b freezes it permanently. The reviewer's suggestion — resolve 3b as the **union** of
+the on-disk set with the FR123 default set — would be non-destructive *and* convergent, and
+would not disturb 3a (an explicit persisted deselection still wins). **This is a product
+decision, not a defect**, and is left as an open question for the PM. Behaviour unchanged in
+this round.
+
+**C3 — FR123's rationale is wrong twice, not once.** Defect 1 above named the `gds` half.
+The second half was never named: FR123 says `gds` and `wds` "are the only bundled modules
+that scaffold directories at the project root", but `lib/bmad-cache/tea/src/module.yaml:306-307`
+declares `directories: - "{test_artifacts}"` — a root directory `bmm` does **not** declare
+(`bmm`'s block is `{planning_artifacts}`, `{implementation_artifacts}`, `{project_knowledge}`),
+from a module that **is** in the default set. So the sentence is wrong about `gds` *and* false
+as a general claim: a default install still scaffolds a root directory from a non-`bmm`
+module. The narrowing decision is unaffected — `design-artifacts/` is the tree the user
+objected to and only `wds` declares it. **The PRD is the PM's; not edited here.**
+
+**C4 — an architecture decision still states the old default.**
+`_bmad-output/planning-artifacts/architecture/decisions/bmad-integration-and-bundling.md:109`
+(the FR123 parameter-mapping table) still reads *"Default: every bundled module from the cache
+manifest (bmm,tea,bmb,cis,gds,wds at v6.8.0 …)"*. That now contradicts both FR123 as amended
+and the shipped code. Recorded, **not edited** — a propagation gap the 2026-08-03
+delta-verification pass did not catch.
+
+**C2 — filed as its own bug, not this change's defect.** `BLOCKING-4`'s verdict in
+`test/project-layout-artifact-routing.test.js` depends on an untracked, gitignored file:
+`:1836` skips any citation whose target is absent, and `.gitignore:28` ignores
+`_bmad-output/methodology/`. Clean worktree 59/0, dirty parent 58/1. The guard therefore
+treats "absent" as legitimate — which is precisely the **CI** state — giving it a permanent
+blind spot for exactly the class of citation it exists to catch. See
+`bug-blocking-4-citation-guard-is-blind-in-ci.md`.
 
 ## Notes
 

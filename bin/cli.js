@@ -157,9 +157,13 @@ ${chalk.bold('Install options:')}
   ${chalk.cyan('--yes')}             Skip all prompts, use defaults (for CI/CD)
   ${chalk.cyan('--agent <name>')}    Target a specific agent (skip agent selection)
   ${chalk.cyan('--bmad-modules [csv]')} Control BMAD module selection.
-                       Bare:    open a multiselect prompt
+                       Bare:    open a multiselect prompt (offers every
+                                bundled module, incl. gds and wds)
                        With CSV: install exactly those (e.g. tea,bmb)
-                       Omitted: install every non-retired module (default)
+                       Omitted: install bmm,tea,bmb,cis (default). The
+                                design-studio modules gds and wds are
+                                bundled but not installed by default —
+                                select them to install them.
                        'bmm' is always force-included.
   ${chalk.cyan('--bmad-custom-source <ref>')} Enumerate extensions from ONE custom
                        marketplace repo (local path or Git URL containing
@@ -347,7 +351,7 @@ function parseFlags(args) {
   // --bmad-modules — controls BMad module selection. Optional-value flag:
   //   bare         → ask the user via multiselect prompt
   //   with CSV     → install exactly those (bmm force-prepended, unknowns rejected)
-  //   not present  → install all non-retired modules (no prompt)
+  //   not present  → install FR123's default set, bmm+tea+bmb+cis (no prompt)
   // Force-prepending of `bmm` and validation of unknown ids is handled
   // centrally by lib/bmad.resolveBmadModules.
   let bmadModulesFlag = '';
@@ -3671,18 +3675,30 @@ async function collectSprintManagementLocation(concern, existingRecord) {
  *
  * Three branches:
  *   1. `--bmad-modules <csv>` → install exactly those (bmm force-prepended,
- *      unknowns rejected with a clear error)
- *   2. `--bmad-modules` bare  → multiselect prompt; bmm is required and
- *      pre-checked, others default-checked so a no-op confirmation matches
- *      the no-flag default
- *   3. (no flag)              → install every non-retired module from the
- *      cache manifest, no prompt — restores the originally-intended
- *      behavior that the hardcoded ['bmm'] literal had been suppressing
+ *      unknowns rejected with a clear error). An explicit selection always
+ *      wins, including one that names `gds` or `wds`.
+ *   2. `--bmad-modules` bare  → multiselect prompt; EVERY bundled module is
+ *      offered, bmm is required and pre-checked, and the remaining initial
+ *      check state is the FR123 default set — so a no-op confirmation lands
+ *      on exactly the same modules as branch 3.
+ *   3. (no flag)              → no prompt. In order: a persisted selection
+ *      from a prior run (bug 27.13), else the modules already present under
+ *      `_bmad/`, else `bmad.getDefaultBmadModules()` — FR123's amended
+ *      default set, bmm + tea + bmb + cis.
+ *
+ * WHY BRANCH 3 IS NO LONGER "EVERY NON-RETIRED MODULE" (FR123, amended
+ * 2026-08-02): that default is what put a five-folder `design-artifacts/`
+ * tree at the root of a Copilot+Cline project that had never asked for UX
+ * tooling — `wds` installed unasked and materialised its `directories:`
+ * block. `gds` and `wds` are still BUNDLED and still installable offline;
+ * they are simply no longer installed without being asked for. Bundling and
+ * installing are different decisions made at different times, and only the
+ * second one moved.
  *
  * `bmm` is force-included in every path because the BMad core agents
  * (analyst, PM, dev, architect, ...) live there and downstream skills
- * break without them. Retired modules (currently only `wds`) are filtered
- * out unconditionally.
+ * break without them. Retired modules (none at v6.10.0) are filtered out
+ * unconditionally.
  */
 async function selectBmadModules({ bmadModulesFlag, bmadModulesPrompt, projectRoot } = {}) {
   const installable = bmad.getInstallableBmadModules().filter(m => !m.retired);
@@ -3712,15 +3728,22 @@ async function selectBmadModules({ bmadModulesFlag, bmadModulesPrompt, projectRo
 
   // Branch 2: bare --bmad-modules → multiselect prompt.
   if (bmadModulesPrompt) {
+    // FR123: every bundled module is OFFERED — this prompt is the documented
+    // route by which `gds`/`wds` remain reachable offline — but the initial
+    // check state is the default INSTALL set, so pressing Enter without
+    // touching anything lands on the same modules as the no-flag branch below.
+    // Checking them all here would silently reintroduce the very "installs
+    // everything" default this change removes.
+    const defaultIds = new Set(bmad.getDefaultBmadModules(installable));
     const choices = installable.map(m => {
       const isCore = m.id === 'bmm';
       const requiredTag = isCore ? chalk.yellow(' (required)') : '';
       return {
         title: chalk.white(m.id) + requiredTag + chalk.gray(` — ${m.description}`),
         value: m.id,
-        // Default-check everything so hitting Enter matches the no-flag
-        // "install all" default. Users uncheck what they want to skip.
-        selected: true,
+        // bmm is force-included downstream regardless; pre-checking it keeps
+        // the prompt honest about that.
+        selected: isCore || defaultIds.has(m.id),
       };
     });
 
@@ -3740,22 +3763,52 @@ async function selectBmadModules({ bmadModulesFlag, bmadModulesPrompt, projectRo
     return persist(bmad.resolveBmadModules({ requested: chosenModules, available: installable }));
   }
 
-  // Branch 3: no flag → use the persisted selection from a prior run if present
-  // (bug 27.13 — a previous deselection must survive); otherwise fall back to
-  // the original "install every available module" default. The persisted set is
-  // intersected with the currently-installable set so a since-retired module
-  // does not resurface, and bmm is force-included via resolveBmadModules.
+  // Branch 3: no flag. Three fallbacks, most-specific first.
+  const availableIds = new Set(installable.map(m => m.id));
+
+  // 3a — a persisted selection from a prior run (bug 27.13): a previous
+  // deselection must survive. Intersected with the currently-installable set so
+  // a since-retired module does not resurface; bmm is force-included via
+  // resolveBmadModules.
   const persisted = getBmadModules(root);
   if (persisted && persisted.length > 0) {
-    const availableIds = new Set(installable.map(m => m.id));
     const stillInstallable = persisted.filter(id => availableIds.has(id));
     try {
       return persist(bmad.resolveBmadModules({ requested: stillInstallable, available: installable }));
     } catch {
-      // If the persisted set somehow fails validation, fall through to default.
+      // If the persisted set somehow fails validation, fall through.
     }
   }
-  return persist(installable.map(m => m.id));
+
+  // 3b — NON-DESTRUCTIVE MIGRATION. Narrowing the default (FR123, amended
+  // 2026-08-02) is behaviour-visible to projects that already installed under
+  // the old every-module default, and an update run passes this same resolved
+  // list to `bmad.updateBmad`. A project that already has `wds` under `_bmad/`
+  // must not have it dropped out of its own module list just because the
+  // default moved — narrowing applies to NEW installs, not to existing ones.
+  //
+  // 3a covers projects installed since bug 27.13 landed persistence; this
+  // covers the ones installed before it, where `.ma-agents.json` carries no
+  // `bmadModules` field at all and disk is the only record of what was chosen.
+  // A fresh project has no `_bmad/`, so this is inert for new installs — which
+  // is exactly the "existing installs unchanged, only NEW installs get the
+  // narrower default" posture NFR49 / Story 30.4 established for Demerzel.
+  // Persisting the result also migrates the project onto 27.13's durable
+  // record, so this disk probe is needed at most once per project.
+  const alreadyInstalled = bmad.getInstalledBmadModules(root).filter(id => availableIds.has(id));
+  if (alreadyInstalled.length > 0) {
+    try {
+      return persist(bmad.resolveBmadModules({ requested: alreadyInstalled, available: installable }));
+    } catch {
+      // Fall through to the default set.
+    }
+  }
+
+  // 3c — a genuinely fresh install: FR123's amended default set.
+  return persist(bmad.resolveBmadModules({
+    requested: bmad.getDefaultBmadModules(installable),
+    available: installable,
+  }));
 }
 
 // --- Custom marketplace source (Story 30.6a) ---
@@ -4408,10 +4461,10 @@ async function installWizard(preselectedSkill, preselectedAgents, customPath, fo
     // stage the plugin and invoke the installer in one pass.
     // v6.6.0: --tools none is rejected for fresh installs; skip BMAD entirely when no IDE tools selected.
     if (bmadTools.length > 0) {
-      // Resolve module set once per BMAD invocation. Default is "install
-      // every non-retired module"; users opt into a specific subset with
-      // --bmad-modules <csv> or open a multiselect prompt with --bmad-modules
-      // (bare).
+      // Resolve module set once per BMAD invocation. Default (FR123, amended
+      // 2026-08-02) is bmm+tea+bmb+cis; the bundled design-studio modules gds
+      // and wds install only when asked for, via --bmad-modules <csv> or the
+      // multiselect that bare --bmad-modules opens.
       const bmadModules = await selectBmadModules({
         bmadModulesFlag,
         bmadModulesPrompt,

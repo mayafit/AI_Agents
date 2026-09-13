@@ -13,6 +13,12 @@
  *   - lib/bmad.getInstalledBmadModules() — _bmad/<id>/ presence detection
  *   - lib/bmad.resolveBmadModules() — bmm-force, dedupe, validation
  *   - bin/cli.parseFlags(--bmad-modules ...) — CSV capture, default empty
+ *
+ * FR123 (amended 2026-08-02) then narrowed the DEFAULT install set from "every
+ * non-retired bundled module" to bmm+tea+bmb+cis, leaving gds and wds bundled
+ * but not installed unless asked for. The final section covers that, with the
+ * expectation parsed out of the PRD shard rather than restated here — see the
+ * long note above it for why a restated expectation is worth nothing.
  */
 'use strict';
 
@@ -48,6 +54,39 @@ async function testAsync(name, fn) {
     errors.push({ name, error: err.message });
   }
 }
+
+// ─── The prompts stub ────────────────────────────────────────────────────────
+//
+// Installed in the require cache BEFORE cli.js is loaded, so cli.js's own
+// `require('prompts')` (bin/cli.js:31) binds to it. Branch 2 of
+// selectBmadModules — the bare `--bmad-modules` multiselect — is the ONLY
+// branch that prompts, and without this seam it is unreachable from a test:
+// every other case in this file passes `bmadModulesPrompt: false` and the
+// branch is never executed.
+//
+// The default answer THROWS rather than returning `{}`. Returning `{}` would
+// read back as `chosenModules === undefined` and drive cli.js into
+// `process.exit(0)`, taking the whole suite down mid-run having reported
+// nothing. Throwing turns an unexpected prompt into an ordinary named failure
+// — and doubles as the assertion that the no-flag and `--yes` branches never
+// prompt at all.
+const promptsModulePath = require.resolve('prompts');
+require('prompts');
+
+function unexpectedPrompt(question) {
+  const name = (question && question.name) || '(unnamed)';
+  const message = (question && question.message) || '';
+  throw new Error(
+    `selectBmadModules asked a question this test did not expect — prompt ` +
+    `${JSON.stringify(name)} (${JSON.stringify(message)}). Only the bare ` +
+    `--bmad-modules branch may prompt.`
+  );
+}
+
+let promptAnswer = unexpectedPrompt;
+require.cache[promptsModulePath].exports = async function stubPrompts(question) {
+  return promptAnswer(question);
+};
 
 const bmad = require('../lib/bmad');
 const { parseFlags, selectBmadModules } = require('../bin/cli.js');
@@ -127,6 +166,39 @@ test('detects installed modules from _bmad/<id>/ directories', () => {
     const result = bmad.getInstalledBmadModules(tmp);
     assert.ok(result.includes('bmm'), `expected bmm in: ${result.join(', ')}`);
     assert.ok(result.includes('tea'), `expected tea in: ${result.join(', ')}`);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('a stray FILE named _bmad/<id> does not count as an installed module', () => {
+  // Reviewer probe P4. The probe is documented as detecting
+  // "`_bmad/<id>/` DIRECTORIES" and its result feeds branch 3b of
+  // selectBmadModules, where it is treated as the user's own module selection
+  // and then PERSISTED. `fs.existsSync` answers yes for a regular file, so a
+  // stray `_bmad/wds` file was enough to make the probe report wds installed —
+  // and the persisted record would then carry it forever.
+  // `prePopulateBmadCache` checks `stat.isDirectory()` in the analogous place
+  // (lib/bmad.js, the cache-source walk); this matches it.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-bmad-test-'));
+  try {
+    fs.mkdirSync(path.join(tmp, '_bmad', 'bmm'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, '_bmad', 'wds'), 'not a module, just a file\n');
+    const result = bmad.getInstalledBmadModules(tmp);
+    assert.ok(result.includes('bmm'), `expected bmm in: ${result.join(', ')}`);
+    assert.ok(!result.includes('wds'),
+      `a regular file named _bmad/wds is not an installed module, got: ${result.join(', ')}`);
+
+    // The statSync guard must FAIL CLOSED. `statSync` throws ENOENT for an id
+    // with no `_bmad/<id>` entry at all — the common case — so a catch arm that
+    // returned true would report every installable module as installed, and
+    // branch 3b would then persist that. Flipping `return false` to
+    // `return true` in that catch otherwise survived the whole suite.
+    for (const absent of ['gds', 'cis', 'bmb']) {
+      assert.ok(!result.includes(absent),
+        `${absent} has no _bmad/${absent} entry at all and must be absent — ` +
+        `the statSync guard must fail closed; got: ${result.join(', ')}`);
+    }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -443,13 +515,636 @@ test('CSV with whitespace from --bmad-modules normalises correctly', () => {
     }
   });
 
-  await testAsync('27.13 no-flag run with no persisted set installs everything (back-compat default)', async () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-27-13-'));
+  // ─── FR123 (amended 2026-08-02) — the DEFAULT INSTALL SET ───────────────────
+  //
+  // WHY THE ORACLE IS PARSED OUT OF THE PRD AND NOT WRITTEN DOWN HERE.
+  //
+  // The assertion this section replaces was, in effect,
+  // `deepStrictEqual(selectBmadModules(), getInstallableBmadModules())` — the
+  // test asked the code what the answer was and then checked the code against
+  // its own answer. It passed for every possible default set, which is why
+  // `wds` reached a Copilot+Cline user's project root as a five-folder
+  // `design-artifacts/` tree with a green suite standing behind it.
+  //
+  // The oracle below is the requirement itself, read from the PRD shard at
+  // runtime. The PRD is authored by the PM, lives outside `lib/` and `bin/`,
+  // and nothing in the product reads it — so it cannot be edited by a change to
+  // the implementation, and the expectation cannot drift into agreement with a
+  // wrong default. Change `DEFAULT_BMAD_MODULE_IDS` without changing FR123 and
+  // these tests go red; that is the whole point of the arrangement.
+  //
+  // The parser takes MEMBERSHIP from the PRD prose. The CANDIDATE UNIVERSE (the
+  // ids it is willing to recognise) comes from the bundle, because prose has no
+  // other way to be tokenised — but a module the PRD does not name is never
+  // admitted, so the direction that matters is not derived from the code.
+
+  const PRD_SHARD = path.join(
+    __dirname, '..', '_bmad-output', 'planning-artifacts', 'prd',
+    'capabilities', 'bmad-integration-and-bundling.md'
+  );
+
+  function readFrLine(id) {
+    const text = fs.readFileSync(PRD_SHARD, 'utf8');
+    const line = text.split(/\r?\n/).find(l => l.trim().startsWith(`- ${id}:`));
+    assert.ok(line, `${id} not found in ${PRD_SHARD} — the oracle for this suite is missing`);
+    return line;
+  }
+
+  // Every module id this bundle knows about — the tokens the parser may find.
+  const BUNDLED_IDS = bmad.getInstallableBmadModules().map(m => m.id);
+
+  function idsIn(span) {
+    return BUNDLED_IDS.filter(id => new RegExp(`\\b${id}\\b`).test(span));
+  }
+
+  // Same membership, but in the order the PRD PROSE names them rather than the
+  // order the bundle happens to enumerate. `idsIn` above filters BUNDLED_IDS,
+  // so its order comes from the cache manifest — i.e. from the code — and can
+  // never contradict a reordered DEFAULT_BMAD_MODULE_IDS. This one can: the
+  // sequence is read out of FR123's sentence.
+  function idsInOrder(span) {
+    const re = new RegExp(`\\b(${BUNDLED_IDS.join('|')})\\b`, 'g');
+    const found = [];
+    let m;
+    while ((m = re.exec(span)) !== null) {
+      if (!found.includes(m[1])) found.push(m[1]);
+    }
+    return found;
+  }
+
+  /** The set FR123 names as the default INSTALL set. */
+  function fr123DefaultSet() {
+    const fr123 = readFrLine('FR123');
+
+    // Guard against a stale PRD: if the pre-amendment wording is still there,
+    // the oracle is not the one this suite exists to enforce and every
+    // assertion below would be meaningless.
+    assert.ok(
+      !/default install set is \*\*every non-retired module\*\*/.test(fr123),
+      'FR123 still carries the pre-amendment "every non-retired module" default — ' +
+      'the PRD amendment this suite depends on has been reverted'
+    );
+
+    const span = fr123.match(
+      /the default install set is (.*?) from the bundled cache manifest/
+    );
+    assert.ok(span, 'FR123 no longer states the default install set in a parseable form');
+    const found = idsIn(span[1]);
+    assert.ok(found.length >= 2,
+      `FR123's default-set clause named ${found.length} known module(s) — parser is not matching`);
+    return found;
+  }
+
+  /**
+   * The same set, in FR123's own written order — the oracle for the ORDER of
+   * the emitted `--modules` value (NFR21 determinism), which every other
+   * assertion in this file sorts away.
+   */
+  function fr123DefaultOrder() {
+    const fr123 = readFrLine('FR123');
+    const span = fr123.match(
+      /the default install set is (.*?) from the bundled cache manifest/
+    );
+    assert.ok(span, 'FR123 no longer states the default install set in a parseable form');
+    const found = idsInOrder(span[1]);
+    assert.deepStrictEqual([...found].sort(), [...fr123DefaultSet()].sort(),
+      'the ordered and unordered parsers disagree about FR123 membership');
+    return found;
+  }
+
+  /** The modules FR123 names as bundled-but-not-default. */
+  function fr123NonDefaultSet() {
+    const fr123 = readFrLine('FR123');
+    const span = fr123.match(
+      /The two design-studio modules (.*?) are \*\*bundled but not installed by default\*\*/
+    );
+    assert.ok(span, 'FR123 no longer states the bundled-but-not-default modules in a parseable form');
+    const found = idsIn(span[1]);
+    assert.strictEqual(found.length, 2,
+      `FR123 says "the two design-studio modules" but named ${found.length}: ${found.join(', ')}`);
+    return found;
+  }
+
+  await testAsync('AC1 a fresh no-flag install resolves exactly the set FR123 names', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-'));
     try {
-      const installable = bmad.getInstallableBmadModules().filter(m => !m.retired).map(m => m.id);
+      const expected = fr123DefaultSet();
       const result = await selectBmadModules({ projectRoot: tmp });
-      assert.deepStrictEqual([...result].sort(), [...installable].sort(),
-        'no persisted set → install every available module');
+      assert.deepStrictEqual([...result].sort(), [...expected].sort(),
+        `a fresh default install must resolve exactly FR123's default set ` +
+        `(${expected.join(', ')}), got ${result.join(', ')}`);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync("AC1 the shipped DEFAULT_BMAD_MODULE_IDS constant is FR123's set", async () => {
+    // Same oracle, applied one layer lower: catches a divergence between the
+    // constant and what selectBmadModules actually hands to bmad-method.
+    assert.deepStrictEqual(
+      [...bmad.DEFAULT_BMAD_MODULE_IDS].sort(),
+      [...fr123DefaultSet()].sort()
+    );
+    assert.deepStrictEqual(
+      [...bmad.NON_DEFAULT_BMAD_MODULE_IDS].sort(),
+      [...fr123NonDefaultSet()].sort()
+    );
+  });
+
+  await testAsync('AC1 every bundled module is either default or explicitly non-default', async () => {
+    // Closes the gap a two-set check leaves open: a newly bundled module that
+    // FR123 classifies neither way would otherwise slip through unnoticed —
+    // exactly the silent growth the old "everything in the manifest" default
+    // produced.
+    const classified = [...fr123DefaultSet(), ...fr123NonDefaultSet()].sort();
+    const installable = bmad.getInstallableBmadModules()
+      .filter(m => !m.retired).map(m => m.id).sort();
+    assert.deepStrictEqual(classified, installable,
+      'a bundled module is not classified by FR123 (or FR123 names one that is not bundled)');
+  });
+
+  await testAsync('AC2 no module in the default set scaffolds design-artifacts/', async () => {
+    // The `design-artifacts/` tree is materialised by upstream's
+    // createModuleDirectories() from a module.yaml `directories:` block. Check
+    // the declaration, which is the actual cause, rather than the module name.
+    const cacheRoot = path.join(__dirname, '..', 'lib', 'bmad-cache');
+
+    function directoriesBlock(id) {
+      for (const rel of [path.join(id, 'src', 'module.yaml'), path.join(id, 'skills', 'module.yaml')]) {
+        const p = path.join(cacheRoot, rel);
+        if (fs.existsSync(p)) {
+          const m = fs.readFileSync(p, 'utf8').match(/^directories:\r?\n((?:[ \t]+-[ \t]+.*\r?\n)+)/m);
+          return m ? m[1] : '';
+        }
+      }
+      return ''; // bmm ships inside bmad-method, not in the bundled cache
+    }
+
+    const scaffolders = bmad.getInstallableBmadModules()
+      .map(m => m.id)
+      .filter(id => /design_artifacts|design-artifacts/.test(directoriesBlock(id)));
+
+    // Teeth: if nothing in the bundle declares it, the filter above proves
+    // nothing and the assertion below would pass vacuously.
+    assert.ok(scaffolders.length > 0,
+      'no bundled module declares a design-artifacts directory — the AC2 check has no teeth');
+
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-'));
+    try {
+      const resolved = await selectBmadModules({ projectRoot: tmp });
+      const offenders = resolved.filter(id => scaffolders.includes(id));
+      assert.deepStrictEqual(offenders, [],
+        `a default install resolves ${offenders.join(', ')}, which scaffold design-artifacts/`);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC4 --yes with no --bmad-modules lands on the default set, prompt-free', async () => {
+    // Drives the real flag parser with the real non-interactive argv, then
+    // feeds exactly what the installer feeds selectBmadModules (bin/cli.js
+    // Step 3.5). Targeted on purpose: test/yes-flag.test.js drives a full
+    // install and dirties hundreds of paths.
+    const flags = parseFlags(['install', '--yes', '--force']);
+    assert.strictEqual(flags.yesFlag, true);
+    assert.strictEqual(flags.bmadModulesFlag, '', '--yes must not synthesise a module CSV');
+    assert.strictEqual(flags.bmadModulesPrompt, false,
+      '--yes must not reach the multiselect branch — that branch is the only one that prompts');
+
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-yes-'));
+    try {
+      const result = await selectBmadModules({
+        bmadModulesFlag: flags.bmadModulesFlag,
+        bmadModulesPrompt: flags.bmadModulesPrompt,
+        projectRoot: tmp,
+      });
+      assert.deepStrictEqual([...result].sort(), [...fr123DefaultSet()].sort(),
+        "--yes must resolve FR123's default set");
+      assert.deepStrictEqual([...getBmadModules(tmp)].sort(), [...fr123DefaultSet()].sort(),
+        'the --yes resolution is persisted like any other');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  // ─── Branch 2 — the bare `--bmad-modules` multiselect ───────────────────────
+  //
+  // WHY THIS SECTION EXISTS. Branch 2 had no behavioural coverage at all:
+  // `bmadModulesPrompt` was asserted only inside the parseFlags tests, and every
+  // call into selectBmadModules passed it `false`. Changing the initial check
+  // state at bin/cli.js from `selected: isCore || defaultIds.has(m.id)` back to
+  // `selected: true` left this suite at 46 passed / 0 failed — and
+  // `selected: true` is LITERALLY the pre-change value, so a careless revert or
+  // a bad merge silently restores "installs everything", the regression this
+  // whole change exists to remove.
+  //
+  // Both halves of FR123's claim about this prompt are pinned here, because
+  // both were unverified: the initial check state IS the default set, and every
+  // bundled module is STILL OFFERED — the second is what FR123's air-gap
+  // argument rests on ("they remain fully available offline through the
+  // `--bmad-modules` multiselect").
+
+  await testAsync('AC4 bare --bmad-modules pre-checks exactly FR123 default set, bmm forced', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-multi-'));
+    const asked = [];
+    try {
+      // Answer by confirming whatever the prompt arrived pre-checked with —
+      // i.e. the user pressing Enter and touching nothing, which is the case
+      // FR123 says must land on the same modules as the no-flag branch.
+      promptAnswer = (question) => {
+        asked.push(question);
+        return { chosenModules: question.choices.filter(c => c.selected).map(c => c.value) };
+      };
+
+      const flags = parseFlags(['install', '--bmad-modules']);
+      assert.strictEqual(flags.bmadModulesPrompt, true, 'bare flag must reach branch 2');
+      assert.strictEqual(flags.bmadModulesFlag, '');
+
+      const result = await selectBmadModules({
+        bmadModulesFlag: flags.bmadModulesFlag,
+        bmadModulesPrompt: flags.bmadModulesPrompt,
+        projectRoot: tmp,
+      });
+
+      assert.strictEqual(asked.length, 1, 'branch 2 must ask exactly one question');
+      const question = asked[0];
+      assert.strictEqual(question.type, 'multiselect');
+
+      const expectedChecked = [...new Set(['bmm', ...fr123DefaultOrder()])];
+      const preChecked = question.choices.filter(c => c.selected).map(c => c.value);
+      assert.deepStrictEqual([...preChecked].sort(), [...expectedChecked].sort(),
+        `the multiselect must arrive pre-checked with FR123's default set ` +
+        `(${expectedChecked.join(', ')}), got ${preChecked.join(', ')} — ` +
+        `pre-checking everything is the pre-change "installs everything" default`);
+
+      // Pressing Enter changes nothing, so branch 2 and branch 3 agree.
+      assert.deepStrictEqual([...result].sort(), [...fr123DefaultSet()].sort(),
+        'a no-op confirmation must resolve exactly what the no-flag branch resolves');
+
+      // Bug 27.13 — branch 2's answer must be as durable as every other
+      // branch's. Without this, dropping `persist()` from the multiselect
+      // return survived the whole suite, and the user's explicit choice would
+      // quietly revert to the default on the next no-flag run.
+      assert.deepStrictEqual([...getBmadModules(tmp)].sort(), [...fr123DefaultSet()].sort(),
+        'the multiselect result must be persisted to .ma-agents.json');
+    } finally {
+      promptAnswer = unexpectedPrompt;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC4 the multiselect forces bmm back in when the user unchecks it', async () => {
+    // The "(required)" tag and the belt-and-suspenders comment beside the
+    // branch-2 return both claim this, and nothing tested it: replacing
+    // `persist(bmad.resolveBmadModules({ requested: chosenModules, ... }))`
+    // with `persist(chosenModules)` survived the whole suite. That mutant
+    // removes BOTH the bmm force and the validation of what came back from the
+    // prompt — the multiselect is the one branch whose input is not the
+    // installer's own, so it is the branch that most needs both.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-nobmm-'));
+    try {
+      promptAnswer = () => ({ chosenModules: ['tea'] });   // bmm deliberately unchecked
+      const result = await selectBmadModules({ bmadModulesPrompt: true, projectRoot: tmp });
+      assert.deepStrictEqual(result, ['bmm', 'tea'],
+        'bmm must be force-prepended even when the prompt comes back without it — ' +
+        'the BMad core agents live there and downstream skills break without them');
+      assert.ok(getBmadModules(tmp).includes('bmm'),
+        'and the forced bmm is what gets persisted, not the raw prompt answer');
+
+      // The same force is what makes the prompt's `min: 1` a UX nicety rather
+      // than a correctness property: even an EMPTY answer resolves to a usable
+      // install. Stated as a test because `min: 1` is enforced inside the
+      // `prompts` library's TUI, which a stubbed prompt never executes — so
+      // relaxing it is unkillable through this seam, and this is what makes
+      // that survivor harmless rather than merely unobserved.
+      promptAnswer = () => ({ chosenModules: [] });
+      const empty = await selectBmadModules({ bmadModulesPrompt: true, projectRoot: tmp });
+      assert.deepStrictEqual(empty, ['bmm'],
+        'an empty multiselect answer must still resolve to the BMad core alone');
+    } finally {
+      promptAnswer = unexpectedPrompt;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC4 cancelling the multiselect aborts — it does not install the pre-checked default', async () => {
+    // `prompts` returns `{}` when the user cancels (Ctrl-C / Esc), so
+    // `chosenModules` reads back as undefined and branch 2 must
+    // `process.exit(0)`. Deleting that guard survived the whole suite, and the
+    // consequence is the worst possible reading of a cancel: the run would
+    // carry on and install whatever the prompt happened to arrive pre-checked
+    // with — the default set — as though the user had confirmed it.
+    //
+    // `process.exit` is stubbed to throw a sentinel so the abort is observable
+    // without taking the suite down, and restored in `finally`.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-cancel-'));
+    const realExit = process.exit;
+    let exitCode;
+    try {
+      promptAnswer = () => ({});
+      process.exit = (code) => { exitCode = code; throw new Error('__stub_process_exit__'); };
+
+      let resolved;
+      try {
+        resolved = await selectBmadModules({ bmadModulesPrompt: true, projectRoot: tmp });
+      } catch (err) {
+        if (err.message !== '__stub_process_exit__') throw err;
+      }
+
+      assert.strictEqual(exitCode, 0,
+        'a cancelled module prompt must exit(0), not fall through into an install');
+      assert.strictEqual(resolved, undefined, 'and must not resolve a module set');
+      assert.strictEqual(getBmadModules(tmp), undefined,
+        'and must not persist a selection the user never made');
+    } finally {
+      process.exit = realExit;
+      promptAnswer = unexpectedPrompt;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC4 bmm is pre-checked by the (required) force, not by its membership of the default set', async () => {
+    // `selected: isCore || defaultIds.has(m.id)` — the `isCore` half is
+    // redundant TODAY only because FR123's default set happens to open with
+    // bmm, so dropping it survives. It is the half that carries the
+    // "(required)" tag's promise, and it is the half that keeps the prompt
+    // honest if the default set is ever amended again. Pinned by removing
+    // bmm from what the default-set helper reports, which is the only
+    // circumstance under which the two halves differ.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-isCore-'));
+    const realGetDefault = bmad.getDefaultBmadModules;
+    const asked = [];
+    try {
+      bmad.getDefaultBmadModules = (available) =>
+        realGetDefault(available).filter(id => id !== 'bmm');
+      promptAnswer = (question) => {
+        asked.push(question);
+        return { chosenModules: question.choices.filter(c => c.selected).map(c => c.value) };
+      };
+
+      await selectBmadModules({ bmadModulesPrompt: true, projectRoot: tmp });
+      assert.strictEqual(asked.length, 1);
+
+      const bmmChoice = asked[0].choices.find(c => c.value === 'bmm');
+      assert.ok(bmmChoice, 'bmm must be offered');
+      assert.strictEqual(bmmChoice.selected, true,
+        'bmm is pre-checked because it is REQUIRED, not because the default set lists it');
+      assert.ok(/\(required\)/.test(bmmChoice.title),
+        `and the prompt must say so; got title ${JSON.stringify(bmmChoice.title)}`);
+    } finally {
+      bmad.getDefaultBmadModules = realGetDefault;
+      promptAnswer = unexpectedPrompt;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC4 bare --bmad-modules still OFFERS every bundled module (the air-gap half)', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-offer-'));
+    const asked = [];
+    try {
+      promptAnswer = (question) => {
+        asked.push(question);
+        return { chosenModules: ['bmm'] };
+      };
+
+      await selectBmadModules({ bmadModulesPrompt: true, projectRoot: tmp });
+      assert.strictEqual(asked.length, 1);
+
+      // The oracle is FR123's two classifications, not the bundle: a module the
+      // PRD names must be offered, whatever the code enumerates.
+      const classified = [...fr123DefaultOrder(), ...fr123NonDefaultSet()];
+      const offered = asked[0].choices.map(c => c.value);
+      assert.deepStrictEqual([...offered].sort(), [...classified].sort(),
+        `every module FR123 classifies — default and non-default alike — must be ` +
+        `offered by the multiselect; got ${offered.join(', ')}`);
+
+      // Teeth: the offer set must be STRICTLY LARGER than the check set, or
+      // "still offered" says nothing. This is what keeps gds/wds reachable
+      // offline once the default no longer installs them.
+      const preChecked = asked[0].choices.filter(c => c.selected).map(c => c.value);
+      assert.ok(offered.length > preChecked.length,
+        `the multiselect offers ${offered.length} module(s) and pre-checks ` +
+        `${preChecked.length} — nothing is reachable that the default does not already install`);
+
+      for (const id of fr123NonDefaultSet()) {
+        assert.ok(offered.includes(id),
+          `${id} is bundled-but-not-default: it must still be OFFERED`);
+        assert.ok(!preChecked.includes(id),
+          `${id} is bundled-but-not-default: it must NOT be pre-checked`);
+      }
+    } finally {
+      promptAnswer = unexpectedPrompt;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC3 an explicit --bmad-modules selection naming wds still wins', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-wds-'));
+    try {
+      const flags = parseFlags(['install', '--bmad-modules', 'wds', '--yes']);
+      assert.strictEqual(flags.bmadModulesFlag, 'wds');
+      const result = await selectBmadModules({
+        bmadModulesFlag: flags.bmadModulesFlag,
+        bmadModulesPrompt: flags.bmadModulesPrompt,
+        projectRoot: tmp,
+      });
+      assert.deepStrictEqual(result, ['bmm', 'wds'],
+        'an explicit selection overrides the default, bmm force-included');
+
+      // The literal argv the installer hands to bmad-method.
+      const cmd = bmad.buildBmadArgs({
+        projectRoot: tmp,
+        modules: result,
+        tools: ['claude-code'],
+      });
+      assert.ok(/--modules bmm,wds\b/.test(cmd),
+        `the bmad-method command must carry --modules bmm,wds, got: ${cmd}`);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC3 selecting a non-default module still installs it from the bundle, offline', async () => {
+    // NOT "the cache directory contains a wds folder". This runs the installer's
+    // real cache-staging step — lib/bmad.prePopulateBmadCache(), the step that
+    // makes an air-gapped install possible — with HOME redirected at a temp
+    // directory, and then asserts the selected module arrived with a usable
+    // payload. No network is reachable from that function: it is fs copy only.
+    const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-home-'));
+    const realHomedir = os.homedir;
+    try {
+      os.homedir = () => tmpHome;
+      await bmad.prePopulateBmadCache();
+      const staged = path.join(tmpHome, '.bmad', 'cache', 'external-modules');
+
+      for (const id of bmad.NON_DEFAULT_BMAD_MODULE_IDS) {
+        const modDir = path.join(staged, id);
+        assert.ok(fs.existsSync(modDir),
+          `${id} is bundled-but-not-default; it must still stage for an offline install`);
+        const payload = fs.readdirSync(modDir).filter(e => !e.startsWith('.'));
+        assert.ok(payload.length > 0, `${id} staged as an empty directory — not installable`);
+      }
+
+      // And the same step stages the default set, so this is not an assertion
+      // that everything trivially lands.
+      for (const id of bmad.DEFAULT_BMAD_MODULE_IDS.filter(m => m !== 'bmm')) {
+        assert.ok(fs.existsSync(path.join(staged, id)), `${id} must stage too`);
+      }
+    } finally {
+      os.homedir = realHomedir;
+      fs.rmSync(tmpHome, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC6 a project that already has wds keeps it on a no-flag re-run', async () => {
+    // Non-destructive migration. The narrowed default applies to NEW installs;
+    // an update run over an existing project passes this same resolved list to
+    // bmad.updateBmad, so dropping wds here is how an existing user would lose
+    // it. This project predates bug 27.13's persistence — `_bmad/` on disk is
+    // the only record of what was chosen.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-existing-'));
+    try {
+      for (const id of ['bmm', 'tea', 'bmb', 'cis', 'gds', 'wds']) {
+        fs.mkdirSync(path.join(tmp, '_bmad', id), { recursive: true });
+      }
+      assert.strictEqual(getBmadModules(tmp), undefined, 'no persisted selection, by construction');
+
+      const result = await selectBmadModules({ projectRoot: tmp });
+      assert.ok(result.includes('wds'),
+        'an existing wds install must not be narrowed away by the new default');
+      assert.ok(result.includes('gds'), 'nor an existing gds install');
+      assert.deepStrictEqual([...result].sort(), ['bmb', 'bmm', 'cis', 'gds', 'tea', 'wds']);
+
+      // And the run migrates the project onto 27.13's durable record.
+      assert.ok(getBmadModules(tmp).includes('wds'), 'the on-disk set is now persisted');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC6 a stray FILE on disk does not migrate a project onto a module it never installed', async () => {
+    // The same defect one layer up, where it actually bites. Branch 3b treats
+    // the on-disk probe as the pre-27.13 project's own module selection and
+    // PERSISTS the result, so a stray file promotes itself into a durable
+    // "explicit user selection" that no future default change can undo.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-strayfile-'));
+    try {
+      for (const id of ['bmm', 'tea']) {
+        fs.mkdirSync(path.join(tmp, '_bmad', id), { recursive: true });
+      }
+      fs.writeFileSync(path.join(tmp, '_bmad', 'wds'), 'not a module, just a file\n');
+
+      const result = await selectBmadModules({ projectRoot: tmp });
+      assert.ok(!result.includes('wds'),
+        `a regular file named _bmad/wds must not put wds in the resolved set, got ${result.join(', ')}`);
+      assert.ok(!getBmadModules(tmp).includes('wds'),
+        'and it must not be persisted as if the user had chosen it');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC6 an explicit deselection still beats the on-disk set', async () => {
+    // The disk probe must not become a second install-everything default: a
+    // user who explicitly drops wds must have it stay dropped even though
+    // `_bmad/wds/` is still on disk from the previous install.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-deselect-'));
+    try {
+      for (const id of ['bmm', 'tea', 'wds']) {
+        fs.mkdirSync(path.join(tmp, '_bmad', id), { recursive: true });
+      }
+      const first = await selectBmadModules({ bmadModulesFlag: 'tea', projectRoot: tmp });
+      assert.deepStrictEqual(first, ['bmm', 'tea']);
+
+      const second = await selectBmadModules({ projectRoot: tmp });
+      assert.ok(!second.includes('wds'),
+        'persisted deselection must win over the on-disk probe');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('AC1 a degraded bundle falls back to bmm rather than throwing', async () => {
+    // getInstallableBmadModules() returns [bmm] alone when the cache manifest
+    // is unreadable. A default set naming tea/bmb/cis would then be rejected by
+    // resolveBmadModules as unknown ids and take the installer down in the
+    // module-selection step.
+    assert.deepStrictEqual(bmad.getDefaultBmadModules([{ id: 'bmm' }]), ['bmm']);
+    assert.deepStrictEqual(bmad.getDefaultBmadModules(['bmm', 'tea']), ['bmm', 'tea']);
+  });
+
+  await testAsync('AC1 a degraded bundle degrades THROUGH selectBmadModules, not only in the helper', async () => {
+    // The test above exercises the intersection as a UNIT. Mutant M-D — deleting
+    // the intersection so `getDefaultBmadModules` returns `[...DEFAULT_BMAD_MODULE_IDS]`
+    // verbatim — survived that at 46/0, because nothing drove the CALL SITE that
+    // consumes it. With the intersection gone, branch 3c hands `tea, bmb, cis` to
+    // `resolveBmadModules` against an available set of `[bmm]` alone and the
+    // documented crash returns:
+    //
+    //   Unknown BMAD module(s): tea, bmb, cis. Available: bmm
+    //
+    // — thrown out of the installer's module-selection step, which is exactly the
+    // failure the intersection exists to prevent. Branch 3c has no try/catch.
+    //
+    // The degradation is induced at its documented source: `getInstallableBmadModules()`
+    // returns `[bmm]` alone when `lib/bmad-cache/cache-manifest.json` is missing or
+    // unreadable. Patching the export (bin/cli.js:48 holds the same module object and
+    // calls it as `bmad.getInstallableBmadModules()`) reproduces that without moving
+    // the shipped cache out from under a parallel suite.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-degraded-'));
+    const realGetInstallable = bmad.getInstallableBmadModules;
+    try {
+      bmad.getInstallableBmadModules = () => [
+        { id: 'bmm', retired: false, description: 'BMad Method core' },
+      ];
+
+      let result;
+      try {
+        result = await selectBmadModules({ projectRoot: tmp });
+      } catch (err) {
+        assert.fail(
+          `a degraded bundle must degrade to a minimal install, not take the ` +
+          `module-selection step down: ${err.message}`
+        );
+      }
+      assert.deepStrictEqual(result, ['bmm'],
+        'a bundle that can only install bmm must resolve exactly [bmm]');
+      assert.deepStrictEqual(getBmadModules(tmp), ['bmm'],
+        'and the degraded resolution is persisted like any other');
+    } finally {
+      bmad.getInstallableBmadModules = realGetInstallable;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await testAsync('NFR21 the default path emits --modules in the order FR123 writes it', async () => {
+    // Mutant M-C — reordering DEFAULT_BMAD_MODULE_IDS to ['cis','bmb','tea','bmm'] —
+    // survived at 46/0. Every AC1/AC4 assertion sorts before comparing, so order was
+    // caught only incidentally by a 2-element deepStrictEqual in the degraded-bundle
+    // test. The installer would have emitted `--modules cis,bmb,tea,bmm`, and the
+    // NFR21 determinism claim in the `getDefaultBmadModules` docblock ("the resolved
+    // --modules value is deterministic regardless of manifest key order") was pinned
+    // by nothing that names it.
+    //
+    // The explicit path already asserts its literal `--modules` string (AC3, below);
+    // this is the same assertion for the DEFAULT path, with the expected order read
+    // out of FR123's own sentence rather than restated here.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-agents-fr123-order-'));
+    try {
+      const expected = fr123DefaultOrder();
+      const result = await selectBmadModules({ projectRoot: tmp });
+      assert.deepStrictEqual(result, expected,
+        `the default set must resolve in FR123's written order (${expected.join(', ')}), ` +
+        `got ${result.join(', ')} — membership alone is not determinism`);
+
+      // The literal argv the installer hands to bmad-method.
+      const cmd = bmad.buildBmadArgs({
+        projectRoot: tmp,
+        modules: result,
+        tools: ['claude-code'],
+      });
+      assert.ok(new RegExp(`--modules ${expected.join(',')}(\\s|$)`).test(cmd),
+        `the bmad-method command must carry --modules ${expected.join(',')}, got: ${cmd}`);
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }
