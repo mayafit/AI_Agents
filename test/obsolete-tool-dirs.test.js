@@ -42,7 +42,10 @@ const {
   // is produced by the same code production uses (`performInstall` calls exactly
   // this pair at lib/installer.js:2108-2115).
   ensureManifest,
-  writeManifest
+  writeManifest,
+  // The ONLY writer of MANIFEST.yaml (lib/installer.js:795, :1806). Fixtures use
+  // it so the derived bookkeeping file is production's, not this test's.
+  generateSkillsManifest
 } = require('../lib/installer');
 
 let passed = 0;
@@ -463,6 +466,14 @@ async function runAll() {
         fs.ensureDirSync(obsoletePath);
         installSkillAsMaAgents(obsoletePath, 'code-review');
         installSkillAsMaAgents(obsoletePath, 'commit-message');
+        // …and the derived MANIFEST.yaml, written by its ONLY writer
+        // (generateSkillsManifest, lib/installer.js:795). Both bookkeeping files
+        // must be excluded from residue; a fixture carrying only .ma-agents.json
+        // cannot tell whether MANIFEST.yaml is excluded too, and a mutant that
+        // dropped it from the exclusion set survived until this was added.
+        await generateSkillsManifest(obsoletePath);
+        assert.ok(fs.existsSync(path.join(obsoletePath, 'MANIFEST.yaml')),
+          `${entry.obsolete}: fixture check — the real writer must have written MANIFEST.yaml`);
         populateReplacement(tmp, entry);
 
         const results = await migrateObsoleteToolDirs(tmp);
@@ -748,21 +759,30 @@ async function runAll() {
       const obsoletePath = obsoleteDirOf(tmp, entry);
       fs.ensureDirSync(obsoletePath);
       installSkillAsMaAgents(obsoletePath, 'code-review');
+      await generateSkillsManifest(obsoletePath);
       seedUserContent(obsoletePath);
       populateReplacement(tmp, entry);
 
-      const manifestPath = path.join(obsoletePath, '.ma-agents.json');
-      assert.ok(fs.existsSync(manifestPath), 'fixture check: the real writers wrote a manifest');
-      const manifestBefore = fs.readFileSync(manifestPath, 'utf-8');
+      // BOTH bookkeeping files, each written by its real writer.
+      const manifestFiles = ['.ma-agents.json', 'MANIFEST.yaml'];
+      const before = {};
+      for (const name of manifestFiles) {
+        const p = path.join(obsoletePath, name);
+        assert.ok(fs.existsSync(p), `fixture check: the real writer wrote ${name}`);
+        before[name] = fs.readFileSync(p, 'utf-8');
+      }
 
       assert.strictEqual(resultFor(await migrateObsoleteToolDirs(tmp), entry).action,
         'preserved-partial', 'fixture check: this entry must take the preserve-partial path');
 
-      assert.ok(fs.existsSync(manifestPath),
-        '.ma-agents.json must NOT be deleted on the preserve path — deleting it ' +
-        'would make the next run see no manifest and behave differently');
-      assert.strictEqual(fs.readFileSync(manifestPath, 'utf-8'), manifestBefore,
-        '.ma-agents.json must be byte-unchanged on the preserve path');
+      for (const name of manifestFiles) {
+        const p = path.join(obsoletePath, name);
+        assert.ok(fs.existsSync(p),
+          `${name} must NOT be deleted on the preserve path — deleting it would make ` +
+          `the next run see a different manifest and behave differently from this one`);
+        assert.strictEqual(fs.readFileSync(p, 'utf-8'), before[name],
+          `${name} must be byte-unchanged on the preserve path`);
+      }
     } finally {
       cleanup(tmp);
     }
