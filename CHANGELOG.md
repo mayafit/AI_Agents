@@ -81,6 +81,15 @@ close.
 
 ### Changed
 
+- **The default BMAD module set is now `bmm`, `tea`, `bmb`, `cis`.** The two
+  design-studio modules — `gds` (Game Design Studio) and `wds` (Whiteport
+  Design Studio) — are **bundled but no longer installed by default**. They
+  remain fully available offline through `--bmad-modules`, so the air-gap
+  guarantee is unchanged; they are simply installed only when asked for.
+  Previously every bundled module was installed, which left projects with no
+  interest in UX tooling holding an unexplained `design-artifacts/` tree.
+  **Existing installs are not disturbed**: a project that already has a module
+  keeps it, and an explicit selection still wins over both.
 - **`_bmad-output/project-layout.yaml` is now the authoritative, always-written
   record of where a project's knowledge lives**, carrying the backend and
   location of both stores plus sprint management. It is written on every install
@@ -211,6 +220,34 @@ close.
 ## [3.17.1] - 2026-07-16
 
 ### Fixed
+- **An upgrade could silently delete hand-authored skills.** When a tool's
+  skills directory moved between versions, the installer removed the old
+  directory **recursively and unconditionally** once the new one had content —
+  destroying any skill you had written there yourself, and logging it in green
+  as a successful cleanup. It now reads that directory's own manifest and
+  removes only what ma-agents installed; if anything else remains, the
+  directory is **preserved** and the files that kept it are named. A directory
+  with no manifest, an unreadable manifest, or an empty one is never removed —
+  unknown provenance fails safe. **This affected `.github/copilot/skills`,
+  `.github/skills`, `.roo/skills` and `.kilocode/skills` in versions 3.7.0
+  through 3.17.1.** Deletions made by those versions are not recoverable from
+  ma-agents — `fs.remove` leaves no backup and records nothing but the
+  directory name. One known limit remains: files placed *inside* a directory
+  ma-agents installed are still removed with it.
+- **Antigravity no longer gets two skill trees.** ma-agents wrote
+  `.antigravity/skills` while bmad-method wrote `.agent/skills`, so a single
+  install produced both — and the tree the tool actually reads was patched by
+  nobody, silently missing the on-prem phase prefix in a project configured
+  for on-prem. The registry now matches upstream's path, and the patch targets
+  are derived from what is on disk rather than from our own table, so a tree
+  written by either pipeline is reached. A parity test fails on any unrecorded
+  path divergence between the two tables.
+- **`ma-agent-sqa` cited a manifest path that never resolves.** Its Critical
+  Action 1 pointed at `_bmad/skills/MANIFEST.yaml`, one path segment short of
+  the `_bmad/skills/sqa/` its registry entry declares. All four `ma-agent-*`
+  personas also regained the `if it exists` guard on that instruction, so the
+  step degrades cleanly in a project where the agent host was never installed
+  instead of sending the agent after a missing file.
 - **ma-agent personas now appear in the IDE agent picker.** The DevOps
   (Amit), Cyber (Yael), SQA (Gadi), and SRE (Alex) personas installed as
   skills but never surfaced in the GitHub Copilot agent-picker dropdown in

@@ -277,6 +277,21 @@ Both messages end by stating that nothing was read or written on your behalf.
 These are stated here, in the shipped documentation, rather than only in the
 repository's changelog — which is **not** part of the npm package.
 
+- **Versions 3.7.0 through 3.17.1 could silently delete hand-authored skills.**
+  When a tool's skills directory moved between versions, the installer removed
+  the old directory recursively once the new one had content, destroying any
+  skill you had written there yourself and reporting it as a successful
+  cleanup. This affected `.github/copilot/skills`, `.github/skills`,
+  `.roo/skills` and `.kilocode/skills`. **It is fixed in this version** — the
+  sweep now removes only what ma-agents installed and preserves the directory
+  if anything else remains — but deletions already made are not recoverable
+  from ma-agents: no backup was written and nothing but the directory name was
+  recorded. Check your version control if you kept such skills.
+- **A file placed inside a skill directory ma-agents installed is still removed
+  with it.** The sweep's unit is the skill directory, not the file. If you have
+  edited a shipped skill in place, that edit is lost when the directory is
+  swept. Keep your own skills in their own directories, which are preserved.
+
 - **Every claim in this release about behaviour with a Confluence MCP *present*
   is mock-verified, not live.** No authorised Confluence MCP was available to
   the implementation or to any review, so the MCP-present branches were
