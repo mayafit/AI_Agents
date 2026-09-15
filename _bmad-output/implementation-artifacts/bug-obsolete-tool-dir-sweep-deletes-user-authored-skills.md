@@ -98,6 +98,17 @@ Why: two pipelines write skills, and only one writes manifests — stated in the
 - It grows with the registry: `OBSOLETE_TOOL_SKILL_DIRS`' own comment invites new entries (`:2251-2253`, *"Story 24.11 (AC5) will add additional entries"*), and each one inherits the behaviour by construction.
 - The failure is invisible at the time and invisible afterwards. The user sees a success line; `git status` shows a deletion only if the tree was tracked.
 
+## Known limit of the fix — NOT closed by Story 31.16
+
+**User files *inside* an ma-agents-installed skill directory are still destroyed.**
+Measured on the shipped preserve path: `code-review/MY-EDITS.md` is gone after the
+run. This follows from the spec as written — owned children are removed wholesale —
+and from the human's deliberate **no-heuristics** decision (see the rejected
+content-comparison alternative below). It is a residual data-loss window that
+Story 31.16 names nowhere. Recorded as a known limit; **no heuristic is to be added
+to close it** without a new decision from the human. The preserve path's promise is
+"a directory ma-agents did not wholly own survives", not "nothing inside it is lost".
+
 ## Suggested resolution
 
 **Make the sweep manifest-aware** — Story 31.16. Per entry:

@@ -88,6 +88,7 @@ Each AC names the **outside authority** its test binds to. No test may take its 
 - **Over-preservation.** A tree written by bmad-method's PluginResolver has no manifest and will now never be swept. Users of those projects keep a stale directory and the existing manual-cleanup instruction. Accepted: this is AC4 working, not failing.
 - **Already-lost files are not recoverable.** Entries 1-4 have been shipping since 3.7.0/3.8.1. `fs.remove` is not a recycle-bin operation and nothing is backed up. This story prevents future loss only. Whether the release notes should say so is a call for the human — this story does not write CHANGELOG text.
 - **A manifest listing a skill the user later hand-edited in place.** That skill is manifest-recorded and will be deleted. Distinguishing it would require the content comparison rejected in §5. Disclosed, not handled.
+- **(N1) User files *inside* an ma-agents-installed skill directory are still destroyed.** Measured on the shipped preserve path: `code-review/MY-EDITS.md` is gone after the run, while `NOTES.md` beside it survives and the directory is reported `preserved-partial`. This follows from the spec as written — owned children are removed wholesale — and from the human's deliberate **no-heuristics** decision. It is a residual data-loss window this story named nowhere until the review found it. **Recorded as a known limit; no heuristic is to be added to close it** without a new decision from the human. The preserve path's promise is "a directory ma-agents did not wholly own survives", not "nothing inside it is lost". Also recorded in the bug file.
 
 ## 7. Traceability
 
@@ -123,7 +124,7 @@ Each AC names the **outside authority** its test binds to. No test may take its 
 | --- | --- | --- |
 | 1 | `31-16-t1` (loops the registry) | the **real filesystem** — user bytes written by the test, read back with `fs.readFileSync`, no mocked `fs` anywhere; the ma-agents side seeded by the **real writers** `ensureManifest` + `writeManifest` |
 | 2 | `31-16-t2` (loops the registry) + `b2-t1`/`b2-t6`/`b2-t7` | the **shipped cleanup contract**, pre-dating this story |
-| 3 | `31-16-t3` | the **shipped log literals**, transcribed from `lib/installer.js:2408-2409` and `:2415-2418`; the residue list built by the test from what the test wrote |
+| 3 | `31-16-t3` | the **shipped log literals**, transcribed from `lib/installer.js:2468-2469` and `:2513-2514`; the residue list built by the test from what the test wrote. **(N2)** `manualCleanupLine`'s literal is SHARED with the plain `preserved` branch (`:2523-2524`), so it does not by itself distinguish the two preserve paths — the `action === 'preserved-partial'` assertion carries that weight. Cosmetic; noted at the literal in the test file. |
 | 4 | `31-16-t4` (no manifest, loops the registry), `31-16-t5` (unparseable), `31-16-t6` (`skills: {}`) | a **real install measured out-of-band** (`D:\Code\Workshop`), re-derivable from `lib/installer.js:1805-1809` and `lib/profile.js:27-32` |
 | 5 | `31-16-t7` | the **registry as data** — length 5, the five `obsolete` values as a set, one result per entry |
 | 6 | `31-16-t8` | the registry, plus `bmad-method`'s upstream `.agent/skills` path |
@@ -170,8 +171,22 @@ strictly better covered than before.
 
 Each mutant was applied to `lib/installer.js`, the suite run, and the original
 bytes restored **from memory** (not from git) in the same step. `lib/installer.js`
-hashes to `5fecc24444d0ba108de864bab21785db0cfaeb06` before and after, and
-`git status --porcelain lib/` is empty.
+hashed to `5fecc24444d0ba108de864bab21785db0cfaeb06` before and after, and
+`git status --porcelain lib/` was empty.
+
+**Stale line refs corrected (N3).** §8.4/§8.5 and the shipped-literal block at
+`test/obsolete-tool-dirs.test.js:154-160` cited `:2408-2409` and `:2415-2418`. The
+transcribed strings themselves were correct; only the refs were stale. Against the
+implementation as it now stands they are **`:2468-2469`** (the green "Removed …"
+line) and **`:2513-2514`** (the "Remove it manually …" tail). All of them are
+corrected, here and in the test file.
+
+Two citations of the same pair are **deliberately left alone**, because they are
+accurate for the commit they name: §4 AC3 above, which was authored against
+`ca78f43` and describes the source as it stood when the AC was written, and the
+bug file's provenance list, which says so explicitly (*"re-verified at source on
+`feature/epic-31` @ `ca78f43`"*). Rewriting either would make a historical
+statement false.
 
 | # | Mutant | Named test that killed it |
 | --- | --- | --- |
@@ -250,12 +265,167 @@ pre-existing and both already filed:**
 All of it was reverted; `git status --porcelain` is empty and
 `lib/installer.js` hashes to `5fecc24444d0ba108de864bab21785db0cfaeb06`.
 
-### 8.6 File List
+### 8.6 Review fix round — the preserve branch's own two destruction paths
+
+An independent review **REJECTED** this story. The irony is worth stating plainly:
+this story exists because `migrateObsoleteToolDirs` destroyed user data, and the
+preserve branch it added introduced **two fresh destruction paths**. Both sat in
+the removal loop, which trusted `.ma-agents.json::skills` keys as filesystem paths
+without ever checking them against the directory listing.
+
+**B1 — the preserve path deleted a directory it had just reported as preserved.**
+`residue` was computed with case-**sensitive** `ownedSet.has(name)`; the
+`fs.remove(path.join(obsoletePath, skillId))` beneath it resolves case-**in**sensitively
+on NTFS and APFS. Reproduced on this branch with an on-disk `Code-Review` against a
+manifest recording `code-review`:
+
+```
+LOG:  ! ... was preserved because it contains 2 item(s) ma-agents did not install:
+      Code-Review, keepme.md
+action: preserved-partial
+AFTER: Code-Review still exists: false
+```
+
+It named the user's directory as content "ma-agents did not install", claimed
+preservation, and destroyed it in the same breath — on this project's primary
+platform. The reviewer's mutant **r2** (ownership matching made case-insensitive)
+**survived the whole suite 19/0**, so nothing pinned these semantics in either
+direction.
+
+**B2 — a manifest key escaped the obsolete directory.** The loop joined raw keys
+onto `obsoletePath` with no basename or containment check. Reproduced: a `skills`
+map holding `"../../../victim"` deleted `<projectRoot>/victim/important.md`, **while
+the entry took the preserve path** — matching nothing in `readdir`, it counted as
+neither owned-present nor residue. Base `ca78f43` could only ever call
+`fs.remove(obsoletePath)`, which is **bounded**; this story had widened the blast
+radius to arbitrary paths driven by file content. "The manifest is normally
+ma-agents-written" is no defence in a function whose stated premise is that
+provenance is unknown and must fail safe.
+
+**The remedy — both, together, inside `migrateObsoleteToolDirs`, so AC10 stays
+untouched.** The `readdir` listing is hoisted and **both halves of the decision are
+taken against it**:
+
+```js
+const entries = fs.readdirSync(obsoletePath);              // hoist, reuse for residue
+const residue = entries.filter(n => !ownedSet.has(n) && !OBSOLETE_SWEEP_MANIFEST_FILES.has(n));
+...
+for (const skillId of owned.filter(id => entries.includes(id))) {   // literal listing membership
+```
+
+`entries.includes` is case-sensitive and can only ever name a real direct child, so
+the residue calculation and the removal can no longer disagree and no traversal
+survives. It also makes the "ghost manifest id" no-op **explicit** rather than
+incidental. Both reproductions now report `true` for every surviving path.
+
+**New tests.** `31-16-t12` (B1) seeds the case mismatch and asserts both that the
+log names `Code-Review` as residue and that it is still on disk, byte-identical.
+`31-16-t13` (B2) plants a `../../../victim` key with the victim **outside** the
+obsolete directory at the project root, plus a fixture check asserting the traversal
+really resolves there. `31-16-t14` **(N5)** loops preserve-on-absent and
+preserve-on-empty over every registry entry — they were pinned only for the copilot
+entry via `results[0]`.
+
+**Mutation run — thirteen mutants, two survivors, both reported.** The harness
+asserts **exactly one anchor match before mutating** and restores in the same step;
+`lib/installer.js` and `test/obsolete-tool-dirs.test.js` hash identically before and
+after every mutant, and `git status --porcelain` is empty.
+
+| # | Mutant | Verdict / killed by |
+| --- | --- | --- |
+| r2a | ownership matching (residue side) made case-insensitive — **the reviewer's r2, replanted** | **KILLED** — `31-16-t12` |
+| r2b | ownership matching (removal side) made case-insensitive — restores B1 in full | **KILLED** — `31-16-t12` |
+| g1 | the listing guard removed entirely (the pre-fix removal loop) | **KILLED** — `31-16-t12`, `31-16-t13` |
+| g2 | `residue` taken from a fresh `fs.readdirSync` instead of the hoisted `entries` | **SURVIVED — equivalent mutant** |
+| m1 | bookkeeping files dropped from the residue exclusion set | **KILLED** — `31-16-t2` |
+| m2 | residue-empty test inverted to `>= 0` (always whole-dir remove) | **KILLED** — 10 cases |
+| m3 | the manifest never consulted — `owned` always empty | **KILLED** — `b2-t1`, `b2-t4`, `b2-t7`, `31-16-t1`, `31-16-t2` |
+| m4 | replacement-content gate forced open | **KILLED** — `b2-t2b`, `31-16-t14` |
+| m5 | `preserved-partial` relabelled `removed` | **KILLED** — 9 cases |
+| m6 | residue names dropped from the preserve log | **KILLED** — `31-16-t3`, `31-16-t12` |
+| m7 | the bookkeeping-file exclusion set made case-**in**sensitive | **SURVIVED — this is N4** |
+| m8 | the removal loop body made a no-op | **KILLED** — `31-16-t1` |
+
+**g1 is the proof `31-16-t13` is real**: with the guard removed the traversal case
+goes red, and the victim it names is outside the swept directory.
+
+Both survivors are reported rather than hidden:
+
+- **g2 is an equivalent mutant.** At that point nothing has been removed yet, so a
+  fresh `readdir` returns the identical listing. The hoist is a readability and
+  intent change, not a behavioural one — the *safety* property lives entirely in
+  `entries.includes(id)` on the removal side, which `r2b`/`g1` do pin.
+- **m7 is N4, and N4 is the fail-safe direction.** No fixture carries a case-variant
+  bookkeeping name, so making the exclusion set case-insensitive changes nothing
+  observable. Deliberately left unpinned — see N4 below.
+
+**A methodology note against my own run.** My first `m3` ("unparseable manifest
+treated as owning everything") was written as a ternary insertion that produced a
+**syntax error**, not a semantic mutant. It reported a nonzero exit with no named
+failing test — a kill by the harness's rules, and not a kill in fact. It was
+rewritten and re-run. A mutant that kills by crashing the interpreter proves
+nothing, and the "killed by" column is the tell.
+
+**Recorded, not implemented (the 🟡 items):**
+
+- **N1** — user files inside an ma-agents-installed skill directory are still
+  destroyed. Measured; recorded in §6 and in the bug file. No heuristic added.
+- **N2** — `31-16-t3`'s `manualCleanupLine` literal is shared with the plain
+  `preserved` branch; `action === 'preserved-partial'` carries the discrimination.
+  Recorded in §8.2 and at the literal itself. Cosmetic.
+- **N3** — stale line refs corrected throughout, here and in the test file.
+- **N4** — case-variant bookkeeping names (`MANIFEST.YAML`, `.MA-AGENTS.JSON`) are
+  treated as residue and preserve forever. That is the **mirror image of B1**: the
+  exclusion set is case-sensitive while the filesystem is not, and here the
+  disagreement errs toward keeping the directory rather than deleting it. **Fine as
+  it stands** — over-preservation costs the user the `rm -rf` we already print. Left
+  unpinned, which is why mutant m7 survives.
+- **N5** — closed rather than recorded: `31-16-t14` loops the preserve-on-empty and
+  preserve-on-absent shapes over all five entries. It was cheap.
+- **`preserved-partial` has no consumer.** The only production call site is
+  `lib/installer.js:2150`, `await migrateObsoleteToolDirs(process.cwd());` — the
+  return value is discarded. The action strings are a test-facing contract only, so
+  no caller can break on them. The story omitted this; recorded now.
+
+**Not re-opened** (verified settled by the review, and untouched by this round): the
+AC2 amendment, and both AC10 deviations — `OBSOLETE_SWEEP_MANIFEST_FILES` stays
+module-private, and `writeManifest`'s export stands (`index.js` does not re-export
+it, so the package's public API is unchanged).
+
+**Validation of this round.** Same environment as §8.5 — no `node_modules` in this
+worktree, junctioned from `.worktrees/epic-31-story-31.15` (`bmad-method` **6.10.0**;
+`main` has 6.9.0 and would be wrong) and **removed again afterwards** so nothing can
+`npm install` through it into another worktree. `project-layout-two-store-round-trip`
+and `yes-flag` were not run.
+
+| Invariant | Pinned | Measured | Exit |
+| --- | --- | --- | --- |
+| preflight 41 copies / `ca9bf25b…` / 13-14-14 | — | asserted inside `release-gate-epic-31` AC7.1 | 0 |
+| gate 9 copies / `cda3d3d9…` / 3-3-3 | — | asserted inside `release-gate-epic-31` AC7.2 | 0 |
+| `release-gate-epic-31` | 43/0 | **43/0** | 0 |
+| `story-15-5-workflow-skills` | 157/0 | **157/0** | 0 |
+| `convert-agents-to-skills` | 146/0 | **146/0** | 0 |
+| `bmad-module-selection` | 55/0 | **55/0** | 0 |
+| `routing-parity` | 16/0 | **16/0** | 0 |
+| `project-layout-staleness-guard` | 64/0 | **64/0** | 0 |
+| `obsolete-tool-dirs` | 19/0 → rises deliberately | **22/0** | 0 |
+| `migration-validation` | 199/3, pre-existing | **199/3** | 1 |
+| `project-layout-artifact-routing` | 58/1, pre-existing | **58/1** | 1 |
+
+Registry order is unchanged and still pinned by `31-16-t11` — `results[0]` is
+`.github/copilot/skills`. The two nonzero exits are the two already-filed
+pre-existing failures, both verified identical on base and neither touched here.
+`git status --porcelain` is empty apart from the files in §8.7.
+
+**Status stays `review`.** This round closes a REJECT; it does not set `done`.
+
+### 8.7 File List
 
 - `lib/installer.js` — modified
 - `test/obsolete-tool-dirs.test.js` — modified
 - `_bmad-output/implementation-artifacts/31-16-manifest-aware-obsolete-tool-dir-sweep.md` — modified (this record)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — modified (status)
+- `_bmad-output/implementation-artifacts/bug-obsolete-tool-dir-sweep-deletes-user-authored-skills.md` — modified (the N1 known limit)
 
 ## 9. Change Log
 
@@ -267,3 +437,7 @@ All of it was reverted; `git status --porcelain` is empty and
 | 2026-09-15 | `31-16-t1`…`t11` added; all five registry entries proven per-entry. |
 | 2026-09-15 | Mutation sweep: m9 survived, was reported, and was closed by covering `MANIFEST.yaml`. |
 | 2026-09-15 | Status → `review`. **Not** `done` — the independent review sets that. |
+| 2026-09-15 | Independent review: **REJECT**. Two blocking data-destruction paths found in the new preserve branch (§8.6). |
+| 2026-09-15 | B1 (case) and B2 (containment) closed together: the `readdir` listing is hoisted and both halves of the decision taken against it. |
+| 2026-09-15 | `31-16-t12`/`t13` added as the pins for B1/B2; `31-16-t14` closes N5. Mutant r2 replanted and dead, both readings. |
+| 2026-09-15 | N1/N2/N3/N4 recorded; N1 also recorded in the bug file. `preserved-partial` has no consumer — recorded. Status remains `review`. |
