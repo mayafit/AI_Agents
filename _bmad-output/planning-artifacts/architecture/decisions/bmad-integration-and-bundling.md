@@ -84,7 +84,7 @@ function buildBmadArgs(installContext) {
   const args = [
     'node', `"${bmadPath}"`, 'install',
     '--directory', `"${installContext.projectRoot}"`,           // FR123: project path (quoted for spaces)
-    '--modules', installContext.selectedModules.join(','),      // FR123 (amended 2026-08-02): default bmm+tea+bmb+cis; gds/wds bundled but opt-in; override via --bmad-modules
+    '--modules', installContext.selectedModules.join(','),      // FR123: default bmm+tea+bmb+cis; gds/wds bundled but opt-in; override via --bmad-modules
     '--tools', installContext.selectedTools.join(','),          // FR123: e.g., "claude-code,cursor,opencode"
     '--user-name', `"${installContext.userName}"`,              // FR123: from ma-agents wizard
     '--communication-language', installContext.commLang,        // FR123: default "English"
@@ -106,7 +106,7 @@ function buildBmadArgs(installContext) {
 |---|---|---|
 | Project path | `--directory` | Detected from cwd / package.json / .git |
 | Selected platforms (claude-code, cursor, opencode...) | `--tools` | Interactive wizard or `--yes` defaults |
-| BMAD modules to install | `--modules` | Default: every bundled module from the cache manifest (bmm,tea,bmb,cis,gds,wds at v6.8.0 — `wds` is an active `type: bmad-org` module; `automator` is `type: experimental` and excluded). Override: `--bmad-modules <csv>` for an explicit subset; `--bmad-modules` (bare) opens a multiselect prompt. `bmm` is force-included in every path |
+| BMAD modules to install | `--modules` | Default: `bmm,tea,bmb,cis`. The two design-studio modules `gds` and `wds` are **bundled but not installed** as part of an ma-agents installation — they ship in the offline cache and install without network access, but only when the user asks for them. (`automator` is `type: experimental` and is excluded from the bundle entirely.) Override: `--bmad-modules <csv>` for an explicit subset; `--bmad-modules` (bare) opens a multiselect prompt offering the bundled modules, `gds` and `wds` included. `bmm` is force-included in every path |
 | User name | `--user-name` | Wizard prompt or system username |
 | Communication language | `--communication-language` | Wizard prompt or "English" default |
 | Document output language | `--document-output-language` | Wizard prompt or "English" default |
