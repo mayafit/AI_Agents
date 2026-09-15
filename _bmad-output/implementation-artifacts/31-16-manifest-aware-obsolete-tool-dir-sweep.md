@@ -203,8 +203,52 @@ one match per anchor** before mutating.
 
 ### 8.5 Validation
 
-All suites run directly, none wrapped in `timeout`. See §9 Change Log for the
-full table.
+**Environment note, and a trap for the reviewer.** This worktree has **no
+`node_modules`**. Suites that resolve `bmad-method` by explicit path (notably
+`routing-parity`) therefore die with `ENOENT … platform-codes.yaml` and report
+**0/0**, which reads exactly like a regression and is not one — it is identical
+on `ca78f43`, measured. Validation was run with `node_modules` junctioned from
+`.worktrees/epic-31-story-31.15` (the only sibling whose `package.json` pins the
+same deps and whose installed `bmad-method` is **6.10.0**; `d:\Code\AI_Agents`
+has **6.9.0** and would be wrong). The junction was removed afterwards so nothing
+can `npm install` through it into another worktree. To re-create it:
+
+```powershell
+New-Item -ItemType Junction `
+  -Path   "D:\Code\AI_Agents-epic-31\.worktrees\impl-31-16\node_modules" `
+  -Target "D:\Code\AI_Agents-epic-31\.worktrees\epic-31-story-31.15\node_modules"
+```
+
+**Invariants — every one re-derived, none moved:**
+
+| Invariant | Pinned | Measured | Exit |
+| --- | --- | --- | --- |
+| preflight 41 copies / `ca9bf25b…` / 13-14-14 | — | asserted inside `release-gate-epic-31` AC7.1 | 0 |
+| gate 9 copies / `cda3d3d9…` / 3-3-3 | — | asserted inside `release-gate-epic-31` AC7.2 | 0 |
+| `release-gate-epic-31` | 43/0 | **43/0** | 0 |
+| `story-15-5-workflow-skills` | 157/0 | **157/0** | 0 |
+| `convert-agents-to-skills` | 146/0 | **146/0** | 0 |
+| `bmad-module-selection` | 55/0 | **55/0** | 0 |
+| `routing-parity` | 16/0 | **16/0** | 0 |
+| `project-layout-staleness-guard` | 64/0 | **64/0** | 0 |
+| `obsolete-tool-dirs` | 8/0 → deliberately rises | **19/0** | 0 |
+
+**Broad run:** 103 suites, the two forbidden ones (`yes-flag`,
+`project-layout-two-store-round-trip`) skipped, **2 nonzero exits, both
+pre-existing and both already filed:**
+
+- `migration-validation` **199/3** — stale skill-count assertions (`5.3`, `5.6`,
+  `5.8`: *expected 63 skill folders, found 50*). **Identical 199/3 on `ca78f43`**,
+  measured in isolation on both commits. Not a regression, not absorbed.
+- `project-layout-artifact-routing` **58/1** (`BLOCKING-4`) — the known
+  non-determinism; `_bmad-output/methodology/` residue is present in this
+  worktree, which is the documented 58/1 condition. Not this story's.
+
+`build-plugin.test.js` again leaked an untracked
+`lib/.bmad-extension-plugin.build-<pid>-<ms>/`, and the broad run mutated
+`.agents/`, `AGENTS.md` and `_bmad-output/project-context.md` as it always does.
+All of it was reverted; `git status --porcelain` is empty and
+`lib/installer.js` hashes to `5fecc24444d0ba108de864bab21785db0cfaeb06`.
 
 ### 8.6 File List
 
