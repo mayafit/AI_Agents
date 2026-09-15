@@ -13,6 +13,19 @@
  *   b2-t5  OBSOLETE_TOOL_SKILL_DIRS is immutable (frozen registry guard)
  *   b2-t6  Replacement dir content survives (not affected by migration)
  *   b2-t7  Obsolete dir with nested content is removed recursively
+ *
+ * Story 31.16 — the sweep becomes manifest-aware. Additional coverage:
+ *   31-16-t1   AC1  user-authored content survives, dir preserved   (per registry entry)
+ *   31-16-t2   AC2  manifest-only dir is still removed              (per registry entry)
+ *   31-16-t3   AC3  the preserve log names the residue by basename
+ *   31-16-t4   AC4  no manifest anywhere → preserved                (per registry entry)
+ *   31-16-t5   AC4  present-but-unparseable manifest → preserved
+ *   31-16-t6   AC4  manifest with `skills: {}` → preserved
+ *   31-16-t7   AC5  registry length, obsolete set, one result per entry
+ *   31-16-t8   AC6  the unreleased .antigravity/skills entry takes both paths
+ *   31-16-t9   AC7a idempotency — two runs, identical actions and identical tree
+ *   31-16-t10  AC7a the manifest files survive the preserve path byte-unchanged
+ *   31-16-t11       registry ORDER is positional — results[0] is the copilot entry
  */
 'use strict';
 
@@ -117,6 +130,114 @@ function seedProject(projectRoot, { withObsolete = true, withNew = true, newHasC
       fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '# code-review\n');
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Story 31.16 helpers
+// ---------------------------------------------------------------------------
+
+// The two user-authored artefacts every preserve fixture carries. Their exact
+// bytes are the AC1 oracle: the real filesystem is read back and compared to
+// these constants, which the implementation has never seen.
+const USER_SKILL_BODY = '# my house style\n\nHand-written. ma-agents never installed this.\n';
+const USER_NOTES_BODY = 'loose note, not a skill directory, not in any manifest\n';
+
+/**
+ * The SHIPPED log literals, transcribed from lib/installer.js so a reviewer can
+ * match them line-for-line against the source. These are the authority AC3 binds
+ * to — NOT a constant the implementation exports for its own use, which would
+ * make the assertion tautological.
+ *
+ *   removalLine       ← lib/installer.js:2408-2409  (the green "Removed …" line)
+ *   manualCleanupLine ← lib/installer.js:2415-2418  (the "Remove it manually …" tail)
+ *
+ * If either literal is reworded in lib/installer.js without this test being
+ * updated, AC3 fails — which is the point.
+ */
+function removalLine(entry) {
+  return `  - Removed legacy tool skills directory ${entry.obsolete} ` +
+    `(moved to ${entry.replacedBy} in v${entry.sinceVersion})`;
+}
+function manualCleanupLine(entry) {
+  return `Remove it manually once you have confirmed there is nothing to keep: ` +
+    `rm -rf ${entry.obsolete}`;
+}
+
+/** Run `fn` with console.log captured; returns { result, out } with ANSI stripped. */
+async function captureLog(fn) {
+  const original = console.log;
+  const lines = [];
+  console.log = (...args) => { lines.push(args.join(' ')); };
+  let result;
+  try {
+    result = await fn();
+  } finally {
+    console.log = original;
+  }
+  // chalk may or may not emit colour depending on TTY detection — strip either way.
+  const out = lines.join('\n').replace(/\[[0-9;]*m/g, '');
+  return { result, out };
+}
+
+/** Absolute path of an entry's obsolete / replacedBy dir under a temp project root. */
+function obsoleteDirOf(projectRoot, entry) {
+  return path.join(projectRoot, ...entry.obsolete.split('/'));
+}
+function replacedByDirOf(projectRoot, entry) {
+  return path.join(projectRoot, ...entry.replacedBy.split('/'));
+}
+
+/** Give the entry's replacement directory content, so the outer gate opens. */
+function populateReplacement(projectRoot, entry) {
+  const dir = path.join(replacedByDirOf(projectRoot, entry), 'code-review');
+  fs.ensureDirSync(dir);
+  fs.writeFileSync(path.join(dir, 'SKILL.md'), '# migrated here\n', 'utf-8');
+}
+
+/** Write the two user-authored paths that must always survive. */
+function seedUserContent(obsoletePath) {
+  const userSkill = path.join(obsoletePath, 'my-house-style', 'SKILL.md');
+  fs.ensureDirSync(path.dirname(userSkill));
+  fs.writeFileSync(userSkill, USER_SKILL_BODY, 'utf-8');
+  const userNotes = path.join(obsoletePath, 'NOTES.md');
+  fs.writeFileSync(userNotes, USER_NOTES_BODY, 'utf-8');
+  return { userSkill, userNotes };
+}
+
+/** Assert both user paths are present and byte-identical to what we wrote. */
+function assertUserContentIntact(label, { userSkill, userNotes }) {
+  assert.ok(fs.existsSync(userSkill), `${label}: my-house-style/SKILL.md must survive`);
+  assert.strictEqual(fs.readFileSync(userSkill, 'utf-8'), USER_SKILL_BODY,
+    `${label}: my-house-style/SKILL.md must be byte-identical`);
+  assert.ok(fs.existsSync(userNotes), `${label}: NOTES.md must survive`);
+  assert.strictEqual(fs.readFileSync(userNotes, 'utf-8'), USER_NOTES_BODY,
+    `${label}: NOTES.md must be byte-identical`);
+}
+
+/** Deterministic recursive snapshot of a tree: type, relative path, and content. */
+function snapshotTree(root) {
+  const out = [];
+  const walk = (dir, rel) => {
+    for (const name of fs.readdirSync(dir).sort()) {
+      const full = path.join(dir, name);
+      const r = rel ? `${rel}/${name}` : name;
+      if (fs.statSync(full).isDirectory()) {
+        out.push(`D ${r}`);
+        walk(full, r);
+      } else {
+        out.push(`F ${r} :: ${fs.readFileSync(full, 'utf-8')}`);
+      }
+    }
+  };
+  walk(root, '');
+  return out.join('\n');
+}
+
+/** Find the result for a given registry entry, failing loudly if absent. */
+function resultFor(results, entry) {
+  const r = results.find(x => x.entry.obsolete === entry.obsolete);
+  assert.ok(r, `expected a result for registry entry ${entry.obsolete}`);
+  return r;
 }
 
 console.log('\n bug B2 — Stale obsolete tool skills directory cleanup\n');
