@@ -23,7 +23,13 @@ const os = require('os');
 
 const {
   migrateObsoleteToolDirs,
-  OBSOLETE_TOOL_SKILL_DIRS
+  OBSOLETE_TOOL_SKILL_DIRS,
+  // Story 31.16 — the REAL manifest writers. Fixtures are built through these so
+  // no test ever hand-writes the `.ma-agents.json` shape; the record under test
+  // is produced by the same code production uses (`performInstall` calls exactly
+  // this pair at lib/installer.js:2108-2115).
+  ensureManifest,
+  writeManifest
 } = require('../lib/installer');
 
 let passed = 0;
@@ -51,9 +57,47 @@ function cleanup(dir) {
 }
 
 /**
+ * Install one skill into `skillsDir` the way ma-agents installs one: a directory
+ * named for the skill id holding a SKILL.md (`performInstall` installs to
+ * `path.join(installPath, skillId)`, lib/installer.js:1754), plus an entry under
+ * `.ma-agents.json::skills` written through the REAL writers `ensureManifest` +
+ * `writeManifest` (the exact pair `performInstall` uses at :2108-2115).
+ *
+ * Nothing here hand-writes the manifest shape — that is the point. The record the
+ * sweep reads is produced by production code, so it stays correct by construction
+ * if that shape ever changes.
+ */
+function installSkillAsMaAgents(skillsDir, skillId) {
+  fs.ensureDirSync(path.join(skillsDir, skillId));
+  fs.writeFileSync(
+    path.join(skillsDir, skillId, 'SKILL.md'),
+    `---\nname: ${skillId}\ndescription: seeded by the real installer writers\n---\n`,
+    'utf-8'
+  );
+  const manifest = ensureManifest(skillsDir, 'github-copilot', 'project');
+  const now = new Date().toISOString();
+  manifest.skills[skillId] = {
+    version: '1.0.0',
+    installedAt: now,
+    updatedAt: now,
+    installerVersion: '0.0.0-test',
+    agentVersion: '0.0.0-test'
+  };
+  writeManifest(skillsDir, manifest);
+}
+
+/**
  * Simulate a pre-F2b project state:
  *   <projectRoot>/.github/copilot/skills/  — stale obsolete directory
  *   <projectRoot>/.github/skills/          — new replacement directory (if withNew=true)
+ *
+ * Story 31.16 — the obsolete directory is seeded as a directory holding ONLY
+ * ma-agents-installed skills, recorded in its own manifest. That is what the b2-*
+ * cases below have always meant by "stale obsolete dir": content ma-agents put
+ * there and has since migrated elsewhere. It previously held one loose
+ * `old-marker.md` that no manifest recorded, which under the pre-31.16 sweep was
+ * indistinguishable from a user's hand-authored file — and was destroyed. See the
+ * "story defect" note in the Story 31.16 completion record.
  */
 function seedProject(projectRoot, { withObsolete = true, withNew = true, newHasContent = true } = {}) {
   fs.ensureDirSync(projectRoot);
@@ -61,7 +105,7 @@ function seedProject(projectRoot, { withObsolete = true, withNew = true, newHasC
   if (withObsolete) {
     const obsoleteDir = path.join(projectRoot, '.github', 'copilot', 'skills');
     fs.ensureDirSync(obsoleteDir);
-    fs.writeFileSync(path.join(obsoleteDir, 'old-marker.md'), '# stale skill\n', 'utf-8');
+    installSkillAsMaAgents(obsoleteDir, 'old-marker');
   }
 
   if (withNew) {
@@ -229,8 +273,13 @@ async function runAll() {
       fs.ensureDirSync(newDir);
       fs.writeFileSync(path.join(newDir, 'code-review.md'), '# code-review\n', 'utf-8');
 
-      // Create a deeply nested obsolete dir
+      // Create a deeply nested obsolete dir. Story 31.16: the nesting sits INSIDE
+      // a manifested skill directory — `some-skill` is ma-agents-installed and
+      // recorded, and `nested/deep-file.md` is arbitrary depth underneath it. The
+      // recursive removal is what this case proves, and it still proves it.
       const obsoleteDir = path.join(tmp, '.github', 'copilot', 'skills');
+      fs.ensureDirSync(obsoleteDir);
+      installSkillAsMaAgents(obsoleteDir, 'some-skill');
       const nestedDir = path.join(obsoleteDir, 'some-skill', 'nested');
       fs.ensureDirSync(nestedDir);
       fs.writeFileSync(path.join(nestedDir, 'deep-file.md'), '# deep\n', 'utf-8');
