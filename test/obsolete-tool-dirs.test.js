@@ -628,6 +628,164 @@ async function runAll() {
     }
   });
 
+  // 31-16-t7 (AC5) — the guard against the per-entry loops above going vacuous.
+  // If an entry were silently dropped from the registry, or the implementation's
+  // own loop were pinned to fewer entries, the loops would still "pass" by
+  // iterating less. This pins both the registry and the result count.
+  await test('31-16-t7 AC5 the registry has exactly five entries and the sweep returns one result per entry', async () => {
+    assert.strictEqual(OBSOLETE_TOOL_SKILL_DIRS.length, 5,
+      'the registry must hold exactly five entries');
+    assert.deepStrictEqual(
+      OBSOLETE_TOOL_SKILL_DIRS.map(e => e.obsolete).slice().sort(),
+      [
+        '.antigravity/skills',
+        '.github/copilot/skills',
+        '.github/skills',
+        '.kilocode/skills',
+        '.roo/skills'
+      ],
+      'the five obsolete paths must be exactly this set'
+    );
+
+    // …and the sweep must actually visit every one of them.
+    const tmp = mktemp();
+    try {
+      const results = await migrateObsoleteToolDirs(tmp);
+      assert.strictEqual(results.length, OBSOLETE_TOOL_SKILL_DIRS.length,
+        'the sweep must return one result per registry entry — a loop pinned to ' +
+        'fewer entries would leave the rest of the registry unswept');
+      for (const entry of OBSOLETE_TOOL_SKILL_DIRS) {
+        resultFor(results, entry);
+      }
+    } finally {
+      cleanup(tmp);
+    }
+  });
+
+  // 31-16-t8 (AC6) — the one unreleased entry of the five. 3.18.0 must not ship
+  // it without this fix, so it is pinned by name and proven to take both paths.
+  await test('31-16-t8 AC6 the unreleased .antigravity/skills entry is present and takes both paths', async () => {
+    const entry = OBSOLETE_TOOL_SKILL_DIRS.find(e => e.obsolete === '.antigravity/skills');
+    assert.ok(entry, 'the .antigravity/skills entry must be in the registry');
+    assert.strictEqual(entry.replacedBy, '.agent/skills',
+      '.antigravity/skills must be replaced by .agent/skills (bmad-method upstream path)');
+
+    // AC1 path — user content present → preserved.
+    let tmp = mktemp();
+    try {
+      const obsoletePath = obsoleteDirOf(tmp, entry);
+      fs.ensureDirSync(obsoletePath);
+      installSkillAsMaAgents(obsoletePath, 'code-review');
+      const userPaths = seedUserContent(obsoletePath);
+      populateReplacement(tmp, entry);
+
+      const r = resultFor(await migrateObsoleteToolDirs(tmp), entry);
+      assert.strictEqual(r.action, 'preserved-partial',
+        '.antigravity/skills must preserve when user content is present');
+      assertUserContentIntact('.antigravity/skills', userPaths);
+    } finally {
+      cleanup(tmp);
+    }
+
+    // AC4 path — no manifest at all → preserved.
+    tmp = mktemp();
+    try {
+      const obsoletePath = obsoleteDirOf(tmp, entry);
+      fs.ensureDirSync(path.join(obsoletePath, 'bmad-agent-dev'));
+      fs.writeFileSync(path.join(obsoletePath, 'bmad-agent-dev', 'SKILL.md'),
+        '---\ntype: skill\n---\n', 'utf-8');
+      populateReplacement(tmp, entry);
+
+      const before = snapshotTree(obsoletePath);
+      const r = resultFor(await migrateObsoleteToolDirs(tmp), entry);
+      assert.strictEqual(r.action, 'preserved-partial',
+        '.antigravity/skills must preserve an unmanifested tree');
+      assert.strictEqual(snapshotTree(obsoletePath), before,
+        '.antigravity/skills: an unmanifested tree must be byte-identical');
+    } finally {
+      cleanup(tmp);
+    }
+  });
+
+  // 31-16-t9 (AC7a) — the preserve-partial path is stable, not oscillating.
+  // Run two produces the same action and the same tree as run one.
+  await test('31-16-t9 AC7a running the sweep twice yields identical actions and an identical tree', async () => {
+    const tmp = mktemp();
+    try {
+      const entry = OBSOLETE_TOOL_SKILL_DIRS[0];
+      const obsoletePath = obsoleteDirOf(tmp, entry);
+      fs.ensureDirSync(obsoletePath);
+      installSkillAsMaAgents(obsoletePath, 'code-review');
+      seedUserContent(obsoletePath);
+      populateReplacement(tmp, entry);
+
+      const first = await migrateObsoleteToolDirs(tmp);
+      const treeAfterFirst = snapshotTree(obsoletePath);
+      const second = await migrateObsoleteToolDirs(tmp);
+      const treeAfterSecond = snapshotTree(obsoletePath);
+
+      assert.deepStrictEqual(
+        second.map(r => `${r.entry.obsolete}=${r.action}`),
+        first.map(r => `${r.entry.obsolete}=${r.action}`),
+        'every entry must report the same action on the second run'
+      );
+      assert.strictEqual(treeAfterSecond, treeAfterFirst,
+        'the preserved tree must be byte-identical after a second sweep');
+      assert.strictEqual(resultFor(second, entry).action, 'preserved-partial',
+        'the second run must still report preserved-partial, not drift to another action');
+    } finally {
+      cleanup(tmp);
+    }
+  });
+
+  // 31-16-t10 (AC7a) — the mechanism that MAKES t9 stable: the manifest files are
+  // left byte-unchanged on the preserve path. Pruning them would make run two see
+  // no manifest and behave differently from run one.
+  await test('31-16-t10 AC7a the manifest files survive the preserve path byte-unchanged', async () => {
+    const entry = OBSOLETE_TOOL_SKILL_DIRS[0];
+    const tmp = mktemp();
+    try {
+      const obsoletePath = obsoleteDirOf(tmp, entry);
+      fs.ensureDirSync(obsoletePath);
+      installSkillAsMaAgents(obsoletePath, 'code-review');
+      seedUserContent(obsoletePath);
+      populateReplacement(tmp, entry);
+
+      const manifestPath = path.join(obsoletePath, '.ma-agents.json');
+      assert.ok(fs.existsSync(manifestPath), 'fixture check: the real writers wrote a manifest');
+      const manifestBefore = fs.readFileSync(manifestPath, 'utf-8');
+
+      assert.strictEqual(resultFor(await migrateObsoleteToolDirs(tmp), entry).action,
+        'preserved-partial', 'fixture check: this entry must take the preserve-partial path');
+
+      assert.ok(fs.existsSync(manifestPath),
+        '.ma-agents.json must NOT be deleted on the preserve path — deleting it ' +
+        'would make the next run see no manifest and behave differently');
+      assert.strictEqual(fs.readFileSync(manifestPath, 'utf-8'), manifestBefore,
+        '.ma-agents.json must be byte-unchanged on the preserve path');
+    } finally {
+      cleanup(tmp);
+    }
+  });
+
+  // 31-16-t11 — registry ORDER is positional and load-bearing: the b2-t2/t2b/t3/t4
+  // cases above assert on results[0]. This pins the contract those cases rely on.
+  await test('31-16-t11 registry order is preserved — results[0] is the copilot entry', async () => {
+    assert.strictEqual(OBSOLETE_TOOL_SKILL_DIRS[0].obsolete, '.github/copilot/skills',
+      'the copilot pre-F2b entry must stay first in the registry');
+    const tmp = mktemp();
+    try {
+      const results = await migrateObsoleteToolDirs(tmp);
+      assert.deepStrictEqual(
+        results.map(r => r.entry.obsolete),
+        OBSOLETE_TOOL_SKILL_DIRS.map(e => e.obsolete),
+        'results must come back in registry order — b2-* cases index results[0]'
+      );
+    } finally {
+      cleanup(tmp);
+    }
+  });
+
   // Summary
   console.log(`\n  ${passed} passed, ${failed} failed\n`);
   if (failed > 0) {
