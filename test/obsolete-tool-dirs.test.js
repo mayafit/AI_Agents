@@ -414,6 +414,72 @@ async function runAll() {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Story 31.16 — the sweep becomes manifest-aware
+  // -------------------------------------------------------------------------
+
+  // 31-16-t1 (AC1) — user-authored content survives and the directory is kept.
+  // Looped over the exported registry, so a sixth entry is covered the day it is
+  // added; 31-16-t7 guards the loop against going vacuous.
+  await test('31-16-t1 AC1 user-authored content survives and the dir is preserved (every registry entry)', async () => {
+    for (const entry of OBSOLETE_TOOL_SKILL_DIRS) {
+      const tmp = mktemp();
+      try {
+        const obsoletePath = obsoleteDirOf(tmp, entry);
+        fs.ensureDirSync(obsoletePath);
+        // (i) a skill ma-agents installed — written through the REAL writers
+        installSkillAsMaAgents(obsoletePath, 'code-review');
+        // (ii) content the user wrote, in no manifest
+        const userPaths = seedUserContent(obsoletePath);
+        populateReplacement(tmp, entry);
+
+        const results = await migrateObsoleteToolDirs(tmp);
+        const r = resultFor(results, entry);
+
+        assert.strictEqual(r.action, 'preserved-partial',
+          `${entry.obsolete}: must report preserved-partial, got "${r.action}"`);
+        assert.strictEqual(r.error, null, `${entry.obsolete}: no error expected`);
+        assert.ok(fs.existsSync(obsoletePath),
+          `${entry.obsolete}: the directory itself must be preserved`);
+        // The authority here is the real filesystem — read back, compared to the
+        // bytes this test wrote, with no mock anywhere in the path.
+        assertUserContentIntact(entry.obsolete, userPaths);
+        // …and the cleanup still did its half of the job.
+        assert.ok(!fs.existsSync(path.join(obsoletePath, 'code-review')),
+          `${entry.obsolete}: the manifest-recorded skill must still be removed`);
+      } finally {
+        cleanup(tmp);
+      }
+    }
+  });
+
+  // 31-16-t2 (AC2) — the cleanup is not disabled: a directory holding only
+  // ma-agents-installed skills is still removed outright, for every entry.
+  await test('31-16-t2 AC2 a manifest-only obsolete dir is still removed (every registry entry)', async () => {
+    for (const entry of OBSOLETE_TOOL_SKILL_DIRS) {
+      const tmp = mktemp();
+      try {
+        const obsoletePath = obsoleteDirOf(tmp, entry);
+        fs.ensureDirSync(obsoletePath);
+        installSkillAsMaAgents(obsoletePath, 'code-review');
+        installSkillAsMaAgents(obsoletePath, 'commit-message');
+        populateReplacement(tmp, entry);
+
+        const results = await migrateObsoleteToolDirs(tmp);
+        const r = resultFor(results, entry);
+
+        assert.strictEqual(r.action, 'removed',
+          `${entry.obsolete}: a manifest-only dir must still be removed, got "${r.action}"`);
+        assert.strictEqual(r.error, null, `${entry.obsolete}: no error expected`);
+        assert.ok(!fs.existsSync(obsoletePath),
+          `${entry.obsolete}: the directory must be gone — the two manifest files ` +
+          `must NOT count as residue, or the cleanup is permanently dead`);
+      } finally {
+        cleanup(tmp);
+      }
+    }
+  });
+
   // Summary
   console.log(`\n  ${passed} passed, ${failed} failed\n`);
   if (failed > 0) {
