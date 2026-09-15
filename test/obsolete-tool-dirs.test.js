@@ -26,6 +26,12 @@
  *   31-16-t9   AC7a idempotency — two runs, identical actions and identical tree
  *   31-16-t10  AC7a the manifest files survive the preserve path byte-unchanged
  *   31-16-t11       registry ORDER is positional — results[0] is the copilot entry
+ *
+ * Review fix round — the preserve branch's own two destruction paths:
+ *   31-16-t12       B1 a case-mismatched manifest key must not delete the
+ *                      directory the same run reports as preserved
+ *   31-16-t13       B2 a manifest key may never escape the obsolete directory
+ *   31-16-t14       preserve-on-empty / preserve-on-absent, every registry entry
  */
 'use strict';
 
@@ -151,8 +157,13 @@ const USER_NOTES_BODY = 'loose note, not a skill directory, not in any manifest\
  * to — NOT a constant the implementation exports for its own use, which would
  * make the assertion tautological.
  *
- *   removalLine       ← lib/installer.js:2408-2409  (the green "Removed …" line)
- *   manualCleanupLine ← lib/installer.js:2415-2418  (the "Remove it manually …" tail)
+ *   removalLine       ← lib/installer.js:2468-2469  (the green "Removed …" line)
+ *   manualCleanupLine ← lib/installer.js:2513-2514  (the "Remove it manually …" tail)
+ *
+ * NOTE (N2): `manualCleanupLine`'s literal is SHARED with the plain `preserved`
+ * branch (lib/installer.js:2523-2524), so its presence alone does not
+ * distinguish the two preserve paths. In 31-16-t3 the discrimination is carried
+ * by the `action === 'preserved-partial'` assertion, not by this literal.
  *
  * If either literal is reworded in lib/installer.js without this test being
  * updated, AC3 fails — which is the point.
@@ -493,7 +504,7 @@ async function runAll() {
 
   // 31-16-t3 (AC3) — the preserve log names what caused the preservation, and
   // does NOT claim a removal. Asserted against the SHIPPED literals transcribed
-  // at the top of this file from lib/installer.js:2408-2409 and :2415-2418.
+  // at the top of this file from lib/installer.js:2468-2469 and :2513-2514.
   await test('31-16-t3 AC3 the preserve log names every residue entry and claims no removal', async () => {
     const entry = OBSOLETE_TOOL_SKILL_DIRS[0];
     const tmp = mktemp();
@@ -518,10 +529,10 @@ async function runAll() {
       }
       assert.ok(out.includes(manualCleanupLine(entry)),
         `the preserve log must carry the shipped manual-cleanup instruction ` +
-        `(lib/installer.js:2415-2418); got:\n${out}`);
+        `(lib/installer.js:2513-2514); got:\n${out}`);
       assert.ok(!out.includes(removalLine(entry)),
         `the preserve log must NOT claim the shipped removal ` +
-        `(lib/installer.js:2408-2409) for a directory it kept; got:\n${out}`);
+        `(lib/installer.js:2468-2469) for a directory it kept; got:\n${out}`);
     } finally {
       cleanup(tmp);
     }
@@ -803,6 +814,160 @@ async function runAll() {
       );
     } finally {
       cleanup(tmp);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Review fix round — the preserve branch's OWN destruction paths.
+  //
+  // Both of these existed because the removal loop joined a raw manifest key
+  // onto `obsoletePath` and removed the result, trusting file content as a
+  // filesystem path. Nothing in the suite pinned either direction: the mutant
+  // that made ownership matching case-insensitive survived all 19 cases.
+  // -------------------------------------------------------------------------
+
+  // 31-16-t12 (B1) — CASE. `residue` is computed with case-sensitive membership,
+  // but `fs.remove` resolves case-insensitively on NTFS and APFS. Before the fix
+  // this run named `Code-Review` in the log as an item "ma-agents did not
+  // install", reported `preserved-partial` — and deleted it in the same breath.
+  //
+  // This case is the direct pin for the reviewer's mutant r2 (ownership matching
+  // made case-insensitive): under r2, `Code-Review` is treated as owned, drops
+  // out of the residue list, and is removed.
+  await test('31-16-t12 B1 a case-mismatched manifest key must not delete what the run reports preserved', async () => {
+    const entry = OBSOLETE_TOOL_SKILL_DIRS[0];
+    const tmp = mktemp();
+    try {
+      const obsoletePath = obsoleteDirOf(tmp, entry);
+      // ON DISK: `Code-Review`. IN THE MANIFEST: `code-review`. Distinct strings;
+      // the same file on a case-insensitive filesystem.
+      fs.ensureDirSync(path.join(obsoletePath, 'Code-Review'));
+      fs.writeFileSync(path.join(obsoletePath, 'Code-Review', 'SKILL.md'),
+        USER_SKILL_BODY, 'utf-8');
+      const userPaths = seedUserContent(obsoletePath);
+      // The manifest records the lowercase id, through the real writers. No
+      // lowercase directory is ever created on disk.
+      const manifest = ensureManifest(obsoletePath, 'github-copilot', 'project');
+      const now = new Date().toISOString();
+      manifest.skills['code-review'] = {
+        version: '1.0.0', installedAt: now, updatedAt: now,
+        installerVersion: '0.0.0-test', agentVersion: '0.0.0-test'
+      };
+      writeManifest(obsoletePath, manifest);
+      populateReplacement(tmp, entry);
+
+      const { result: results, out } = await captureLog(() => migrateObsoleteToolDirs(tmp));
+      const r = resultFor(results, entry);
+
+      assert.strictEqual(r.action, 'preserved-partial',
+        `a case-mismatched key owns nothing on disk, so the dir must preserve; got "${r.action}"`);
+      // The log named it as residue. The filesystem must agree.
+      assert.ok(out.includes('Code-Review'),
+        `fixture check: the preserve log must name Code-Review as residue; got:\n${out}`);
+      assert.ok(fs.existsSync(path.join(obsoletePath, 'Code-Review')),
+        'Code-Review was reported as content ma-agents did not install and the ' +
+        'directory declared preserved — deleting it in the same run is the bug');
+      assert.strictEqual(
+        fs.readFileSync(path.join(obsoletePath, 'Code-Review', 'SKILL.md'), 'utf-8'),
+        USER_SKILL_BODY,
+        'Code-Review/SKILL.md must be byte-identical');
+      assertUserContentIntact('case-mismatch', userPaths);
+    } finally {
+      cleanup(tmp);
+    }
+  });
+
+  // 31-16-t13 (B2) — CONTAINMENT. A manifest key is file content, never a path.
+  // Before the fix a `skills` map holding `../../../victim` escaped the obsolete
+  // directory and deleted an unrelated path under the project root — while the
+  // entry still took the preserve branch, because a key matching nothing in
+  // `readdir` counts as neither owned-present nor residue.
+  //
+  // The victim deliberately lives OUTSIDE the obsolete directory, at the project
+  // root, so surviving proves containment and not merely "preserve kept the
+  // directory". Remove the `entries.includes(id)` filter from the removal loop
+  // and this case goes red.
+  await test('31-16-t13 B2 a traversal manifest key must not reach outside the obsolete directory', async () => {
+    const entry = OBSOLETE_TOOL_SKILL_DIRS[0];
+    const tmp = mktemp();
+    try {
+      const obsoletePath = obsoleteDirOf(tmp, entry);
+      fs.ensureDirSync(obsoletePath);
+      const userPaths = seedUserContent(obsoletePath);
+
+      // The victim: a sibling of .github, well outside the swept directory.
+      const victimDir = path.join(tmp, 'victim');
+      const victimFile = path.join(victimDir, 'important.md');
+      fs.ensureDirSync(victimDir);
+      fs.writeFileSync(victimFile, 'do not delete me\n', 'utf-8');
+      // Fixture check: the traversal must actually resolve to the victim, or
+      // this case proves nothing.
+      assert.strictEqual(
+        path.resolve(path.join(obsoletePath, '../../../victim')),
+        path.resolve(victimDir),
+        'fixture check: the traversal key must resolve to <projectRoot>/victim ' +
+        'from inside the obsolete directory');
+
+      // A manifest key that is not a basename, written through the real writers.
+      const manifest = ensureManifest(obsoletePath, 'github-copilot', 'project');
+      const now = new Date().toISOString();
+      manifest.skills['../../../victim'] = {
+        version: '1.0.0', installedAt: now, updatedAt: now,
+        installerVersion: '0.0.0-test', agentVersion: '0.0.0-test'
+      };
+      writeManifest(obsoletePath, manifest);
+      populateReplacement(tmp, entry);
+
+      const results = await migrateObsoleteToolDirs(tmp);
+      const r = resultFor(results, entry);
+
+      assert.strictEqual(r.error, null, 'no error expected');
+      assert.ok(fs.existsSync(victimDir),
+        '<projectRoot>/victim must survive — a manifest key may never be joined ' +
+        'onto the obsolete path and removed without a listing check');
+      assert.ok(fs.existsSync(victimFile),
+        '<projectRoot>/victim/important.md must survive the sweep');
+      assert.strictEqual(fs.readFileSync(victimFile, 'utf-8'), 'do not delete me\n',
+        '<projectRoot>/victim/important.md must be byte-identical');
+      assertUserContentIntact('traversal-key', userPaths);
+    } finally {
+      cleanup(tmp);
+    }
+  });
+
+  // 31-16-t14 (N5) — preserve-on-empty and preserve-on-absent were pinned only
+  // for the copilot entry (b2-t2 / b2-t2b, both indexing results[0]). Loop them
+  // over the registry, to the standard the 31-16-t* cases set.
+  await test('31-16-t14 the replacement gate preserves on an absent OR empty replacement (every registry entry)', async () => {
+    for (const entry of OBSOLETE_TOOL_SKILL_DIRS) {
+      for (const shape of ['absent', 'empty']) {
+        const tmp = mktemp();
+        try {
+          const obsoletePath = obsoleteDirOf(tmp, entry);
+          fs.ensureDirSync(obsoletePath);
+          installSkillAsMaAgents(obsoletePath, 'code-review');
+          const userPaths = seedUserContent(obsoletePath);
+          if (shape === 'empty') {
+            fs.ensureDirSync(replacedByDirOf(tmp, entry));
+          }
+
+          const before = snapshotTree(obsoletePath);
+          const r = resultFor(await migrateObsoleteToolDirs(tmp), entry);
+
+          assert.strictEqual(r.action, 'preserved',
+            `${entry.obsolete} (${shape} replacement): must report "preserved", got "${r.action}"`);
+          assert.strictEqual(r.error, null, `${entry.obsolete} (${shape}): no error expected`);
+          assert.ok(fs.existsSync(obsoletePath),
+            `${entry.obsolete} (${shape}): the directory must survive`);
+          // Nothing is removed on this path — not even ma-agents' own skills,
+          // because the content may not have been migrated anywhere yet.
+          assert.strictEqual(snapshotTree(obsoletePath), before,
+            `${entry.obsolete} (${shape}): the tree must be byte-identical`);
+          assertUserContentIntact(`${entry.obsolete} (${shape})`, userPaths);
+        } finally {
+          cleanup(tmp);
+        }
+      }
     }
   });
 
