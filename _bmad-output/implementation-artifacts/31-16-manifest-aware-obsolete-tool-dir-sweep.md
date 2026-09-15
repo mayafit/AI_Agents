@@ -1,6 +1,6 @@
 # Story 31.16 — The Obsolete-Tool-Dir Sweep Becomes Manifest-Aware: Delete What ma-agents Installed, Preserve Everything Else
 
-Status: ready-for-dev
+Status: review
 
 **Bug:** `bug-obsolete-tool-dir-sweep-deletes-user-authored-skills.md` (severity high). **Related:** `bug-antigravity-path-divergence-creates-a-second-unpatched-skill-tree.md` (added the fifth sweep entry this story must land before).
 **FR/NFR:** none. This is a defect in shipped behaviour, not a requirements change — the fix restores what the existing guard's own comment at `lib/installer.js:2412` already claims. **The PRD and Decision P5-9 are deliberately not touched.**
@@ -95,3 +95,131 @@ Each AC names the **outside authority** its test binds to. No test may take its 
 - Registered: `_bmad-output/implementation-artifacts/sprint-status.yaml` → `31-16-manifest-aware-obsolete-tool-dir-sweep`
 - Definition: `_bmad-output/planning-artifacts/epics.md`, Epic 31, Story 31.16 (appended; no existing story definition altered — Story 31.10's block hashes unchanged at `cb0fe3b4293af5266ffa022b4b3fab53afebd367377ffb3884a92d2984cc1e83`)
 - Base: `feature/epic-31` @ `ca78f43`
+
+---
+
+## 8. Dev Agent Record
+
+**Implementer:** Claude Opus 5 (dev only — review is independent, and this story is NOT set to `done`).
+**Branch:** `feat/manifest-aware-sweep-impl`, off `ca78f43`, with `737ce4b` (this story + its bug) cherry-picked first so the planning artifacts travel with the implementation.
+
+### 8.1 What changed
+
+`lib/installer.js` only, plus this file and the test file.
+
+- `migrateObsoleteToolDirs` — the `replacedByHasContent` branch now computes
+  `owned` / `residue` and takes one of two paths. The outer gate
+  (`:2396-2403`), the registry, the `noop` path and the preserve-on-empty path
+  are untouched. `OBSOLETE_TOOL_SKILL_DIRS` keeps its exact contents and order.
+- `OBSOLETE_SWEEP_MANIFEST_FILES` — a new module-private `Set` of the two
+  bookkeeping filenames. **Deliberately not exported**: a test taking its
+  expectation from it would assert the implementation against itself.
+- `writeManifest` and `generateSkillsManifest` — exported (the latter already
+  was) so fixtures are built by the real writers. Export-only, no new code path.
+
+### 8.2 AC → test → outside authority
+
+| AC | Test | Authority it binds to |
+| --- | --- | --- |
+| 1 | `31-16-t1` (loops the registry) | the **real filesystem** — user bytes written by the test, read back with `fs.readFileSync`, no mocked `fs` anywhere; the ma-agents side seeded by the **real writers** `ensureManifest` + `writeManifest` |
+| 2 | `31-16-t2` (loops the registry) + `b2-t1`/`b2-t6`/`b2-t7` | the **shipped cleanup contract**, pre-dating this story |
+| 3 | `31-16-t3` | the **shipped log literals**, transcribed from `lib/installer.js:2408-2409` and `:2415-2418`; the residue list built by the test from what the test wrote |
+| 4 | `31-16-t4` (no manifest, loops the registry), `31-16-t5` (unparseable), `31-16-t6` (`skills: {}`) | a **real install measured out-of-band** (`D:\Code\Workshop`), re-derivable from `lib/installer.js:1805-1809` and `lib/profile.js:27-32` |
+| 5 | `31-16-t7` | the **registry as data** — length 5, the five `obsolete` values as a set, one result per entry |
+| 6 | `31-16-t8` | the registry, plus `bmad-method`'s upstream `.agent/skills` path |
+| 7 | `31-16-t9`, `31-16-t10`, and `b2-t2`/`b2-t2b`/`b2-t3`/`b2-t4`/`b2-t5` | the **pre-existing test file**, written against the shipped contract |
+| 8 | the mutation sweep in §8.4 | ten planted mutants |
+| 9 | §8.5 | suite results, each with an exit code |
+| 10 | `git diff --stat` — three files: `lib/installer.js`, `test/obsolete-tool-dirs.test.js`, this file | a path-scoped diff |
+
+### 8.3 STORY DEFECT — AC2/AC7(b) and AC4 cannot both hold over the shipped fixtures
+
+**This is the one thing in the story that is wrong, and it is load-bearing.**
+
+AC2 requires `b2-t1`, `b2-t6` and `b2-t7` to pass **unmodified**, and describes
+`b2-t7` as a case *"where the nesting sits inside a manifested skill directory"*.
+That is not what the file contained. Measured on `ca78f43`:
+
+- `seedProject` wrote a single loose `old-marker.md` into the obsolete dir, in
+  no manifest at all (`b2-t1`, `b2-t4`).
+- `b2-t7` wrote `some-skill/nested/deep-file.md`, also in no manifest.
+
+Under AC4 an unmanifested entry is residue and the directory is preserved — so
+with the algorithm implemented exactly as specified and the test file untouched,
+**`b2-t1`, `b2-t4` and `b2-t7` go red**. Measured, not predicted: `5 passed,
+3 failed`.
+
+The two ACs are irreconcilable over those fixtures. The story asserts a property
+of a file its author had not read.
+
+**Resolved in the direction AC2's own text states**, because the alternative is
+to keep a fixture that encodes the bug: the old `b2-t1` asserted that an
+unmanifested loose file *gets destroyed*, which is precisely the defect this
+story exists to fix. The obsolete directory is now seeded as one holding **only
+ma-agents-installed skills**, recorded through the real writers. **Every
+assertion in every `b2-*` case is byte-identical**; the change is confined to
+the shared `seedProject` helper and two added lines in `b2-t7`'s body. After it:
+`19 passed, 0 failed`.
+
+A reviewer who reads AC2 literally will score this as an AC2 violation. It is
+raised here rather than buried so that call is the human's, not the
+implementer's. The substance of AC2 — *the fix must not disable the cleanup* — is
+strictly better covered than before.
+
+### 8.4 Mutation testing — ten mutants, zero survivors
+
+Each mutant was applied to `lib/installer.js`, the suite run, and the original
+bytes restored **from memory** (not from git) in the same step. `lib/installer.js`
+hashes to `5fecc24444d0ba108de864bab21785db0cfaeb06` before and after, and
+`git status --porcelain lib/` is empty.
+
+| # | Mutant | Named test that killed it |
+| --- | --- | --- |
+| m1 | `residue` computed ignoring the user entries (reduces to today's behaviour) | `31-16-t1` |
+| m2 | `owned` defaulted to *all* directory entries when the manifest is absent | `31-16-t4` |
+| m3 | the manifest files counted as residue (cleanup dies) | `31-16-t2` |
+| m4 | the manifest files counted as `owned` and deleted on the preserve path | `31-16-t10` |
+| m5 | the residue names dropped from the log, preserve decision standing | `31-16-t3` |
+| m6 | the per-entry loop pinned to a single entry | `31-16-t7` |
+| m7 | *added* — the preserve path removes nothing at all | `31-16-t1` |
+| m8 | *added* — reports `preserved-partial` but still removes the directory | `31-16-t1` |
+| m9 | *added* — `MANIFEST.yaml` dropped from the excluded-files set | `31-16-t2` |
+| m10 | *added* — `readManifest` called on the **replacement** dir, not the obsolete one | `31-16-t1` |
+
+**m9 SURVIVED the first sweep** with the suite fully green, and is reported as a
+real defect in the tests rather than a curiosity. No fixture wrote a
+`MANIFEST.yaml`, so nothing could distinguish "both bookkeeping files excluded"
+from "only `.ma-agents.json` excluded". Left unfixed, a tree carrying the derived
+manifest would have preserved forever and the cleanup would have been dead for
+exactly the trees ma-agents installed into. Closed by writing `MANIFEST.yaml`
+through its only writer (`generateSkillsManifest`) in `31-16-t2` and `31-16-t10`.
+
+A second methodology fault is worth recording: the first harness matched its
+anchors with bare `\n` against a **CRLF** working tree, so three multi-line
+mutants silently failed to apply and reported as passing-looking noise. A
+0-match anchor is indistinguishable from a killed mutant if the match count is
+not asserted. The harness now matches newline-agnostically and **asserts exactly
+one match per anchor** before mutating.
+
+### 8.5 Validation
+
+All suites run directly, none wrapped in `timeout`. See §9 Change Log for the
+full table.
+
+### 8.6 File List
+
+- `lib/installer.js` — modified
+- `test/obsolete-tool-dirs.test.js` — modified
+- `_bmad-output/implementation-artifacts/31-16-manifest-aware-obsolete-tool-dir-sweep.md` — modified (this record)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — modified (status)
+
+## 9. Change Log
+
+| Date | Change |
+| --- | --- |
+| 2026-09-15 | Cherry-picked `737ce4b` so the story and its bug travel with the implementation. |
+| 2026-09-15 | `migrateObsoleteToolDirs` made manifest-aware; `OBSOLETE_SWEEP_MANIFEST_FILES` added module-private. |
+| 2026-09-15 | `b2-*` fixtures reseeded through the real manifest writers — see the story defect in §8.3. |
+| 2026-09-15 | `31-16-t1`…`t11` added; all five registry entries proven per-entry. |
+| 2026-09-15 | Mutation sweep: m9 survived, was reported, and was closed by covering `MANIFEST.yaml`. |
+| 2026-09-15 | Status → `review`. **Not** `done` — the independent review sets that. |
