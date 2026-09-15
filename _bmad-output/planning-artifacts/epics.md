@@ -5702,3 +5702,133 @@ Recorded rather than resolved by invention. None blocks the gate stories (31.1, 
 - **OQ-4 — How is a Confluence page's identity recorded?** P5-9.7 maps one page per markdown artifact, and Story 31.10 must update rather than duplicate on re-run. NFR79 says `project-layout.yaml` records "only the space key and root page identity", which does not say whether per-artifact pages are matched by title (breaks on rename/reshard) or by a stored page id (a growing per-artifact record the layout file was not designed to carry). **Settle before Story 31.10.**
 - **OQ-5 — Research reports belong to neither store as written.** FR255 assigns the product brief and PRD to the system requirements store; FR256 assigns architecture, UX and epics to the software requirements store. FR119 also requires *research* outputs (domain, market, technical) to resolve from configuration, and today they sit in `planning-artifacts/` alongside the brief — but no F26 requirement says which store owns them. This is a genuine PRD gap, **not** grounds for inventing an FR. **Settle in Story 31.6** as a recorded story-level routing decision, or raise it to the PM for an FR.
 - **OQ-6 — Two remote-git stores mean two clones.** FR258 applies FR113–FR116's remote-clone semantics *per store*, so a project can now ask the installer to clone two repositories in one run. Nothing forbids it and it is not a contradiction, but the confirmation and failure UX for a partial two-clone install is unspecified. Minor; **settle in Story 31.5** or accept the sequential single-clone behaviour applied twice.
+
+---
+
+## Design-Studio Module Disposition (Standalone — Scope Decision Required)
+
+### Story DS.1: Decide and Execute the Disposition of `gds` and `wds` in the ma-agents Implementation
+
+**Status:** `backlog` — **blocked on a human scope decision.** This story is written to
+*surface* the decision, not to resolve it. Do not start implementation until an option
+below is chosen by a human.
+
+**Context.** `gds` (Game Design Studio) and `wds` (Whiteport Design Studio) are two of the
+five modules ma-agents bundles under `lib/bmad-cache/`. As of FR123 they are **bundled but
+not installed by default** — `DEFAULT_BMAD_MODULE_IDS` is `['bmm','tea','bmb','cis']`
+(`lib/bmad.js:559`) and the two design-studio modules are reachable only through an explicit
+`--bmad-modules` request or the bare-flag multiselect. That change has shipped and is merged.
+
+**The scope question this story exists to ask.** *"Not installed by default"* (shipped) and
+*"removed from ma-agents"* (not started) are different propositions, and the second is much
+larger. Three candidate scopes, with costs measured against the tree at `ca78f43`:
+
+---
+
+#### Option A — Stop bundling them
+
+Remove `gds`/`wds` from `lib/bmad-cache/`, from `KNOWN_BUNDLED_MODULES`, and from the
+multiselect.
+
+**Measured cost:**
+
+- **NFR73's two-sided set-equality guard — cheaper than feared.**
+  `KNOWN_BUNDLED_MODULES` (`scripts/build-bmad-cache.js:60`) is *both* the include filter
+  (`normalizeModules()` at `:238-243` filters on it as a closed allowlist) *and* the
+  allowlist `diffBundleSet()` compares against (`:291-297`). Dropping the two codes therefore
+  shrinks the resolved set and the allowlist together: `missing` and `extra` both stay empty
+  and the guard needs **no redesign** — it is a one-line edit. The cost is in the pinned
+  assertions, not the guard: `test/build-bmad-cache-reader.test.js:204-205`,
+  `test/bundle-filter-set-equality.test.js:236-237`,
+  `test/bmad-version-bump.test.js:411-412`, plus ~55 `gds`/`wds` references in
+  `test/bmad-module-selection.test.js`.
+- **Cache-manifest build.** `npm run build:bmad-cache` must be re-run and the regenerated
+  `lib/bmad-cache/cache-manifest.json` committed; the plugin bundle is rebuilt on the same
+  pass (`npm run build:plugin`, per the Bundle Drift Guard).
+- **Package size — the real prize.** `gds` is 5 MB and `wds` is 9 MB of a 32 MB
+  `lib/bmad-cache/` (~41%), and 1,223 of the cache's 2,509 files (~49%). This is the single
+  largest size lever available.
+- **Release gate.** `test/release-gate-epic-31.test.js` carries **11** references to
+  `lib/bmad-cache/gds/...` (0 to `wds`), including seven digest-allowlist entries keyed to
+  specific gds files and two hard-coded paths at `:2047-2048` and `:2146-2147`. All would
+  need rework. `test/routing-parity.test.js` has **zero** gds/wds references.
+- **Air gap — VERIFIED PROBLEM, and it is the blocker.** The bundled cache exists precisely
+  so `~/.bmad/cache/external-modules/` can be pre-populated offline (FR76); with no cached
+  copy, bmad-method falls back to `git clone --depth 1 <url>` against GitHub — the exact
+  failure mode P2-6 was created to eliminate. So a user who wants `gds` or `wds` **would
+  need network access**, and `--bmad-modules wds` on an air-gapped machine would fail.
+  NFR2/NFR50/NFR57 are not violated (they cover the *default* install path), but FR123's
+  explicit promise — *"they remain fully available offline through the `--bmad-modules`
+  multiselect, so the air-gap guarantee is unchanged"* — becomes false, and FR75 names
+  `gds`/`wds` as bundled by requirement.
+- **Therefore Option A requires a PRD change** (FR75 and FR123 both). **That is a human
+  decision and is deliberately not drafted here.**
+
+---
+
+#### Option B — Keep bundled, remove from the interactive surface
+
+They stay in the cache and stay installable by explicit `--bmad-modules gds`, but are no
+longer offered by the bare-flag multiselect.
+
+**Measured cost:** small and self-contained — the multiselect population in
+`lib/bmad.js` (`getInstallableBmadModules()`) and the assertions in
+`test/bmad-module-selection.test.js`. **No** cache rebuild, **no** allowlist edit, **no**
+NFR73 change, **no** PRD change, **no** air-gap impact, **no** size saving.
+
+**Caveat worth stating plainly:** this is close to a no-op over shipped behaviour. The
+modules already do not install unless asked. Option B only makes them *less discoverable*
+while the package still pays the full 14 MB — arguably the worst of both trade-offs.
+
+---
+
+#### Option C — Full removal including the `gds-*` / `wds-*` skills
+
+**This option's premise does not hold, and that is a finding.** There are **zero**
+`gds-*` or `wds-*` directories under `skills/`, `lib/bmad-extension/`, or
+`lib/bmad-extension-plugin`. ma-agents authors none of those skills. The 20 design-studio
+skills that appear in an agent's skill roster come from the *installed BMAD modules* —
+7 `gds-*` workflow directories under `lib/bmad-cache/gds/src/workflows/` and 13 `wds-*`
+under `lib/bmad-cache/wds/`. They are upstream content, vendored, not ma-agents code.
+
+**Consequently the pinned counts do not move:**
+
+- The **41-copy preflight** walks `['skills', 'lib/bmad-extension/skills',
+  'lib/bmad-extension-plugin']` (`test/project-layout-artifact-routing.test.js:1907`,
+  asserted at `:1929`). No gds/wds path is in scope. **Unmoved.**
+- The **9-copy gate** is a hardcoded list of nine ma-agents skill paths
+  (`test/project-layout-confluence-page-tree.test.js:2235-2245`). No gds/wds path.
+  **Unmoved.**
+- `bmad-module-selection` and the release-gate population move exactly as described under
+  Option A; `routing-parity` does not move at all.
+
+**Option C therefore collapses into Option A** plus the release-gate digest rework. It is
+not a larger third tier, and it inherits Option A's PRD blocker.
+
+---
+
+#### Recommendation — defer; do not spend the removal now
+
+**Recommended: no structural change before the redesign** (keep the bundle, keep the
+multiselect entry). Reasons:
+
+1. **The user-visible complaint is already closed.** The reported harm was an uninvited
+   `design-artifacts/` tree. FR123's shipped default set removes it. Nothing further is
+   required to keep that promise.
+2. **The only option with a real payoff is blocked.** Option A is the sole option that buys
+   anything measurable (14 MB, ~49% of cache files), and it cannot proceed without a PRD
+   change that trades away an offline guarantee the product is built around.
+3. **A major ma-agents redesign is planned immediately after this release.** Both the cache
+   layout and the module-selection surface are plausible redesign targets, so an expensive
+   removal executed now — allowlist, manifest rebuild, four test suites, eleven release-gate
+   digest pins — is work with a high probability of being discarded. This weighs heavily
+   against acting early.
+4. **Option B costs little but buys less.** If a change is nonetheless required before the
+   redesign, Option B is the cheapest safe move; it should be taken only if reducing the
+   prompt surface is itself the goal, since it saves no bytes.
+
+**Acceptance criteria for this story are deliberately not written.** They depend on which
+option is chosen. When a human picks one, this story is replaced by an implementation story
+scoped to that option — and if the pick is A or C, a PRD amendment to FR75 and FR123 is a
+prerequisite and is that human's call.
+
