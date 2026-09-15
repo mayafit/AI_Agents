@@ -480,6 +480,154 @@ async function runAll() {
     }
   });
 
+  // 31-16-t3 (AC3) — the preserve log names what caused the preservation, and
+  // does NOT claim a removal. Asserted against the SHIPPED literals transcribed
+  // at the top of this file from lib/installer.js:2408-2409 and :2415-2418.
+  await test('31-16-t3 AC3 the preserve log names every residue entry and claims no removal', async () => {
+    const entry = OBSOLETE_TOOL_SKILL_DIRS[0];
+    const tmp = mktemp();
+    try {
+      const obsoletePath = obsoleteDirOf(tmp, entry);
+      fs.ensureDirSync(obsoletePath);
+      installSkillAsMaAgents(obsoletePath, 'code-review');
+      seedUserContent(obsoletePath);
+      populateReplacement(tmp, entry);
+
+      // The residue list is built by the test from what the test wrote — not
+      // read back out of the implementation.
+      const expectedResidue = ['my-house-style', 'NOTES.md'];
+
+      const { result: results, out } = await captureLog(() => migrateObsoleteToolDirs(tmp));
+      assert.strictEqual(resultFor(results, entry).action, 'preserved-partial',
+        'fixture check: this entry must take the preserve-partial path');
+
+      for (const name of expectedResidue) {
+        assert.ok(out.includes(name),
+          `the preserve log must name residue entry "${name}" by basename; got:\n${out}`);
+      }
+      assert.ok(out.includes(manualCleanupLine(entry)),
+        `the preserve log must carry the shipped manual-cleanup instruction ` +
+        `(lib/installer.js:2415-2418); got:\n${out}`);
+      assert.ok(!out.includes(removalLine(entry)),
+        `the preserve log must NOT claim the shipped removal ` +
+        `(lib/installer.js:2408-2409) for a directory it kept; got:\n${out}`);
+    } finally {
+      cleanup(tmp);
+    }
+  });
+
+  // 31-16-t4 (AC4) — the field's common case: a tree written by bmad-method's
+  // PluginResolver, which writes skills and no manifest at all. Shape measured
+  // out-of-band in D:\Code\Workshop (four trees, 166 entries each, zero per-tree
+  // manifests) and recorded in the bug file; re-derivable from the two-pipeline
+  // note at lib/installer.js:1805-1809 and the profile-store note at
+  // lib/profile.js:27-32, both of which independently state that a tree can
+  // legitimately carry no manifest.
+  await test('31-16-t4 AC4 a tree with NO manifest anywhere is preserved (every registry entry)', async () => {
+    for (const entry of OBSOLETE_TOOL_SKILL_DIRS) {
+      const tmp = mktemp();
+      try {
+        const obsoletePath = obsoleteDirOf(tmp, entry);
+        // Skill directories with SKILL.md and NOTHING else — no .ma-agents.json,
+        // no MANIFEST.yaml, anywhere in the tree.
+        for (const id of ['bmad-agent-dev', 'bmad-create-story']) {
+          fs.ensureDirSync(path.join(obsoletePath, id));
+          fs.writeFileSync(path.join(obsoletePath, id, 'SKILL.md'),
+            `---\ntype: skill\ntriggers: []\n---\n# ${id}\n`, 'utf-8');
+        }
+        const userPaths = seedUserContent(obsoletePath);
+        populateReplacement(tmp, entry);
+
+        // Fixture check — this is the whole premise of AC4.
+        assert.ok(!fs.existsSync(path.join(obsoletePath, '.ma-agents.json')),
+          `${entry.obsolete}: fixture must carry no .ma-agents.json`);
+        assert.ok(!fs.existsSync(path.join(obsoletePath, 'MANIFEST.yaml')),
+          `${entry.obsolete}: fixture must carry no MANIFEST.yaml`);
+
+        const before = snapshotTree(obsoletePath);
+        const results = await migrateObsoleteToolDirs(tmp);
+        const r = resultFor(results, entry);
+
+        assert.strictEqual(r.action, 'preserved-partial',
+          `${entry.obsolete}: an unmanifested tree must be preserved, got "${r.action}"`);
+        assert.ok(fs.existsSync(obsoletePath),
+          `${entry.obsolete}: an unmanifested tree must never be removed`);
+        assert.strictEqual(snapshotTree(obsoletePath), before,
+          `${entry.obsolete}: every path in an unmanifested tree must be byte-identical`);
+        assertUserContentIntact(entry.obsolete, userPaths);
+      } finally {
+        cleanup(tmp);
+      }
+    }
+  });
+
+  // 31-16-t5 (AC4) — a manifest that is present but unparseable. readManifest
+  // already returns null on a parse error (lib/installer.js:295-299), so this
+  // takes the same empty-`owned` path with nothing special-cased.
+  await test('31-16-t5 AC4 a present-but-unparseable manifest is preserved, not treated as ownership', async () => {
+    const entry = OBSOLETE_TOOL_SKILL_DIRS[0];
+    const tmp = mktemp();
+    try {
+      const obsoletePath = obsoleteDirOf(tmp, entry);
+      fs.ensureDirSync(obsoletePath);
+      fs.ensureDirSync(path.join(obsoletePath, 'code-review'));
+      fs.writeFileSync(path.join(obsoletePath, 'code-review', 'SKILL.md'), '# cr\n', 'utf-8');
+      const userPaths = seedUserContent(obsoletePath);
+      // Deliberately invalid JSON — this is not "hand-writing the manifest
+      // shape", it is the absence of any readable shape.
+      fs.writeFileSync(path.join(obsoletePath, '.ma-agents.json'),
+        '{ this is not json', 'utf-8');
+      populateReplacement(tmp, entry);
+
+      const before = snapshotTree(obsoletePath);
+      const results = await migrateObsoleteToolDirs(tmp);
+      const r = resultFor(results, entry);
+
+      assert.strictEqual(r.action, 'preserved-partial',
+        `an unparseable manifest must preserve, got "${r.action}"`);
+      assert.ok(fs.existsSync(obsoletePath), 'the directory must be preserved');
+      assert.strictEqual(snapshotTree(obsoletePath), before,
+        'nothing may be removed when the manifest cannot be read');
+      assertUserContentIntact('unparseable-manifest', userPaths);
+    } finally {
+      cleanup(tmp);
+    }
+  });
+
+  // 31-16-t6 (AC4) — a well-formed manifest that records no skills. Written
+  // through the REAL writers, so the empty-`skills` shape is production's, not
+  // this test's invention.
+  await test('31-16-t6 AC4 a manifest with `skills: {}` owns nothing and preserves', async () => {
+    const entry = OBSOLETE_TOOL_SKILL_DIRS[0];
+    const tmp = mktemp();
+    try {
+      const obsoletePath = obsoleteDirOf(tmp, entry);
+      fs.ensureDirSync(obsoletePath);
+      fs.ensureDirSync(path.join(obsoletePath, 'code-review'));
+      fs.writeFileSync(path.join(obsoletePath, 'code-review', 'SKILL.md'), '# cr\n', 'utf-8');
+      const userPaths = seedUserContent(obsoletePath);
+      // Real writers, no skills added.
+      writeManifest(obsoletePath, ensureManifest(obsoletePath, 'github-copilot', 'project'));
+      const written = JSON.parse(fs.readFileSync(path.join(obsoletePath, '.ma-agents.json'), 'utf-8'));
+      assert.deepStrictEqual(written.skills, {},
+        'fixture check: the real writers must have produced an empty skills map');
+      populateReplacement(tmp, entry);
+
+      const before = snapshotTree(obsoletePath);
+      const results = await migrateObsoleteToolDirs(tmp);
+      const r = resultFor(results, entry);
+
+      assert.strictEqual(r.action, 'preserved-partial',
+        '`skills: {}` must own nothing and preserve, got "' + r.action + '"');
+      assert.ok(fs.existsSync(obsoletePath), 'the directory must be preserved');
+      assert.strictEqual(snapshotTree(obsoletePath), before,
+        'a manifest that records no skills authorises no removal');
+      assertUserContentIntact('empty-skills-manifest', userPaths);
+    } finally {
+      cleanup(tmp);
+    }
+  });
+
   // Summary
   console.log(`\n  ${passed} passed, ${failed} failed\n`);
   if (failed > 0) {
