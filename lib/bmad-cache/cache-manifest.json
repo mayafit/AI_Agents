@@ -20,18 +20,6 @@
       "branch": "main",
       "commitSha": "07a8dd03d196a762f21c241d985293fe5b0f90e7",
       "clonedAt": "2026-06-13T15:11:42.507Z"
-    },
-    "gds": {
-      "url": "https://github.com/bmad-code-org/bmad-module-game-dev-studio.git",
-      "branch": "main",
-      "commitSha": "46c3a6cddf882af1f918187d6e5748c1edfd9c52",
-      "clonedAt": "2026-06-13T15:11:43.930Z"
-    },
-    "wds": {
-      "url": "https://github.com/bmad-code-org/bmad-method-wds-expansion",
-      "branch": "main",
-      "commitSha": "cc16f09fcfab26d35635af1491f36a38a8431c8d",
-      "clonedAt": "2026-06-13T15:11:45.601Z"
     }
   }
 }
