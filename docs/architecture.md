@@ -199,7 +199,7 @@ skills/<skill-name>/
 
 **Responsibility**: Pre-vendor BMAD's external modules so installs never touch the network.
 
-ma-agents bundles bmad-method as an npm dependency **and** pre-clones BMAD's external modules (`tea`, `bmb`, `cis`, `gds`) into `lib/bmad-cache/` at build time via `npm run build:bmad-cache` ([scripts/build-bmad-cache.js](../scripts/build-bmad-cache.js)). This is what lets `npx ma-agents install` run fully offline in air-gapped environments (NFR2/NFR50/NFR54) — the npm tarball already contains every module bmad-method would otherwise `git clone` from GitHub at install time.
+ma-agents bundles bmad-method as an npm dependency **and** pre-clones BMAD's external modules (`tea`, `bmb`, `cis`) into `lib/bmad-cache/` at build time via `npm run build:bmad-cache` ([scripts/build-bmad-cache.js](../scripts/build-bmad-cache.js)). This is what lets `npx ma-agents install` run fully offline in air-gapped environments (NFR2/NFR50/NFR54) — the npm tarball already contains every module bmad-method would otherwise `git clone` from GitHub at install time.
 
 **Module discovery**: the builder reads BMAD's bundled module registry to learn which external modules to clone. **The registry source has moved across BMAD versions** and the reader must track it:
 
