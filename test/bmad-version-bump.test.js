@@ -42,7 +42,7 @@
  * entries carry code/url/name/type (schema unchanged); that `bmad-loop` is
  * present as `type: bmad-org` + `marketplace-plugin: true` and `bmad-automator`
  * is `deprecated: true`; and that running the REAL closed-allowlist reader
- * against the live YAML resolves EXACTLY {tea, bmb, cis, gds, wds} with
+ * against the live YAML resolves EXACTLY {tea, bmb, cis} with
  * `bmad-loop` excluded. Fully offline (reads the installed file; no network, no
  * clone). If the path or schema ever drifts, THIS is the gate that fails — not
  * a silently thin (or silently over-broad) cache.
@@ -249,7 +249,7 @@ test('installed bmad-method is version 6.10.0', () => {
 // `deprecated: true`; and — the actual safety property Story 30.2/30.3 exist to
 // guarantee — that running the REAL closed-allowlist reader
 // (`normalizeModules`) against this live YAML resolves EXACTLY
-// {tea, bmb, cis, gds, wds}, with `bmad-loop` excluded despite being
+// {tea, bmb, cis}, with `bmad-loop` excluded despite being
 // `type: bmad-org`. Fully offline (reads the installed file; no network, no
 // clone). If the path, schema, or bundled-set ever drifts, THIS is the gate
 // that fails — not a silently thin or silently over-broad cache.
@@ -286,12 +286,12 @@ test('AC (P5-8 gate): live-installed bmad-modules.yaml is at the package root, s
     'bmad-automator must carry deprecated: true at 6.10.0');
 
   // The actual safety property: the REAL closed-allowlist reader run against
-  // this live YAML resolves exactly the five — bmad-loop excluded even though
+  // this live YAML resolves exactly the three — bmad-loop excluded even though
   // it is type: bmad-org, because the filter is a closed allowlist (Story 30.2),
   // not an open "keep every bmad-org" predicate.
   const resolved = reader.normalizeModules(reader.parseModulesYaml(rawText)).map(m => m.code).sort();
-  assert.deepStrictEqual(resolved, ['bmb', 'cis', 'gds', 'tea', 'wds'],
-    `live closed-allowlist resolution must be exactly tea/bmb/cis/gds/wds with bmad-loop excluded; got ${resolved.join(', ')}`);
+  assert.deepStrictEqual(resolved, ['bmb', 'cis', 'tea'],
+    `live closed-allowlist resolution must be exactly tea/bmb/cis with bmad-loop excluded; got ${resolved.join(', ')}`);
   assert.ok(!resolved.includes('bmad-loop'),
     'bmad-loop must NEVER be force-bundled — this is the concrete bug Story 30.2 closes and 30.3 proves end-to-end at 6.10.0');
 });
@@ -344,14 +344,14 @@ test('AC1: the relocated package-root path is the FIRST registry candidate, tagg
   assert.strictEqual(first.schema, 'package-root-v68');
 });
 
-test('AC1: closed-allowlist filter keeps the five bundled codes and excludes type: experimental', () => {
+test('AC1: closed-allowlist filter keeps the three bundled codes and excludes type: experimental', () => {
   // Story 30.2 replaced the old `type: bmad-org` include predicate with a
   // closed allowlist (KNOWN_BUNDLED_MODULES). Drive the real normalizeModules
-  // over the 6.8.0-shaped fixture: the five allowlisted codes survive,
+  // over the 6.8.0-shaped fixture: the three allowlisted codes survive,
   // experimental (automator) is dropped (it was never on the allowlist).
   const codes = reader.normalizeModules(reader.parseModulesYaml(FIXTURE_V68)).map(m => m.code).sort();
-  assert.deepStrictEqual(codes, ['bmb', 'cis', 'gds', 'tea', 'wds'],
-    `expected the five allowlisted modules; automator (experimental) must be excluded. Got: ${codes.join(', ')}`);
+  assert.deepStrictEqual(codes, ['bmb', 'cis', 'tea'],
+    `expected the three allowlisted modules; automator (experimental) must be excluded. Got: ${codes.join(', ')}`);
 });
 
 test('AC1: bmm/core exclusion invariant retained (closed allowlist excludes anything not explicitly bundled)', () => {
@@ -382,33 +382,36 @@ test('AC2: wds IS in the v6.8.0 registry as an active type: bmad-org module (was
   assert.strictEqual(wdsRaw.url, 'https://github.com/bmad-code-org/bmad-method-wds-expansion');
 });
 
-test('AC2/AC4: wds is bundled — a normal bmad-org clone, not a retained relic', () => {
-  // Inverts the old `'retired upstream modules (e.g. wds) are flagged in manifest
-  // when retained'` assertion. After normalization wds is an ordinary cache entry
-  // (code/url/name/branch, branch defaulting to main) with NO retired/skip path
-  // and no retiredUpstream flag.
-  const out = reader.normalizeModules(reader.parseModulesYaml(FIXTURE_V68));
-  const wds = out.find(m => m.code === 'wds');
-  assert.ok(wds, 'wds must normalize to an active bundled module');
-  assert.strictEqual(wds.branch, 'main', '6.8.0 omits branch → must default to main');
-  assert.deepStrictEqual(Object.keys(wds).sort(), ['branch', 'code', 'name', 'url'],
-    'wds must be a normal clone entry with no retiredUpstream/retention fields');
-  assert.strictEqual(wds.retiredUpstream, undefined, 'wds must NOT be flagged retiredUpstream at v6.8.0');
+// FR75. wds IS an active bmad-org entry in the registry (the test above pins
+// that), and gds likewise; neither is bundled, and the reason is the allowlist
+// alone. Stated as a normalization assertion rather than a manifest one so it
+// fails on the code path, not just on the shipped artifact.
+test('FR75: gds and wds normalize away despite being live, unflagged bmad-org entries', () => {
+  const parsed = reader.parseModulesYaml(FIXTURE_V68);
+  for (const code of ['gds', 'wds']) {
+    const raw = parsed.find(m => m.code === code);
+    assert.ok(raw, `fixture precondition: ${code} is present in the registry`);
+    assert.strictEqual(raw.type, 'bmad-org',
+      `fixture precondition: ${code} is an ordinary bmad-org module`);
+  }
+  const out = reader.normalizeModules(parsed).map(m => m.code);
+  assert.ok(!out.includes('gds'), `gds must not be bundled (FR75); got: ${out.join(', ')}`);
+  assert.ok(!out.includes('wds'), `wds must not be bundled (FR75); got: ${out.join(', ')}`);
 });
 
-test('AC4: bundled set is exactly tea/bmb/cis/gds/wds; automator/bmm/core absent', () => {
-  // The full bundled-set assertion for the externally-cloned modules: the five
+test('AC4: bundled set is exactly tea/bmb/cis; automator/bmm/core absent', () => {
+  // The full bundled-set assertion for the externally-cloned modules: the three
   // allowlisted codes present, experimental automator absent, and the built-in
   // bmm/core absent (never in the registry). Also pin KNOWN_BUNDLED_MODULES so a
   // future edit to the bundled set is caught here too.
   const codes = reader.normalizeModules(reader.parseModulesYaml(FIXTURE_V68)).map(m => m.code).sort();
-  for (const required of ['tea', 'bmb', 'cis', 'gds', 'wds']) {
+  for (const required of ['tea', 'bmb', 'cis']) {
     assert.ok(codes.includes(required), `bundled set missing ${required}; got: ${codes.join(', ')}`);
   }
   assert.ok(!codes.includes('automator'), 'automator (experimental) must be absent from the bundled set');
   assert.ok(!codes.includes('bmm'), 'bmm (built-in) must be absent from the externally-cloned set');
   assert.ok(!codes.includes('core'), 'core (built-in) must be absent from the externally-cloned set');
-  assert.deepStrictEqual([...reader.KNOWN_BUNDLED_MODULES].sort(), ['bmb', 'cis', 'gds', 'tea', 'wds'],
+  assert.deepStrictEqual([...reader.KNOWN_BUNDLED_MODULES].sort(), ['bmb', 'cis', 'tea'],
     'KNOWN_BUNDLED_MODULES must stay aligned with the bundled set the cache build guards on');
 });
 
@@ -475,7 +478,7 @@ test('cache-manifest.json registrySchema is unchanged (package-root-v68) at v6.1
   assert.strictEqual(manifest.registrySchema, 'package-root-v68');
 });
 
-test('cache-manifest.json contains EXACTLY the five allowlisted modules — bmad-loop absent', () => {
+test('cache-manifest.json contains EXACTLY the three allowlisted modules — bmad-loop absent', () => {
   // The concrete end-to-end proof for this story: at v6.10.0 the manifest built
   // from the LIVE registry must resolve to exactly the closed allowlist, with
   // the new bmad-loop module excluded (never force-bundled/installed-by-default
@@ -483,9 +486,13 @@ test('cache-manifest.json contains EXACTLY the five allowlisted modules — bmad
   const manifestPath = path.join(projectRoot, 'lib', 'bmad-cache', 'cache-manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const codes = Object.keys(manifest.modules).filter(c => !manifest.modules[c].retiredUpstream).sort();
-  assert.deepStrictEqual(codes, ['bmb', 'cis', 'gds', 'tea', 'wds'],
-    `expected exactly the five allowlisted modules (bmad-loop must be absent); got: ${codes.join(', ')}`);
+  assert.deepStrictEqual(codes, ['bmb', 'cis', 'tea'],
+    `expected exactly the three allowlisted modules (bmad-loop must be absent); got: ${codes.join(', ')}`);
   assert.ok(!('bmad-loop' in manifest.modules), 'bmad-loop must never appear in cache-manifest.json');
+  for (const code of ['gds', 'wds']) {
+    assert.ok(!(code in manifest.modules),
+      `FR75: ${code} must not appear in cache-manifest.json, retained or otherwise`);
+  }
 });
 
 test('each cached module has a commit SHA in manifest', () => {

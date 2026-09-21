@@ -106,10 +106,30 @@ console.log('\nStory 30.2: closed-by-default bundle filter + two-sided set-EQUAL
 
 console.log('normalizeModules() — closed-by-default allowlist');
 
-test('exactly the five allowlisted modules survive the live 6.10.0 registry', () => {
+test('exactly the three allowlisted modules survive the live 6.10.0 registry', () => {
   const codes = reader.normalizeModules(reader.parseModulesYaml(FIXTURE_6_10_0)).map(m => m.code).sort();
-  assert.deepStrictEqual(codes, ['bmb', 'cis', 'gds', 'tea', 'wds'],
-    `expected exactly {tea,bmb,cis,gds,wds}; got: ${codes.join(', ')}`);
+  assert.deepStrictEqual(codes, ['bmb', 'cis', 'tea'],
+    `expected exactly {tea,bmb,cis}; got: ${codes.join(', ')}`);
+});
+
+// FR75. The registry fixture is a snapshot of the live v6.10.0 registry, in
+// which gds and wds are ordinary healthy bmad-org entries — the same shape as
+// tea, bmb and cis. Nothing about the DATA excludes them; only the allowlist
+// does. Asserted here as well as in build-bmad-cache-reader because this suite
+// is the one that owns the closed-allowlist posture.
+test('FR75: gds and wds are EXCLUDED even though the registry offers them unflagged', () => {
+  const parsed = reader.parseModulesYaml(FIXTURE_6_10_0);
+  for (const code of ['gds', 'wds']) {
+    const entry = parsed.find(m => m.code === code);
+    assert.ok(entry, `fixture precondition: the 6.10.0 registry still carries ${code}`);
+    assert.strictEqual(entry.type, 'bmad-org',
+      `fixture precondition: ${code} is an ordinary first-party module`);
+    assert.ok(!reader.DISQUALIFYING_FLAGS.some(f => reader.isFlagTrue(entry[f])),
+      `fixture precondition: ${code} carries no disqualifying flag`);
+  }
+  const codes = reader.normalizeModules(parsed).map(m => m.code);
+  assert.ok(!codes.includes('gds'), `gds must not be bundled (FR75); got: ${codes.join(', ')}`);
+  assert.ok(!codes.includes('wds'), `wds must not be bundled (FR75); got: ${codes.join(', ')}`);
 });
 
 test('bmad-loop (type: bmad-org + marketplace-plugin: true) is EXCLUDED — the exact 30.1 break', () => {
@@ -125,15 +145,15 @@ test('bmad-automator (deprecated experimental) is EXCLUDED', () => {
 
 test('a plain NEW type: bmad-org module carrying NEITHER flag FAILS CLOSED (excluded)', () => {
   // The class the open-by-default filter could not catch: an innocent future
-  // first-party module. The allowlist drops it — the resolved set stays five.
+  // first-party module. The allowlist drops it — the resolved set stays three.
   const raw = reader.parseModulesYaml(FIXTURE_6_10_0).concat([
     { key: 'bmad-shiny-new', code: 'shiny', url: 'https://github.com/bmad-code-org/bmad-shiny-new', name: 'Shiny New', type: 'bmad-org' },
   ]);
   const codes = reader.normalizeModules(raw).map(m => m.code).sort();
   assert.ok(!codes.includes('shiny'),
     `a new un-allowlisted bmad-org module must fail closed; got: ${codes.join(', ')}`);
-  assert.deepStrictEqual(codes, ['bmb', 'cis', 'gds', 'tea', 'wds'],
-    `resolved set must stay exactly the five; got: ${codes.join(', ')}`);
+  assert.deepStrictEqual(codes, ['bmb', 'cis', 'tea'],
+    `resolved set must stay exactly the three; got: ${codes.join(', ')}`);
 });
 
 test('output shape is still { code, url, name, branch } with branch defaulting to main', () => {
@@ -181,36 +201,49 @@ test('a NON-allowlisted module carrying a flag does NOT throw (it is simply drop
 
 console.log('\ndiffBundleSet() — two-sided set-EQUALITY');
 
-test('the exact five resolve to no drift (missing + extra both empty)', () => {
-  const { missing, extra } = reader.diffBundleSet(['tea', 'bmb', 'cis', 'gds', 'wds']);
+test('the exact three resolve to no drift (missing + extra both empty)', () => {
+  const { missing, extra } = reader.diffBundleSet(['tea', 'bmb', 'cis']);
   assert.deepStrictEqual(missing, []);
   assert.deepStrictEqual(extra, []);
+});
+
+// NFR73 needed no redesign for FR75 because KNOWN_BUNDLED_MODULES is BOTH the
+// include filter in normalizeModules() and the allowlist diffBundleSet()
+// compares against: dropping a code shrinks both sides together, so missing
+// and extra both stay empty. The load-bearing consequence is asserted here —
+// a build that somehow resolved gds or wds again would be caught as EXTRA
+// rather than passing silently.
+test('NFR73: re-resolving gds or wds is reported as EXTRA, not silently accepted', () => {
+  const { missing, extra } = reader.diffBundleSet(['tea', 'bmb', 'cis', 'gds', 'wds']);
+  assert.deepStrictEqual(missing, [], 'the allowlisted three are all present');
+  assert.deepStrictEqual(extra, ['gds', 'wds'],
+    'an unbundled module reappearing in the resolved set must fail the equality guard');
 });
 
 test('an EXTRA module (bmad-loop) is caught — the two-sided half NFR56 missed', () => {
   // This is the exact silent-addition bug: the resolved set is a SUPERSET of the
   // allowlist. The old subset-only guard saw MISSING=(none) and passed; the
   // equality guard must flag the extra.
-  const { missing, extra } = reader.diffBundleSet(['tea', 'bmb', 'cis', 'gds', 'wds', 'bmad-loop']);
+  const { missing, extra } = reader.diffBundleSet(['tea', 'bmb', 'cis', 'bmad-loop']);
   assert.deepStrictEqual(missing, [], 'nothing is missing in the addition case');
   assert.deepStrictEqual(extra, ['bmad-loop'], 'the extra module must be reported');
 });
 
 test('a MISSING module (thin cache) is still caught', () => {
   const { missing, extra } = reader.diffBundleSet(['tea']);
-  assert.deepStrictEqual(missing, ['bmb', 'cis', 'gds', 'wds']);
+  assert.deepStrictEqual(missing, ['bmb', 'cis']);
   assert.deepStrictEqual(extra, []);
 });
 
 test('simultaneous missing AND extra are both reported', () => {
-  const { missing, extra } = reader.diffBundleSet(['tea', 'bmb', 'cis', 'gds', 'bmad-loop']);
-  assert.deepStrictEqual(missing, ['wds']);
+  const { missing, extra } = reader.diffBundleSet(['tea', 'bmb', 'bmad-loop']);
+  assert.deepStrictEqual(missing, ['cis']);
   assert.deepStrictEqual(extra, ['bmad-loop']);
 });
 
 test('diffBundleSet accepts a Set or an array and is order-independent', () => {
-  const fromArr = reader.diffBundleSet(['wds', 'tea', 'bmb', 'gds', 'cis']);
-  const fromSet = reader.diffBundleSet(new Set(['cis', 'gds', 'wds', 'bmb', 'tea']));
+  const fromArr = reader.diffBundleSet(['cis', 'tea', 'bmb']);
+  const fromSet = reader.diffBundleSet(new Set(['bmb', 'cis', 'tea']));
   assert.deepStrictEqual(fromArr, { missing: [], extra: [] });
   assert.deepStrictEqual(fromSet, { missing: [], extra: [] });
 });
@@ -233,8 +266,8 @@ test('recognizes string and boolean true; rejects everything else', () => {
 
 console.log('\nexported constants');
 
-test('KNOWN_BUNDLED_MODULES is exactly the five bundled modules', () => {
-  assert.deepStrictEqual([...reader.KNOWN_BUNDLED_MODULES].sort(), ['bmb', 'cis', 'gds', 'tea', 'wds']);
+test('KNOWN_BUNDLED_MODULES is exactly the three bundled modules', () => {
+  assert.deepStrictEqual([...reader.KNOWN_BUNDLED_MODULES].sort(), ['bmb', 'cis', 'tea']);
 });
 
 test('DISQUALIFYING_FLAGS pins marketplace-plugin + deprecated', () => {
