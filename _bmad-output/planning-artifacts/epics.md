@@ -5709,9 +5709,10 @@ Recorded rather than resolved by invention. None blocks the gate stories (31.1, 
 
 ### Story DS.1: Decide and Execute the Disposition of `gds` and `wds` in the ma-agents Implementation
 
-**Status:** `backlog` — **blocked on a human scope decision.** This story is written to
-*surface* the decision, not to resolve it. Do not start implementation until an option
-below is chosen by a human.
+**Status:** `in-progress` — **the human chose Option A and authorised the PRD change.**
+`gds` and `wds` are unbundled: FR75 and FR123 now state that they are neither bundled nor
+installed and that obtaining either one requires network access. The options analysis
+below is retained as the record of what was decided against; it is not re-written.
 
 **Context.** `gds` (Game Design Studio) and `wds` (Whiteport Design Studio) are two of the
 five modules ma-agents bundles under `lib/bmad-cache/`. As of FR123 they are **bundled but
