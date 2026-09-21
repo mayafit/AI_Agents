@@ -713,20 +713,27 @@ function shippedMarkdown() {
  * no window and no subject filter was ever consulted, so the whole closed set
  * simply did not apply to them.
  *
- * It was not hypothetical when it was found. `lib/bmad-cache/gds/src/workflows/
- * 1-preproduction/gds-create-game-brief/customize.toml:114` names Confluence
- * outright, in an `external_handoffs` directive, in a shipped file nothing
- * scanned — and that workflow's own `SKILL.md:99` tells the agent to "execute
- * each entry in `{workflow.external_handoffs}` … Invoke the tool". So the
- * vehicle for a live, executed mirror existed in the tree: the same key with a
- * READ-BACK direction rather than a one-way publish.
+ * It was not hypothetical when it was found. The vehicle was
+ * `lib/bmad-cache/gds/…/gds-create-game-brief/customize.toml:114`, which named
+ * Confluence outright in an `external_handoffs` directive in a shipped file
+ * nothing scanned, while that workflow's own `SKILL.md` told the agent to
+ * "execute each entry in `{workflow.external_handoffs}` … Invoke the tool".
+ *
+ * THAT FILE NO LONGER SHIPS. FR75 unbundled `gds` and `wds`, and with them went
+ * every `external_handoffs` declaration in the tree — there are now zero, in
+ * any shipped file, of any extension. The hole this scan closes is therefore no
+ * longer demonstrable on a live vehicle, and AC7.5i asserts that absence rather
+ * than pretending otherwise. The scan stays widened: the class of bypass is a
+ * property of the POPULATION, not of one vendored example, and the next
+ * upstream sync can reintroduce one without warning.
  *
  * The population is derived from the SAME outside authority as the markdown
  * half — `package.json`'s `files` ∩ `git ls-files` — for the same reason, and
  * with NO path excluded by rule. A path exclusion for `lib/bmad-cache/**` would
- * be the easy fix here (all three real hits are vendored) and would reopen
- * attack 2's scope hole across 666 shipped files. This epic already refused
- * that trade once and pinned by digest instead; the same is done below.
+ * be the easy fix here (the real hits are vendored) and would reopen attack 2's
+ * scope hole across the 663 shipped markdown files the cache still contributes.
+ * This epic already refused that trade once and pinned by digest instead; the
+ * same is done below.
  *
  * `.yml` is in the extension set although the shipped tree currently contains
  * ZERO of them (3 tracked `.yml` exist, all under `.github/`, none inside the
@@ -1603,20 +1610,6 @@ const ADJUDICATED_MIRROR_PASSAGES = Object.freeze({
   // digest stops matching, AC7.5d fails, and a human re-adjudicates. A path
   // exclusion for `lib/bmad-cache/` would have been the easy fix and would have
   // reopened attack 2's scope hole across 666 shipped files.
-  '2ee78afd': 'lib/bmad-cache/gds/…/gds-create-game-brief/SKILL.md:47 — upstream `external_handoffs` '
-    + 'schema example, {"directive": "Confluence upload", …}. A one-way PUBLISH RECORD.',
-  'bad65455': 'lib/bmad-cache/gds/…/gds-gdd/assets/headless-schemas.md:24 — same upstream example '
-    + '(Create payload). A one-way PUBLISH RECORD.',
-  'b6995c09': 'lib/bmad-cache/gds/…/gds-gdd/assets/headless-schemas.md:44 — same upstream example '
-    + '(Update payload). A one-way PUBLISH RECORD.',
-  '667ee3c2': 'lib/bmad-cache/gds/…/gds-prd/assets/headless-schemas.md:22 — same upstream example '
-    + '(Create payload). A one-way PUBLISH RECORD.',
-  'fa07f6dc': 'lib/bmad-cache/gds/…/gds-prd/assets/headless-schemas.md:39 — same upstream example '
-    + '(Update payload). A one-way PUBLISH RECORD.',
-  '18433621': 'lib/bmad-cache/gds/…/gds-ux/assets/headless-schemas.md:27 — same upstream example '
-    + '(Create payload). A one-way PUBLISH RECORD.',
-  '0a953733': 'lib/bmad-cache/gds/…/gds-ux/assets/headless-schemas.md:47 — same upstream example '
-    + '(Update payload). A one-way PUBLISH RECORD.',
 
   // ─── Admitted by the NON-MARKDOWN half of the population (attack 6) ───────
   //
@@ -1640,38 +1633,6 @@ const ADJUDICATED_MIRROR_PASSAGES = Object.freeze({
   // right and are not re-litigated; the DESCRIPTIONS named bytes the digested
   // window does not cover, which breaks the one thing the digest is for — a
   // human going to the cited line and seeing the passage that was adjudicated.
-  '649b5cea': 'lib/bmad-cache/gds/…/gds-create-game-brief/customize.toml — the digested window is '
-    + 'lines 99-114 and the citation is its FIRST line, which is not the matching text: line 99 '
-    + 'is the tail of the `external_sources` EXAMPLES ("query corp:wishlist_search…"), followed '
-    + 'by `external_sources = []` at :101. The window then covers the `external_handoffs` '
-    + 'comment block (:103-:114) and STOPS at :114. So it holds the comment block but NOT the '
-    + 'key: `external_handoffs = []` is line 116, OUTSIDE the window, as is the Slack example at '
-    + ':115. (This entry previously read "its 13-line comment block plus the key" — the key was '
-    + 'never in these bytes.) THE FILE THIS ATTACK WAS FOUND ON. The matched directive is line '
-    + '114, an EXAMPLE — "After finalize, upload '
-    + 'brief.md and addendum.md to Confluence via corp:confluence_upload (space_key=\'GAME\', '
-    + 'parent_page=\'Game Briefs\', …)" — and the key itself ships EMPTY (`external_handoffs '
-    + '= []`). A one-way PUBLISH of a locally-produced artifact: no copy of anything '
-    + 'Confluence returns, no read-back direction, no trigger, no conflict resolution, and '
-    + 'the comment states "local files always exist regardless" — the local file is the '
-    + 'SOURCE, not the cache. Same shape as this product\'s own FR255/FR256 publish, which '
-    + 'FR266\'s retirement leaves intact, and the same upstream example already adjudicated '
-    + 'in markdown at 2ee78afd.',
-  'f93251c9': 'lib/bmad-cache/gds/…/gds-ux/customize.toml — A WINDOW ARTIFACT, in the same '
-    + 'sense as 88a4d876 below, and it was not labelled as one. The digested window is lines '
-    + '78-93 and the cited line 78 is "# Polish passes applied to DESIGN.md and EXPERIENCE.md '
-    + 'at finalize." — nothing to do with the adjudication. The window is DOMINATED by two '
-    + 'unrelated keys: `doc_standards` (:78-:84) and `external_sources` (:86-:89). Only its '
-    + 'last three lines (:91-:93) are the `external_handoffs` comment, and the key '
-    + '`external_handoffs = []` is line 94, OUTSIDE the window. (This entry previously read '
-    + '"the same `external_handoffs` entry"; the digest does not cover that entry.) ONE '
-    + 'RESPECT IN WHICH IT DIFFERS FROM 88a4d876, measured rather than asserted: 88a4d876 '
-    + 'needs a window of 2 or more to match at all, while this file still matches at a window '
-    + 'of ONE — line 93 carries subject and verb together. So the MATCH is not manufactured by '
-    + 'the window; the CITATION and the DIGESTED SPAN are. The matching text is line 93 alone: '
-    + '"# Example: \\"Upload DESIGN.md to Confluence via corp:confluence_upload '
-    + '(space_key=\'DESIGN\').\\"" — a one-way PUBLISH example for a key that ships EMPTY. '
-    + 'A one-way PUBLISH RECORD; verdict unchanged.',
   '88a4d876': 'lib/bmad-cache/tea/…/bmad-testarch-trace/workflow.yaml:20 — a WINDOW ARTIFACT, '
     + 'not an instruction. The subject comes from `allow_external_pointer_resolution: true # '
     + 'Follow local placeholder pointers (e.g., Jira/Confluence) when compatible adapters '
@@ -1983,22 +1944,33 @@ test('AC7.5c [harness] the scan reaches shipped instruction text OUTSIDE the thr
   const inSkillRoots = new Set(skillRootFiles);
   const outside = shipped.filter((f) => !inSkillRoots.has(f));
   // The two populations, both pinned so neither can drift silently.
-  //   2,332 = tracked .md under package.json's `files` roots (what this scans);
+  //   1,280 = tracked .md under package.json's `files` roots (what this scans);
   //     316 = the three skills/ roots (all the old scope covered);
-  //   2,016 = the widening — every one of these was previously UNSCANNED.
-  // Of the 2,332, 1,049 reach the npm tarball (`npm pack --dry-run` = 1,929
-  // entries, 1,049 of them .md), and 733 of those 1,049 are outside the skills/
+  //     964 = the widening — every one of these was previously UNSCANNED.
+  // Of the 1,280, 1,046 reach the npm tarball (`npm pack --dry-run` = 1,770
+  // entries, 1,046 of them .md), and 730 of those 1,046 are outside the skills/
   // roots. This suite scans the tracked SUPERSET, so the tarball figures are
   // recorded in the gate record rather than asserted here.
+  //
+  // ─── FR75: 2,332 -> 1,280 AND 2,016 -> 964, WITH THE REASON ─────────────
+  //
+  // `gds` and `wds` stopped being bundled, taking 1,223 tracked files out of
+  // `lib/bmad-cache/` — 1,052 of them markdown, all of them OUTSIDE the skills/
+  // roots. So both figures move by exactly 1,052 and the OLD scope (316) does
+  // not move at all, which is what says the widening was not narrowed: the
+  // scanned population shrank because the shipped population shrank, not
+  // because the scan stopped looking anywhere. Verifiable in one command:
+  //
+  //     git show --stat <unbundle-commit> -- lib/bmad-cache
   assert.strictEqual(inSkillRoots.size, 316,
     `the OLD scope must be what it was: found ${inSkillRoots.size} skill-root .md`);
-  assert.strictEqual(outside.length, 2016,
+  assert.strictEqual(outside.length, 964,
     `the widening must actually widen: ${outside.length} tracked shipped .md now scanned that ` +
-    `the skills/-roots scope missed (expected 2016, of which 733 reach the npm tarball — ` +
-    `666 lib/bmad-cache, 26 lib/bmad-workflows, 8 lib/mil498-templates, ` +
+    `the skills/-roots scope missed (expected 964, of which 730 reach the npm tarball — ` +
+    `663 lib/bmad-cache, 26 lib/bmad-workflows, 8 lib/mil498-templates, ` +
     `7 lib/bmad-extension/workflows, 6 lib/templates, and the root/docs/mil498 documentation)`
   );
-  assert.strictEqual(shipped.length, 2332,
+  assert.strictEqual(shipped.length, 1280,
     `and the total scanned markdown population is pinned: found ${shipped.length}`);
 });
 
@@ -2044,10 +2016,14 @@ test('AC7.5h [harness] the scan population includes shipped NON-MARKDOWN agent-r
     shippedStructuredText().map((f) => path.relative(REPO_ROOT, f).replace(/\\/g, '/')).sort(),
     'the scan list must pair EVERY structured file with the structured width'
   );
-  const TARGET = 'lib/bmad-cache/gds/src/workflows/1-preproduction/'
-    + 'gds-create-game-brief/customize.toml';
+  // Attack 6's original target was a `gds` file and FR75 unbundled `gds`, so
+  // the control is now carried by another vendored TOML that ships, is not
+  // markdown, and is inside the `files` roots. What it has to prove is
+  // unchanged: a non-markdown shipped file is in the population the scan walks.
+  const TARGET = 'lib/bmad-cache/tea/src/workflows/testarch/'
+    + 'bmad-testarch-trace/customize.toml';
   assert.ok(structured.includes(TARGET),
-    'attack 6\'s exact target must now be in the scanned population');
+    'the non-markdown control target must be in the scanned population');
   assert.ok(!md.has(TARGET),
     'and it must genuinely be OUTSIDE the markdown population, or this control proves nothing');
 
@@ -2066,13 +2042,13 @@ test('AC7.5h [harness] the scan population includes shipped NON-MARKDOWN agent-r
     const x = SHIPPED_STRUCTURED_EXTENSIONS.find((e) => f.toLowerCase().endsWith(e));
     byExt[x] += 1;
   }
-  assert.deepStrictEqual(byExt, { '.toml': 72, '.yaml': 240, '.yml': 0, '.json': 70 },
+  assert.deepStrictEqual(byExt, { '.toml': 36, '.yaml': 222, '.yml': 0, '.json': 64 },
     `the non-markdown population is pinned by extension: got ${JSON.stringify(byExt)}`);
-  assert.strictEqual(structured.length, 382,
+  assert.strictEqual(structured.length, 322,
     `and its total is pinned: found ${structured.length}`);
 
-  // The scanned whole, and the honest remainder. 3,250 tracked files sit under
-  // the `files` roots; 2,332 + 382 = 2,714 of them are now scanned and 536 are
+  // The scanned whole, and the honest remainder. 2,027 tracked files sit under
+  // the `files` roots; 1,280 + 322 = 1,602 of them are now scanned and 425 are
   // not (.py, .js, .ts, .mjs, .cjs, .sh, .ps1, .groovy, .astro, .html, .css,
   // .csv, .xml, .txt, .svg, binaries and dotfiles). §9 item 16 enumerates that
   // remainder; this asserts the arithmetic so the record's figures cannot drift
@@ -2101,11 +2077,19 @@ test('AC7.5h [harness] the scan population includes shipped NON-MARKDOWN agent-r
   // `MIRROR_VOCABULARY` from this file rather than restating it and asserts the
   // hook text matches ZERO entries. That is a mitigation in a second suite, not
   // coverage here; a reviewer widening this scan to `.js` would subsume it.
+  //
+  // ─── FR75: 3,250 -> 2,027 AND 536 -> 425, WITH THE REASON ───────────────
+  //
+  // Unbundling `gds` and `wds` removed 1,223 tracked files from
+  // `lib/bmad-cache/`: 1,052 markdown, 60 structured, 111 in the unscanned
+  // remainder. 3,250 - 1,223 = 2,027 and 536 - 111 = 425, and every one of the
+  // three scanned/unscanned figures moves DOWN by its own share, which is what
+  // a shrinking shipped tree looks like as opposed to a narrowed scan.
   const all = shippedFilesWithExtensions(['']); // '' matches every filename
-  assert.strictEqual(all.length, 3250,
+  assert.strictEqual(all.length, 2027,
     `the shipped tracked population must be what the record says: found ${all.length}`);
-  assert.strictEqual(all.length - md.size - structured.length, 536,
-    'and the UNSCANNED remainder must be the 536 files item 16 enumerates');
+  assert.strictEqual(all.length - md.size - structured.length, 425,
+    'and the UNSCANNED remainder must be the 425 files item 16 enumerates');
 });
 
 test('AC7.5i [end-to-end] a TOML external_handoffs mirror directive is REPORTED, and was NOT before', () => {
@@ -2143,9 +2127,16 @@ test('AC7.5i [end-to-end] a TOML external_handoffs mirror directive is REPORTED,
   // for the forward half is READ OFF that entry rather than restated. If the
   // scan stops carrying this file, or carries it at the markdown width, the
   // lookup fails and so does this test.
-  const REAL = path.join(REPO_ROOT, 'lib', 'bmad-cache', 'gds', 'src', 'workflows',
-    '1-preproduction', 'gds-create-game-brief', 'customize.toml');
-  assert.ok(fs.existsSync(REAL), 'attack 6\'s real vehicle must still exist to prove this on');
+  // ─── FR75: THE ORIGINAL VEHICLE NO LONGER SHIPS ──────────────────────
+  //
+  // Attack 6 was found on a `gds` customize.toml, and `gds` is no longer
+  // bundled. The carrier below is another vendored TOML that still ships and is
+  // still non-markdown; what it carries is the POPULATION half of the proof,
+  // which never depended on the file's contents. The contents half is asserted
+  // at the bottom of this test, and it now asserts the absence.
+  const REAL = path.join(REPO_ROOT, 'lib', 'bmad-cache', 'tea', 'src', 'workflows',
+    'testarch', 'bmad-testarch-trace', 'customize.toml');
+  assert.ok(fs.existsSync(REAL), 'the non-markdown carrier must exist to prove this on');
   const scanList = shippedTextToScan();
   const entry = scanList.find((e) => e.abs === REAL);
   assert.ok(entry,
@@ -2188,12 +2179,37 @@ test('AC7.5i [end-to-end] a TOML external_handoffs mirror directive is REPORTED,
     assert.ok(scannedPop.has(REAL),
       'and the list the real scan walks must contain it — that is the fix');
 
-    // …and the vehicle is genuinely a vehicle: the shipped bytes really do tell
-    // an agent to execute whatever is in that key. Read from the shipped file,
-    // not restated, so this cannot drift into a claim about nothing.
-    const skill = fs.readFileSync(path.join(path.dirname(REAL), 'SKILL.md'), 'utf-8');
-    assert.match(skill, /\{workflow\.external_handoffs\}/,
-      'the workflow SKILL.md must really dispatch on external_handoffs, or attack 6 has no vehicle');
+    // …and the state of the tree is recorded rather than assumed. FR75 removed
+    // the only modules that DECLARED `external_handoffs` values, so no shipped
+    // file now assigns that key and there is nothing for an agent to execute.
+    // That is an ASSERTION, not a comment: if an upstream sync reintroduces a
+    // declaration, this fails and a human re-reads it against the closed set,
+    // which is the point of the gate. The widened scan is what keeps a
+    // reintroduced one visible in the meantime.
+    //
+    // A DECLARATION, not a mention. One shipped file still NAMES the key —
+    // bmb's customize.toml authoring guide, which documents the four
+    // append-only arrays in a schema table. Documentation of a key is not a
+    // routing instruction: it assigns nothing, names no tool and no
+    // destination, and AC7.5's own vocabulary scan reports zero hits in it. It
+    // is pinned below by name so it cannot quietly become a declaration.
+    const files = shippedTextToScan()
+      .map((e) => ({
+        rel: path.relative(REPO_ROOT, e.abs).split(path.sep).join('/'),
+        text: fs.readFileSync(e.abs, 'utf-8'),
+      }));
+    const declarers = files
+      .filter((f) => /external_handoffs\s*[=:]/.test(f.text))
+      .map((f) => f.rel);
+    assert.deepStrictEqual(declarers, [],
+      `a shipped file declares external_handoffs again: ${declarers.join(', ')} — ` +
+      `re-adjudicate it against the closed set before this gate passes`);
+
+    const mentions = files.filter((f) => /external_handoffs/.test(f.text)).map((f) => f.rel);
+    assert.deepStrictEqual(mentions,
+      ['lib/bmad-cache/bmb/skills/bmad-workflow-builder/references/customize-toml-guide.md'],
+      `the only shipped mention of external_handoffs must be bmb's schema ` +
+      `documentation; got: ${mentions.join(', ')}`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
