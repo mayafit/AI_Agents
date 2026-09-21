@@ -81,15 +81,21 @@ close.
 
 ### Changed
 
-- **The default BMAD module set is now `bmm`, `tea`, `bmb`, `cis`.** The two
-  design-studio modules — `gds` (Game Design Studio) and `wds` (Whiteport
-  Design Studio) — are **bundled but no longer installed by default**. They
-  remain fully available offline through `--bmad-modules`, so the air-gap
-  guarantee is unchanged; they are simply installed only when asked for.
-  Previously every bundled module was installed, which left projects with no
-  interest in UX tooling holding an unexplained `design-artifacts/` tree.
-  **Existing installs are not disturbed**: a project that already has a module
-  keeps it, and an explicit selection still wins over both.
+- **The BMAD module set is now `bmm`, `tea`, `bmb`, `cis` — and the two
+  design-studio modules are no longer shipped at all.** `gds` (Game Dev
+  Studio) and `wds` (Whiteport Design Studio) are **neither bundled nor
+  installed**: they are absent from `lib/bmad-cache/` and from the cache
+  manifest, so `--bmad-modules` does not offer them and `--bmad-modules wds`
+  is refused by name. Previously every bundled module was installed, which
+  left projects with no interest in UX tooling holding an unexplained
+  `design-artifacts/` tree.
+  **The cost, stated plainly:** obtaining either module now requires network
+  access to its upstream GitHub repository. **On an air-gapped machine
+  neither is obtainable at all.** The air-gap guarantee covers the bundled
+  set — `bmm`, `tea`, `bmb`, `cis` — and these two are outside it.
+  **Existing installs are narrowed, not deleted**: a project that already has
+  `_bmad/wds/` keeps that directory on disk; only the resolved module list
+  narrows. The package is **28% smaller packed** as a result (11.3 MB → 8.1 MB).
 - **`_bmad-output/project-layout.yaml` is now the authoritative, always-written
   record of where a project's knowledge lives**, carrying the backend and
   location of both stores plus sprint management. It is written on every install
