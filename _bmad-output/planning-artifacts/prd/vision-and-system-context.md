@@ -47,7 +47,7 @@ Each capability area represents a permanent part of the product that is enhanced
 
 2. **Skill Enforcement** — Top-priority instruction injection, BMAD `critical_actions` on agent activation, per-agent enforcement hooks (Claude Code hooks, others as available), context persistence strategies. Moves from advisory to enforced compliance. — **In Development**
 
-3. **BMAD-METHOD Integration** — Install/update/customize/recompile pipeline. Bundled bmad-method v6.2.0 as a direct npm dependency with pre-cloned external modules (bmb, cis, tea, gds, wds). Single unified wizard UX with explicit parameter passing to bmad-method. CI/CD compatible non-interactive mode. — **In Development**
+3. **BMAD-METHOD Integration** — Install/update/customize/recompile pipeline. Bundled bmad-method v6.2.0 as a direct npm dependency with pre-cloned external modules (bmb, cis, tea). Single unified wizard UX with explicit parameter passing to bmad-method. CI/CD compatible non-interactive mode. — **In Development**
 
 4. **BMAD Extension Architecture** — Module identity via `module.yaml` (`code`, `description`, `module_version`), setup skill for config management, `module-help.csv` capability registration, anti-zombie config pattern. All BMAD-facing enhancements use official BMAD Builder extension points with zero bmad-method core modifications. — **In Development**
 
