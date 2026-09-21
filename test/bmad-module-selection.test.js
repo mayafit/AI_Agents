@@ -24,6 +24,7 @@
 'use strict';
 
 const assert = require('assert');
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -654,6 +655,17 @@ test('CSV with whitespace from --bmad-modules normalises correctly', () => {
   // That cost is the whole reason the requirement needed a human decision, so
   // it must stay legible to a reader of the PRD - not quietly dropped in a
   // later tidy-up. This asserts the PRD still says it, in both places.
+  //
+  // SECONDARY, DELIBERATELY. These four phrase assertions are cheap and they
+  // DOCUMENT INTENT, which is why they are kept - but they are not the
+  // guarantee, and a review demonstrated exactly how they fail. Mutant M-R1
+  // kept all four pinned phrases verbatim and INVERTED THE MEANING AROUND
+  // THEM: FR75 became "requires network access the first time only ... sites
+  // that keep a local mirror are unaffected ... the practical air-gap cost is
+  // nil", FR123 "neither module is obtainable at all from this package - but
+  // an internal mirror obtains both without egress, so nothing is actually
+  // lost." The suite stayed 58 passed / 0 failed. No regex oracle can pin
+  // semantics; the digest pin below is what stops that mutant.
   await testAsync('FR75/FR123 still state the air-gap cost of unbundling, in plain words', async () => {
     const fr75 = readFrLine('FR75');
     assert.match(fr75, /requires network access/,
@@ -665,6 +677,93 @@ test('CSV with whitespace from --bmad-modules normalises correctly', () => {
       'FR123 must still state that the design-studio modules are neither bundled nor installed');
     assert.match(fr123, /air-gapped machine neither module is obtainable/,
       'FR123 must still state the air-gap consequence');
+  });
+
+  // ─── THE DIGEST PIN — the guarantee the phrase assertions cannot give ──────
+  //
+  // The technique is the one this repo already owns: test/release-gate-epic-31
+  // AC7.1/AC7.2 pin the preflight and gate blocks by the sha256 of their
+  // ADJUDICATED BYTES, and ADJUDICATED_MIRROR_PASSAGES admits documentation
+  // prose the same way - "the exception is over the BYTES, not over the file."
+  // Applied here it converts the air-gap statement from a keyword denylist
+  // (defeatable, see M-R1 above) into a closed set over the passage itself:
+  // ANY edit inside either span changes the digest and turns this red, so the
+  // edit must be RE-ADJUDICATED DELIBERATELY rather than landing silently.
+  // That is the point. A failure here is not a bug report - it is a request
+  // for a human to re-read the sentence and re-pin it on purpose.
+  //
+  // WHY THE SPANS ARE BOUNDED WHERE THEY ARE. Both start at the same phrase,
+  // "The two design-studio modules", which is where each requirement turns to
+  // gds/wds. FR75's span runs to END OF LINE because the rest of FR75 is that
+  // subject. FR123's runs up to (not including) "Experimental-channel
+  // modules", the next sentence on a different subject - so the span is
+  // HERMETIC in both directions and M-R1's attack (append a softening clause
+  // next to a pinned phrase) lands INSIDE the digest rather than beside it.
+  // Deleting either boundary anchor fails the extraction, not the extraction's
+  // silence: both are asserted before anything is hashed.
+  //
+  // EOL-SAFE: readFrLine splits on /\r?\n/ and the spans contain no newline,
+  // so these digests are identical on an LF and a CRLF checkout.
+  const AIRGAP_PASSAGE_DIGESTS = Object.freeze({
+    FR75: {
+      sha256: '6d17761b20a389045d10afbe54d13576299c1516841da5f724d4bf11552c4de5',
+      bytes: 492,
+      adjudicated:
+        'FR75 - gds/wds are **not bundled**, are absent from lib/bmad-cache/ and the '
+        + 'cache manifest, are never pre-populated by FR76, and because bmad-method '
+        + 'resolves an uncached module by `git clone --depth 1` from GitHub, obtaining '
+        + 'either REQUIRES NETWORK ACCESS and on an air-gapped machine NEITHER CAN BE '
+        + 'INSTALLED. Stated as an unqualified cost, with no mirror, mitigation or '
+        + '"first time only" escape clause.',
+    },
+    FR123: {
+      sha256: '0aab6b0dba7a68714f10481a79186db9f1121946d329d769bf087b55b20abc14',
+      bytes: 645,
+      adjudicated:
+        'FR123 - gds/wds are **neither bundled nor installed**, the --bmad-modules '
+        + 'multiselect does not offer them, an explicit request is rejected as unknown, '
+        + 'a user who wants either must obtain it OVER THE NETWORK, on an air-gapped '
+        + 'machine NEITHER IS OBTAINABLE AT ALL, and the NFR2/NFR50/NFR57 air-gap '
+        + 'guarantee covers bmm+tea+bmb+cis only - the two design-studio modules are '
+        + 'OUTSIDE it. Again unqualified: no mirror, no egress-free alternative.',
+    },
+  });
+
+  /**
+   * The adjudicated air-gap passage of one FR, extracted by anchors that are
+   * themselves asserted. Returns the exact bytes that were adjudicated.
+   */
+  function airGapPassage(id) {
+    const line = readFrLine(id);
+    const START = 'The two design-studio modules';
+    const start = line.indexOf(START);
+    assert.notStrictEqual(start, -1,
+      `${id} no longer contains the phrase "${START}" — the air-gap passage cannot be `
+      + 'located, so its digest cannot be checked. Restore the anchor or re-cut the pin.');
+    if (id === 'FR75') return line.slice(start);
+    const END = 'Experimental-channel modules';
+    const end = line.indexOf(END, start);
+    assert.notStrictEqual(end, -1,
+      `FR123 no longer contains the closing anchor "${END}" — the air-gap passage is `
+      + 'unbounded on the right, so an appended qualifier would escape the digest.');
+    return line.slice(start, end);
+  }
+
+  await testAsync('FR75/FR123: the air-gap passages match their adjudicated digests', async () => {
+    for (const [id, pin] of Object.entries(AIRGAP_PASSAGE_DIGESTS)) {
+      const passage = airGapPassage(id);
+      assert.strictEqual(passage.length, pin.bytes,
+        `${id}'s air-gap passage is ${passage.length} characters, expected ${pin.bytes} — `
+        + 'the passage changed; re-read it and re-pin deliberately.');
+      const actual = crypto.createHash('sha256').update(passage, 'utf8').digest('hex');
+      assert.strictEqual(actual, pin.sha256,
+        `${id}'s air-gap passage no longer matches its adjudicated digest.\n`
+        + `  WHAT WAS ADJUDICATED: ${pin.adjudicated}\n`
+        + `  expected sha256 ${pin.sha256}\n`
+        + `  actual   sha256 ${actual}\n`
+        + '  This is not a bug to patch away. Re-read the passage, confirm the air-gap\n'
+        + '  cost is still stated UNCONDITIONALLY, then update the pin in the same commit.');
+    }
   });
 
   await testAsync('FR75: the shipped bundle is exactly the set FR75 names', async () => {
