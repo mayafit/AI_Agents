@@ -23,8 +23,8 @@ const force = process.argv.includes('--force');
 // carry `code`/`url`/`name`/`type` — the same shape the parser already reads.
 // Crucially the new schema carries no `branch` field (default to `main`) and
 // it expresses the bundle decision via a `type` field rather than the old
-// `built_in` flag: `type: bmad-org` modules (tea, bmb, cis, gds, wds) are
-// cloned; `type: experimental` (automator) is excluded; `bmm`/`core` are
+// `built_in` flag. The bundle itself is governed by the closed allowlist
+// below (KNOWN_BUNDLED_MODULES = tea, bmb, cis), not by `type`; `bmm`/`core` are
 // built into the npm package itself and are absent from the registry entirely.
 //
 // Candidates are tried in order; the first that exists on disk wins. The
@@ -57,7 +57,7 @@ const REGISTRY_CANDIDATES = [
 // FUTURE plain `bmad-org` module) onto air-gapped machines. Closing to this
 // allowlist means new/renamed/re-flagged upstream modules FAIL CLOSED (excluded)
 // rather than fail open.
-const KNOWN_BUNDLED_MODULES = ['tea', 'bmb', 'cis', 'gds', 'wds'];
+const KNOWN_BUNDLED_MODULES = ['tea', 'bmb', 'cis'];
 
 // The registry `type` first-party expansions carry. Retained for diagnostics
 // and for the shape-flip assertion below (an allowlisted module is expected to
@@ -206,7 +206,7 @@ function parseModulesYaml(content) {
  *   { code, url, name, branch }
  *
  * CLOSED-BY-DEFAULT (FR235). The filter is an ALLOWLIST: an entry survives ONLY
- * if its `code` is in KNOWN_BUNDLED_MODULES (tea, bmb, cis, gds, wds). Every
+ * if its `code` is in KNOWN_BUNDLED_MODULES (tea, bmb, cis). Every
  * other registry entry is dropped no matter its `type` — so a NEW upstream
  * module (even a plain `type: bmad-org` one carrying neither disqualifying
  * flag), `bmad-loop` (`marketplace-plugin: true`), the deprecated
@@ -602,11 +602,20 @@ function main() {
     }
   }
 
-  // AC #7 gate: preserve existing cached modules that are no longer in the
-  // upstream registry (e.g. v6.3.0 retired `wds`). We keep the directory and
-  // the manifest entry verbatim so downstream consumers keep working until a
-  // maintainer explicitly confirms deletion. The retirement is documented in
-  // the story's Dev Notes.
+  // AC #7 gate: preserve existing cached modules that the resolved set no
+  // longer contains. We keep the directory and the manifest entry verbatim so
+  // downstream consumers keep working until a maintainer explicitly confirms
+  // deletion.
+  //
+  // THE GATE IS DIRECTORY-TRIGGERED, AND THAT MATTERS FOR A DELIBERATE
+  // UNBUNDLING. "Resolved set no longer contains it" covers two different
+  // causes: retired upstream, and removed from KNOWN_BUNDLED_MODULES on
+  // purpose (`gds`/`wds` per FR75). This loop cannot tell them apart — it only
+  // asks whether `lib/bmad-cache/<code>/` is still on disk. So removing a code
+  // from the allowlist WITHOUT deleting its directory re-adds it to the
+  // manifest flagged `retiredUpstream: true`, and it is back in
+  // `getInstallableBmadModules()`. Deleting the directory is therefore part of
+  // unbundling a module, not a separate tidy-up.
   //
   // `retentionStash` was built up-front (before any --force wipe) so the
   // retention decision does not depend on whether the module directory
