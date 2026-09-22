@@ -95,6 +95,7 @@
         "./skills/create-bug-story",
         "./skills/generate-backlog",
         "./skills/modify-sprint",
+        "./skills/my-next-issue",
         "./skills/prioritize-backlog",
         "./skills/project-context-expansion",
         "./skills/remove-from-sprint",

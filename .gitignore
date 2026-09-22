@@ -56,6 +56,13 @@ opencode.json
 # lib/custom-marketplace.js#stageCustomMarketplaceSubset. Never commit.
 .ma-agents-custom-marketplace-stage/
 
+# Transient plugin-build staging dir produced by scripts/build-plugin.js:179
+# (`.bmad-extension-plugin.build-<pid>-<timestamp>`). Its two siblings above were
+# gitignored; this one never was, so a leaked stage silently lands in `git add -A`.
+# The leak itself is a separate defect — see
+# bug-jira-no-user-identity-context.md "Notes". Never commit.
+lib/.bmad-extension-plugin.build-*/
+
 # Story 29.1 — Knowledge Atlas site output (transient, regenerated on each skill run).
 # _bmad-output/ itself remains tracked (project knowledge artifacts); only the nested
 # knowledge-site/ is ignored.

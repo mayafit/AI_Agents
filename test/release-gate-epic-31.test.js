@@ -1193,7 +1193,7 @@ test('AC7.2 the Story 31.9 gate is 9 copies at ONE digest, distributed 3/3/3', (
     `both deploy pipelines must carry the gate: ${JSON.stringify(dist)}`);
 });
 
-test('AC7.3 [control] a LOOSE `Backend Routing` probe matches 36 shipped skill files against the gate\'s 9', () => {
+test('AC7.3 [control] a LOOSE `Backend Routing` probe matches 39 shipped skill files against the gate\'s 9', () => {
   // Without this control, AC7.2's "9" looks like a number someone chose. It is
   // not: a loose probe also matches Story 17.22's sprint-tracking `## Backend
   // Routing` block, and would return nonsense.
@@ -1205,10 +1205,29 @@ test('AC7.3 [control] a LOOSE `Backend Routing` probe matches 36 shipped skill f
   // assertion walks (and is 61, not 60, at HEAD). Both numbers are now stated
   // for what they actually measure:
   //
-  //   - over SHIPPED SKILL MARKDOWN (this assertion's population, 316 files):
-  //     36 loose matches against the gate's 9 — a 4x over-match;
+  //   - over SHIPPED SKILL MARKDOWN (this assertion's population, 319 files):
+  //     39 loose matches against the gate's 9 — a 4x+ over-match;
   //   - over ALL TRACKED MARKDOWN (`git grep -l 'Backend Routing' -- '*.md'`,
-  //     which is what the record's prose cites): 61 files.
+  //     which is what the record's prose cites): 66 files.
+  //
+  // ─── #148/#149 MERGE: 36 -> 39, WITH THE REASON ──────────────────────────
+  //
+  // `my-next-issue` (PR #148) is a NEW sprint-tracking skill, shipped in all
+  // three deploy pipelines (`skills/my-next-issue/SKILL.md`,
+  // `lib/bmad-extension/skills/my-next-issue/SKILL.md`,
+  // `lib/bmad-extension-plugin/skills/my-next-issue/SKILL.md`), and — like
+  // every other sprint-management skill in this repository — it carries its
+  // own `## Backend Routing` heading routing between the file-system and Jira
+  // trackers (see its SKILL.md: "Before executing any file-system operations,
+  // determine and route to the correct backend"). That is the SAME Story
+  // 17.22 sprint-tracking pattern the other 36 pre-existing over-matches
+  // already carry, NOT the F26 `## Knowledge Store Backend Routing` gate this
+  // control exists to distinguish from (the headings differ in full, and
+  // `extractBlocks`/`collectBlocks` match on the exact heading line, not a
+  // substring). So all three new copies are benign over-matches of the same
+  // kind AC7.2's exact-heading anchor already accounts for, and the anchored
+  // 9 (AC7.2) is untouched because none of the three is a copy of the F26
+  // gate. 36 + 3 = 39.
   //
   // The exact pin is intentional and matches how AC7.1/AC7.2 pin 41 and 9: if a
   // skill gains or loses the Story 17.22 sprint-tracking block, this number
@@ -1216,7 +1235,7 @@ test('AC7.3 [control] a LOOSE `Backend Routing` probe matches 36 shipped skill f
   const loose = shippedSkillMarkdown()
     .filter((f) => fs.readFileSync(f, 'utf-8').includes('Backend Routing'));
   assert.strictEqual(
-    loose.length, 36,
+    loose.length, 39,
     `the loose probe must genuinely over-match the anchored 9; it matched ${loose.length}. ` +
     `If this moved because skills were added or removed, re-adjudicate and re-pin — do NOT ` +
     `relax it back to a '> 9' inequality, which pins nothing.`
@@ -1944,13 +1963,12 @@ test('AC7.5c [harness] the scan reaches shipped instruction text OUTSIDE the thr
   const inSkillRoots = new Set(skillRootFiles);
   const outside = shipped.filter((f) => !inSkillRoots.has(f));
   // The two populations, both pinned so neither can drift silently.
-  //   1,280 = tracked .md under package.json's `files` roots (what this scans);
-  //     316 = the three skills/ roots (all the old scope covered);
+  //   1,283 = tracked .md under package.json's `files` roots (what this scans);
+  //     319 = the three skills/ roots (all the old scope covered);
   //     964 = the widening — every one of these was previously UNSCANNED.
-  // Of the 1,280, 1,046 reach the npm tarball (`npm pack --dry-run` = 1,770
-  // entries, 1,046 of them .md), and 730 of those 1,046 are outside the skills/
-  // roots. This suite scans the tracked SUPERSET, so the tarball figures are
-  // recorded in the gate record rather than asserted here.
+  // Of the 1,283 markdown files, the npm-tarball subset is not re-measured here
+  // (a `npm pack` subprocess is deliberately not run in this suite); see the
+  // superset/tarball note in the FR75 comment below for the last measured split.
   //
   // ─── FR75: 2,332 -> 1,280 AND 2,016 -> 964, WITH THE REASON ─────────────
   //
@@ -1962,7 +1980,22 @@ test('AC7.5c [harness] the scan reaches shipped instruction text OUTSIDE the thr
   // because the scan stopped looking anywhere. Verifiable in one command:
   //
   //     git show --stat <unbundle-commit> -- lib/bmad-cache
-  assert.strictEqual(inSkillRoots.size, 316,
+  //
+  // ─── #148/#149 MERGE: 1,280 -> 1,283 AND 316 -> 319, WITH THE REASON ─────
+  //
+  // PR #148 added ONE new skill, `my-next-issue`, shipped as `SKILL.md` in all
+  // three deploy pipelines: `skills/my-next-issue/SKILL.md`,
+  // `lib/bmad-extension/skills/my-next-issue/SKILL.md`, and
+  // `lib/bmad-extension-plugin/skills/my-next-issue/SKILL.md` — all three
+  // inside the `skills/` roots this scan already covered. So both the total
+  // (1,280 -> 1,283) and the old scope (316 -> 319) move by exactly 3, and the
+  // WIDENING (964) does not move at all: nothing new landed outside the
+  // skills/ roots. The identity-resolution block PR #148 inserted into 8
+  // EXISTING sprint skills changed those files' bytes, not the population —
+  // no file was added or removed by that insertion. Verifiable in one command:
+  //
+  //     git diff --name-status --diff-filter=A <merge-base>..origin/main
+  assert.strictEqual(inSkillRoots.size, 319,
     `the OLD scope must be what it was: found ${inSkillRoots.size} skill-root .md`);
   assert.strictEqual(outside.length, 964,
     `the widening must actually widen: ${outside.length} tracked shipped .md now scanned that ` +
@@ -1970,7 +2003,7 @@ test('AC7.5c [harness] the scan reaches shipped instruction text OUTSIDE the thr
     `663 lib/bmad-cache, 26 lib/bmad-workflows, 8 lib/mil498-templates, ` +
     `7 lib/bmad-extension/workflows, 6 lib/templates, and the root/docs/mil498 documentation)`
   );
-  assert.strictEqual(shipped.length, 1280,
+  assert.strictEqual(shipped.length, 1283,
     `and the total scanned markdown population is pinned: found ${shipped.length}`);
 });
 
@@ -2042,17 +2075,32 @@ test('AC7.5h [harness] the scan population includes shipped NON-MARKDOWN agent-r
     const x = SHIPPED_STRUCTURED_EXTENSIONS.find((e) => f.toLowerCase().endsWith(e));
     byExt[x] += 1;
   }
-  assert.deepStrictEqual(byExt, { '.toml': 36, '.yaml': 222, '.yml': 0, '.json': 64 },
+  // ─── #148/#149 MERGE: 322 -> 325, {.toml:36, .yaml:222->224, .json:64->65} ──
+  //
+  // PR #148 added two new shipped structured files, both `bmad-skill-manifest
+  // .yaml` companions to the new `my-next-issue` skill in the two `lib/`
+  // deploy pipelines (`lib/bmad-extension/skills/my-next-issue/
+  // bmad-skill-manifest.yaml` and `lib/bmad-extension-plugin/skills/
+  // my-next-issue/bmad-skill-manifest.yaml`), and one new `.json`
+  // (`skills/my-next-issue/skill.json`, the `skills/` pipeline's own manifest
+  // format). The fourth new tracked file at that path,
+  // `.agents/skills/my-next-issue/bmad-skill-manifest.yaml`, is NOT inside any
+  // `package.json` `files` root (`.agents/` ships nothing), so it does not
+  // enter this population. `.toml` is untouched: no new TOML shipped. So
+  // `.yaml` +2, `.json` +1, `.toml` +0, `.yml` +0, total +3. Verifiable:
+  //
+  //     git diff --name-status --diff-filter=A <merge-base>..origin/main -- lib/ skills/
+  assert.deepStrictEqual(byExt, { '.toml': 36, '.yaml': 224, '.yml': 0, '.json': 65 },
     `the non-markdown population is pinned by extension: got ${JSON.stringify(byExt)}`);
-  assert.strictEqual(structured.length, 322,
+  assert.strictEqual(structured.length, 325,
     `and its total is pinned: found ${structured.length}`);
 
-  // The scanned whole, and the honest remainder. 2,027 tracked files sit under
-  // the `files` roots; 1,280 + 322 = 1,602 of them are now scanned and 425 are
+  // The scanned whole, and the honest remainder. 2,035 tracked files sit under
+  // the `files` roots; 1,283 + 325 = 1,608 of them are now scanned and 427 are
   // not (.py, .js, .ts, .mjs, .cjs, .sh, .ps1, .groovy, .astro, .html, .css,
-  // .csv, .xml, .txt, .svg, binaries and dotfiles). §9 item 16 enumerates that
-  // remainder; this asserts the arithmetic so the record's figures cannot drift
-  // from the code's.
+  // .csv, .xml, .txt, .svg, binaries and dotfiles — plus the two new `.gitkeep`
+  // markers below). §9 item 16 enumerates that remainder; this asserts the
+  // arithmetic so the record's figures cannot drift from the code's.
   //
   // ─── STORY 31.15: 3,249 -> 3,250 AND 535 -> 536, WITH THE REASON ─────────
   //
@@ -2085,11 +2133,26 @@ test('AC7.5h [harness] the scan population includes shipped NON-MARKDOWN agent-r
   // remainder. 3,250 - 1,223 = 2,027 and 536 - 111 = 425, and every one of the
   // three scanned/unscanned figures moves DOWN by its own share, which is what
   // a shrinking shipped tree looks like as opposed to a narrowed scan.
+  //
+  // ─── #148/#149 MERGE: 2,027 -> 2,035 AND 425 -> 427, WITH THE REASON ─────
+  //
+  // PR #148 added 8 tracked files under the `files` roots for the new
+  // `my-next-issue` skill: 3 `.md` (already counted in `shippedMarkdown()`
+  // above), 3 structured (2 `.yaml` + 1 `.json`, already counted in
+  // `shippedStructuredText()` above), and 2 extension-less `.gitkeep`
+  // placeholders (`lib/bmad-extension/skills/my-next-issue/.gitkeep` and
+  // `lib/bmad-extension-plugin/skills/my-next-issue/.gitkeep`) that fall into
+  // neither scanned population. So `all` moves by +8 (2,027 -> 2,035) while
+  // the two SCANNED populations account for +3 and +3 of that move, leaving
+  // the UNSCANNED remainder to move by exactly the 2 `.gitkeep` files
+  // (425 -> 427). Verifiable in one command:
+  //
+  //     git diff --name-status --diff-filter=A <merge-base>..origin/main -- lib/ skills/
   const all = shippedFilesWithExtensions(['']); // '' matches every filename
-  assert.strictEqual(all.length, 2027,
+  assert.strictEqual(all.length, 2035,
     `the shipped tracked population must be what the record says: found ${all.length}`);
-  assert.strictEqual(all.length - md.size - structured.length, 425,
-    'and the UNSCANNED remainder must be the 425 files item 16 enumerates');
+  assert.strictEqual(all.length - md.size - structured.length, 427,
+    'and the UNSCANNED remainder must be the 427 files item 16 enumerates');
 });
 
 test('AC7.5i [end-to-end] a TOML external_handoffs mirror directive is REPORTED, and was NOT before', () => {

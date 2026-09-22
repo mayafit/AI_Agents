@@ -162,6 +162,18 @@ Before executing any file-system operations, determine and route to the correct 
 3. If `tracking_system` is `jira`:
    a. Perform the Jira operation: Query the active sprint for project `{jira_project_key}` at `{jira_url}` and retrieve all sprint issues with their statuses. Query backlog issue count. Query epic progress (completed stories per epic). Map Jira sprint states and issue statuses to canonical vocabulary per the status mapping below. Use this data for health analysis — no writes. Status mapping: Backlog/Open → backlog, To Do/Selected for Development → ready-for-dev, In Progress → in-progress, In Review/Code Review → review, Done/Resolved → done, On Hold/Blocked → on-hold, Won't Do/Cancelled → cancelled.
       Use whatever Jira-capable tool is available in your current tool context.
+      Resolve the operating user from the Jira tool's OWN authenticated identity: in JQL,
+      `assignee = currentUser()`. Jira evaluates `currentUser()` against the credential the
+      tool already holds, so it needs no configuration and never goes stale. Do NOT derive
+      the user from the OS login name and do NOT store a Jira user id in config — a local
+      account name has no defined relation to an Atlassian accountId (it resolves to nothing
+      on Cloud, and can silently resolve to a DIFFERENT person on Server/DC where directory
+      usernames collide).
+      Whenever the request is scoped to the operator — "my issues", "assigned to me", "what
+      should I work on" — add `AND assignee = currentUser()` to the JQL.
+      If `currentUser()` resolves to no user (a shared service-account token), STOP and tell
+      the user that the Jira tool is authenticated as a shared account, so user-scoped
+      queries are unavailable. Do NOT silently widen the query back to whole-project scope.
       Map Jira entities to the canonical schema (Sprint → sprints[], Backlog → backlog[],
       Epic → epics[], Jira status → canonical vocabulary per Section 6.3 of the routing spec).
    b. If the Jira operation SUCCEEDS: continue with the Jira data returned. Jira is the source of truth.
