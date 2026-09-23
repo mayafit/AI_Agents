@@ -5609,6 +5609,81 @@ Compact form: `(31.1 ∥ 31.2) → [31.3 → 31.4] ∥ [31.5 → (31.6 ∥ 31.7 
 - AC7's negative check is deliberate. FR266 was retired *before* implementation and an accidental mirror is the single most likely way this epic acquires the subsystem P5-9.6 removed.
 - Run any test file touched by the store split **directly** as well as through `npm test` — the chained test script halts on the known MIL-498 CRLF drift at position 13 and can mask downstream breakage (the Story 30.4 / 30.8 precedent).
 
+### Story 31.15: The Publish Trigger — `on_complete` Overrides Make the Five Authoring Skills Publish to a Confluence-Backed Store
+
+**Status:** ready-for-dev
+**Size:** Medium
+**Priority:** High
+
+**User Story:** As a team whose knowledge store is Confluence-backed, the artifacts the BMAD authoring workflows produce actually appear as pages under that store's root page — created the first time, updated the next — without my remembering to run anything, so that a Confluence-backed store is not a setting that quietly does nothing. (Completes FR255, FR256, FR260 by supplying the trigger Story 31.10 built the protocol for; consumes FR261/FR262, FR264, P5-9.6, P5-9.7)
+
+**Successor to Story 31.10 — whose escalation was withdrawn.** Story 31.10 shipped the whole page-tree publish protocol and then escalated its own AC1/AC3/AC5 (pages *are created*) as unachievable, on the reasoning that the five authoring skills are "not shipped by this package" and that there is "no publish command". **Both halves are wrong.** `ma-agents confluence-plan` is a shipped command (handler `bin/cli.js:5384`, dispatch `:5702`, help `:130`), with `confluence-record-root-page` at `:5546`; `executePlan` having no JS caller is by design and documented at `:5378-5388`. And `bmad-method` is a runtime dependency (`package.json:35`) whose five authoring skills land in a user's project because `installBmad()` (`lib/bmad.js:842`) puts them there — ma-agents does not *own* those documents, but it controls the project they are installed into. **The escalation proved a location fact and substituted it for a capability fact.** Story 31.10's definition above is left unedited; the correction lives in this story and in Story 31.14's traceability.
+
+**The gap, precisely.** The Confluence create/update instruction already ships byte-identical in nine copies (Story 31.9's gate) and already says *"update that page when it is already there and create it when it is not"* (`skills/generate-backlog/SKILL.md:142`). Three ma-agents skills carry it. The five authoring skills carry nothing, so they never reach it. **This is a trigger gap, not a protocol gap.**
+
+**The channel.** The upstream-sanctioned customization override — not skill-document injection. All five skills resolve `_bmad/scripts/resolve_customization.py` at activation and refuse to begin until it resolves (`.claude/skills/bmad-prd/SKILL.md:18`, `:26`); all five expose `on_complete`, *"Executed when the workflow completes"* (`.claude/skills/bmad-prd/customize.toml:36-39`). The installer generates `_bmad/custom/<skill>.toml` — the **team** layer — as a second output of the same one-way pass that already derives `_bmad/bmm/config.yaml` from the binding (`generateBmmConfig`, `bin/cli.js:1029`, called at `:4252`, `:4690`, `:4994`). `external_handoffs` was considered and rejected: it does not exist in `bmad-create-epics-and-stories`, and its documented *"skip that handoff and flag it"* semantics contradict FR262's fail-loud.
+
+**Acceptance Criteria:**
+1. After an install or `bind` on a project with a `confluence`-backed store, `resolve_customization.py --key workflow.on_complete` returns a non-empty publish directive for each of the five skills. The five, and their store assignment, are derived at test time from **FR264's enumeration sentence** (`prd/capabilities/project-knowledge-and-repository-layout.md:60`) — never hard-coded and never imported from the implementation.
+2. `_bmad/custom/<skill>.user.toml` is never created or modified on any path; a pre-seeded one is byte-identical afterwards. Same never-touch rule already kept for `config.user.toml` (`bin/cli.js:1006-1008`, `:4854-4856`; P5-9.4).
+3. The write is marker-delimited and idempotent, mirroring `injectOnPremPrefixBlock` (`lib/bmad.js:1324-1357`): two runs byte-identical; user content outside the markers survives a regeneration and an ma-agents update byte-identical; a malformed half-block is a fresh insert, not a corruption; a backend flip away from `confluence` removes the block and nothing else. **A user's hand-written override must survive an ma-agents update — this is the story's main hazard.**
+4. TOML validity is proven after every write, and a pre-existing `on_complete` outside the markers makes the generator refuse loudly and write nothing rather than emit a duplicate key. Rationale is evidenced, not asserted: `load_toml` treats a non-required layer's parse failure as a *warning* and returns `{}` (`resolve_customization.py:69-89`), silently discarding the entire team layer.
+5. No silent skip. Every no-publish path prints a named reason; the hook text carries Step B2's terminal *"STOP, say which page failed, and report no publish"*; and because `on_complete` runs **after** the workflow already told the user the artifact is ready (`bmad-prd/SKILL.md:91` then `:92`), the hook instructs the agent to correct that message on a halt.
+6. Store routing: brief and PRD to the system store, architecture, UX and epics to the software store; a `file-system`-backed store gets no hook and emits nothing. Oracle built from FR255 (`:50`), FR256 (`:51`), FR264 (`:60`), FR257 (`:52`) — **not** from Story 31.6's shipped table, which is downstream of the same sentences.
+7. The hook is emitted as a **TOML array** so a user array override appends and both run; the residual — a scalar `.user.toml` override replaces it outright (`resolve_customization.py:152-168`) — is demonstrated and disclosed as an irreducible limit of the upstream merge model.
+8. **FR266 stays retired.** The generated hook text passes the same hardened adversarial analysis Story 31.9's suite applies to the shipped gate (`test/project-layout-confluence-routing.test.js:1635-1680`, where four permissive payloads including FR266's mirror survived in all nine copies): no mirror, no cache, no sync, no export, no reconcile, no local copy, no fallback.
+9. **The three pinned invariants are proved, not assumed.** Story 31.4's preflight **41 copies / one sha256** (27 `GUARDED` + 14 plugin mirror) and Story 31.9's gate **9 copies / one sha256** (6 `GATED` + 3 plugin mirror) are re-run and reported with observed numbers; no file under `skills/`, `lib/bmad-extension/skills/` or `lib/bmad-extension-plugin/` is modified, asserted by a path-scoped diff check. **An unexplained count move is a defect, never a rebaseline.** The Epic 31 release-gate baseline is re-derived at implementation time — `test/release-gate-epic-31.test.js` does not exist on `feature/epic-31` and no "40 passed" baseline may be asserted against it.
+10. Story 31.14's traceability records Story 31.10's AC1/AC3/AC5 as **met by Story 31.15**, and the original escalation as **withdrawn on a scope error**. Story 31.10's definition and its `sprint-status.yaml` done-record stay byte-unchanged.
+11. Full `npm test` green on Linux/CI and Windows; every touched test file also run **directly**, per the MIL-498 CRLF caveat.
+12. **The three-writer collision is demonstrated, not asserted as handled.** After this story `_bmad/custom/<skill>.toml` has three writers: the ma-agents generator, a human, and an **agent running the `bmad-customize` skill** — which authors TOML into exactly that path at runtime (`.claude/skills/bmad-customize/SKILL.md:87`, sparse-override rule `:71`) and knows nothing of ma-agents' markers. That skill is **not shipped by ma-agents**; it ships from `node_modules/bmad-method/src/core-skills/bmad-customize/`. AC3/AC4 cover the first two writers; this covers the third. (a) A test reproduces the end state — a bare `on_complete` outside the markers — and proves through the **real** resolver that the duplicate key discards the **entire team layer, hook and customization together, at exit status 0**. (b) AC4's refusal holds over that file as an *input*, not only as a state the generator declined to create. (c) **A detection path independent of the generator** (`ma-agents status`/`diag` flags a `_bmad/custom/<skill>.toml` that does not parse, or an `on_complete` outside the markers) — a collision introduced between two generations is otherwise a silent dead publish. (d) The emitted block carries an owner comment directing customizers to an **array override in `.user.toml`**. An implementation satisfying (a), (b) and (d) but not (c) is incomplete. **This is the epic's signature defect — success reported over a failed write — reached by a route no earlier story named.**
+
+**Technical notes:**
+- **The Atlassian Rovo MCP is unauthorised and cannot be authorised non-interactively.** The publish path is **mock-verified only**, exactly as Story 31.10 §1 recorded. That limit must be stated in the completion report, not papered over.
+- **This story opens ma-agents' FIRST write path into `_bmad/custom/`.** Every existing reference is a read, a comment, or a delete: `cleanupLegacyArtifacts()` *removes* legacy `.xml` from `_bmad/custom/agents/` (`lib/bmad.js:3340-3351`, the only `path.join(..., 'custom', ...)` in `lib/` or `bin/`), and `bin/cli.js:1006`/`:4855` are comments asserting the **opposite of a write** (P5-9.4's never-touch rule for `config.user.toml`). No `writeFileSync`/`ensureDir`/`outputFile` in either tree targets that directory. The story does **not** extend existing behaviour — it opens a new write surface against an established discipline. P5-9.4 is a *sibling-file* rule and is respected exactly: `<skill>.toml` only, never `<skill>.user.toml`, never `config.toml`/`config.user.toml`.
+- **The directory's lifecycle is owned by another package.** `_bmad/custom/` is created by the vendored bmad-method installer (`node_modules/bmad-method/tools/installer/core/install-paths.js:24`, `:31`, `:33`), its `.gitignore` seeded there too (`installer.js:680-683`), and the existing `_bmad/custom/config.toml` is a **bmad-method-authored stub**. ma-agents contributes no path segment and no content today. An upstream change can move, reinitialise or repopulate it — so the generator creates the directory if absent, never assumes a file in it is its own, and any `bmad-method` pin bump past `6.10.0` re-checks `install-paths.js`.
+- **Install-time gating, not runtime gating.** Writing the hook unconditionally and letting `confluence-plan`'s own gateway check decide was rejected: on a `file-system` store it would emit a message, and Step B1 is explicit that such a project *"gets no message from this section, no prompt, and no offer"* (`skills/generate-backlog/SKILL.md:139`). Generating at the same three sites as `config.yaml` removes the staleness class without extending Story 31.4's guard scope.
+- **The hook must not become a tenth copy of the 31.9 gate block.** It is a short directive routing to the shipped protocol by naming `ma-agents confluence-plan --store <store>` — not a restatement of it.
+- `_bmad/` is gitignored (`.gitignore:20`; `git ls-files _bmad` → 0), so `_bmad/custom/<skill>.toml` is not committed here despite the resolver calling that layer *"team/org, committed"* (`resolve_customization.py:6`). That is why the file must be **generated from the committed binding** rather than hand-maintained. **The untracked-file objection was re-checked and the reasoning holds:** the hook is untracked in exactly the way `_bmad/bmm/config.yaml` is, under the same ignored root, generated at the same three sites from the same binding — so it is never staler than `config.yaml`, and a fresh clone has no `_bmad/` at all (no resolver, none of the five skills installed) rather than a stale hook. `_bmad/` regenerates only when the bmad-method installer runs — not on `npm test`, not on `npm install` (`prepare` is `build-plugin` + `build-atlas`).
+- **Whether bmad-method's installer clears `_bmad/custom/` is now answered: it does not — and the inverse is the hazard.** On an update it classifies any file absent from `files-manifest.csv` as a `customFile`, backs it up and **restores it verbatim** (`node_modules/bmad-method/tools/installer/core/installer.js:588`, `:624-636`, `:509-546`, `:918-923`), so AC3's survival claim is upheld upstream. But `config.yaml` is explicitly **exempted** from that restore (`installer.js:915-917`) and `_bmad/custom/<skill>.toml` is not, so a **stale** hook is restored rather than regenerated. Safe inside `ma-agents install` only because generation (`bin/cli.js:4252`) runs **after** `installBmad()` (`:4089`/`:4104`) — that ordering is load-bearing and must not be reversed. A user running bmad-method's installer directly gets the old block back; accepted residual, remedy is `ma-agents bind`. AC3 must still be proved against a **real** install, fresh **and** update.
+- This story is a fifth candidate resolution to `bug-system-requirements-store-has-no-ma-agents-owned-confluence-gate.md` — *own the trigger without owning the document*. That bug's FR262-scope question stays OPEN for a human; its blast radius for these five skills closes here.
+
+### Story 31.16: The Obsolete-Tool-Dir Sweep Becomes Manifest-Aware — Delete What ma-agents Installed, Preserve Everything Else
+
+**Status:** ready-for-dev
+**Size:** Small
+**Priority:** High — **release-blocking for 3.18.0**
+
+**User Story:** As a user who hand-wrote a skill into a tool directory ma-agents later declared obsolete, my file is still there after an upgrade — because the cleanup removes the skills ma-agents installed and leaves anything it did not, rather than deleting the whole directory and reporting that as a migration. (No FR: this is a defect in shipped behaviour, not a requirements change. Bug: `bug-obsolete-tool-dir-sweep-deletes-user-authored-skills.md`)
+
+**The defect.** `migrateObsoleteToolDirs` (`lib/installer.js:2382`) runs one recursive `await fs.remove(obsoletePath)` (`:2405`) as soon as the replacement directory has any content. **The existing guard answers the wrong question** — its `else` comment says *"Replacement is absent or empty — do not silently destroy user content"* (`:2412`), but its predicate is only *"did the migration happen?"*, never *"is there anything here ma-agents did not put?"*. The directory carries ma-agents' own record of exactly that — `.ma-agents.json::skills` (`writeManifest` `:302`, populated `:2108-2115`) and the `MANIFEST.yaml` derived from it (`generateSkillsManifest` `:795`, sole writer noted at `:1806`) — and the sweep imports neither. A user's skill is deleted under a green *"Removed legacy tool skills directory"* (`:2408`), and the comment on that branch — *"Safe to remove — skills have been migrated"* (`:2404`) — is true of ma-agents' skills and false of theirs.
+
+**Five entries are affected** (`lib/installer.js:2256-2274`): `.github/copilot/skills`→`.github/skills` (3.7.0), `.github/skills`→`.agents/skills`, `.roo/skills`→`.agents/skills`, `.kilocode/skills`→`.agents/skills` (all 3.8.1), and `.antigravity/skills`→`.agent/skills` (3.18.0). **Four are already on `main`** (`git show main:lib/installer.js`, lines 2009-2014) and have been running in users' projects for releases — anyone who hand-wrote a Roo or Kilocode skill has already lost it and no release can give it back. **The fifth is unreleased** (`package.json::version` = `3.18.0-beta.1`), which is what makes this actionable now. **The `.antigravity/skills` entry must not ship without this fix** — shipping it as written extends silent data loss to a new directory.
+
+**Explicitly NOT at risk, so nobody "fixes" them.** **Cline** is `.cline/skills` in both tables (`lib/agents.js:134`; upstream `platform-codes.yaml:63`) — no divergence, no sweep entry, untouched. **opencode, gemini and cursor** do diverge from upstream and are deliberately recorded in `PLATFORM_PATH_DIVERGENCES` (`lib/agents.js:401-430`), but **none has a sweep entry**, so nothing is deleted; post-fix they keep two trees and the disk-derived patcher from `bug-antigravity-path-divergence` patches both.
+
+**The premise, corrected before the ACs were written — the manifest is SOUND but INCOMPLETE.** Measured: `D:\Code\Workshop` has four populated skill trees (166 entries each) and **zero per-tree manifests** — the only hit is the project-root `.ma-agents.json`, which has **no `skills` key** because it is a profile store (`lib/profile.js:27-32`); the reason is stated in the code, that two pipelines write skills and only one writes manifests (`lib/installer.js:1805-1809`). And where a manifest does exist it under-records: `d:\Code\AI_Agents\.claude\skills` has 35 directories on disk against 44 manifest ids, with two on-disk ma-agents-installed skills (`reconfigure-layout`, `repo-sync-check`) absent from the record. **So manifest-recorded ⟹ ma-agents installed it, but not conversely.** The manifest is used as a positive record only; everything unrecorded is unknown provenance and is preserved. The design over-preserves on purpose — an un-swept directory costs the user the `rm -rf` the preserve branch already prints (`:2418`); a deleted hand-written skill costs the file. **AC4 is therefore not an edge case; in the field it is the common case.**
+
+**Acceptance Criteria:**
+1. **A user-authored file in a swept directory survives, and the directory is preserved.** Fixture: an obsolete directory holding skill directories written through the **real installer writers** (`ensureManifest` + `writeManifest`, `lib/installer.js:302`, `:2108-2115`, plus a real `<skillId>/SKILL.md`), *and* a hand-authored `my-house-style/SKILL.md` in no manifest plus a loose `NOTES.md`. After the sweep both user paths exist **byte-identical** and the directory still exists. Authority: **the real filesystem** (no mock `fs`), and the manifest's own writers for the fixture — the test never hand-writes the `.ma-agents.json` shape.
+2. **A directory containing only ma-agents-installed skills is still removed** — the fix must not disable the cleanup. Same fixture minus the two user paths: `fs.existsSync(obsoletePath) === false` and `action === 'removed'`. Authority: **the pre-existing shipped contract** — `test/obsolete-tool-dirs.test.js` cases `b2-t1`, `b2-t6`, `b2-t7` pass **unmodified**, `b2-t7`'s nesting placed inside a manifested skill directory; any edit to those three cases fails the AC.
+3. **The preserved case names the files that caused preservation.** Captured stdout on the AC1 fixture contains `my-house-style` and `NOTES.md` and does **not** contain the removal string. Authority: **the shipped log literals** at `lib/installer.js:2408-2409` and `:2415-2418`, asserted as the exact templates a reviewer can match against those lines; the new preserve-partial line must name every residue entry by basename, with the residue list built by the test from what the test wrote.
+4. **A directory with no manifest at all is preserved, never removed** — unknown provenance fails safe. Fixture reproduces the measured `D:\Code\Workshop` shape: skill directories with `SKILL.md`, **no `MANIFEST.yaml` and no `.ma-agents.json` anywhere**, replacement populated; every path byte-identical afterwards. Two siblings: a **present but unparseable** `.ma-agents.json` (`readManifest` already returns `null`, `:295-299`) and a manifest with `skills: {}`. Authority: **a real install measured out-of-band**, corroborated independently by `lib/installer.js:1805-1809` and `lib/profile.js:27-32`, which both state a tree can legitimately carry no manifest.
+5. **All five entries get the behaviour, proven per-entry, not on one.** AC1, AC2 and AC4 each run **as a loop over the exported `OBSOLETE_TOOL_SKILL_DIRS`**, seeding paths from the registry rather than hard-coding them, so a sixth entry is covered the day it is added; plus `length === 5` and the five `obsolete` values asserted as a set, so a vacuous loop or a dropped entry fails. Authority: **the registry as data**.
+6. **The unreleased entry is gated.** A test asserts `.antigravity/skills` is in the registry and takes the AC1 and AC4 paths. Recorded here and in the bug file: **3.18.0 must not ship that entry without this fix.**
+7. **Idempotency, and the outer gate unchanged.** (a) Two runs over the AC1 fixture give identical actions and an identical tree — the preserve-partial path is stable, and the manifest files are left byte-unchanged on it. (b) `b2-t2` (preserve when the replacement is absent/empty), `b2-t3`, `b2-t4` and `b2-t5` pass **unmodified**: the preserve-on-empty rule is untouched and the new logic sits strictly inside the `replacedByHasContent` branch. Authority: **the pre-existing test file**, written against the shipped contract before this story.
+8. **Every new test is mutation-tested and the mutants are named**, each planted, each proven to turn a named test red, each reverted: (m1) residue computed ignoring the user entries → AC1 red; (m2) `owned` defaulted to *all* entries when the manifest is absent → AC4 red; (m3) manifest files counted as residue → AC2 red (cleanup dies); (m4) manifest files counted as `owned` and deleted on the preserve path → AC7(a) red; (m5) residue names dropped from the log while the preserve decision stands → AC3 red; (m6) the per-entry loop pinned to one entry → AC5 red. A survivor is a defect in the test and is reported, not argued away. **No AC may be met by a test whose expectation comes from `migrateObsoleteToolDirs` or from a constant the implementation exports for its own use — this repository has produced six tautological tests and must not produce a seventh.**
+9. **Full `npm test` green on Windows; every touched test file also run directly**, per the caveat in `bug-npm-test-windows-suite-health-chain.md`; the pre-existing suite-health failure confirmed identical on the base commit and reported as not-a-regression.
+10. **Nothing outside `lib/installer.js::migrateObsoleteToolDirs` and `test/` changes**, asserted by a path-scoped diff. `OBSOLETE_TOOL_SKILL_DIRS` keeps its exact contents **and order** (`:2270-2271` pins `results[0]` as the copilot entry); `lib/agents.js` untouched; no PRD, Decision-P5-9 or CHANGELOG text edited under this story.
+
+**Technical notes:**
+- **The algorithm, per entry, inside the unchanged `replacedByHasContent` branch:** `owned` := keys of `readManifest(obsoletePath).skills` (empty when absent or unparseable); `residue` := `readdir(obsoletePath)` minus `owned` minus `{.ma-agents.json, MANIFEST.yaml}`. Empty residue → remove the directory, existing log line unchanged. Non-empty → remove each `owned` child, preserve the directory, log the residue by name. A manifest key with no directory on disk is a no-op removal, which is what keeps it idempotent without a pre-existence check.
+- **The two manifest files are excluded from residue, not added to `owned`.** Counting them as residue would make every manifested tree preserve forever and the cleanup would be dead; deleting them on the preserve path would make run two see no manifest and behave differently from run one. They are removed only as part of whole-directory removal.
+- **A manifest key is a directory basename** because `performInstall` installs to `path.join(installPath, skillId)` (`lib/installer.js:1754`) and `generateSkillsManifest` emits `file: <skillId>/SKILL.md` (`:816`). That is the manifest contract the fix depends on and the tests must bind to.
+- **`migrateRetiredSkills` (`:2277`) is not touched** — different sweep, unit of skill ids rather than directories, already manifest-aware (`:2311-2344`).
+- **Rejected alternatives, recorded so they are not re-proposed.** *Move-to-backup*: invents a directory nothing ever reclaims. *Prompt first*: the sweep runs inside `installSkill` (`:2150`) on a path that must work under `--yes`. *Delete anything matching a currently-shipped skill id*: uses the live catalog as the oracle instead of the install record, so a skill retired since install becomes undeletable and a renamed one deletable in a tree it was never installed into. *Compare content against `skills/<id>/SKILL.md`*: `performInstall` injects per-agent frontmatter and applies a resource map (`:1765-1791`), and the on-prem patcher rewrites deployed personas in place, so every legitimately patched persona would read as user-modified.
+- **Residual risks, disclosed rather than solved.** (a) **Over-preservation** — a PluginResolver-written tree has no manifest and will now never be swept; that is AC4 working, not failing. (b) **Already-lost files are unrecoverable**: entries 1-4 have shipped since 3.7.0/3.8.1, `fs.remove` is not a recycle-bin operation and nothing was backed up; this story prevents future loss only, and whether the release notes should say so is a call for the human. (c) A manifest-recorded skill the user later hand-edited **in place** is still deleted — distinguishing it needs the content comparison rejected above.
+- Full specification: `_bmad-output/implementation-artifacts/31-16-manifest-aware-obsolete-tool-dir-sweep.md`.
+
 ### Epic 31 — Cross-Epic Notes
 
 - **Unblocks Epic 14 Story 14.2 (Confluence MCP Integration), deferred since 2026-03-20.** Story 14.2 was blocked on "a new PRD FR defining the `knowledge_backend` field before any implementation work can be scoped". FR257's per-store `backend` is that field. Per the addendum, **14.2 should be reframed against FR254–FR262 rather than implemented as originally scoped** — its original framing predates the two-store model and the retirement of FR266. Epic 14's own entry is left unedited here; reframing 14.2 is a separate correct-course decision for whoever picks Epic 14 up.
@@ -5627,3 +5702,134 @@ Recorded rather than resolved by invention. None blocks the gate stories (31.1, 
 - **OQ-4 — How is a Confluence page's identity recorded?** P5-9.7 maps one page per markdown artifact, and Story 31.10 must update rather than duplicate on re-run. NFR79 says `project-layout.yaml` records "only the space key and root page identity", which does not say whether per-artifact pages are matched by title (breaks on rename/reshard) or by a stored page id (a growing per-artifact record the layout file was not designed to carry). **Settle before Story 31.10.**
 - **OQ-5 — Research reports belong to neither store as written.** FR255 assigns the product brief and PRD to the system requirements store; FR256 assigns architecture, UX and epics to the software requirements store. FR119 also requires *research* outputs (domain, market, technical) to resolve from configuration, and today they sit in `planning-artifacts/` alongside the brief — but no F26 requirement says which store owns them. This is a genuine PRD gap, **not** grounds for inventing an FR. **Settle in Story 31.6** as a recorded story-level routing decision, or raise it to the PM for an FR.
 - **OQ-6 — Two remote-git stores mean two clones.** FR258 applies FR113–FR116's remote-clone semantics *per store*, so a project can now ask the installer to clone two repositories in one run. Nothing forbids it and it is not a contradiction, but the confirmation and failure UX for a partial two-clone install is unspecified. Minor; **settle in Story 31.5** or accept the sequential single-clone behaviour applied twice.
+
+---
+
+## Design-Studio Module Disposition (Standalone — Scope Decision Required)
+
+### Story DS.1: Decide and Execute the Disposition of `gds` and `wds` in the ma-agents Implementation
+
+**Status:** `in-progress` — **the human chose Option A and authorised the PRD change.**
+`gds` and `wds` are unbundled: FR75 and FR123 now state that they are neither bundled nor
+installed and that obtaining either one requires network access. The options analysis
+below is retained as the record of what was decided against; it is not re-written.
+
+**Context.** `gds` (Game Design Studio) and `wds` (Whiteport Design Studio) are two of the
+five modules ma-agents bundles under `lib/bmad-cache/`. As of FR123 they are **bundled but
+not installed by default** — `DEFAULT_BMAD_MODULE_IDS` is `['bmm','tea','bmb','cis']`
+(`lib/bmad.js:559`) and the two design-studio modules are reachable only through an explicit
+`--bmad-modules` request or the bare-flag multiselect. That change has shipped and is merged.
+
+**The scope question this story exists to ask.** *"Not installed by default"* (shipped) and
+*"removed from ma-agents"* (not started) are different propositions, and the second is much
+larger. Three candidate scopes, with costs measured against the tree at `ca78f43`:
+
+---
+
+#### Option A — Stop bundling them
+
+Remove `gds`/`wds` from `lib/bmad-cache/`, from `KNOWN_BUNDLED_MODULES`, and from the
+multiselect.
+
+**Measured cost:**
+
+- **NFR73's two-sided set-equality guard — cheaper than feared.**
+  `KNOWN_BUNDLED_MODULES` (`scripts/build-bmad-cache.js:60`) is *both* the include filter
+  (`normalizeModules()` at `:238-243` filters on it as a closed allowlist) *and* the
+  allowlist `diffBundleSet()` compares against (`:291-297`). Dropping the two codes therefore
+  shrinks the resolved set and the allowlist together: `missing` and `extra` both stay empty
+  and the guard needs **no redesign** — it is a one-line edit. The cost is in the pinned
+  assertions, not the guard: `test/build-bmad-cache-reader.test.js:204-205`,
+  `test/bundle-filter-set-equality.test.js:236-237`,
+  `test/bmad-version-bump.test.js:411-412`, plus ~55 `gds`/`wds` references in
+  `test/bmad-module-selection.test.js`.
+- **Cache-manifest build.** `npm run build:bmad-cache` must be re-run and the regenerated
+  `lib/bmad-cache/cache-manifest.json` committed; the plugin bundle is rebuilt on the same
+  pass (`npm run build:plugin`, per the Bundle Drift Guard).
+- **Package size — the real prize.** `gds` is 5 MB and `wds` is 9 MB of a 32 MB
+  `lib/bmad-cache/` (~41%), and 1,223 of the cache's 2,509 files (~49%). This is the single
+  largest size lever available.
+- **Release gate.** `test/release-gate-epic-31.test.js` carries **11** references to
+  `lib/bmad-cache/gds/...` (0 to `wds`), including seven digest-allowlist entries keyed to
+  specific gds files and two hard-coded paths at `:2047-2048` and `:2146-2147`. All would
+  need rework. `test/routing-parity.test.js` has **zero** gds/wds references.
+- **Air gap — VERIFIED PROBLEM, and it is the blocker.** The bundled cache exists precisely
+  so `~/.bmad/cache/external-modules/` can be pre-populated offline (FR76); with no cached
+  copy, bmad-method falls back to `git clone --depth 1 <url>` against GitHub — the exact
+  failure mode P2-6 was created to eliminate. So a user who wants `gds` or `wds` **would
+  need network access**, and `--bmad-modules wds` on an air-gapped machine would fail.
+  NFR2/NFR50/NFR57 are not violated (they cover the *default* install path), but FR123's
+  explicit promise — *"they remain fully available offline through the `--bmad-modules`
+  multiselect, so the air-gap guarantee is unchanged"* — becomes false, and FR75 names
+  `gds`/`wds` as bundled by requirement.
+- **Therefore Option A requires a PRD change** (FR75 and FR123 both). **That is a human
+  decision and is deliberately not drafted here.**
+
+---
+
+#### Option B — Keep bundled, remove from the interactive surface
+
+They stay in the cache and stay installable by explicit `--bmad-modules gds`, but are no
+longer offered by the bare-flag multiselect.
+
+**Measured cost:** small and self-contained — the multiselect population in
+`lib/bmad.js` (`getInstallableBmadModules()`) and the assertions in
+`test/bmad-module-selection.test.js`. **No** cache rebuild, **no** allowlist edit, **no**
+NFR73 change, **no** PRD change, **no** air-gap impact, **no** size saving.
+
+**Caveat worth stating plainly:** this is close to a no-op over shipped behaviour. The
+modules already do not install unless asked. Option B only makes them *less discoverable*
+while the package still pays the full 14 MB — arguably the worst of both trade-offs.
+
+---
+
+#### Option C — Full removal including the `gds-*` / `wds-*` skills
+
+**This option's premise does not hold, and that is a finding.** There are **zero**
+`gds-*` or `wds-*` directories under `skills/`, `lib/bmad-extension/`, or
+`lib/bmad-extension-plugin`. ma-agents authors none of those skills. The 20 design-studio
+skills that appear in an agent's skill roster come from the *installed BMAD modules* —
+7 `gds-*` workflow directories under `lib/bmad-cache/gds/src/workflows/` and 13 `wds-*`
+under `lib/bmad-cache/wds/`. They are upstream content, vendored, not ma-agents code.
+
+**Consequently the pinned counts do not move:**
+
+- The **41-copy preflight** walks `['skills', 'lib/bmad-extension/skills',
+  'lib/bmad-extension-plugin']` (`test/project-layout-artifact-routing.test.js:1907`,
+  asserted at `:1929`). No gds/wds path is in scope. **Unmoved.**
+- The **9-copy gate** is a hardcoded list of nine ma-agents skill paths
+  (`test/project-layout-confluence-page-tree.test.js:2235-2245`). No gds/wds path.
+  **Unmoved.**
+- `bmad-module-selection` and the release-gate population move exactly as described under
+  Option A; `routing-parity` does not move at all.
+
+**Option C therefore collapses into Option A** plus the release-gate digest rework. It is
+not a larger third tier, and it inherits Option A's PRD blocker.
+
+---
+
+#### Recommendation — defer; do not spend the removal now
+
+**Recommended: no structural change before the redesign** (keep the bundle, keep the
+multiselect entry). Reasons:
+
+1. **The user-visible complaint is already closed.** The reported harm was an uninvited
+   `design-artifacts/` tree. FR123's shipped default set removes it. Nothing further is
+   required to keep that promise.
+2. **The only option with a real payoff is blocked.** Option A is the sole option that buys
+   anything measurable (14 MB, ~49% of cache files), and it cannot proceed without a PRD
+   change that trades away an offline guarantee the product is built around.
+3. **A major ma-agents redesign is planned immediately after this release.** Both the cache
+   layout and the module-selection surface are plausible redesign targets, so an expensive
+   removal executed now — allowlist, manifest rebuild, four test suites, eleven release-gate
+   digest pins — is work with a high probability of being discarded. This weighs heavily
+   against acting early.
+4. **Option B costs little but buys less.** If a change is nonetheless required before the
+   redesign, Option B is the cheapest safe move; it should be taken only if reducing the
+   prompt surface is itself the goal, since it saves no bytes.
+
+**Acceptance criteria for this story are deliberately not written.** They depend on which
+option is chosen. When a human picks one, this story is replaced by an implementation story
+scoped to that option — and if the pick is A or C, a PRD amendment to FR75 and FR123 is a
+prerequisite and is that human's call.
+

@@ -294,10 +294,19 @@ All 11 BMAD agents have enforcement via `critical_actions` in `.customize.yaml` 
 **Mechanism:**
 ```yaml
 critical_actions:
-  1: "Read the skills MANIFEST at {project-root}/_bmad/skills/MANIFEST.yaml"
+  1: "Read the skills MANIFEST at {project-root}/_bmad/skills/<agent-slug>/MANIFEST.yaml if it exists"
   2: "For each skill marked always_load: true, read the skill file completely"
   3: "Follow all skill directives during this session"
 ```
+
+> **Note (2026-09-12):** this snippet previously showed a bare
+> `{project-root}/_bmad/skills/MANIFEST.yaml`. That path is not what Story 8.3
+> specified — the manifest is per-agent-host, at
+> `{project-root}/_bmad/skills/<agent-slug>/MANIFEST.yaml`, where `<agent-slug>`
+> matches the `skillsDir` in `lib/agents.js` (`sre`, `devops`, `cyber`, `sqa`).
+> The bare form leaked from here into `ma-agent-sqa`'s Critical Actions block and
+> survived there until it was corrected. Keep the slug segment in any copy of this
+> snippet.
 
 **Deployment:** Extension module at `_bmad/extensions/ma-agents-skills/` deployed during BMAD customization pipeline (Stage 3 in `bmad.js`).
 

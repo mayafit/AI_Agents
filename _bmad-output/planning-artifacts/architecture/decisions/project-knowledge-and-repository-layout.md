@@ -380,6 +380,67 @@ of the rules below change.]**
   binding architecture is what makes a globally-installed skill resolvable from the project root
   alone (NFR83), and it is independent of where BMAD's own modules live.
 
+---
+
+**SPIKE OUTCOME NOTE — FR250 / Story 31.1 — verdict: FAIL (2026-08-03).**
+
+Appended, not substituted: none of P5-9.8's rules above changes. The "If the spike fails" branch is
+the one that now applies, as written. Full evidence in
+[31-1-spike-global-install-feasibility-6-10-0.md](../../../implementation-artifacts/31-1-spike-global-install-feasibility-6-10-0.md).
+
+Established against a **live `npm install bmad-method@6.10.0`** in a scratch directory, with the
+installer actually **run** non-interactively into a user-scoped `--directory` (exit 0):
+
+- bmad-method v6.10.0 has **no user-level / global install target**. No `--global` / `--user` /
+  `--scope` option exists on `bmad install`, and the concept appears nowhere in its source or docs.
+  The single target is `<--directory>/_bmad` (`core/install-paths.js:15-18`). The only user-level
+  directory it owns, `~/.bmad/cache/…`, is a module **clone cache**, not an installation.
+- `--directory` *does* accept a user-scoped path, but what it writes there is a **phantom project** —
+  `_bmad/`, `_bmad-output/planning-artifacts/`, `_bmad-output/implementation-artifacts/`, `docs/` and
+  `.claude/skills/` (46 skills) — in the user's home directory.
+- Decisive: **there is no module-resolution search order.** `Installer.findBmadDir` is a single
+  `path.join(projectDir, '_bmad')` with no upward walk (`core/installer.js:1638-1641`);
+  `resolve_config.py` requires `--project-root` and hard-fails on a missing
+  `<project-root>/_bmad/config.toml` (exit 1, reproduced); the ~211 `{project-root}/_bmad/…`
+  references in the installed skills are project-relative literals the model expands at runtime
+  (`ide/_config-driven.js:94`); and no `BMAD_HOME`-style override exists. A user-level `_bmad/` is
+  therefore unreachable from inside any project — globally-installed BMAD skills would be visible
+  everywhere and functional nowhere, which is worse than today's honest skip.
+- `--output-folder` has **no meaning with no project in scope**: it both scaffolds project output
+  directories at the install target *and* is baked into config as the literal
+  `{project-root}/_bmad-output/…`, which is never the global install's own path.
+
+Consequences, all already provided for above: FR249 degrades to the FR250 path; the filter at
+`bin/cli.js:1440-1452` and the guard at `bin/cli.js:1455` are **retained** (only the user-facing
+message changes, to the three facts FR250 names); Story 31.12 becomes a messaging-and-gating change
+rather than an installer capability. **No part of P5-9.1–P5-9.7 changes, and this verdict does not
+block Stories 31.2–31.10.** Air-gap posture (NFR77) is satisfied on identical terms to a project
+install — the offline module cache is user-level and scope-independent, and the skills-only global
+path performs no git, npm or CDN access.
+
+Two incidental confirmations from the same live install: `_bmad/` holds `config.toml` +
+`config.user.toml` with module configs in YAML and **no `config.user.yaml`**, independently
+verifying the 2026-08-02 amendment to P5-9.4; and the project-scope assumption in `bin/cli.js` is
+encoded at **five** scope-gated sites (1441, 1455, 1616, 1759, 1768), not two — the three beyond the
+pair named above are the FR251 project-scoped-work gates and are already correct. A further **five**
+sites hardcode a `'project'` literal (1214, 1246, 1256, 1668, 1680); the first three are pre-wizard
+Step-0 cleanup where the assumption is defensible, while 1668/1680 are a latent global-*update*
+defect. Story 31.11 should be handed all ten rather than re-deriving them.
+
+Re-open condition: this gate flips to PASS only when upstream ships both a user-level resolution
+search order (or environment override) **and** a way to install without materialising project-scoped
+output directories at the target.
+
+**Concrete watch trigger:** upstream issue `bmad-code-org/BMAD-METHOD` **#1728 — "feat: global
+install + bmad-link/unlink for multi-project workflows"** (OPEN, `priority:high`, created
+2026-02-21) proposes precisely that — a `--global` flag targeting `~/.bmad/` plus `bmad link` /
+`unlink` for per-project binding. It is **not present in 6.10.0** (verified by execution:
+`bmad install --global` → `error: unknown option '--global'`), so it **confirms this FAIL rather
+than flipping it**, but it turns the re-open condition into something watchable. Track #1728; when it
+ships, re-run this spike against that version and re-test it against both conditions above. Its
+`bmad link` concept is the upstream analogue of `ma-agents bind` (FR252) — if both come to exist,
+Story 31.13 should reconcile them rather than duplicate.
+
 #### Deferred
 
 - Per-artifact Confluence page templates, and any enforced hierarchy beyond P5-9.7's tree mapping.

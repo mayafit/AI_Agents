@@ -199,7 +199,7 @@ skills/<skill-name>/
 
 **Responsibility**: Pre-vendor BMAD's external modules so installs never touch the network.
 
-ma-agents bundles bmad-method as an npm dependency **and** pre-clones BMAD's external modules (`tea`, `bmb`, `cis`, `gds`) into `lib/bmad-cache/` at build time via `npm run build:bmad-cache` ([scripts/build-bmad-cache.js](../scripts/build-bmad-cache.js)). This is what lets `npx ma-agents install` run fully offline in air-gapped environments (NFR2/NFR50/NFR54) — the npm tarball already contains every module bmad-method would otherwise `git clone` from GitHub at install time.
+ma-agents bundles bmad-method as an npm dependency **and** pre-clones BMAD's external modules (`tea`, `bmb`, `cis`) into `lib/bmad-cache/` at build time via `npm run build:bmad-cache` ([scripts/build-bmad-cache.js](../scripts/build-bmad-cache.js)). This is what lets `npx ma-agents install` run fully offline in air-gapped environments (NFR2/NFR50/NFR54) — the npm tarball already contains every module bmad-method would otherwise `git clone` from GitHub at install time.
 
 **Module discovery**: the builder reads BMAD's bundled module registry to learn which external modules to clone. **The registry source has moved across BMAD versions** and the reader must track it:
 
@@ -209,9 +209,20 @@ ma-agents bundles bmad-method as an npm dependency **and** pre-clones BMAD's ext
 | 6.3.0 – 6.6.x | `tools/installer/modules/registry-fallback.yaml` | YAML |
 | 6.8.0+ | `bmad-modules.yaml` (bmad-method **package root**) | YAML (`modules:` map; the in-package `registry-fallback.yaml` was retired in 6.7.0) |
 
-The registry has stayed **YAML** throughout — only its path has moved. (`tools/installer/modules/official-modules.js` is unchanged loader code that reads this YAML; it does not contain the module list.) Modules are classified by a `type` field: `type: bmad-org` modules are bundled (**tea, bmb, cis, gds, wds**) and `type: experimental` modules are excluded (currently `automator`). `bmm`/`core` are built-in (loaded from bmad-method's local `module.yaml`, absent from the registry) and are never cloned. The reader for the current pin and its fail-loud contract are defined by Architecture Decision **P5-5** (Epic 27) in `_bmad-output/planning-artifacts/architecture.md`. A companion build step, `npm run build:plugin` ([scripts/build-plugin.js](../scripts/build-plugin.js)), assembles the ma-agents extension plugin bundle (`lib/bmad-extension-plugin/`) deterministically; a CI Bundle Drift Guard enforces that the committed bundle matches a fresh build.
+The registry has stayed **YAML** throughout — only its path has moved. (`tools/installer/modules/official-modules.js` is unchanged loader code that reads this YAML; it does not contain the module list.) The bundle is governed by a closed allowlist, `KNOWN_BUNDLED_MODULES` = **tea, bmb, cis** (FR235); every other registry entry is excluded whatever its `type`, including `type: experimental` (currently `automator`), the `marketplace-plugin` module `bmad-loop`, and the two design-studio modules `gds`/`wds`, which FR75 does not bundle. `bmm`/`core` are built-in (loaded from bmad-method's local `module.yaml`, absent from the registry) and are never cloned. The reader for the current pin and its fail-loud contract are defined by Architecture Decision **P5-5** (Epic 27) in `_bmad-output/planning-artifacts/architecture.md`. A companion build step, `npm run build:plugin` ([scripts/build-plugin.js](../scripts/build-plugin.js)), assembles the ma-agents extension plugin bundle (`lib/bmad-extension-plugin/`) deterministically; a CI Bundle Drift Guard enforces that the committed bundle matches a fresh build.
 
 > **Maintenance note:** because the registry path has now moved twice (YAML→YAML→YAML at three locations), the cache builder fails loud — if the resolved `type: bmad-org` set is smaller than the known bundled set, or no module source is found, it exits non-zero rather than producing a thin/empty cache, so a future BMAD registry move surfaces at build time, not as a broken air-gapped install.
+
+#### 3.6.1 Air-gap posture with a Confluence-backed knowledge store (NFR80)
+
+F26 lets each of the two knowledge stores choose a `backend` of `file-system` or `confluence`, which changes what "offline" means for a project — so the posture is stated exactly here rather than left to be inferred from the paragraph above:
+
+- **Installation and skill loading require no network at all**, unchanged. Neither reads a knowledge store: the installer writes the binding and generates `_bmad/bmm/config.yaml` from it, and both are local files.
+- **Every `file-system`-backed workflow requires no network at all**, unchanged. The backend gate embedded in the skills that resolve knowledge-store artifacts reads `{system,software}_requirements_backend` out of the generated `config.yaml` — a local read — and on `file-system` proceeds exactly as it did before, consulting nothing.
+- **A `confluence`-backed store additionally requires its Confluence host to be reachable from the machine running the agent.** That is not the same as requiring internet egress: an intra-perimeter Confluence Server or Data Center on an air-gapped network satisfies it. It does require a Confluence-capable MCP server configured in the agent; with none, the affected skill halts loudly and does not degrade to local files (FR262). There is no local mirror, no cache and therefore no sync (P5-9.6).
+- **A project that must operate with no network whatsoever keeps both stores `file-system`-backed.** That is the default, and it is what `--yes` always selects.
+
+Proven rather than asserted: `test/project-layout-confluence-routing.test.js` runs the whole binding-and-generation flow in a child process whose `dns`, `net`, `http`, `https`, `tls` and `fetch` primitives are poisoned, verifies that the block actually armed, and requires the flow to complete having attempted no egress at all.
 
 ## 4. Data Flow
 

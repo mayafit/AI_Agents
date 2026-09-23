@@ -5,9 +5,255 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.18.0] - 2026-09-21
+
+Federated knowledge stores, an authoritative committed project binding, and a
+global install that does no project-scoped work (Epic 31 / PRD capability F26 /
+Architecture Decision P5-9).
+
+**MINOR, not MAJOR.** Every change below is additive: three new commands
+(`bind`, `confluence-plan`, `confluence-record-root-page`), two new install
+questions, new generated `config.yaml` fields, and one new committed file. No
+existing command, flag or generated field is removed or changes meaning. A
+project that configures no second store resolves exactly the artifact paths it
+resolved before (NFR82), and `--yes` selects the previous single-repository
+`file-system` defaults for both stores, so CI and non-interactive installs are
+unaffected. See "Known limitations" below for what this release does *not*
+close.
+
+### Added
+
+- **Two independent knowledge stores.** The installer now asks separately where
+  the **system requirements** (product brief, PRD including its shards) and the
+  **software requirements** (architecture, UX designs, epics) live. Each store
+  answers independently and each selects its own `backend`. The sprint-management
+  question is unchanged and remains a third, separate question. Story files and
+  everything else under `implementation_artifacts` belong to **neither** store —
+  they follow `sprint_management_path`, because a story is sprint execution
+  state rather than a requirement, so moving a knowledge store does not move
+  the stories. (FR254, FR255, FR256, FR257, FR258, FR267)
+- **A `confluence` backend for either store.** A store can live in a Confluence
+  space instead of on the file system, and the two stores may differ — system
+  requirements in Confluence for stakeholder visibility while software
+  requirements stay in git alongside the code, or any other combination. The
+  installer asks for the space and for a root page; left blank, ma-agents
+  generates a root page named for the project and tells the user the name it
+  used. (FR257, FR259, FR260)
+- **`ma-agents bind`.** Binds an already-installed project to its knowledge
+  stores. It collects only the project-scoped answers and writes
+  `_bmad-output/project-layout.yaml` plus `project-context.md`. It installs no
+  skills and no BMAD modules, it is idempotent — a re-run against an
+  already-bound project reports the existing bindings and changes nothing
+  unless an answer is explicitly edited — and it never overwrites an existing
+  `project-context.md`. (FR252, NFR78)
+- **`ma-agents confluence-plan`** prints, for the current project, the page tree
+  a publish would produce — one page per markdown artifact, nested so the pages
+  mirror the source folder structure — together with the enumerated operations a
+  publish performs and the order to perform them in, parents first. It writes
+  nothing, anywhere: not the plan, not a cache, not a report file. The
+  Confluence-capable MCP lives in the agent's tool context, not in this process,
+  so this command enumerates the plan and performs none of it. (FR260, P5-9.7)
+- **`ma-agents confluence-record-root-page`** records the id Confluence assigned
+  to a root page it created, so later runs address the page directly instead of
+  re-resolving it by title. It refuses to record when the binding was retitled
+  between the plan and the write-back, and reports the refusal by name.
+- **The five BMAD authoring skills now publish to a Confluence-backed store.**
+  On install or `bind`, ma-agents generates `_bmad/custom/<skill>.toml` for
+  `bmad-prd`, `bmad-architecture`, `bmad-create-epics-and-stories`, `bmad-ux`
+  and `bmad-product-brief`, setting the upstream-sanctioned `on_complete` hook
+  to run the publish path for the store that owns each artifact. This uses the
+  customization channel those skills already resolve at activation, so **no
+  skill document is edited** — the 41-copy preflight and the 9-copy routing gate
+  are untouched. A `file-system` store gets no hook, no prompt and no message.
+  The generated block is marker-delimited and idempotent: anything outside the
+  markers is yours and is preserved, and a re-run changes nothing. Because the
+  hook runs *after* a workflow has already told the user the artifact is ready,
+  its text instructs the agent to correct that message if the publish halts.
+  (FR255, FR256, FR262, FR264)
+- **`ma-agents status` names two silent-failure states** it can detect in the
+  customization layer: a collision that would make the team layer unparseable
+  (which would discard the publish hook *and* the user's own overrides), and a
+  scalar `on_complete` override in the personal layer that replaces the hook.
+  Both otherwise fail silently at exit 0. (FR262)
+- **`ma-agents status` reports the active install scope**, and for a global
+  install lists which projects on this machine have been bound and whether a
+  readable `project-layout.yaml` was found at each root. (FR253)
+
+### Changed
+
+- **The BMAD module set is now `bmm`, `tea`, `bmb`, `cis` — and the two
+  design-studio modules are no longer shipped at all.** `gds` (Game Dev
+  Studio) and `wds` (Whiteport Design Studio) are **neither bundled nor
+  installed**: they are absent from `lib/bmad-cache/` and from the cache
+  manifest, so `--bmad-modules` does not offer them and `--bmad-modules wds`
+  is refused by name. Previously every bundled module was installed, which
+  left projects with no interest in UX tooling holding an unexplained
+  `design-artifacts/` tree.
+  **The cost, stated plainly:** obtaining either module now requires network
+  access to its upstream GitHub repository. **On an air-gapped machine
+  neither is obtainable at all.** The air-gap guarantee covers the bundled
+  set — `bmm`, `tea`, `bmb`, `cis` — and these two are outside it.
+  **Existing installs are narrowed, not deleted**: a project that already has
+  `_bmad/wds/` keeps that directory on disk; only the resolved module list
+  narrows. The package is **28% smaller packed** as a result (11.3 MB → 8.1 MB).
+- **`_bmad-output/project-layout.yaml` is now the authoritative, always-written
+  record of where a project's knowledge lives**, carrying the backend and
+  location of both stores plus sprint management. It is written on every install
+  and every bind — not only in multi-repo or Jira mode, and no longer *deleted*
+  when both concerns are same-repo, which is what the previous code did. Because
+  `_bmad-output/` is deliberately tracked, these bindings are committed and
+  shared by the whole team. (FR263, superseding FR117 and FR122)
+- **`_bmad/bmm/config.yaml` is now GENERATED from that binding** rather than
+  written directly from install answers, on install and on bind only. It gains
+  `system_requirements_path`, `software_requirements_path` and the per-store
+  backend and space-key fields, and it records which binding it was generated
+  from in a `project_layout_stamp:` field. The legacy `planning_artifacts` and
+  `knowledgebase_path` fields are **retained** and resolve to the software
+  requirements store, so every existing reference keeps working unchanged. The
+  per-developer TOML overrides (`_bmad/config.user.toml`,
+  `_bmad/custom/config.user.toml`) are never touched. (FR264)
+- **A global install now performs no project-scoped work.** It does not generate
+  `project-context.md`, does not write `project-layout.yaml`, and does not prompt
+  for knowledge-store locations, because no project is in scope at that moment.
+  The chosen scope is recorded so a later `ma-agents bind` knows the install was
+  global. The existing Installation Scope question and the `--global` flag are
+  retained as-is. (FR248, FR251)
+- **BMAD-METHOD remains per-project on a global install, and the installer now
+  says so.** A confirmation spike against a live bmad-method v6.10.0 established
+  that upstream has no user-level install: `bmad install --global` is an unknown
+  option, and module resolution outside a project does not work. FR249 therefore
+  degrades per FR250 — ma-agents skills install globally and the installer
+  reports three facts: that BMAD remains project-scoped, the command that
+  installs BMAD into a project, and that the F26 knowledge-store requirements
+  are unaffected. This replaces the previous behaviour, which filtered BMAD
+  agents out of a global install and told the user to re-run without `--global`
+  — framing a working mode as a failure. (FR249, FR250)
+- **Legacy single-store projects keep working, and migration is offered, never
+  forced.** A `project-layout.yaml` that predates F26, or that carries only the
+  single `knowledgebase_path`, is read as both stores pointing at that one
+  location. The user is told the project is using the legacy single-store layout
+  and given the exact command that splits it; everything keeps working until
+  they run it. (FR265)
+
+### Fail-loud behaviour (new)
+
+- **A Confluence-backed store with no Confluence MCP halts.** Skills do not
+  silently degrade and do not fall back to any local copy. The error names the
+  affected store, its configured space, the fact that no Confluence MCP was
+  detected, and how to configure one — or how to re-bind the store to the file
+  system. It explicitly forbids falling back to the file system, creating a
+  local copy, continuing with a partial or empty result, and changing the
+  configured backend on the user's behalf. A Confluence-backed store with no
+  Confluence MCP has no degraded mode. (FR261, FR262)
+- **An unrecognised store backend halts rather than defaulting.** This is a
+  deliberate departure from the sprint-tracking routing pattern, which falls
+  back to the file system on an unknown value: for a knowledge store, falling
+  back would resolve a store this build cannot identify to local files, which is
+  exactly the silent degradation FR262 forbids.
+- **A stale generated config halts.** Skills that resolve knowledge-store paths
+  now run a gateway preflight that compares `_bmad/bmm/config.yaml` against the
+  committed binding before any read, any write and any prompt. On disagreement
+  it halts, names every store that moved and both of its locations, and
+  prescribes `ma-agents bind`. The comparison is on **content, never
+  timestamps** — mtime ordering is not preserved by `git pull`, `git checkout`
+  or a fresh clone, so a timestamp comparison would both miss real drift and
+  report drift on a clean checkout.
+
+### Security
+
+- **No Confluence credentials are stored on disk, anywhere.** Authentication is
+  entirely the MCP server's responsibility. `project-layout.yaml` records only
+  the space key and the root page's title and id — which is what makes the file
+  safe to commit. Verified at the release gate by enumerating every file a
+  Confluence-configured install writes and scanning every byte of each. (NFR79)
+
+### Deliberately not implemented
+
+- **FR266 (a local mirror of every Confluence-backed store) was RETIRED before
+  implementation** and has no code, no cache, no sync direction, no sync trigger
+  and no conflict-resolution path. The mirror had been justified on air-gap
+  grounds, but this product's air-gap requirement means *no internet* — no npm,
+  git or CDN access — not *no network*: an enterprise Confluence inside the
+  perimeter is reachable on an air-gapped network. With Confluence
+  unreachability reclassified as a misconfiguration rather than a working mode,
+  FR262's fail-loud behaviour removes the need for a mirror entirely. The
+  release gate asserts the absence as a closed set rather than as a denylist.
+  (P5-9.6)
+
+### Known limitations
+
+> **This file does not ship on npm.** `CHANGELOG.md` is not in `package.json`'s
+> `files` list, so it reaches readers on GitHub only. The two sections above are
+> therefore reproduced in `README.md` — under "Deliberately not implemented" and
+> "Known limitations of v3.18.0" — which **is** in the published tarball. Keep
+> the two in step.
+
+- **Every claim in this release about behaviour with a Confluence MCP *present*
+  is mock-verified, not live.** No authorised Confluence MCP was available to
+  the implementation or to any review, so the MCP-present branches were
+  exercised against a stubbed tool context. The MCP-*absent* branch — the
+  fail-loud path — is the default state and was exercised for real.
+- **The publish trigger reaches the authoring skills through a file three
+  parties can write.** `_bmad/custom/<skill>.toml` is written by ma-agents, by a
+  human, and by the upstream `bmad-customize` skill. TOML forbids duplicate
+  keys, and the upstream resolver treats a parse error in that layer as a
+  *warning* — it returns an empty layer and **exits 0** — so a second writer
+  adding its own `on_complete` silently discards the publish hook and every
+  other override in the file. ma-agents refuses to write over a collision it can
+  detect and `ma-agents status` names it, but **that check is a partial scanner,
+  not a full TOML parser**: it can miss a malformation and stay silent. The
+  durable fix belongs upstream in `resolve_customization.py`, which is replaced
+  on every install, so it cannot be patched from here.
+- **A bare non-ASCII-whitespace line authored by a user is not detected.** A
+  line containing only U+00A0, U+2007 or U+3000 makes the file invalid to the
+  real parser while ma-agents' reader accepts it; the customization layer is
+  then dead at exit 0 with nothing reported. Such a file is already invalid
+  before ma-agents touches it — this is a detection gap, not corruption. A
+  byte-order mark in the same position *is* caught.
+- **`_bmad-output/project-layout.yaml` carries a `generated:` date**, so two
+  runs of the same answers are byte-identical only within the same calendar day.
+  `ma-agents bind` declines to rewrite the file on a no-edit re-run precisely so
+  that this cannot present as a spurious change.
+- **`npm test` is not green on Windows**, for nine reasons that predate this
+  release. The one this epic introduced — the Story 31.4 preflight block
+  breaking Story 15.5's verbatim invariant — **is resolved**: the block now
+  lives in the source workflow files, so the converted and source copies agree
+  and that suite is green. See
+  `_bmad-output/implementation-artifacts/bug-npm-test-windows-suite-health-chain.md`.
+- **This release was verified on Windows only.** Linux and CI were never run, so
+  every cross-platform claim here is inference rather than a result.
+
 ## [3.17.1] - 2026-07-16
 
 ### Fixed
+- **An upgrade could silently delete hand-authored skills.** When a tool's
+  skills directory moved between versions, the installer removed the old
+  directory **recursively and unconditionally** once the new one had content —
+  destroying any skill you had written there yourself, and logging it in green
+  as a successful cleanup. It now reads that directory's own manifest and
+  removes only what ma-agents installed; if anything else remains, the
+  directory is **preserved** and the files that kept it are named. A directory
+  with no manifest, an unreadable manifest, or an empty one is never removed —
+  unknown provenance fails safe. **This affected `.github/copilot/skills`,
+  `.github/skills`, `.roo/skills` and `.kilocode/skills` in versions 3.7.0
+  through 3.17.1.** Deletions made by those versions are not recoverable from
+  ma-agents — `fs.remove` leaves no backup and records nothing but the
+  directory name. One known limit remains: files placed *inside* a directory
+  ma-agents installed are still removed with it.
+- **Antigravity no longer gets two skill trees.** ma-agents wrote
+  `.antigravity/skills` while bmad-method wrote `.agent/skills`, so a single
+  install produced both — and the tree the tool actually reads was patched by
+  nobody, silently missing the on-prem phase prefix in a project configured
+  for on-prem. The registry now matches upstream's path, and the patch targets
+  are derived from what is on disk rather than from our own table, so a tree
+  written by either pipeline is reached. A parity test fails on any unrecorded
+  path divergence between the two tables.
+- **`ma-agent-sqa` cited a manifest path that never resolves.** Its Critical
+  Action 1 pointed at `_bmad/skills/MANIFEST.yaml`, one path segment short of
+  the `_bmad/skills/sqa/` its registry entry declares. All four `ma-agent-*`
+  personas also regained the `if it exists` guard on that instruction, so the
+  step degrades cleanly in a project where the agent host was never installed
+  instead of sending the agent after a missing file.
 - **ma-agent personas now appear in the IDE agent picker.** The DevOps
   (Amit), Cyber (Yael), SQA (Gadi), and SRE (Alex) personas installed as
   skills but never surfaced in the GitHub Copilot agent-picker dropdown in

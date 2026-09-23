@@ -130,6 +130,8 @@ When `tracking_system` is set to any value other than `file-system` or `jira`:
 
 The skill falls back to file-system (no halt).
 
+**Scope — sprint tracking only.** This fallback governs the `tracking_system` switch above and nothing else. A **knowledge store**'s `backend` default-denies instead: an unrecognised value HALTs, because falling back would resolve a store this build cannot identify to local files, which is the silent degradation FR262 forbids. Story 31.9's knowledge-store gate states that departure in its own text; this note records it here so §2.5 is not read as universal.
+
 ### 2.6 Detection Timing
 
 The backend detection check occurs at the **START** of every skill workflow, before any read or write operations. It is a gateway check, not an afterthought. No skill logic executes before the backend is confirmed.

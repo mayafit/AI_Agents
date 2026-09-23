@@ -152,13 +152,13 @@ test('reads QUOTED name values', () => {
 
 // ---- normalizeModules() type filter ----
 
-console.log('\nnormalizeModules() — type filter (bmad-org in, experimental out)');
+console.log('\nnormalizeModules() — closed allowlist (FR235) over the registry');
 
-test('keeps exactly the five bmad-org modules and drops experimental', () => {
+test('keeps exactly the three allowlisted modules and drops everything else', () => {
   const out = reader.normalizeModules(reader.parseModulesYaml(FIXTURE_68));
   const codes = out.map(m => m.code).sort();
-  assert.deepStrictEqual(codes, ['bmb', 'cis', 'gds', 'tea', 'wds'],
-    `automator (experimental) must be excluded; got: ${codes.join(', ')}`);
+  assert.deepStrictEqual(codes, ['bmb', 'cis', 'tea'],
+    `only the allowlisted codes survive; got: ${codes.join(', ')}`);
 });
 
 test('drops untyped built-in entries (bmm/core are absent from registry anyway)', () => {
@@ -180,12 +180,25 @@ test('output shape is { code, url, name, branch } with branch defaulting to main
   assert.strictEqual(tea.branch, 'main', '6.8.0 omits branch → must default to main');
 });
 
-test('wds is a normal bmad-org clone (no retired/skip path)', () => {
-  const out = reader.normalizeModules(reader.parseModulesYaml(FIXTURE_68));
-  const wds = out.find(m => m.code === 'wds');
-  assert.ok(wds, 'wds must be present as an active bmad-org module');
-  assert.strictEqual(wds.branch, 'main');
-  assert.strictEqual(wds.url, 'https://github.com/bmad-code-org/bmad-method-wds-expansion');
+// FR75: gds and wds are NOT bundled. The point of this test is that they are
+// dropped for that reason ALONE — the registry still lists both as healthy,
+// active `type: bmad-org` entries carrying neither `deprecated` nor
+// `marketplace-plugin`, so nothing in the registry data excludes them. If this
+// ever passes because the fixture stopped describing them as active, the
+// precondition assertions fail and say so.
+test('FR75: gds and wds are dropped although the registry lists both as active bmad-org modules', () => {
+  const parsed = reader.parseModulesYaml(FIXTURE_68);
+  for (const code of ['gds', 'wds']) {
+    const entry = parsed.find(m => m.code === code);
+    assert.ok(entry, `fixture precondition: the registry must still carry ${code}`);
+    assert.strictEqual(entry.type, 'bmad-org',
+      `fixture precondition: ${code} must still be an ordinary bmad-org module`);
+    assert.ok(!reader.DISQUALIFYING_FLAGS.some(f => reader.isFlagTrue(entry[f])),
+      `fixture precondition: ${code} must carry no disqualifying flag`);
+  }
+  const codes = reader.normalizeModules(parsed).map(m => m.code);
+  assert.ok(!codes.includes('gds'), `gds must not be bundled (FR75); got: ${codes.join(', ')}`);
+  assert.ok(!codes.includes('wds'), `wds must not be bundled (FR75); got: ${codes.join(', ')}`);
 });
 
 test('rejects a module code with path-traversal characters', () => {
@@ -201,9 +214,37 @@ test('rejects a module code with path-traversal characters', () => {
 
 console.log('\nexported reader constants');
 
-test('KNOWN_BUNDLED_MODULES is exactly the five bundled modules', () => {
+test('KNOWN_BUNDLED_MODULES is exactly the three bundled modules', () => {
   assert.deepStrictEqual([...reader.KNOWN_BUNDLED_MODULES].sort(),
-    ['bmb', 'cis', 'gds', 'tea', 'wds']);
+    ['bmb', 'cis', 'tea']);
+});
+
+// The constant is only worth pinning if it describes what actually ships. Both
+// comparands here come from the shipped tree rather than from the build
+// script: the on-disk cache directories and the generated cache manifest. A
+// constant edited without unbundling, or an unbundling that forgets the
+// constant, makes these disagree. This is also the executable form of FR75's
+// "absent from lib/bmad-cache/ and from the cache manifest".
+test('FR75: the shipped cache dir and manifest agree with KNOWN_BUNDLED_MODULES', () => {
+  const cacheDir = path.join(__dirname, '..', 'lib', 'bmad-cache');
+  const onDisk = fs.readdirSync(cacheDir, { withFileTypes: true })
+    .filter(d => d.isDirectory())
+    .map(d => d.name)
+    .sort();
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(cacheDir, 'cache-manifest.json'), 'utf8')
+  );
+  const manifestCodes = Object.keys(manifest.modules || {}).sort();
+  const expected = [...reader.KNOWN_BUNDLED_MODULES].sort();
+
+  assert.deepStrictEqual(onDisk, expected,
+    `lib/bmad-cache/ directories must equal the allowlist; got: ${onDisk.join(', ')}`);
+  assert.deepStrictEqual(manifestCodes, expected,
+    `cache-manifest.json modules must equal the allowlist; got: ${manifestCodes.join(', ')}`);
+  for (const code of ['gds', 'wds']) {
+    assert.ok(!onDisk.includes(code), `FR75: ${code} must not ship under lib/bmad-cache/`);
+    assert.ok(!manifestCodes.includes(code), `FR75: ${code} must not appear in cache-manifest.json`);
+  }
 });
 
 test('the relocated package-root path is first in REGISTRY_CANDIDATES', () => {
