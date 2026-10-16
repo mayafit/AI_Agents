@@ -159,7 +159,9 @@ ${chalk.bold('Install options:')}
   ${chalk.cyan('--bmad-modules [csv]')} Control BMAD module selection.
                        Bare:    open a multiselect prompt (offers every
                                 bundled module: bmm, tea, bmb, cis)
-                       With CSV: install exactly those (e.g. tea,bmb)
+                       With CSV: install exactly those (e.g. "tea,bmb" —
+                                 quote it: PowerShell splits a bare
+                                 comma list into separate arguments)
                        Omitted: install bmm,tea,bmb,cis (default)
                        'bmm' is always force-included. The design-studio
                        modules gds and wds are not bundled and cannot be
@@ -193,7 +195,7 @@ ${chalk.bold('Examples:')}
   npx ${NAME} install --yes
   npx ${NAME} install --yes --agent claude-code
   npx ${NAME} install --yes --global
-  npx ${NAME} install --yes --bmad-modules bmm,tea,bmb
+  npx ${NAME} install --yes --bmad-modules "bmm,tea,bmb"  # quote the list in PowerShell
   npx ${NAME} install --bmad-modules                    # prompt for modules
   npx ${NAME} install --yes --bmad-custom-source ./org-marketplace
   npx ${NAME} install --bmad-custom-source git@git.intra.example:team/bmad-marketplace.git
