@@ -387,6 +387,22 @@ function processModule(mod, manifest) {
     return null;
   }
 
+  // The install pins this module to `pinTag` (lib/bmad.getBundledModulePins →
+  // `--pin`), so it must name the release this cache holds. A shallow clone
+  // fetches the tags that point at HEAD, so an exact match is available
+  // without history. An untagged HEAD gets no pinTag and fails
+  // test/bundled-module-pins.test.js — set it by hand to the release HEAD is
+  // a metadata-only successor of, or rebuild from a release.
+  let pinTag = '';
+  try {
+    pinTag = execFileSync('git', ['-C', moduleDir, 'describe', '--tags', '--exact-match', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: 'pipe',
+    }).trim();
+  } catch {
+    console.warn(`  ⚠  ${mod.code}: HEAD ${commitSha.substring(0, 7)} is not a release tag — pinTag must be set by hand`);
+  }
+
   // Install production dependencies
   const pkgJsonPath = path.join(moduleDir, 'package.json');
   if (fs.existsSync(pkgJsonPath)) {
@@ -433,6 +449,7 @@ function processModule(mod, manifest) {
     url: mod.url,
     branch: mod.branch,
     commitSha,
+    ...(pinTag ? { pinTag } : {}),
     clonedAt: new Date().toISOString(),
   };
 }

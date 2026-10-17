@@ -7,18 +7,21 @@
       "url": "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise",
       "branch": "main",
       "commitSha": "8734d51f24071ddbcb3617390b5fcddb4128ef77",
+      "pinTag": "v1.19.0",
       "clonedAt": "2026-06-13T15:11:39.614Z"
     },
     "bmb": {
       "url": "https://github.com/bmad-code-org/bmad-builder",
       "branch": "main",
       "commitSha": "e6935f2776c34ffd9b18f4ef1e334584ef10a50f",
+      "pinTag": "v2.1.0",
       "clonedAt": "2026-06-27T14:28:16.693Z"
     },
     "cis": {
       "url": "https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite",
       "branch": "main",
       "commitSha": "07a8dd03d196a762f21c241d985293fe5b0f90e7",
+      "pinTag": "v0.2.1",
       "clonedAt": "2026-06-13T15:11:42.507Z"
     }
   }
