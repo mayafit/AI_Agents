@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.18.1] - 2026-10-17
+
+### Fixed
+- **Installing TEA failed for everyone.** ma-agents pinned `bmad-method`
+  exactly but left its external modules (tea, bmb, cis) unpinned, so each
+  install pulled whatever upstream had released last. TEA v2.0.x dropped the
+  `src/module.yaml` that bmad-method 6.10.0 needs, so every install that
+  selected tea aborted with `Module 'tea' was downloaded but its module
+  definition was not found`. The suggested `--next=tea` didn't help. Online
+  and offline installs of the same release had also drifted apart. Every
+  bundled module is now pinned to the release the offline cache holds: tea
+  `v1.19.0`, bmb `v2.1.0`, cis `v0.2.1`. The cache is stamped so the pinned
+  install still works with no network, and a cache left at another release
+  (such as a broken tea v2.0.2 clone) is replaced automatically.
+  **Behaviour change:** a project that 3.18.0 installed at a newer upstream
+  bmb or cis moves back to the pinned release on its next install or update.
+- **Installs on Windows aborted with `EBUSY: resource busy or locked`.**
+  After placing skills, bmad-method deletes its temporary `_bmad/<module>/<skill>`
+  copies once, with no retry. A momentary lock from Defender, the search
+  indexer or an editor's file watcher (for example, the project folder open in
+  VS Code) killed the whole install. ma-agents now gives those deletes a
+  retry budget of about 12 seconds. bmad-method itself is unchanged.
+- **`bmad-help` described and routed every ma-skills entry wrongly.** The
+  ma-skills `module-help.csv` used the pre-6.10 column layout, which
+  bmad-method 6.10.0 loads by position. All 51 rows landed in the wrong
+  columns of `_bmad/_config/bmad-help.csv` (skill = `anytime`, empty
+  description), with a `header does not match canonical schema` warning on
+  every install. The file now uses the current schema and gives each entry
+  its own menu code, e.g. `[SSS] Generate SSS`.
+- **`MANIFEST.yaml` and the `my-next-issue` skill were invalid YAML.** Skill
+  descriptions were written into YAML unescaped, so the colon in
+  `my-next-issue`'s description (`Jira: assignee = …`) broke its `SKILL.md`
+  header and the entire `.claude/skills/MANIFEST.yaml`, the file `CLAUDE.md`
+  tells the agent to read first. bmad-method also skipped the skill because
+  of it and left `_bmad/ma-skills/my-next-issue/` behind after every install.
+  Values are now quoted only where YAML needs it, so every other skill's
+  files are unchanged.
+- **`--bmad-modules bmm,bmb,cis` failed from PowerShell.** The `npx.ps1` shim
+  passes an unquoted comma list as separate arguments. The help text now
+  shows the quoted form: `--bmad-modules "bmm,tea,bmb"`.
+
 ## [3.18.0] - 2026-09-21
 
 Federated knowledge stores, an authoritative committed project binding, and a
