@@ -2148,11 +2148,19 @@ test('AC7.5h [harness] the scan population includes shipped NON-MARKDOWN agent-r
   // (425 -> 427). Verifiable in one command:
   //
   //     git diff --name-status --diff-filter=A <merge-base>..origin/main -- lib/ skills/
+  //
+  // ─── #153: 2,035 -> 2,036 AND 427 -> 428, WITH THE REASON ────────────────
+  //
+  // PR #153 (bug-bmad-skill-dir-cleanup-ebusy-on-windows) added one tracked
+  // file under the `files` roots: `lib/fs-retry-preload.js`, the fs.rm retry
+  // shim preloaded into the bmad-method child. It is `.js`, so neither scanned
+  // population moves and the whole +1 lands in the UNSCANNED remainder. Its
+  // text is an fs wrapper with no instruction text and no FR266 vocabulary.
   const all = shippedFilesWithExtensions(['']); // '' matches every filename
-  assert.strictEqual(all.length, 2035,
+  assert.strictEqual(all.length, 2036,
     `the shipped tracked population must be what the record says: found ${all.length}`);
-  assert.strictEqual(all.length - md.size - structured.length, 427,
-    'and the UNSCANNED remainder must be the 427 files item 16 enumerates');
+  assert.strictEqual(all.length - md.size - structured.length, 428,
+    'and the UNSCANNED remainder must be the 428 files item 16 enumerates');
 });
 
 test('AC7.5i [end-to-end] a TOML external_handoffs mirror directive is REPORTED, and was NOT before', () => {
