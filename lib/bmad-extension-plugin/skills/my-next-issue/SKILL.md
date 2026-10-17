@@ -1,6 +1,6 @@
 ---
 name: my-next-issue
-description: Return the highest-priority open item assigned to the operating user (Jira: assignee = currentUser()) and answer "what should I work on next?"
+description: 'Return the highest-priority open item assigned to the operating user (Jira: assignee = currentUser()) and answer "what should I work on next?"'
 type: skill
 triggers:
   - "my next issue"
