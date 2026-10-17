@@ -305,11 +305,14 @@ test('module-help.csv is parseable', () => {
   assert.ok(csvData.rows.length > 0, 'CSV must have data rows');
 });
 
-test('module-help.csv has correct header columns', () => {
-  const expected = ['module', 'phase', 'name', 'code'];
-  for (const col of expected) {
-    assert.ok(csvData.headers.includes(col), `Missing header column: ${col}`);
-  }
+// bmad-method 6.10.0's canonical schema (tools/installer/modules/module-help-schema.js).
+// The pre-6.10 header (module,phase,name,code,...) is loaded positionally and lands
+// every value in the wrong column of _bmad/_config/bmad-help.csv.
+test('module-help.csv has the canonical bmad-method header', () => {
+  assert.deepStrictEqual(csvData.headers, [
+    'module', 'skill', 'display-name', 'menu-code', 'description', 'action', 'args',
+    'phase', 'preceded-by', 'followed-by', 'required', 'output-location', 'outputs',
+  ]);
 });
 
 // 51 since bug-jira-no-user-identity-context added the `my-next-issue` row (was 50).
@@ -325,7 +328,7 @@ test('all CSV entries use module code ma-skills', () => {
 });
 
 test('CSV has entries for all 4 agent skills', () => {
-  const codeIdx = csvData.headers.indexOf('code');
+  const codeIdx = csvData.headers.indexOf('skill');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedAgentSkills) {
     assert.ok(codes.includes(skill), `Missing CSV entry for agent skill: ${skill}`);
@@ -333,7 +336,7 @@ test('CSV has entries for all 4 agent skills', () => {
 });
 
 test('CSV has entries for all 3 SQA skills', () => {
-  const codeIdx = csvData.headers.indexOf('code');
+  const codeIdx = csvData.headers.indexOf('skill');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedSqaSkills) {
     assert.ok(codes.includes(skill), `Missing CSV entry for SQA skill: ${skill}`);
@@ -341,7 +344,7 @@ test('CSV has entries for all 3 SQA skills', () => {
 });
 
 test('CSV has entries for all 8 MIL-498 skills', () => {
-  const codeIdx = csvData.headers.indexOf('code');
+  const codeIdx = csvData.headers.indexOf('skill');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedMil498Skills) {
     assert.ok(codes.includes(skill), `Missing CSV entry for MIL-498 skill: ${skill}`);
@@ -349,7 +352,7 @@ test('CSV has entries for all 8 MIL-498 skills', () => {
 });
 
 test('CSV has entries for all 7 SRE skills', () => {
-  const codeIdx = csvData.headers.indexOf('code');
+  const codeIdx = csvData.headers.indexOf('skill');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedSreSkills) {
     assert.ok(codes.includes(skill), `Missing CSV entry for SRE skill: ${skill}`);
@@ -357,7 +360,7 @@ test('CSV has entries for all 7 SRE skills', () => {
 });
 
 test('CSV has entries for all 5 DevOps skills', () => {
-  const codeIdx = csvData.headers.indexOf('code');
+  const codeIdx = csvData.headers.indexOf('skill');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedDevopsSkills) {
     assert.ok(codes.includes(skill), `Missing CSV entry for DevOps skill: ${skill}`);
@@ -365,7 +368,7 @@ test('CSV has entries for all 5 DevOps skills', () => {
 });
 
 test('CSV has entries for all 7 Cyber skills', () => {
-  const codeIdx = csvData.headers.indexOf('code');
+  const codeIdx = csvData.headers.indexOf('skill');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedCyberSkills) {
     assert.ok(codes.includes(skill), `Missing CSV entry for Cyber skill: ${skill}`);
@@ -373,7 +376,7 @@ test('CSV has entries for all 7 Cyber skills', () => {
 });
 
 test('CSV has entries for all 15 extension workflow skills', () => {
-  const codeIdx = csvData.headers.indexOf('code');
+  const codeIdx = csvData.headers.indexOf('skill');
   const codes = csvData.rows.map(r => r[codeIdx]);
   for (const skill of expectedExtensionSkills) {
     assert.ok(codes.includes(skill), `Missing CSV entry for extension skill: ${skill}`);
