@@ -6,6 +6,7 @@
 **Change scope classification:** **Major — fundamental replan (PM / Architect)**
 **Baseline:** ma-agents 3.18.1 (`38ea256`), pinned to `bmad-method@6.10.0`; upstream at v6.12.4
 **Companion input:** `bmad-6.11-6.12-impact-analysis.md` (branch `docs/bmad-6-11-6-12-impact-analysis`, unmerged) — the source-verified upstream delta this proposal builds on
+**Applied 2026-10-31 (same PR, on the product owner's "go on"):** PRD F27/F28 (FR268–FR278, NFR84–NFR85), Decision P5-10, Epics 32–35, Story 14.2 closure, `sprint-status.yaml` registration. The ID ranges below were drafted as FR268–FR273 before the edits were applied; the final IDs are FR268–FR274 (F28, integration shard) and FR275–FR278 (F27, currency shard).
 
 ---
 

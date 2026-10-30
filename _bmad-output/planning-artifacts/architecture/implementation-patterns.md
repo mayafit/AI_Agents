@@ -220,3 +220,20 @@ critical_actions:
 - Fetching bmad-method via `npx` instead of using the npm dependency copy (breaks air-gap, NFR20 violation)
 - Letting bmad-method auto-fetch external modules without pre-populating the cache first (breaks air-gap)
 - Including `.git/` directories in `lib/bmad-cache/` — wastes package size, not needed for installation
+
+### Phase 5 Extension Decomposition Patterns (2026-10-31, P5-10)
+
+**All AI Agents Working on Epics 32–35 MUST:**
+- **Shared text is generated, never depended on.** A block two modules both need (tracker routing, knowledge-store preflight) has one source under `shared/` in the extension repo and is rendered into each consuming skill at build. Never load it across modules at run time; never hand-edit a rendered copy.
+- **Extension scripts are in-skill.** Anything an extension needs at run time (binding stamp, Confluence page tree, publish-hook generator, Atlas engine) lives under that skill's `scripts/` and is invoked as `uv run {skill-root}/scripts/x.py` or `node {skill-root}/scripts/x.cjs`. Never `require('ma-agents/…')`, never `require.resolve` a package.
+- **Skill directory names are unique across all six packages.** Prefix by family (`sre-`, `cyber-`, `mil498-`, `ma-agent-`, …). IDE skill folders are flat and bmad-method ≥ 6.10 aborts on duplicate leaf names.
+- **Overlays bind through `_bmad/custom/<skill>.toml` only**, marker-delimited, idempotent, version-keyed by the installed bmad-method, excluding `v6-shims/`, and reporting every unbound target by name. No overlay edits a skill document.
+- **One upstream version.** Target the pinned bmad-method only; when upstream retires a skill, repoint to its successor in the same change — never carry both names.
+- **`persistent_facts` are explicit.** Upstream ships them empty; every owned `customize.toml` states its own (e.g. `file:{project-root}/**/project-context.md`).
+- **Version per module.** Bump `module_version` in the module you changed; never bump a sibling.
+
+**Phase 5 Anti-Patterns:**
+- A `ma-core` / shared-runtime module that other extensions import — it recreates the monolith's coupling.
+- Passing `--shims` to bmad-method, or binding a `v6-shims/` name as an overlay target.
+- Putting config questions in the ma-agents wizard that belong to a module's `module.yaml`.
+- Adding skill content to the `ma-agents` npm package after Epic 35.

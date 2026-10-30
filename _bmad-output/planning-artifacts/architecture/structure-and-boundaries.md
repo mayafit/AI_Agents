@@ -110,6 +110,54 @@ ma-agents/
     └── cli.test.js                 — CLI command tests
 ```
 
+### Target Structure after P5-10 (2026-10-31 — Epics 33–35)
+
+The tree above is the **current** single-package layout and remains accurate until Epic 33 lands. The target is two repositories:
+
+```
+ma-bmad-extensions/                       — NEW repository: the five BMAD extensions
+├── .claude-plugin/marketplace.json       — one plugin per module (discovery mode → installer picker)
+├── shared/                               — canonical text rendered into consuming skills at build
+│   ├── tracker-routing.md                — (was pasted in 13 sprint skills)
+│   └── knowledge-store-preflight.md      — (was pasted in 17 skills)
+├── modules/
+│   ├── ma-ops-agents/                    — module.yaml (code, module_version) + module-help.csv
+│   │   ├── ma-agent-{sre,devops,cyber,sqa}/
+│   │   ├── sre-*/ devops-*/ cyber-*/ sqa-*/
+│   │   ├── mil498-*/                     — templates moved into each skill's assets/
+│   │   ├── create-hardened-docker-skill/ verify-hardened-docker-skill/ docker-*/ self-signed-cert/
+│   │   └── bmad-dev-epic/                — orchestrates bmad-build / build-auto / code-review / review / walkthrough
+│   ├── ma-sprint/
+│   │   ├── add-sprint/ … sprint-status-view/ create-bug-story/ story-status-lookup/
+│   │   └── (each: customize.toml with [workflow] tracker = "file-system" + activation_steps_prepend)
+│   ├── ma-atlassian/
+│   │   ├── module.yaml                   — config questions: jira_url, jira_project_key, confluence_space, confluence_root_page
+│   │   ├── ma-atlassian-setup/           — generates _bmad/custom/<skill>.toml overrides from the version-keyed target table
+│   │   │   ├── references/jira-tracker.md
+│   │   │   ├── references/confluence-store.md
+│   │   │   ├── references/targets.yaml   — {bmad-method version → skill → roles}
+│   │   │   └── scripts/                  — binding stamp, page tree, publish-hook generator (from lib/confluence-*.js + bin/cli.js)
+│   │   ├── my-next-issue/ bind/ confluence-plan/ confluence-record-root-page/
+│   ├── ma-knowledge/
+│   │   └── bmad-knowledge/scripts/atlas.cjs
+│   └── ma-standards/
+│       ├── cpp-*/ csharp-*/ python-*/ js-ts-*/ cmake-*/ logging-*/ opentelemetry-*/ vercel-react-*/
+│       ├── code-documentation/ git-workflow-skill/ code-review/ commit-message/ ai-audit-trail/ test-*/ …
+│       └── ma-standards-setup/           — injects the always-load rule block into per-tool instruction files
+├── scripts/build.js                      — renders shared/, validates every SKILL.md, emits per-module digests
+└── test/                                 — per-module: manifest enumeration, drift gate, offline PluginResolver passthrough
+
+ma-agents/                                — THIS repository after Epic 35: the thin offline installer
+├── bin/cli.js                            — wizard (scope, profile, tools, modules), stage-and-invoke, IDE injection only
+├── lib/{installer,agents,bmad,profile,reconfigure,uninstall}.js
+├── lib/bmad-cache/                       — bmm built-in; tea / bmb / cis at the v6.12.4 registry pins
+├── lib/extensions/                       — pinned copies of modules/* from one ma-bmad-extensions tag (staged as N --custom-source paths)
+├── lib/templates/                        — instruction-block templates
+└── test/                                 — installer, injection, offline gate (uv in the loop)
+```
+
+Removed from `ma-agents` by Epic 35: `lib/bmad-extension/`, `lib/bmad-extension-plugin/`, `skills/`, `lib/knowledge-atlas/`, `lib/confluence-*.js`, `lib/custom-marketplace.js`, `lib/bmad-workflows/`, `lib/mil498-templates/`, `mil498/`, and the `bind` / `confluence-*` CLI commands.
+
 ### Architectural Boundaries
 
 **Module Boundaries (4 modules, strict separation):**

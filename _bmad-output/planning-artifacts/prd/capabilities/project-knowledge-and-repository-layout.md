@@ -62,6 +62,8 @@
 
 - FR267: Story files and other implementation artifacts (`implementation_artifacts`) belong to **neither** knowledge store — they follow `sprint_management_path` alongside `sprint-status.yaml`, because a story is sprint execution state rather than a requirement. This confirms and does not change FR120, which already resolves story creation and status through `{sprint_management_path}`. The consequence for F26 is that the binding schema carries exactly two stores plus a sprint-management location, and that a project moving its knowledge stores does not move its stories
 
+> **Delivery note (2026-10-31, P5-10).** F26's requirement text (FR254–FR267, NFR79–NFR83) is unchanged. Its **delivery vehicle** changes: the project-bind step, the generated-config staleness stamp, the Confluence page tree, the publish-hook generator and the store/space config questions are delivered by the `ma-atlassian` extension's own setup skill and in-skill scripts (FR273), not by `ma-agents bind` / `confluence-plan` / `confluence-record-root-page` in `bin/cli.js`. The knowledge-store preflight that 17 skills carry no longer invokes `ma-agents/bin/cli.js` for the exact stamp comparison; it calls the extension's script (FR270). NFR83 (resolution from project root + committed `project-layout.yaml` only) is thereby strengthened: no package path is involved at all.
+
 ## Quality Attributes (Non-Functional Requirements)
 
 ### Federated Knowledge Stores (F26)

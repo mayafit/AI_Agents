@@ -21,7 +21,7 @@ classification:
 # Product Requirements Document - agents
 
 **Author:** Alon
-**Date:** 2026-03-05 | **Last Edited:** 2026-08-03
+**Date:** 2026-03-05 | **Last Edited:** 2026-10-31
 
 > **This is the PRD index.** The PRD was decomposed on 2026-07-31 (it was a single 184 KB /
 > 1,011-line file). Content is verbatim; this file carries the front matter and the registers.
@@ -44,7 +44,18 @@ were never defined (Known Issues #2), so the high-water mark overstates the ID c
 **NFR83**. 11 capability domains covering the PRD's 26 declared capability areas. Every ID except
 FR35 appears in exactly one file.
 
-**F26 — Global Installation & Federated Knowledge Stores** is the newest capability area and
+**F27 — BMAD v6.12.4 Integration (latest-only)** and **F28 — Extension Decomposition & Thin
+Installer** were added 2026-10-31 by the [Sprint Change Proposal](sprint-change-proposal-2026-10-31.md)
+(Architecture Decision P5-10, Epics 32–35). F27 lives in
+[bmad-platform-currency](prd/capabilities/bmad-platform-currency.md) (FR275–FR278; supersedes FR236;
+inverts FR213/NFR74) and F28 in
+[bmad-integration-and-bundling](prd/capabilities/bmad-integration-and-bundling.md) (FR268–FR274,
+NFR84–NFR85; amends F4). Delivery notes were added to
+[sprint-and-backlog-management](prd/capabilities/sprint-and-backlog-management.md) and
+[project-knowledge-and-repository-layout](prd/capabilities/project-knowledge-and-repository-layout.md);
+no F10/F26 requirement text changed. High-water marks are now **FR278** and **NFR85**.
+
+**F26 — Global Installation & Federated Knowledge Stores** was the previous newest capability area and
 spans two capability files: the install-scope thread lives in
 [bmad-integration-and-bundling](prd/capabilities/bmad-integration-and-bundling.md)
 (FR248–FR253, NFR76–NFR78) and the knowledge-store / Confluence thread in
@@ -120,8 +131,8 @@ software, so they are pinned here.
 | Capability file | PRD capability areas | FRs | NFRs | Architecture |
 |---|---|---|---|---|
 | [skills-platform.md](prd/capabilities/skills-platform.md) | F1 Skill Management & Portability · F2 Skill Enforcement · F15 Developer Infrastructure | 25 | — | [skills-platform.md](architecture/decisions/skills-platform.md) |
-| [bmad-integration-and-bundling.md](prd/capabilities/bmad-integration-and-bundling.md) | F3 BMAD-METHOD Integration (+ Bundled Install) · F4 BMAD Extension Architecture · **F26** (install scope) | 22 | NFR16–21, 76–78 | [bmad-integration-and-bundling.md](architecture/decisions/bmad-integration-and-bundling.md) |
-| [bmad-platform-currency.md](prd/capabilities/bmad-platform-currency.md) | F25 v6.10.0 *(current)* · F24 v6.9.0 · F23 v6.8.0 · F21 v6.6.0 · F20 6.3.0 · F5 6.2.0 | 52 | NFR29–33, 50–59, 70–75 | [bmad-platform-currency.md](architecture/decisions/bmad-platform-currency.md) |
+| [bmad-integration-and-bundling.md](prd/capabilities/bmad-integration-and-bundling.md) | F3 BMAD-METHOD Integration (+ Bundled Install) · F4 BMAD Extension Architecture · **F26** (install scope) · **F28** Extension Decomposition & Thin Installer | 29 | NFR16–21, 76–78, 84–85 | [bmad-integration-and-bundling.md](architecture/decisions/bmad-integration-and-bundling.md) |
+| [bmad-platform-currency.md](prd/capabilities/bmad-platform-currency.md) | **F27 v6.12.4** *(current)* · F25 v6.10.0 · F24 v6.9.0 · F23 v6.8.0 · F21 v6.6.0 · F20 6.3.0 · F5 6.2.0 | 56 | NFR29–33, 50–59, 70–75 | [bmad-platform-currency.md](architecture/decisions/bmad-platform-currency.md) |
 | [agent-personas-and-ide-targets.md](prd/capabilities/agent-personas-and-ide-targets.md) | F6 Specialized Agent Personas · F14 OpenCode Support · F22 Cline Workflow Generation | 9 | — | [agent-personas-and-ide-targets.md](architecture/decisions/agent-personas-and-ide-targets.md) |
 | [methodology-and-sdlc-workflows.md](prd/capabilities/methodology-and-sdlc-workflows.md) | F7 MIL-STD-498 · F8 SDLC Workflows · F9 Bug Management · F16 Methodology Onboarding | 27 | — | — |
 | [sprint-and-backlog-management.md](prd/capabilities/sprint-and-backlog-management.md) | F10 Sprint & Backlog Management | 20 | **none** | [sprint-and-backlog-management.md](architecture/decisions/sprint-and-backlog-management.md) |
@@ -156,8 +167,8 @@ exact and machine-derived from the shard contents (no approximation, no "partial
 | FR IDs | Capability file | Count |
 |---|---|---|
 | FR1–FR7, FR34–FR38, FR44–FR47, FR51–FR55, FR73, FR204–FR206 | [skills-platform](prd/capabilities/skills-platform.md) | 25 |
-| FR8–FR12, FR74–FR76, FR104–FR106, FR123–FR127, FR248–FR253 | [bmad-integration-and-bundling](prd/capabilities/bmad-integration-and-bundling.md) | 22 |
-| FR94–FR103, FR107–FR110, FR182–FR198, FR207–FR214, FR235–FR247 | [bmad-platform-currency](prd/capabilities/bmad-platform-currency.md) | 52 |
+| FR8–FR12, FR74–FR76, FR104–FR106, FR123–FR127, FR248–FR253, FR268–FR274 | [bmad-integration-and-bundling](prd/capabilities/bmad-integration-and-bundling.md) | 29 |
+| FR94–FR103, FR107–FR110, FR182–FR198, FR207–FR214, FR235–FR247, FR275–FR278 | [bmad-platform-currency](prd/capabilities/bmad-platform-currency.md) | 56 |
 | FR13–FR33, FR60–FR64, FR72 | [methodology-and-sdlc-workflows](prd/capabilities/methodology-and-sdlc-workflows.md) | 27 |
 | FR35, FR42, FR56–FR57, FR199–FR203 | [agent-personas-and-ide-targets](prd/capabilities/agent-personas-and-ide-targets.md) | 9 |
 | FR65–FR71, FR128–FR140 | [sprint-and-backlog-management](prd/capabilities/sprint-and-backlog-management.md) | 20 |
@@ -171,7 +182,7 @@ exact and machine-derived from the shard contents (no approximation, no "partial
 | NFR span | File |
 |---|---|
 | NFR1–NFR15 | general-quality-attributes |
-| NFR16–NFR21, NFR76–NFR78 | bmad-integration-and-bundling |
+| NFR16–NFR21, NFR76–NFR78, NFR84–NFR85 | bmad-integration-and-bundling |
 | NFR22–NFR25, NFR34–NFR37, NFR79–NFR83 | project-knowledge-and-repository-layout |
 | NFR26–NFR28 | agent-activity-dashboard |
 | NFR29–NFR33, NFR50–NFR59, NFR70–NFR75 | bmad-platform-currency |

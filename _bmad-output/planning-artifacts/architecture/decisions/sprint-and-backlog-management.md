@@ -181,3 +181,14 @@ If a project has existing `backlog.yaml`, `sprints/sprint-N.yaml`, or the old `s
 5. Legacy files are renamed with `.legacy` suffix (not deleted — user can verify and remove)
 
 **Affects:** All 13 skills listed in the integration map above, `sprint-status.yaml` (new unified file), `{story_location}/done/` (archive directory)
+
+#### P2-11 amendment (2026-10-31, P5-10): the tracker hook contract
+
+The backend-routing block (`mcp-detection-pattern-spec.md`) no longer lives inside each sprint skill. From P5-10:
+
+- **`ma-sprint` skills expose a hook, not a branch.** Each skill's `customize.toml` declares `[workflow] tracker = "file-system"` and an `activation_steps_prepend` slot. The skill body implements file-system behaviour only and reads `{workflow.tracker}` at activation.
+- **The Jira branch is one adapter reference** (`ma-atlassian/references/jira-tracker.md`): the routing block, the identity clause (`assignee = currentUser()`, shared-account STOP), the entity mapping to the canonical schema (§6.3) and the retry / switch-to-file-system failure contract — moved verbatim from the 13 skills, maintained once.
+- **Binding is by override.** `ma-atlassian`'s setup skill writes a marker-delimited `_bmad/custom/<skill>.toml` for each installed target: `tracker = "jira"` plus a prepend step that loads the adapter reference. Removing the override (or the module) returns the skill to file-system behaviour with no edit.
+- **Upstream skills are bound the same way.** `bmad-sprint-planning` (v6.12, `sprint_plan.py` core — preserves `project_key`, `tracking_system`, `story_location`), `bmad-build`, `bmad-build-auto`, `bmad-code-review`, `bmad-correct-course`, `bmad-retrospective`, `bmad-walkthrough`. ma-agents' shadow `bmad-sprint-planning` / `bmad-sprint-status` / `bmad-dev-story` are deleted; `v6-shims/` are never bound.
+- **Unknown tracker value** keeps §2.5's fall-back-to-file-system semantics (unchanged — this is sprint state, not a knowledge store; contrast FR262).
+- **`project_key`, `tracking_system`** continue to be written to `sprint-status.yaml` by whichever skill initialises it; the Atlassian module's config questions (Jira URL, project key) feed them via the binding generated from `project-layout.yaml` (P5-9), not via the ma-agents wizard.

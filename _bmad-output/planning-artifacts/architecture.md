@@ -12,7 +12,7 @@ completedAt: '2026-03-07'
 project_name: 'agents'
 user_name: 'Alon'
 date: '2026-03-05'
-lastEdited: '2026-08-02'
+lastEdited: '2026-10-31'
 ---
 
 # Architecture Decision Document
@@ -33,8 +33,8 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 > inside an H2 titled *"P5-1 Addendum: .agents/skills Cross-Tool Standard Assessment (Story
 > 24.11)"*. An agent looking for architectural decisions found the Phase 2 set and stopped.
 
-**Totals:** 23 numbered decisions (P2-1 … P5-9) plus 4 unnumbered Phase 1 decisions.
-**Next free decision ID: P5-10.**
+**Totals:** 24 numbered decisions (P2-1 … P5-10) plus 4 unnumbered Phase 1 decisions.
+**Next free decision ID: P5-11.**
 
 ---
 
@@ -42,6 +42,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 | ID | Decision | Requirements | Notes | File |
 |---|---|---|---|---|
+| P5-10 | Extension decomposition, overlay mechanism & thin offline installer — latest-only bmad-method | FR268–FR278, NFR84–NFR85; FR236 superseded; FR213/NFR74 inverted; FR239–FR243 retired | 2026-10-31 · **F27 + F28** · supersedes P2-3/P2-9 (single module), P4-1 (single plugin), P5-6(c) (uv boundary); amends P2-6, P2-11, P5-9 · Epics 32–35 | [bmad-integration-and-bundling](architecture/decisions/bmad-integration-and-bundling.md) |
 | P5-9 | Federated knowledge stores, binding authority & global install scope | FR248–FR265, FR267, NFR76–NFR83 | 2026-08-02 · supersedes FR111/FR117 · retires FR266 · **F26** | [project-knowledge-and-repository-layout](architecture/decisions/project-knowledge-and-repository-layout.md) |
 | P5-8 | BMAD v6.10.0 — bundle filter, custom marketplace source, Demerzel deprecation | FR235–FR247, NFR70–NFR75 | 2026-07-09 · **current version** · retains the P5-5 reader | [bmad-platform-currency](architecture/decisions/bmad-platform-currency.md) |
 | P5-7 | BMAD Knowledge Atlas — static knowledge-site visualization tier | FR215–FR234, NFR60–NFR69 | 2026-06-28 · extends P3-1 | [knowledge-graph-and-atlas](architecture/decisions/knowledge-graph-and-atlas.md) |
