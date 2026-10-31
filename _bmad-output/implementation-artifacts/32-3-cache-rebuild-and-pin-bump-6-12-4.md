@@ -4,7 +4,7 @@ Status: ready-for-dev (do NOT start before Story 32.1 records PASS; consume its 
 Blocked on: 32-1
 Wave: 1 (parallel with 32.2)
 
-**FR:** FR275 (supersedes FR236), FR271, FR276 (no `--shims`). **NFR:** NFR2, NFR50, NFR57, NFR58 (offline bundle self-contained), NFR73 (two-sided bundle set equality, unchanged logic). **Decision inputs:** P5-10.5 (latest-only, no shims), P5-10.8 (gate-first).
+**FR:** FR275 (supersedes FR236), FR271, FR276 (no `--shims`), FR279 (Node engines). **NFR:** NFR2, NFR50, NFR57, NFR58 (offline bundle self-contained), NFR73 (two-sided bundle set equality, unchanged logic). **Decision inputs:** P5-10.5 (latest-only, no shims), P5-10.8 (gate-first).
 
 ## Story
 
@@ -19,7 +19,7 @@ ma-agents pins bmad-method in two places — `package.json:35` (`"bmad-method": 
 ## Acceptance Criteria
 
 1. **Pin sites.** `package.json` dependency `bmad-method` is exactly `"6.12.4"` (no range); `BMAD_TARGET_VERSION === '6.12.4'`; `package-lock.json` resolves `node_modules/bmad-method` to `6.12.4`. Test (extend `test/bmad-version-bump.test.js`): reads `require('bmad-method/package.json').version` from the *installed* package — not from a constant in `lib/` — and asserts it equals both pin sites.
-2. **Engines.** ma-agents `package.json` `engines.node` equals the string 32.1 AC1 recorded for bmad-method 6.12.4 (expected `>=20.12.0`). Test asserts ma-agents' range is not looser than the installed bmad-method's `engines.node` (compare against `require('bmad-method/package.json').engines.node`, not against a literal).
+2. **Engines (FR279).** ma-agents `package.json` `engines.node` equals the string 32.1 AC1 recorded for bmad-method 6.12.4 (expected `>=20.12.0`). Test asserts ma-agents' range is not looser than the installed bmad-method's `engines.node` (compare against `require('bmad-method/package.json').engines.node`, not against a literal).
 3. **Builder clones the registry pin.** `scripts/build-bmad-cache.js` reads the pin field 32.1 AC2 named from `bmad-modules.yaml` and clones that tag (`--branch <tag>`) when present; for a module the registry leaves unpinned (`bmb`), it clones the latest **stable release tag** (not `main` head) and records it. `pinTag` in the manifest equals the registry pin for tea/cis. Test: run the reader against the vendored 6.12.4 `node_modules/bmad-method/bmad-modules.yaml` and assert the planned `{code → tag}` map equals the registry's own pin values read independently in the test with `js-yaml`.
 4. **Cache rebuilt.** `npm run build:bmad-cache -- --force` produces `lib/bmad-cache/{tea,bmb,cis}` with `cache-manifest.json` `bmadMethodVersion: "6.12.4"`, `pinTag` tea `v1.27.2`, cis `v0.3.2`, bmb = the tag recorded in AC3, and a `registrySchema` value matching 32.1's AC2 finding. Each cached module's own `module.yaml` (or plugin manifest) version is read from disk and matches its `pinTag` (outside authority: the cloned bytes, not the manifest).
 5. **Allowlist logic intact.** `KNOWN_BUNDLED_MODULES` stays `['tea','bmb','cis']` (`scripts/build-bmad-cache.js:60`); `test/bundle-filter-set-equality.test.js` and `test/build-bmad-cache-reader.test.js` pass against the 6.12.4 registry (gds present-but-not-bundled, wds absent, `bmad-loop` / `bmad-automator` still excluded by FR235).

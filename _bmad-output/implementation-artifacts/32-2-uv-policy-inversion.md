@@ -10,11 +10,11 @@ Wave: 1 (parallel with 32.3)
 
 As an **ma-agents user on a host whose `python3` is older than 3.11, or on an air-gapped image**,
 I want ma-agents-owned skills to call the shared `_bmad/scripts/*.py` through `uv run`, exactly as upstream v6.11+ skills do, and the on-prem prerequisite stated where I will read it,
-so that customization resolves correctly instead of silently degrading to the hand-merge fallback, and an air-gapped install fails at install-prep time, not at first skill activation.
+so that customization resolves correctly instead of silently degrading to the hand-merge fallback, and an air-gapped operator learns the `uv` prerequisite from the docs before deploying, rather than from a `bmad-build` halt at first skill activation (the install itself still succeeds without `uv` — NFR74 clause 1, NFR59(a); 32.9 AC7(b)).
 
 ## Context
 
-Upstream v6.11 made `uv` + Python ≥ 3.11 the contract for `_bmad/scripts/resolve_customization.py`, `resolve_config.py` and `memlog.py` (`tomllib` is 3.11 stdlib); `bmad-build` / `bmad-build-auto` HALT on activation without `uv`. ma-agents' policy (FR213 / NFR74 / NFR59(c), Decision P5-6(c)) forbade exactly that migration and pins it with two guards in `test/uv-transition-resilience.test.js`: `:194` ("ma-agents control-plane code (lib JS, scripts/, bin/) contains no `uv run`") and `:208` ("no ma-agents-owned skill uses `uv run`", scanning `lib/bmad-extension/skills/**/*.md`). The one owned skill that calls a shared script today is the epic orchestrator: `lib/bmad-extension/skills/bmad-dev-epic/SKILL.md:135` — ``Run: `python3 {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --key workflow` ``. The impact analysis cited this as `SKILL.md:23`; the file has since grown (verified at :135). The four persona skills (`ma-agent-cyber`, `-devops`, `-sqa`, `-sre`) do **not** call any shared script today — their activation (`ma-agent-sre/SKILL.md:20-28`) reads `_bmad/bmm/config.yaml` directly — so for them this story is a verification and an explicit decision, not a migration. The PRD already marks FR213 as INVERTED (`prd/capabilities/bmad-platform-currency.md:61`) and NFR74 as AMENDED (`:147`); NFR59 at `:152` still carries the old (c) clause without an annotation.
+Upstream v6.11 made `uv` + Python ≥ 3.11 the contract for `_bmad/scripts/resolve_customization.py`, `resolve_config.py` and `memlog.py` (`tomllib` is 3.11 stdlib); `bmad-build` / `bmad-build-auto` HALT on activation without `uv`. ma-agents' policy (FR213 / NFR74 / NFR59(c), Decision P5-6(c)) forbade exactly that migration and pins it with two guards in `test/uv-transition-resilience.test.js`: `:194` ("ma-agents control-plane code (lib JS, scripts/, bin/) contains no `uv run`") and `:208` ("no ma-agents-owned skill uses `uv run`", scanning `lib/bmad-extension/skills/**/*.md`). The one owned skill that calls a shared script today is the epic orchestrator: `lib/bmad-extension/skills/bmad-dev-epic/SKILL.md:135` — ``Run: `python3 {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --key workflow` ``. The impact analysis cited this as `SKILL.md:23`; the file has since grown (verified at :135). The four persona skills (`ma-agent-cyber`, `-devops`, `-sqa`, `-sre`) do **not** call any shared script today — their activation (`ma-agent-sre/SKILL.md:20-28`) reads `_bmad/bmm/config.yaml` directly — so for them this story is a verification and an explicit decision, not a migration. The PRD already marks FR213 as INVERTED (`prd/capabilities/bmad-platform-currency.md:62`), NFR74 as AMENDED (`:148`) and NFR59 as AMENDED with clause (c) inverted (`:153`) — no PRD edit is outstanding for this story.
 
 ## Acceptance Criteria
 
@@ -38,7 +38,6 @@ Upstream v6.11 made `uv` + Python ≥ 3.11 the contract for `_bmad/scripts/resol
 - [ ] T6 README on-prem prerequisites; check the on-prem template (AC7)
 - [ ] T7 Mutants m1–m4 (AC8)
 - [ ] T8 `npm run build:plugin`; drift check (AC9)
-- [ ] T9 Flag to PM (do not edit): NFR59 at `prd/capabilities/bmad-platform-currency.md:152` lacks an "(c) replaced by FR277" annotation
 
 ## Dev Notes
 
@@ -53,7 +52,8 @@ Upstream v6.11 made `uv` + Python ≥ 3.11 the contract for `_bmad/scripts/resol
 
 - Pin bump, cache rebuild (32.3); the full `bmad-dev-epic` rewrite (32.5); TOML validation (32.7).
 - Any `uv` execution from installer JavaScript (forbidden by P5-10.6).
-- PRD/architecture edits — T9 is a flag only.
+- PRD/architecture edits (the FR213 / NFR74 / NFR59 annotations were applied by the planning PR).
+- Making install-prep fail when `uv` is absent — NFR74 clause 1 and NFR59(a) require the install to succeed; AC6 keeps that asserted.
 - Extension-repo script conventions (Epic 33).
 
 ## Verification record

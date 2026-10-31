@@ -1,8 +1,8 @@
 # Story 32.6 — Retired Skill-Name Sweep (and Paige's retirement)
 
 Status: backlog
-Blocked on: 32-3
-Wave: 2 (parallel with 32.4, 32.5)
+Blocked on: 32-3, 32-4, 32-5
+Wave: 3 (after 32.4 and 32.5 merge to the epic branch; parallel with 32.7, 32.8 — readiness C-5)
 
 **FR:** FR276 ("every ma-agents-owned enumeration, 'next steps' text, `module-help.csv` row, `MANIFEST.yaml` entry and training reference to a retired name … is removed or repointed"), FR271. **NFR:** NFR49 (user content preserved). **Decision inputs:** P5-10.5 (retired upstream workflows are replaced by their successors in every ma-agents enumeration), Sprint Change Proposal §4.4 ("rewrite … `my-next-issue` 'next steps' against the 6.12 catalog").
 
@@ -18,7 +18,7 @@ The retired set for this sweep is: `bmad-create-story`, `bmad-dev-story`, `bmad-
 
 ## Acceptance Criteria
 
-1. **Repo-wide zero-hit test.** New `test/retired-skill-names.test.js` runs `git ls-files` (outside authority: the tracked tree) and asserts zero occurrences of each retired name and each `v6-shims/` leaf name in every tracked text file, **excluding only**: `_bmad-output/**` (history), `CHANGELOG.md`, `AiAudit.md` (session log), `lib/bmad-cache/**` (vendored upstream), and an explicit allowlist array of `{file, name, reason}` entries for intentional historical mentions (e.g. a migration table that maps an old name to a new one). The shim leaf set is read from `node_modules/bmad-method/src/bmm-skills/v6-shims/` (and `src/core-skills/**/v6-shims` if present) at test time, not hard-coded. Each allowlist entry must still match (a stale allowlist entry fails the test). Failure output is file:line:name.
+1. **Repo-wide zero-hit test.** New `test/retired-skill-names.test.js` runs `git ls-files` (outside authority: the tracked tree) and asserts zero occurrences of each retired name and each `v6-shims/` leaf name in every tracked text file, **excluding only**: `_bmad-output/**` (history), `CHANGELOG.md`, `AiAudit.md` (session log), `lib/bmad-cache/**` (vendored upstream), and an explicit allowlist array of `{file, name, reason}` entries for intentional historical mentions (e.g. a migration table that maps an old name to a new one). The shim leaf set is read from `node_modules/bmad-method/src/bmm-skills/v6-shims/` (and `src/core-skills/**/v6-shims` if present) at test time, not hard-coded. Names upstream deleted outright (not shimmed) are taken from the list 32.1 AC9(i) recorded (catalog(6.10.0) − non-shim catalog(6.12.4)), held in one fixture file that cites `32-1-gate-findings.md`, so a deleted-outright name cannot escape both the hand list and the shim read. Each allowlist entry must still match (a stale allowlist entry fails the test). Failure output is file:line:name.
 2. **Positive control.** The test asserts the shim set it read is non-empty and contains `bmad-dev-story`, and that `bmad-generate-project-context` is **not** in the retired set (guards against over-sweeping a live skill).
 3. **`my-next-issue` repointed.** Both copies' "Next steps" and the `:24` / `:13` prose name the 6.12 successors confirmed in `32-1-gate-findings.md` AC9 (expected: `/bmad-build {{top.id}}` for "implement it", and no separate "prepare the story file first" line unless 32.1 names a 6.12 skill for it). `test/installed-yaml-validity.test.js` (which covers this skill's description YAML) still passes. The Jira routing block and identity clause in both copies are byte-unchanged (`test/jira-identity-clause.test.js` passes).
 4. **Paige retired — decided, not orphaned.** `lib/bmad-customize/bmm-tech-writer.customize.yaml` is deleted; `PERSONA_SKILL_MAP` drops `'bmm-tech-writer'` (`lib/bmad.js:1422`); `BUILTIN_AGENTS` drops it (`lib/skill-authoring.js:411`). Test lists that mirror those constants are updated to derive from them or from the directory listing of `lib/bmad-customize/` rather than restating them: `test/skill-customize-agent.test.js:62`, `test/bmad-extension.test.js:83`, `test/integration-verification.test.js:426`, `test/migration-validation.test.js:459`. A test asserts every key of `PERSONA_SKILL_MAP` has a `lib/bmad-customize/<key>.customize.yaml` and every value is a skill dir present in a real 6.12.4 install (or explicitly marked INERT, as `bmm-sm` / `bmm-qa` already are in the comment at `lib/bmad.js:1424`, entries `:1437-1438`).
@@ -30,17 +30,18 @@ The retired set for this sweep is: `bmad-create-story`, `bmad-dev-story`, `bmad-
 
 ## Tasks / Subtasks
 
+- [ ] T0 Start from the epic branch **after** 32.4 and 32.5 have merged (they delete entries from `.agents/skills/` and `MANIFEST.yaml` and rewrite `bmad-dev-epic`; branching earlier conflicts on `.agents/skills/MANIFEST.yaml`)
 - [ ] T1 Write `test/retired-skill-names.test.js` with shim-set read from upstream, allowlist, pptx scan; add to the chain (AC1, AC2, AC7)
 - [ ] T2 Repoint both `my-next-issue` copies (AC3)
 - [ ] T3 Retire Paige: customize file, `PERSONA_SKILL_MAP`, `BUILTIN_AGENTS`, derived test lists (AC4, AC5)
 - [ ] T4 README rows and stale bundle line (AC6)
 - [ ] T5 Edit the training deck (`anthropic-skills:pptx` or `python-pptx` via `uv run`); bump `version.json` (AC7)
-- [ ] T6 Regenerate `.agents/skills/` at 6.12.4; scratch-install `_bmad/_config` check (AC8)
+- [ ] T6 Regenerate `.agents/skills/` at 6.12.4 on top of 32.4's deletions (run the regeneration only after 32.4 is merged); scratch-install `_bmad/_config` check (AC8)
 - [ ] T7 Mutants m1–m4 (AC9); `npm run build:plugin`
 
 ## Dev Notes
 
-- Run AC1's test last, after 32.4 and 32.5 have landed on the epic branch — before that it legitimately fails on their files. Until then run it with the two skill dirs filtered locally to see only this story's surface.
+- 32.4 and 32.5 are hard blockers (readiness C-5): AC1 legitimately fails on their files until they land, and AC8's `.agents/skills/` regeneration must run on top of 32.4's deletions.
 - The sweep regex must be word-bounded: `bmad-review` is a live 6.12 skill and a prefix of `bmad-review-edge-case-hunter`; `bmad-create-prd` (shim) vs `bmad-create-epics-and-stories` (live). Match whole skill names (`(?<![a-z0-9-])name(?![a-z0-9-])`).
 - `bmm-sm` / `bmm-qa` are already documented INERT in `PERSONA_SKILL_MAP` (`lib/bmad.js:1424-1438`); do not "fix" them here — they are not in the retired set.
 - `.agents/skills/` regeneration rewrites ~600 tracked files; commit it separately (`chore:`) so the review diff of the real changes stays readable. `npm test` also mutates `.agents/`, `AGENTS.md`, `project-context.md` (known) — restore before committing.

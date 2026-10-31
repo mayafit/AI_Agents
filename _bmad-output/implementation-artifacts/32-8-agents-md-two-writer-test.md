@@ -18,7 +18,7 @@ ma-agents writes `AGENTS.md` only for the OpenCode target: `lib/agents.js:313` r
 
 ## Acceptance Criteria
 
-All ACs run against real writers: ma-agents' through its exported install path (OpenCode selected), upstream's through the 6.12.4 `bmad-project-context` mechanism as installed by 32.3 — **not** a hand-written imitation of upstream's block. If upstream's block insertion is LLM-driven instructions rather than a script, the test drives the deterministic part 32.1 AC9(e) identified (template + markers) and the Verification record says exactly which part was simulated and why.
+All ACs run against real writers: ma-agents' through its exported install path (OpenCode selected), upstream's through the 6.12.4 `bmad-project-context` mechanism as installed by 32.3 — **not** a hand-written imitation of upstream's block. If upstream's block insertion is LLM-driven instructions rather than a script, the test drives the deterministic part 32.1 AC9(e) identified (template + markers) and the Verification record says exactly which part was simulated and why. **Simulation rule (readiness C-10):** any simulated upstream write reads its marker strings and its block template **at test time from the vendored 6.12.4 tree** (`node_modules/bmad-method/src/**/bmad-project-context/**`, the exact file and line 32.1 AC9(e) cited) — no upstream marker, template text or adoption phrase is typed into the test as a literal. The test asserts the values it read are non-empty and that the source file exists, so a moved or renamed upstream file fails the test rather than leaving it vacuous. 32.1's findings file is cited for the path only, never for the content.
 
 1. **Order A (ma-agents first).** Empty project → ma-agents install (OpenCode) → upstream `bmad-project-context` block write. Assert: the MA-AGENTS block is byte-identical to its pre-upstream content; upstream's block is present exactly once; ma-agents' leading comment and template prose either survive verbatim or the record states upstream's documented adoption rule replaced them (and that is then flagged to the PO as a UX finding, not silently accepted).
 2. **Order B (upstream first).** Empty project → upstream block write → ma-agents install. Assert: upstream's block is byte-identical before/after; the MA-AGENTS block is present exactly once; ma-agents did **not** write its full template over an existing file (only the marker block was added).
@@ -28,7 +28,7 @@ All ACs run against real writers: ma-agents' through its exported install path (
 6. **Marker non-interference.** Upstream's marker strings (from 32.1 AC9(e)) do not match ma-agents' `stripMarkerBlock` regex (`lib/uninstall.js:61`) and ma-agents' markers do not match upstream's block detector. Asserted by feeding each tool's block to the other's matcher.
 7. **CRLF.** Repeat AC1–AC3 with the fixture saved with CRLF line endings; no writer converts the other's block or the user's prose to LF (byte compare). (Mixed CRLF/LF in composed blocks is a known class in this repo — Epic 27.10.)
 8. **Removal list reviewed.** `lib/uninstall.js` `INJECTION_FILES` is reviewed against 6.12.4: if upstream now writes any of `CLAUDE.md`, `.clinerules`, `.cline/clinerules.md`, `.roo/rules/00-ma-agents.md`, the same two-writer assertions (AC3, AC5) are added for that file. The review outcome is recorded either way.
-9. **Mutation-checked.** (m1) `markdownMarkersMerger` writes the full template whenever markers are absent (even if the file exists) → AC2 red; (m2) `stripMarkerBlock` regex made greedy → AC5 red when a second marker-like block exists; (m3) the merger normalises line endings of the whole file → AC7 red; (m4) uninstall deletes `AGENTS.md` unconditionally → AC5 red.
+9. **Mutation-checked.** (m1) `markdownMarkersMerger` writes the full template whenever markers are absent (even if the file exists) → AC2 red; (m2) `stripMarkerBlock` regex made greedy → AC5 red when a second marker-like block exists; (m3) the merger normalises line endings of the whole file → AC7 red; (m4) uninstall deletes `AGENTS.md` unconditionally → AC5 red; (m5) the vendored upstream template path pointed at a nonexistent file → the simulation fails loudly instead of using a fallback literal.
 
 ## Tasks / Subtasks
 
@@ -37,7 +37,7 @@ All ACs run against real writers: ma-agents' through its exported install path (
 - [ ] T3 Uninstall cases (AC5); matcher cross-check (AC6)
 - [ ] T4 CRLF variants (AC7)
 - [ ] T5 `INJECTION_FILES` review against 6.12.4 (AC8)
-- [ ] T6 Mutants m1–m4 (AC9)
+- [ ] T6 Mutants m1–m5 (AC9)
 - [ ] T7 If a clobber is found: fix in `markdownMarkersMerger` / `stripMarkerBlock` only, with a test first; if the clobber is upstream's, record it and file an upstream issue — do not work around it in ma-agents
 
 ## Dev Notes
@@ -55,4 +55,4 @@ All ACs run against real writers: ma-agents' through its exported install path (
 
 ## Verification record
 
-Suite: … ; upstream mechanism driven (script / simulated part + why): … ; INJECTION_FILES review: … ; mutants: m1 … m4 ; unverified: …
+Suite: … ; upstream mechanism driven (script / simulated part + why): … ; INJECTION_FILES review: … ; mutants: m1 … m5 ; unverified: …

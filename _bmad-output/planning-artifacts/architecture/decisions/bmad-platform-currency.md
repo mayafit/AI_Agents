@@ -4,7 +4,9 @@
 > pre-split document; the index carries the front matter, registers and reading order.
 >
 > Constrains prd/capabilities/bmad-platform-currency.md. Ordered NEWEST FIRST:
-> P5-8 (v6.10.0, current) → P5-6 → P5-5 → P5-2 → P5-1 → P4-1 → P2-9.
+> P5-8 (v6.10.0) → P5-6 → P5-5 → P5-2 → P5-1 → P4-1 → P2-9. **Current target (v6.12.4, latest-only, no shims) is
+> Decision P5-10.5/P5-10.6 in [bmad-integration-and-bundling.md](bmad-integration-and-bundling.md)** — it supersedes
+> P5-8's pin and reverses P5-6(c). *(Pointer added 2026-10-31, Epic 32 readiness review.)*
 > P5-8 retains the P5-5 registry reader; the two P5-1 addenda travel with P5-1.
 
 ---
@@ -46,6 +48,8 @@
 
 **[ASSUMPTION]** Epic/story split — whether custom-marketplace-source and Demerzel-deprecation ship as story clusters within Epic 30 or as adjacent epics — to be ratified in epics/story planning; the subset-passing spike (Story 30.5) gates the custom-source stories.
 ### Decision P5-6: BMAD v6.9.0 Integration — Pin Bump (No Reader Change) + Installer-Output Resilience (FR211–FR214, NFR58–NFR59) (2026-06-27)
+
+> **(c) reversed by P5-10.6 (2026-10-31)** — owned skill guidance now calls `_bmad/scripts/*.py` via `uv run`; see [bmad-integration-and-bundling.md](bmad-integration-and-bundling.md) Decision P5-10.
 
 **Context:** P5-5 reworked `scripts/build-bmad-cache.js` to read BMAD's external-module list from the relocated package-root `bmad-modules.yaml` (v6.8.0), because the registry **path** had moved (and moved twice before that). The v6.9.0 bump is the opposite situation, and the contrast is the whole point of this decision. A source comparison of the v6.8.0…v6.9.0 tags — performed out-of-tree via a shallow clone of the v6.9.0 tag plus a `gh api compare v6.8.0...v6.9.0` tag-to-tag diff (not against an npm-installed `bmad-method@6.9.0`, which is not yet on disk in this repo; Story 28.1 is the hard re-verification gate against the live install) — confirms the module registry `bmad-modules.yaml` is **UNCHANGED**: both **path** and **schema** (the `modules:` map with `code`/`url`/`name`/`type`) are identical to v6.8.0. The v6.8.0 registry-relocation break (FR207 / P5-5) therefore **does not recur**, and `build-bmad-cache.js` requires **no reader change** for this bump — the candidate-path list, the `parseModulesYaml()` shape, and the `type: bmad-org`/`type: experimental` filter from P5-5 all still resolve. The `marketplace.json` manifest shape is likewise UNCHANGED (upstream changes are additive only — new skill paths and renames already absorbed at 6.8.0 per P5-5). The only **behavioral** upstream change that touches ma-agents' code path is in the installer: v6.9.0 replaces the legacy `python3`-presence probe with a `uv` environment check. That change is **warn-don't-block** — same CLI flags, same exit codes, but new stdout text plus a "uv recommended" banner, and the install proceeds when `uv` is absent (new upstream files: `tools/installer/core/uv-check.js`, `tools/installer/core/wsl-node-check.js`). All other v6.9.0 additions (`bmad-forge-idea` core skill; the `bmad-architecture` lean-spine rewrite with `bmad-create-architecture` kept as a forwarding shim, slated for removal in BMAD v7; `src/scripts/memlog.py`; party-mode/brainstorming enhancements; the Astro 6 security upgrade; the WSL-runs-Windows-Node installer guard; empty-skill-group cleanup; new installer platform targets hermes-agent + CodeWhale) are passthrough for ma-agents.
 
