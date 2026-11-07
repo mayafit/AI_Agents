@@ -110,102 +110,147 @@ ma-agents/
     └── cli.test.js                 — CLI command tests
 ```
 
-### Target Structure after P5-11 (2026-11-07 — Epics 36–39)
+### Target Structure — ma-agents 4.x
 
-The **Complete Project Directory Structure** above is the current single-package layout (ma-agents 3.x) and stays accurate for the 3.x line. The v7 target is two deliverables: the `ma-bmad-extensions` repository in the BMAD v7 module layout (P5-11.2, FR285) and the thin offline installer's bundle (P5-11.6, FR282–FR284). It replaces the P5-10 tree below.
+The tree above is the ma-agents 3.x line. ma-agents 4.x is two deliverables: the `ma-bmad-extensions` repository of BMAD v7 modules and the `ma-agents` npm installer with its offline bundle (Decision P5-11).
 
-```
-ma-bmad-extensions/                       — NEW repository; ONE version line (NFR86); validate_manifests.py in CI
-├── skills/                               — flat tree; install with `npx skills add <org>/ma-bmad-extensions[#tag] --skill …`
-│   ├── bmod-ma-ops/                      — module record (code ma-ops)
-│   │   ├── bmod.toml                     — [bmod] code/version/update_source/skills/required_skills (bmad core only) + [[bmod.config_questions]] (none)
-│   │   ├── help/help.md                  — read by the `bmad` skill
-│   │   ├── roster.toml                   — Alex, Yael, Amit, Gadi; group "ops"
-│   │   ├── retired.toml                  — records bmad-dev-epic → ma-ops-dev-epic
-│   │   └── migration-1.toml              — 3.x sprint-status.yaml backlog: → store backlog/; sprints: archived with a report
-│   ├── bmod-ma-standards/                — bmod.toml, help/help.md, retired.toml
-│   ├── bmod-ma-knowledge/                — bmod.toml (config question atlas_output), help/help.md, retired.toml (bmad-knowledge → ma-knowledge-atlas)
-│   ├── bmod-ma-atlassian/                — bmod.toml (jira_site, jira_project_key, jira_mcp_server, confluence_site, confluence_space,
-│   │                                       confluence_root_page, confluence_mcp_server), help/help.md, retired.toml,
-│   │                                       migration-1.toml (3.x project-layout.yaml + Epic 31 markers → setup answers + overrides)
-│   ├── ma-agent-{sre,cyber,devops,sqa}/  — each member skill: SKILL.md + bmod.toml [skill] bmod="ma-ops", source=…, scripts=…
-│   ├── sre-*/ cyber-*/ devops-*/ sqa-*/ mil498-*/
-│   ├── ma-ops-dev-epic/                  — tickets.py discovery; bmad-build / build-auto / code-review / review / walkthrough
-│   ├── cpp-*/ csharp-*/ python-*/ js-ts-*/ … code-review/ test-generator/ git-workflow-skill/ commit-message/ auto-bug-detection/
-│   ├── ma-standards-apply/               — AGENTS.md / .clinerules / .roomodes injection (marker-delimited)
-│   ├── project-context-expansion/ open-presentation/ skill-creator/
-│   ├── ma-knowledge-atlas/scripts/atlas.cjs
-│   ├── ma-atlassian-bind/                — per-target override table; bind / unbind / status; writes _bmad/custom/<skill>.toml
-│   │   ├── references/override-targets.toml    — (skill, section, key, insertion slot) per target
-│   │   ├── assets/jira-onprem-ticketing.toml   — Sofia store starter (Jira Server/DC via MCP or REST)
-│   │   └── scripts/                      — Confluence publish engine + page tree (from lib/confluence-*.js; JavaScript, PEP 723 for any .py)
-│   └── confluence-plan/ confluence-record-root-page/
-└── test/                                 — per module: validate_manifests.py, npx skills add <local> --skill bmod-<code> + bmad setup <code>
-                                            --module-answers, activation of every skill (offline, with the Epic 36 runtime)
-
-ma-agents/                                — THIS repository after Epic 39: the thin offline installer (Node CLI, semver MAJOR 4.0.0)
-├── bin/cli.js                            — wizard, bundle install flow, IDE injection, status / uninstall only
-├── lib/{installer,agents,profile,uninstall}.js
-├── package.json                          — bmadRef = pinned upstream SHA; BMAD_TARGET_REF mirrors it
-└── bundle/ (built, shipped in the tarball; manifest records every SHA/tag/version)
-    ├── bmad-method-skills/               — BMAD-METHOD skills/ snapshot at the pinned SHA (+ tea / cis module repos at their tags)
-    ├── skills-cli/                       — vendored npm `skills` tarball (1.7.6 at the pin)
-    ├── ma-bmad-extensions/               — snapshot of one tag of the extension repository
-    ├── uv/  python-3.11/                 — uv binary + Python 3.11 standalone interpreter (UV_PYTHON)
-    └── wheelhouse/                       — every PEP 723 dependency of the vendored scripts (≥ jinja2, pyyaml); UV_FIND_LINKS + UV_OFFLINE
-```
-
-Removed from `ma-agents` by Epic 39: `lib/bmad-extension/`, `lib/bmad-extension-plugin/`, the `ma-skills` module, `lib/bmad-cache/` and the `bmad-method` npm dependency, `lib/custom-marketplace.js` and the `--custom-source` wizard (FR239–FR243 retired), `bin/cli.js` orchestration paths, `skills/`, `lib/knowledge-atlas/`, `lib/confluence-*.js`, `project-layout.yaml` handling and the 41 preflight copies. Not carved: the `ma-sprint` skills stay in the 3.x monolith only (P5-11.8). Directory names inside `bundle/` and `references/` are indicative; the stories fix them.
-
-### Target Structure after P5-10 (2026-10-31 — Epics 33–35) **[SUPERSEDED 2026-11-07 by P5-11]**
-
-> *Superseded by "Target Structure after P5-11" above (Sprint Change Proposal 2026-11-07): the marketplace / `module.yaml` / `shared/` layout below is v6-shaped and was never built. Kept as history.*
-
-The tree above is the **current** single-package layout and remains accurate until Epic 33 lands. The target is two repositories:
+**Extension repository**
 
 ```
-ma-bmad-extensions/                       — NEW repository: the five BMAD extensions
-├── .claude-plugin/marketplace.json       — one plugin per module (discovery mode → installer picker)
-├── shared/                               — canonical text rendered into consuming skills at build
-│   ├── tracker-routing.md                — (was pasted in 13 sprint skills)
-│   └── knowledge-store-preflight.md      — (was pasted in 17 skills)
-├── modules/
-│   ├── ma-ops-agents/                    — module.yaml (code, module_version) + module-help.csv
-│   │   ├── ma-agent-{sre,devops,cyber,sqa}/
-│   │   ├── sre-*/ devops-*/ cyber-*/ sqa-*/
-│   │   ├── mil498-*/                     — templates moved into each skill's assets/
-│   │   ├── create-hardened-docker-skill/ verify-hardened-docker-skill/ docker-*/ self-signed-cert/
-│   │   └── bmad-dev-epic/                — orchestrates bmad-build / build-auto / code-review / review / walkthrough
-│   ├── ma-sprint/
-│   │   ├── add-sprint/ … sprint-status-view/ create-bug-story/ story-status-lookup/
-│   │   └── (each: customize.toml with [workflow] tracker = "file-system" + activation_steps_prepend)
-│   ├── ma-atlassian/
-│   │   ├── module.yaml                   — config questions: jira_url, jira_project_key, confluence_space, confluence_root_page
-│   │   ├── ma-atlassian-setup/           — generates _bmad/custom/<skill>.toml overrides from the version-keyed target table
-│   │   │   ├── references/jira-tracker.md
-│   │   │   ├── references/confluence-store.md
-│   │   │   ├── references/targets.yaml   — {bmad-method version → skill → roles}
-│   │   │   └── scripts/                  — binding stamp, page tree, publish-hook generator (from lib/confluence-*.js + bin/cli.js)
-│   │   ├── my-next-issue/ bind/ confluence-plan/ confluence-record-root-page/
-│   ├── ma-knowledge/
-│   │   └── bmad-knowledge/scripts/atlas.cjs
-│   └── ma-standards/
-│       ├── cpp-*/ csharp-*/ python-*/ js-ts-*/ cmake-*/ logging-*/ opentelemetry-*/ vercel-react-*/
-│       ├── code-documentation/ git-workflow-skill/ code-review/ commit-message/ ai-audit-trail/ test-*/ …
-│       └── ma-standards-setup/           — injects the always-load rule block into per-tool instruction files
-├── scripts/build.js                      — renders shared/, validates every SKILL.md, emits per-module digests
-└── test/                                 — per-module: manifest enumeration, drift gate, offline PluginResolver passthrough
-
-ma-agents/                                — THIS repository after Epic 35: the thin offline installer
-├── bin/cli.js                            — wizard (scope, profile, tools, modules), stage-and-invoke, IDE injection only
-├── lib/{installer,agents,bmad,profile,reconfigure,uninstall}.js
-├── lib/bmad-cache/                       — bmm built-in; tea / bmb / cis at the v6.12.4 registry pins
-├── lib/extensions/                       — pinned copies of modules/* from one ma-bmad-extensions tag (staged as N --custom-source paths)
-├── lib/templates/                        — instruction-block templates
-└── test/                                 — installer, injection, offline gate (uv in the loop)
+ma-bmad-extensions/                         — one version line; tag per release; validate_manifests.py in CI
+├── skills/                                 — flat; every folder below sits directly in skills/
+│   ├── bmod-ma-ops/                        — record folder, code ma-ops
+│   │   ├── bmod.toml                       — [bmod] code, version, update_source, skills (40), required_skills = bmad core,
+│   │   │                                     recommended_skills = bmad-build, bmad-agent-po, git-workflow-skill + code-review (with source);
+│   │   │                                     no config questions
+│   │   ├── SKILL.md                        — stub: redirects to `bmad setup ma-ops`
+│   │   ├── help/help.md
+│   │   ├── roster.toml                     — Alex, Yael, Amit, Gadi; group "ops"
+│   │   ├── retired.toml                    — renamed bmad-dev-epic → ma-ops-dev-epic
+│   │   └── migration-1.toml                — 3.x backlog: → {output_folder}/backlog/; sprints: → archive-v6/sprints.yaml; report
+│   ├── bmod-ma-standards/                  — record folder, code ma-standards
+│   │   ├── bmod.toml                       — skills (29), required_skills = bmad core; no config questions
+│   │   ├── SKILL.md  help/help.md
+│   │   └── retired.toml                    — empty
+│   ├── bmod-ma-knowledge/                  — record folder, code ma-knowledge
+│   │   ├── bmod.toml                       — skills (1); config question atlas_output
+│   │   ├── SKILL.md  help/help.md
+│   │   └── retired.toml                    — renamed bmad-knowledge → ma-knowledge-atlas
+│   ├── bmod-ma-atlassian/                  — record folder, code ma-atlassian
+│   │   ├── bmod.toml                       — skills (3); nine config questions (P5-11.9)
+│   │   ├── SKILL.md  help/help.md
+│   │   ├── retired.toml                    — empty
+│   │   └── migration-1.toml                — 3.x project-layout.yaml + 3.x override markers → answers + bind; report
+│   │
+│   │   ── ma-ops members (each: SKILL.md, bmod.toml [skill] bmod = "bmod-ma-ops", source = …) ──
+│   ├── ma-agent-sre/  ma-agent-cyber/  ma-agent-devops/  ma-agent-sqa/
+│   ├── sre-check-deployment-status/  sre-check-secrets/  sre-check-system-status/  sre-day-2-ops/
+│   ├── sre-deployment-strategies/  sre-fix-deployments/  sre-gitops-status/
+│   ├── cyber-generate-certs/  cyber-immunity-estimation/  cyber-security-audit/  cyber-vault-secrets/
+│   ├── cyber-verify-docker-users/  cyber-verify-image-signature/  cyber-vulnerability-scan/
+│   ├── devops-configure-infrastructure/  devops-disconnected-deployment/  devops-docker-compose-setup/
+│   ├── devops-manage-helm/  devops-sign-docker-image/
+│   ├── sqa-audit/  sqa-ieee12207/  sqa-requirements-quality/
+│   ├── mil498-ocd/  mil498-requirement-quality/  mil498-sdd/  mil498-sdp/  mil498-srs/  mil498-ssdd/
+│   ├── mil498-sss/  mil498-std/                      — DID templates under each skill's assets/
+│   ├── create-hardened-docker-skill/  docker-hardening-verification/  docker-image-signing/
+│   ├── verify-hardened-docker-skill/  self-signed-cert/
+│   ├── ma-ops-dev-epic/                    — tickets.py discovery; bmad-build / -auto / code-review / review / walkthrough
+│   │
+│   │   ── ma-standards members ──
+│   ├── cpp-best-practices/  cpp-concurrency-safety/  cpp-const-correctness/  cpp-memory-handling/
+│   ├── cpp-modern-composition/  cpp-robust-interfaces/  csharp-best-practices/
+│   ├── python-best-practices/  python-dependency-mgmt/  python-security-skill/
+│   ├── js-ts-dependency-mgmt/  js-ts-security-skill/  vercel-react-best-practices/  cmake-best-practices/
+│   ├── logging-best-practices/  opentelemetry-best-practices/  code-documentation/  code-review/
+│   ├── test-generator/  test-accompanied-development/  git-workflow-skill/  commit-message/
+│   ├── auto-bug-detection/  ai-audit-trail/  document-revision-history/  skill-creator/
+│   ├── project-context-expansion/
+│   ├── open-presentation/                  — assets/: the training deck
+│   ├── ma-standards-apply/                 — ma-standards marker block in AGENTS.md, CLAUDE.md, .clinerules,
+│   │                                         .roomodes, .github/copilot-instructions.md; `remove` sub-command
+│   │
+│   │   ── ma-knowledge member ──
+│   ├── ma-knowledge-atlas/
+│   │   └── assets/atlas.cjs                — Knowledge Atlas engine, run with node
+│   │
+│   │   ── ma-atlassian members ──
+│   ├── ma-atlassian-bind/                  — bind / unbind / status
+│   │   ├── bmod.toml                       — [skill] scripts = the four scripts below
+│   │   ├── config/jira-onprem-ticketing.toml   — Sofia store starter (Jira Server/Data Center)
+│   │   ├── references/bind-targets.toml    — the P5-11.4 target table
+│   │   └── scripts/                        — publish engine, page tree, override generator, collision check (JavaScript)
+│   ├── ma-atlassian-confluence-plan/
+│   └── ma-atlassian-confluence-record-root-page/
+└── test/                                   — module assignment; validate_manifests.py; per module: npx skills add <local> and
+                                              <repo>#<tag> into a vanilla v7 project, bmad setup, bmad status, offline activation
 ```
 
-Removed from `ma-agents` by Epic 35: `lib/bmad-extension/`, `lib/bmad-extension-plugin/`, `skills/`, `lib/knowledge-atlas/`, `lib/confluence-*.js`, `lib/custom-marketplace.js`, `lib/bmad-workflows/`, `lib/mil498-templates/`, `mil498/`, and the `bind` / `confluence-*` CLI commands.
+**Installer package**
+
+```
+ma-agents/                                  — npm package, semver 4.x, engines.node ≥ 20.12
+├── package.json                            — bmadRef { core, skillsCli, tea, cis, extensions }
+├── bin/cli.js                              — install, update, status, uninstall, bundle build; wizard and flags
+├── lib/installer.js                        — install sequence (P5-11.10)
+├── lib/agents.js                           — coding tool → Skills CLI --agent; ma-agents marker block
+├── lib/uninstall.js                        — skills-lock.json removal; 3.x parts on an upgrade
+├── lib/bundle.js                           — bundle build: snapshot, wheelhouse enumeration, manifest
+├── bundle/                                 — built by `bundle build`, shipped in the tarball
+│   ├── manifest.json                       — every item with SHA-256; bmadRef; extension tag; omissions
+│   ├── bmad-method/                        — BMAD-METHOD skills/ at bmadRef.core (core-tools, method, toolsmith, founder)
+│   ├── tea/  cis/                          — at bmadRef.tea / bmadRef.cis (absent when no tag carries a bmod record)
+│   ├── ma-bmad-extensions/                 — skills/ at the extension tag, file: update source
+│   ├── skills-cli/                         — npm `skills` tarball at bmadRef.skillsCli
+│   ├── runtime/linux-x64/  runtime/win-x64/ — uv binary + python-build-standalone 3.11
+│   └── wheelhouse/linux-x64/  wheelhouse/win-x64/ — every PEP 723 dependency of the bundled scripts
+└── test/                                   — install sequence, bundle determinism, injection ownership, upgrade fixture (3.18.x)
+```
+
+**Boundaries**
+
+| Component | Owns | Never touches |
+|---|---|---|
+| `ma-agents` installer | bundle verification; runtime placement and `uv.toml`; Skills CLI and `setup.py` invocation; the answers file; the `ma-agents` marker block; `.ma-agents.json`; backup before an upgrade | skill content; `_bmad/custom/`; the `ma-standards` block; the initiative store |
+| `bmod-ma-ops` | its agents and workflows; `migration-1.toml` | sprint or tracking files outside its migration; story status (only `bmad-build`'s plan file sets it) |
+| `bmod-ma-standards` | its skills; the `ma-standards` marker block (`ma-standards-apply`) | the `ma-agents` block; other modules' files |
+| `bmod-ma-knowledge` | `ma-knowledge-atlas` and its output folder (`atlas_output`) | the initiative store (read only) |
+| `bmod-ma-atlassian` | its marker blocks in `_bmad/custom/<skill>.toml` and `ticketing-store-config.toml`; Confluence pages under the two root pages; `migration-1.toml` | upstream skill files; user-authored keys; anything outside its markers |
+| Upstream BMAD (`bmad`, Sofia, `bmad-build`) | `_bmad/config.toml`, setup, `bmad migrate`, the initiative store, plan files | — |
+
+**Data flow**
+
+| Flow | Path |
+|---|---|
+| Install | `ma-agents install` → verify `manifest.json` → place runtime, write `uv.toml` → `npx skills add <bundle>/bmad-method` → `npx skills add` per module source → answers file → `setup.py --module-answers` → `_bmad/config.toml`, `_bmad/custom/config*.toml` → `ma-agents` block → `ma-agents status` |
+| Bind | `ma-atlassian-bind bind` → `resolve_config.py` (`modules.ma-atlassian.*`) → bind-target table × installed skills → marker blocks in `_bmad/custom/<skill>.toml` + `ticketing-store-config.toml` → report (bound, collision, not installed, missing slot) |
+| Publish | upstream skill finishes (`external_handoffs` / `on_complete`) or Sofia changes the board or store (`board_after` / `store_after`) → `node _bmad/ma-atlassian/scripts/<engine>` → Confluence page under the planning or tickets root page |
+| Migrate | `ma-agents install` on a 3.x project → backup → uninstall 3.x parts → install 4.x → `bmad migrate method` → `bmod-ma-ops/migration-1.toml` → `bmod-ma-atlassian/migration-1.toml` → reports under `{output_folder}/migration-v6-v7/` |
+
+**Requirements to structure**
+
+| Requirement | Component | Location |
+|---|---|---|
+| FR280, FR281 | installer | `package.json` `bmadRef`; CI qualification gate |
+| FR282 | installer | `bundle/runtime/`, `bundle/wheelhouse/`, `lib/installer.js` |
+| FR283, FR284 | installer | `lib/installer.js` |
+| FR285, FR295 | extension repository | `skills/bmod-*/bmod.toml`, member `bmod.toml`, `test/` |
+| FR286 | `bmod-ma-ops` | `roster.toml`, `help/help.md` (every record) |
+| FR287 | every module | `retired.toml` |
+| FR288 | every skill | `resolve_config.py` / `resolve_customization.py` calls |
+| FR289 | `bmod-ma-atlassian` | `ma-atlassian-bind/config/jira-onprem-ticketing.toml`, `ticketing-store-config.toml` |
+| FR290, FR291 | `bmod-ma-atlassian` | `ma-atlassian-bind/references/bind-targets.toml`, `scripts/` |
+| FR292 | `bmod-ma-ops` | `ma-ops-dev-epic/` |
+| FR293, FR300 | `bmod-ma-atlassian` | `bmod.toml` config questions, `ma-atlassian-confluence-*` |
+| FR294 | `bmod-ma-ops`, `bmod-ma-atlassian` | `migration-1.toml` |
+| FR296 | `bmod-ma-ops` | `migration-1.toml`; no sprint-file skill in the repository |
+| FR297, FR298 | installer | `bin/cli.js` (`--source`, wizard, flags) |
+| FR299 | installer | `lib/bundle.js`, `bundle/manifest.json` |
+| FR301 | installer, `bmod-ma-standards` | `lib/agents.js`, `ma-standards-apply/` |
+| FR302 | installer, every module | `bmadRef`, `required_skills`, `ma-agents status` |
+| NFR84 | extension repository | `test/`, CI |
+| NFR86 | extension repository | one `version` across `bmod-*/bmod.toml` |
+| NFR87 | installer | `test/` upgrade fixture |
 
 ### Architectural Boundaries
 

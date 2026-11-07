@@ -5,6 +5,8 @@ completedDate: '2026-03-08'
 lastEdited: '2026-11-07'
 phase5EditHistory:
   - date: '2026-11-07'
+    changes: 'Restructured as specification: Epics 32–35 and their Cross-Epic Notes moved verbatim to epics-archive-2026-11-07.md (one pointer line left in place); Epics 36–39 rewritten for ma-agents 4.x on BMAD v7 (Goal, Scope, FR Coverage, Stories with one-line outcomes, Gates and dependencies, Out of scope); story lists 36.1–36.7, 37.1–37.6, 38.1–38.6, 39.1–39.5.'
+  - date: '2026-11-07'
     changes: 'Sprint Change Proposal 2026-11-07 / Decision P5-11 (supersedes P5-10): Epics 32–35 annotated SUPERSEDED (one italic note under each heading and under their Cross-Epic Notes; bodies unchanged) and Epics 36–39 appended re-planned against BMAD v7 at the pinned upstream commit e734d3ac3c0f4ea31cc2c2bbbe79e86e54f2cae6: Epic 36 v7 Gate — Pin, Prove Offline, Qualify (hard gate; 36.1–36.6 + 36.7 GA re-gate); Epic 37 Carve-outs as v7 Modules (bmod-ma-standards, bmod-ma-ops, bmod-ma-knowledge); Epic 38 Atlassian on Sofia and the Handoff Slots (bmod-ma-atlassian); Epic 39 Thin Offline Installer for v7 + Monolith Retirement (release on the GA tag only, 4.0.0). ma-sprint is not carved (PO decision after GA).'
   - date: '2026-10-31'
     changes: 'Added Epics 32–35 (Phase 5) from the Sprint Change Proposal 2026-10-31 / Decision P5-10: Epic 32 BMAD v6.12.4 Currency — latest-only, no shims (hard gate); Epic 33 Extension Monorepo & Clean Carve-outs (ma-knowledge, ma-standards, ma-ops-agents); Epic 34 Sprint Extension & Atlassian Overlay (ma-sprint hook points, ma-atlassian setup skill + version-keyed target table, F26 deliverables as in-skill scripts); Epic 35 Thin Offline Installer. Story 14.2 (Confluence MCP Integration) closed as superseded by Epic 31 + Epic 34 — entry annotated, not rewritten. Stories for 32–35 are to be authored by bmad-create-epics-and-stories; the new sections record scope, FR coverage, dependencies and gates only.'
@@ -5841,198 +5843,138 @@ prerequisite and is that human's call.
 
 ---
 
-## Epic 32: BMAD v6.12.4 Currency — Latest-Only, No Shims (Phase 5)
-
-*SUPERSEDED 2026-11-07 — cancelled before any story started; succeeded by **Epic 36** (v7 Gate — Pin, Prove Offline, Qualify) (Sprint Change Proposal 2026-11-07, `sprint-change-proposal-2026-11-07.md`; Decision P5-11 supersedes P5-10). BMAD v7 replaces the v6.12.4 mechanics this epic was written in. The text below is kept unchanged as history.*
-
-**Goal:** Move ma-agents from bmad-method v6.10.0 to **v6.12.4 in one hop**, adopting the v6.12 skill catalog directly — no `--shims`, no parallel version support — and get the existing monolith green against it **before** any decomposition starts. Everything in Epics 33–35 carves skills that must already target the v6.12 pipeline; carving first would port them twice.
-
-**Value:** Restores platform currency after two structural upstream releases (v6.11.0 Phase-4 replacement, review-family merge, `uv` mandate; v6.12.0 `persistent_facts` empty, `{diff_file}`, shims opt-in) and deletes three ma-agents skills that shadow upstream names now that upstream converged on our sprint schema.
-
-**Source:** `bmad-6.11-6.12-impact-analysis.md` (source-verified delta; its §7 `--shims` route is declined per FR271 / P5-10.5). PRD F27 (FR275–FR278). Decision P5-10.5, P5-10.6.
-
-**Dependencies:** Epic 30 (v6.10.0 — done), Epic 31 (done; its owned TOML and `AGENTS.md` writer are validated here). Release 3.18.1 already resolved two former blockers (`gds`/`wds` unbundled; `module-help.csv` on the current schema).
-
-**Execution order:** Gate-first, mirroring Epics 27/28/30.
-- Wave 0 — **32.1 gate spike** against a scratch `bmad-method@6.12.4`: registry path/schema; `--shims` semantics under `--yes` (to omit it deliberately); `uv run` under `--network none` with a pre-seeded cache; AGY `.agents/skills` collision; `removals.txt` behaviour on update; upstream `sprint_plan.py` schema vs ours. Verdict PASS/STOP → `epic-runs/epic-32/32-1-gate-findings.md`, plus a separate 32.4 GO/HOLD line driven by the `sprint_plan.py` schema verdict (readiness C-1).
-- Wave 1 — 32.2 uv policy inversion (FR277: implement the already-applied FR213/NFR74/NFR59c supersession, invert `test/uv-transition-resilience.test.js`, `uv run` in owned skill guidance) ∥ 32.3 cache rebuild at the v6.12.4 pins (tea v1.27.2, cis v0.3.2, bmb) + `BMAD_TARGET_VERSION` + `package.json` pin.
-- Wave 2 — 32.4 delete shadowed `bmad-dev-story` / `bmad-sprint-planning` / `bmad-sprint-status` (manifests, help rows, marketplace enumeration, Cline wrapper reconciliation) ∥ 32.5 rewrite `bmad-dev-epic` against `bmad-build` / `bmad-build-auto` / `bmad-code-review` / `bmad-review` / `bmad-walkthrough`.
-- Wave 3 — 32.6 retired-name sweep (`bmad-create-story`, `bmad-dev-story`, `bmad-shard-doc`, `bmad-index-docs`, `bmad-agent-tech-writer`, `bmad-check-implementation-readiness`, research trio) across skills, `module-help.csv`, `MANIFEST.yaml`, docs, training deck — needs 32.4 + 32.5 merged (its zero-hit guard and the `.agents/skills/` regeneration depend on them; readiness C-5) ∥ 32.7 owned-TOML validation (FR278: parse, undefined vars, explicit `persistent_facts`, `{diff_file}`) ∥ 32.8 `AGENTS.md` two-writer integration test.
-- Wave 4 — 32.9 release gate: offline install under `--network none` with `uv` in the loop; multi-tool smoke (NFR52); semver cut; CHANGELOG.
-
-**FR Coverage:** FR271, FR275, FR276, FR277, FR278, FR279 (Node engines, added 2026-10-31 by the readiness review); supersedes FR236; inverts FR213, NFR74, NFR59(c). Re-asserts NFR2/NFR50/NFR57/NFR58 with `uv` in the loop.
-
-**Out of scope:** any file move into the extension repository (Epic 33); overlay design (Epic 34); adding Polytoken/Grok/ZCode/AGY as first-class ma-agents targets (P5-6(d) stands); `bmad-loop` bundling (FR235 stands).
-
----
-
-## Epic 33: Extension Monorepo & Clean Carve-outs (Phase 5)
-
-*SUPERSEDED 2026-11-07 — cancelled before any story started; succeeded by **Epic 37** (Carve-outs as v7 Modules) (Sprint Change Proposal 2026-11-07, `sprint-change-proposal-2026-11-07.md`; Decision P5-11 supersedes P5-10). BMAD v7 replaces the v6.12.4 mechanics this epic was written in. The text below is kept unchanged as history.*
-
-**Goal:** Stand up the `ma-bmad-extensions` repository — one `.claude-plugin/marketplace.json`, N plugins, per-module `module.yaml` + `module-help.csv` + `module_version`, `shared/` text rendered at build, drift gate and offline PluginResolver passthrough test **per module** — and carve out the three zero-coupling modules: `ma-knowledge`, `ma-standards`, `ma-ops-agents`.
-
-**Value:** Proves the repository shape and the independent-installability contract (FR269, NFR84) on modules that touch no other module and no sprint or knowledge-store state, before the only phase with real design (Epic 34) begins.
-
-**Dependencies:** Epic 32 release gate PASSED (hard gate, P5-10.8). Epic 29 (Atlas engine — done), Epic 20 (SQA — done), Epic 15 (skill-folder agents — done).
-
-**Execution order:**
-- Wave 0 — 33.1 repository scaffold: marketplace template with `${version}` per plugin, `modules/`, `shared/`, `scripts/build.js` generalised from `scripts/build-plugin.js` (sorted copy, SKILL.md fail-fast, symlink refusal, per-module SHA-256 digest), CI drift gate per module, offline passthrough test driving the real PluginResolver per module against the pinned bmad-method.
-- Wave 1 — 33.2 `ma-knowledge`: move `bmad-knowledge` + `lib/knowledge-atlas/dist/atlas.cjs` into the skill's `scripts/`; replace `require.resolve('ma-agents/…')` with a relative path; port the 13 `knowledge-atlas-*` tests ∥ 33.3 `ma-standards`: move the root `skills/` tree; add `ma-standards-setup` (injects the always-load rule block into `AGENTS.md` / `.roomodes` / `.clinerules` / copilot instructions, marker-delimited, idempotent); port `instruction-block*`, `agents-md`, `roomodes`, `clinerules` tests.
-- Wave 2 — 33.4 `ma-ops-agents`: move the four personas (`customize.toml` `[agent]` section intact — it is the persona-picker signal), the 22 family skills, `mil498-*` (templates relocated into each skill's `assets/`), Docker/cert skills and `bmad-dev-epic` (as rewritten in 32.5); unique leaf names verified; port `ma-agent-persona-picker`, `bmad-persona-phase-prefix`, `convert-agents-to-skills` tests.
-- Wave 3 — 33.5 release gate: each of the three modules installs **alone** on a clean machine via `npx bmad-method install --custom-source <repo> --modules bmm --tools claude-code,copilot,cline,roo-code,kilocode --yes` with no ma-agents package present; first tags cut per module.
-
-**FR Coverage:** FR268, FR269, FR270, NFR84, NFR85 (for the three modules). FR104–FR106 re-satisfied per module.
-
-**Out of scope:** `ma-sprint`, `ma-atlassian` (Epic 34); any change to the `ma-agents` npm package beyond pointing its tests at the new repo (Epic 35). During this epic the npm package continues to ship the monolith — the two coexist until Epic 35.
-
----
-
-## Epic 34: Sprint Extension & Atlassian Overlay (Phase 5)
-
-*SUPERSEDED 2026-11-07 — cancelled before any story started; succeeded by **Epic 38** (Atlassian on Sofia and the Handoff Slots); `ma-sprint` is not carved (Sprint Change Proposal 2026-11-07, `sprint-change-proposal-2026-11-07.md`; Decision P5-11 supersedes P5-10). BMAD v7 replaces the v6.12.4 mechanics this epic was written in. The text below is kept unchanged as history.*
-
-**Goal:** Deliver `ma-sprint` (backend-agnostic sprint and backlog skills with a tracker hook point) and `ma-atlassian` (an overlay that binds Jira and Confluence behaviour into every installed target — upstream and ours — through generated `_bmad/custom/<skill>.toml` overrides, asks its own config questions, and ships the F26 deliverables as in-skill scripts). This is the only epic with new design.
-
-**Value:** Jira and Confluence become a BMAD extension anyone can add to a plain bmad-method install, covering the skills upstream added since the original Jira/Confluence work (`bmad-build`, `bmad-build-auto`, `bmad-walkthrough`, `bmad-review`, `bmad-deep-recon`, `bmad-project-context`); the routing text that is pasted into 13 (Jira) and 17 (preflight) skills is maintained once.
-
-**Dependencies:** Epic 33 (repository, build, per-module tests — done). Epic 31 (all Confluence behaviour and its 14 `project-layout-*` tests — moved, not rewritten). Epic 17 Story 17.22 (routing pattern — moved into the adapter). Epic 14 Story 14.2 closed as superseded.
-
-**Execution order:**
-- Wave 0 — 34.1 **design spike**: the hook contract (P2-11 amendment) proven on one `ma-sprint` skill and one upstream skill (`bmad-sprint-planning` v6.12) with a hand-written override; the version-keyed target table format (`references/targets.yaml`); confirm every target's `customize.toml` exposes the keys the overlay needs at v6.12.4. STOP if an upstream target has no usable hook.
-- Wave 1 — 34.2 `ma-sprint`: move the nine sprint/backlog skills + `create-bug-story` + `story-status-lookup`; strip the Jira block and the knowledge-store preflight into `shared/`-rendered hook-point stubs; file-system behaviour unchanged byte-for-byte on a file-system project ∥ 34.3 `ma-atlassian` adapters: `references/jira-tracker.md` (routing block + identity clause + §6.3 mapping + failure contract, verbatim from the skills) and `references/confluence-store.md` (Epic 31 preflight B1–B3, verbatim).
-- Wave 2 — 34.4 `ma-atlassian-setup`: `module.yaml` config questions (`jira_url`, `jira_project_key`, `confluence_space`, `confluence_root_page`); generator walking the target table, marker-delimited idempotent overrides, shim exclusion, bind-time report of unbound targets/keys at exit ≠ 0 (FR273) ∥ 34.5 F26 scripts relocated: binding stamp, `project-layout.yaml` writer, generated-config derivation, Confluence page tree (`lib/confluence-page-tree.js`), publish-hook generator (`lib/confluence-publish-hook.js`) → `ma-atlassian-setup/scripts/`; `bind`, `confluence-plan`, `confluence-record-root-page`, `my-next-issue` as skills; the 17-skill preflight's exact-stamp check repointed from `ma-agents/bin/cli.js` to the in-skill script (FR270).
-- Wave 3 — 34.6 port tests: 14 `project-layout-*`, `jira-identity-clause`, `release-gate-epic-31` subset; new tests for the target table (every v6.12.4 target present in the vendored upstream tree, no `v6-shims/` entry, every ma-sprint skill bound) ∥ 34.7 release gate (release 1): `ma-sprint` alone = file-system behaviour; `ma-sprint` + `ma-atlassian` on a Jira-bound project = today's behaviour; `ma-atlassian` alone on a plain bmad-method = upstream skills bound, ma-sprint targets reported absent (not failed).
-- Wave 4 (release 2) — 34.8 `bmad-code-review → Jira transition` (new write path) ∥ 34.9 `bmad-correct-course → Confluence write` (new write path) ∥ 34.10 live Confluence MCP verification of the Epic 31 MCP-present branches (mock-verified until now — recorded in CHANGELOG 3.18.0 Known limitations).
-
-**FR Coverage:** FR272, FR273 (new); FR139, FR140 (delivered as adapter); FR254–FR267, NFR79–NFR83 (delivery vehicle moved, text unchanged); FR268–FR270, NFR84–NFR85 for the two modules.
-
-**Out of scope:** any backend other than `file-system`, `jira`, `confluence`; a Confluence mirror (FR266 stays retired); changing the unified sprint-status schema; Jira/Confluence config questions in the ma-agents wizard (they leave it in Epic 35).
-
----
-
-## Epic 35: Thin Offline Installer (Phase 5)
-
-*SUPERSEDED 2026-11-07 — cancelled before any story started; succeeded by **Epic 39** (Thin Offline Installer for v7 + Monolith Retirement) (Sprint Change Proposal 2026-11-07, `sprint-change-proposal-2026-11-07.md`; Decision P5-11 supersedes P5-10). BMAD v7 replaces the v6.12.4 mechanics this epic was written in. The text below is kept unchanged as history.*
-
-**Goal:** Reduce the `ma-agents` npm package to its one remaining purpose — **offline, on-prem packaging** of bmad-method plus pinned copies of the five extensions — and remove every skill tree, extension source, Confluence/Atlas library and the custom-marketplace consumption feature from it.
-
-**Value:** The air-gap promise is kept by one small package whose only job is to carry bytes and invoke the upstream installer; everything users actually run comes from the same extension repository online users install directly. Package size and the CLI shrink by an order of magnitude; the CI matrix shrinks to installer + injection + offline gate.
-
-**Dependencies:** Epics 33 and 34 released (every extension tagged). Epic 21 (on-prem profile — done), Epic 26 (instruction-block guardrails — done).
-
-**Execution order:**
-- Wave 0 — 35.1 vendoring: `lib/extensions/` populated from one `ma-bmad-extensions` tag by a build script that records module versions in the cache manifest (NFR85); `stagePlugin()` generalised to stage N module directories and pass N local `--custom-source` paths (bmad-method ≥ 6.10 accepts Windows paths; relative POSIX form retained for safety).
-- Wave 1 — 35.2 removals: `lib/bmad-extension/`, `lib/bmad-extension-plugin/`, `skills/`, `lib/knowledge-atlas/`, `lib/confluence-*.js`, `lib/custom-marketplace.js` (FR239–FR243 retired per FR274), `lib/bmad-workflows/`, `lib/mil498-templates/`, `mil498/`, the `bind` / `confluence-*` commands, the Jira/Confluence wizard questions (now module config); `package.json` `files[]`, `prepare`/`version` hooks and the test chain pruned ∥ 35.3 wizard retained surface: scope, profile, tools, module selection (`--bmad-modules`), extension selection (which of the five to stage — default all).
-- Wave 2 — 35.4 offline release gate: the `npm pack --ignore-scripts` tarball installs all five extensions under `--network none` with `uv` pre-seeded; byte-identical `_bmad/<module>/` trees to an online `--custom-source <repo>@<tag>` install; multi-tool smoke (NFR52) ∥ 35.5 docs and training: README, QUICK_START, SKILLS_STRUCTURE, DEVELOPMENT, the training deck and `docs/` rewritten around six packages; the unmerged `docs/align-doc-set` branch rebased onto this and closed.
-- Wave 3 — 35.6 semver **major** cut (4.0.0): the package no longer carries skills; CHANGELOG states what moved where and the exact `--custom-source` command for users who do not need offline packaging.
-
-**FR Coverage:** FR274 (new); FR74–FR76, FR123–FR127 (bundled install, unchanged in intent); FR248–FR253 (install scope — unchanged); NFR20–NFR21, NFR77 re-asserted. Retires FR239–FR243.
-
-**Out of scope:** retiring the on-prem profile or IDE injection (both stay — they are what the installer is for); adding new platform targets; any extension content change (belongs in the extension repository from here on).
-
-### Epics 32–35 — Cross-Epic Notes
-
-*SUPERSEDED 2026-11-07 — see "Epics 36–39 — Cross-Epic Notes" (Sprint Change Proposal 2026-11-07). Kept unchanged as history.*
-
-- **Approval and sequencing record:** Sprint Change Proposal 2026-10-31 (`sprint-change-proposal-2026-10-31.md`), Decision P5-10. Epic 32 is a hard gate for 33; 33 for 34; 33 + 34 for 35. The gate is Epic 32's **release gate (32.9)**, not 32.1's spike verdict: no Epic 33 story (33.1–33.5) starts, and none overlaps any Epic 32 wave, before 32.9 records PASS (P5-10.8). *(Amended 2026-10-31, readiness C-3: an earlier clause letting 33.2/33.3 overlap 32's Waves 3–4 on a 32.1 PASS was removed — it contradicted P5-10.8.)*
-- **Stories are not written here.** Per the correct-course handoff, `bmad-create-epics-and-stories` authors the story files for each epic in turn; the wave lists above are the scope contract they must cover.
-- **Numbering:** `epics.md` previously topped out at Epic 31; `sprint-status.yaml` carries `epic-30` (shipped, never written into this file — pre-existing drift). 32–35 are unused in both files.
-- **For future readers:** the session that produced this change first argued for a `ma-core` module and for Atlassian owning the sprint skills; both were rejected (P5-10 *Rejected alternatives*). Do not reintroduce them.
+Epics 32–35 are no longer in force; their text is kept in `epics-archive-2026-11-07.md`.
 
 ---
 
 ## Epic 36: v7 Gate — Pin, Prove Offline, Qualify (Phase 5)
 
-**Goal:** Qualify BMAD v7 at one pinned upstream commit (`e734d3ac3c0f4ea31cc2c2bbbe79e86e54f2cae6`, 2026-11-06) as the only target of the ma-agents v7 line, prove the offline runtime (uv + Python 3.11 + wheelhouse under `--network none`), and plumb the pin through the repository — **before** any module is carved. Re-run the gate on the v7 GA tag before Epic 39 ships.
+**Goal:** Qualify BMAD v7 at the upstream commit recorded in `package.json` `bmadRef.core` (initial value `e734d3ac3c0f4ea31cc2c2bbbe79e86e54f2cae6`) as the only BMAD target of ma-agents 4.x; prove the offline runtime (uv + Python 3.11 + wheelhouse under `--network none`); record the version set and snapshot it with `ma-agents bundle build`; and cut the first 4.x pre-release. The gate is re-run on the BMAD v7 GA tag before the 4.x on-prem release.
 
-**Value:** Every later epic builds on facts this epic records per SHA (Skills-CLI install from a local folder and a tag, headless setup, the validator, update sources, Sofia store overrides, the v6 migration) instead of on the preview's documentation. The surviving intent of the cancelled Epic 32 (qualify the upstream target, prove offline uv, owned-TOML validation, `AGENTS.md` two-writer test) moves here against the v7 commit.
+**Scope:**
+- Gate spike: every upstream mechanism Epics 37–39 build on (Skills CLI install from a folder and a tag, headless setup, the manifest validator, update sources, Sofia store overrides, the v6 migration, `customize.toml` slots, offline rendering, tea/cis module tags) is run against the pinned commit and recorded with a PASS / STOP / FALLBACK verdict and one GO line per downstream story.
+- Offline runtime: a wheelhouse builder driven by the PEP 723 headers of the snapshot, the runtime folder layout, five upstream scripts under `--network none`, and `docs/on-prem-runtime.md`.
+- Version record and snapshot: `bmadRef` (`core`, `skillsCli`, `tea`, `cis`); `ma-agents bundle build` snapshots BMAD-METHOD `skills/`, tea and cis at their tags and the Skills CLI tarball into `bundle/` with a SHA-256 manifest; `engines.node` floor; uv executed only through one runner with `--no-cache`.
+- Contract tests: the `customize.toml` contract validator (module files and bind overrides) and the instruction-file coexistence test (three block owners in one file).
+- Release: a 4.x pre-release on dist-tag `next` with the runtime proof in CI; the GA re-gate.
 
-**Source:** Sprint Change Proposal 2026-11-07 (`sprint-change-proposal-2026-11-07.md` §4.4). PRD F27 (FR271 am., FR277–FR284), NFR74 (am.). Decision P5-11.5, P5-11.6, P5-11.10. Supersedes Epic 32 (cancelled); the 36.x stories cite the reusable Dev Notes of Stories 32.1–32.9 (`lib/bmad.js:2830` `BMAD_TARGET_VERSION`, `lib/agents.js:313`, `lib/uninstall.js:50`, pinned counts, Paige references).
+**FR Coverage:** FR277, FR278, FR279, FR280, FR281, FR282; FR283 and FR284 (proven as premises here, delivered in 39.2); FR299 (snapshot half; 39.1 completes the bundle); FR301 (coexistence test); FR302 (`bmadRef`); NFR74. Re-asserts NFR2, NFR50, NFR57 and NFR58 with uv and the wheelhouse in the loop.
 
-**Dependencies:** none upstream of it in this plan (hard gate for Epics 37–39). Epic 31 (done; its owned TOML and `AGENTS.md` writer are validated here). `bug-npm-test-windows-suite-health-chain` (kept; cited by 36.6).
+**Architecture:** Decision P5-11.5 (target commit and GA gate), P5-11.6 (offline Python runtime), P5-11.10 (installer sequence and ownership).
 
-**Execution order:** Gate-first.
-- Wave 0 — **36.1 gate spike** against the pinned SHA in a scratch project: `npx skills add` from a local folder and from a tag; `bmad setup` via `setup.py --module-answers`; `validate_manifests.py` on a minimal `bmod-ma-ops` fixture; prefix handling; `https://` update source for an on-prem Git host; `file:` channel behaviour on `bmad status`; Sofia store override from a custom `ticketing-store-config.toml`; `migrate_v6.py` on a copy of a real 3.18.1 project. Verdict GO/STOP per question → `epic-runs/epic-36/36-1-gate-findings.md` ∥ **36.2 offline runtime proof**: uv + Python 3.11 standalone + wheelhouse; `uv run --no-cache` of `render_skill.py`, `resolve_config.py`, `resolve_customization.py`, `tickets.py`, `setup.py` under `--network none`; the recipe becomes `docs/on-prem-runtime.md` and a build script that enumerates PEP 723 deps from the snapshot.
-- Wave 1 — 36.3 target pin plumbing: `package.json` `bmadRef`, `BMAD_TARGET_REF` (replacing `BMAD_TARGET_VERSION` at `lib/bmad.js:2830`), `build-bmad-cache.js` re-targeted to snapshot `skills/` at the SHA (+ tea/cis tags), Node engines ≥ 20.12 (FR279), `uv-transition-resilience` test inverted (FR277) — blocked on 36.1 ∥ 36.4 owned-TOML validation (FR278) against v7 `customize.toml` shapes (`[agent]` vs `[workflow]`, Sofia slots) — blocked on 36.1 ∥ 36.5 `AGENTS.md` two-writer test against v7 `bmad-project-context` markers — blocked on 36.1.
-- Wave 2 — 36.6 release gate: verdict record per SHA; `npm test` chain health recorded honestly; Linux CI job with uv; semver for the 3.x line untouched; CHANGELOG "v7 line pre-release" note — blocked on 36.1–36.5.
-- Wave 3 — **36.7 GA re-gate**: 36.1 + 36.2 re-run on the v7 GA tag; verdict recorded per tag (FR281) — blocked on v7 GA; must pass before 39.5.
+**Stories:**
+- **36.1** Gate spike — each premise is run against the pinned commit; verdict, GO lines and change set in `epic-runs/epic-36/36-1-gate-findings.md`.
+- **36.2** Offline runtime proof — the wheelhouse builder and the runtime folder let five upstream scripts exit 0 under `--network none`; `docs/on-prem-runtime.md` records the recipe.
+- **36.3** `bmadRef` and `bundle build` snapshot — one version record; a deterministic snapshot with a SHA-256 manifest; `engines.node` ≥ 20.12; uv runs only through the runner with `--no-cache`.
+- **36.4** `customize.toml` contract validator — module `customize.toml` files and bind override files are checked by the upstream resolver and a slot classifier read from the pinned tree.
+- **36.5** Instruction-file coexistence — a marker-block writer and a test proving the `ma-agents`, `ma-standards` and `bmad:context` blocks and user prose survive every write order; real `adopt` runs recorded.
+- **36.6** 4.x pre-release cut — release record, Linux CI with uv, offline runtime CI job, version `4.0.0-next.0` on dist-tag `next`, CHANGELOG stating the pre-release is not for on-prem use.
+- **36.7** GA re-gate — 36.1, 36.2, 36.4 and 36.5 re-run on the GA tag; GO-39.5 or STOP.
 
-**FR Coverage:** FR271 (am.), FR277, FR278, FR279, FR280, FR281, FR282, FR283, FR284; NFR74 (am.). Re-asserts NFR2/NFR50/NFR57 with uv + wheelhouse in the loop.
+**Gates and dependencies:**
+- Wave 0: 36.1 ∥ 36.2. 36.1 is the hard gate for 36.3–36.5 through its GO lines; a STOP on 36.1 AC11 re-scopes 36.2.
+- Wave 1: 36.3 ∥ 36.4 ∥ 36.5, each on GO-36.3/36.4/36.5.
+- Wave 2: 36.6, after 36.1–36.5. Its PASS opens Epic 37.
+- Wave 3: 36.7, after the BMAD v7 GA tag and 36.6. Its GO-39.5 is the precondition for 39.5.
+- Uses `bug-npm-test-windows-suite-health-chain` (listed, not fixed, by 36.6).
 
-**Out of scope:** any module carve-out (Epic 37); Sofia store or Confluence override design (Epic 38); the installer bundle builder (Epic 39 — 36.2 proves the recipe, 39.1 productises it); any change to the 3.x line's bmad-method pin.
+**Out of scope:** carving modules (Epic 37); store and Confluence overrides (Epic 38); the installer wizard, install flow, uninstall, upgrade and the complete bundle (Epic 39); any change to the 3.x line.
 
 ---
 
 ## Epic 37: Carve-outs as v7 Modules (Phase 5)
 
-**Goal:** Stand up `ma-bmad-extensions` in the BMAD v7 module layout — flat `skills/` tree, one `bmod-<code>/` record per module, `validate_manifests.py` in CI, per-module install test, one version line — and carve out `bmod-ma-standards`, `bmod-ma-ops` and `bmod-ma-knowledge`.
+**Goal:** `ma-bmad-extensions` in the BMAD v7 module layout carries `bmod-ma-standards`, `bmod-ma-ops` and `bmod-ma-knowledge`, each installable alone on a vanilla v7 project with `npx skills add <source> --skill …` + `bmad setup <code>`, from a local folder or a tag, online or offline.
 
-**Value:** Our agents, standards and Atlas become installable on any vanilla v7 project with `npx skills add … --skill …` + `bmad setup <code>`, online or offline, without the ma-agents package. The same work (carve-out, naming, roster, config reads) is stable across the v7 preview, so it starts as soon as the gate says GO.
+**Scope:**
+- Repository: flat `skills/<name>/` tree, one `bmod-<code>/` record per module, one version line for every record, CI running upstream `validate_manifests.py`, a per-module install test, the 36.4 contract validator, and a test that every tracked skill belongs to exactly one module.
+- `bmod-ma-standards`: the language, quality, git, documentation and training skills, plus `ma-standards-apply` (owner of the `ma-standards` instruction block).
+- `bmod-ma-ops`: agents Alex, Yael, Amit and Gadi in `roster.toml` (group `ops`); the SRE, cyber, DevOps, SQA, MIL-STD-498, Docker and certificate workflows; `ma-ops-dev-epic` over the ticket tree and the `bmad-build` pipeline; `retired.toml` rename; `migration-1.toml` for 3.x tracking data.
+- `bmod-ma-knowledge`: `ma-knowledge-atlas` over the initiative store, engine in `assets/atlas.cjs`, config question `atlas_output`, `retired.toml` rename.
+- The complete skill-to-module assignment is FR295; the module records, rosters and renames are P5-11.1.
 
-**Source:** SCP 2026-11-07 §4.1, §4.4. PRD F28 (FR268–FR270 am., FR285–FR288, FR292, FR294), NFR84 (am.), NFR86. Decision P5-11.1, P5-11.2, P5-11.3, P5-11.7. Supersedes Epic 33 (cancelled).
+**FR Coverage:** FR285, FR286, FR287, FR288, FR292, FR294 (`ma-ops` migration), FR295, FR296, FR301 (`ma-standards` block owner); NFR84, NFR86. FR104–FR106 are satisfied per module.
 
-**Dependencies:** Epic 36 — 37.1/37.2 may start once 36.1 records GO on the Skills-CLI and validator questions, even if 36.2 is open; 37.6 needs the 36.2 runtime. Epic 29 (Atlas engine — done), Epic 20 (SQA — done), Epic 15 (skill-folder agents — done).
+**Architecture:** Decision P5-11.1 (package map), P5-11.2 (repository and versioning), P5-11.3 (inter-module independence), P5-11.7 (epic orchestration via the ticket tree), P5-11.8 (sprint functions via Sofia).
 
-**Execution order:**
-- Wave 0 — 37.1 scaffold: `skills/`, `validate_manifests.py` in CI, per-module `npx skills add <local>` install test, one version line (NFR86).
-- Wave 1 — 37.2 `bmod-ma-standards` (+ `ma-standards-apply`, `project-context-expansion`, `open-presentation` + deck) ∥ 37.4 `bmod-ma-knowledge` (`ma-knowledge-atlas` over the initiative store; `atlas_output` config question).
-- Wave 2 — 37.3 `bmod-ma-ops`: agents + `roster.toml` + workflows + MIL-STD-498; `ma-ops-dev-epic` rewrite with `tickets.py` discovery and the `bmad-build` pipeline; `migration-1.toml` for 3.x `backlog:` / `sprints:`.
-- Wave 3 — 37.5 config-read sweep (FR288) + `bmad-` prefix sweep (FR287) + cross-module reference audit (`recommended_skills` or removal); audited by SQA (Gadi).
-- Wave 4 — 37.6 release gate: each module installs alone on a vanilla v7 project from a local folder and from a tag, `bmad status` current, every skill activates offline with the Epic 36 runtime.
+**Stories:**
+- **37.1** Repository scaffold — `ma-bmad-extensions` with `skills/`, one version line, CI running `validate_manifests.py`, the contract validator, the `uv run --no-cache` skill-guidance lint, the complete-assignment test, and per-module install from a local folder and from a tag.
+- **37.2** `bmod-ma-standards` — the standards skills and `ma-standards-apply`, which writes and removes only the `ma-standards` block and passes the 36.5 coexistence cases.
+- **37.3** `bmod-ma-ops` — four agents in `roster.toml`, the ops workflows and MIL-STD-498 skills, `ma-ops-dev-epic` reading epics and stories with `tickets.py` and writing story status only through `bmad-build`'s plan file, and `migration-1.toml` moving 3.x tracking data into the ticket tree's backlog and archive.
+- **37.4** `bmod-ma-knowledge` — `ma-knowledge-atlas` generates the Atlas from the initiative store under `core.output_folder` into `atlas_output`.
+- **37.5** Cross-module sweep — configuration read only through `resolve_config.py` and `resolve_customization.py`; no owned skill named `bmad-*`; every cross-module reference declared in `recommended_skills` with `source` or removed; no reference to a sprint skill FR296 excludes; audited by the SQA agent (Gadi).
+- **37.6** Release gate — each module installs alone from a local folder and from a tag on a vanilla v7 project, `bmad status` reports it current, every skill activates offline with the 36.2 runtime, skill names are unique across our repository and the bundled upstream snapshot; first tag of the version line.
 
-**FR Coverage:** FR268, FR269, FR270 (am.), FR285, FR286, FR287, FR288, FR292 (`ma-ops` side), FR294 (`ma-ops` migration); NFR84 (am.), NFR86. FR104–FR106 re-satisfied per module in v7 form.
+**Gates and dependencies:**
+- 37.1 and 37.2 start on 36.1's GO-37.1 / GO-37.2 lines, even while 36.2 is open. 37.3–37.5 start after 36.6 records PASS. 37.6 needs the 36.2 runtime.
+- Wave 0: 37.1. Wave 1: 37.2 ∥ 37.4. Wave 2: 37.3. Wave 3: 37.5. Wave 4: 37.6.
+- Builds on Epic 29 (Atlas engine), Epic 20 (SQA agent) and Epic 15 (skill-folder agents).
 
-**Out of scope:** `bmod-ma-atlassian` (Epic 38); `ma-sprint` (not carved — PO decision after GA); any change to the ma-agents npm package (Epic 39). The 3.x monolith keeps shipping unchanged while this epic runs.
-
----
-
-## Epic 38: Atlassian on Sofia and the Handoff Slots (Phase 5)
-
-**Goal:** Deliver `bmod-ma-atlassian`: Jira as a Sofia (`bmad-agent-po`) ticket-store definition for on-prem Jira, Confluence publish/read through `external_handoffs` / `on_complete` / `external_sources` overrides, an idempotent `ma-atlassian-bind`, and a migration from the 3.x binding.
-
-**Value:** Jira and Confluence ride the extension points v7 already provides instead of per-skill routing text and a binding spine v7 deletes. Kept thin until GA because upstream ticket-store hooks are "not integrated yet".
-
-**Source:** SCP 2026-11-07 §4.1, §4.4. PRD F28 (FR289, FR290, FR291, FR293, FR294). Decision P5-11.4, P5-11.9. Supersedes Epic 34 (cancelled). Retires the Epic 31 binding spine in the v7 line (Epic 31 itself stays in history untouched).
-
-**Dependencies:** Epic 37 (repository, CI, install test). Epic 31 (Confluence engine, page tree, Story 31.15 collision predicate — relocated, not rewritten). Epic 36 gate findings on Sofia store overrides (36.1).
-
-**Execution order:**
-- Wave 0 — 38.1 spike: on-prem Jira through the Rovo/Atlassian MCP vs REST from `acli`-shaped verbs; Confluence MCP write path; which `bmad setup` answers can pre-fill `ticketing-store-config.toml`.
-- Wave 1 — 38.2 `jira-onprem-ticketing.toml` store starter + identity clause + §6.3 maps ∥ 38.3 `ma-atlassian-bind` (override table, generator, bind/unbind/status, fail-loud collision report carrying Story 31.15's predicate).
-- Wave 2 — 38.4 Confluence engine relocation (publish hook, page tree, `confluence-plan`, `confluence-record-root-page`) as `ma-atlassian` scripts/skills; `external_handoffs` / `on_complete` / `external_sources` overrides ∥ 38.5 `migration-1.toml` from the 3.x binding (`project-layout.yaml`, Epic 31 markers) to setup answers + new overrides.
-- Wave 3 — 38.6 release gate: Jira story round-trip (create, transition, status read-back) on an on-prem Jira; Confluence publish of a PRD run; bind → unbind leaves no trace; coexistence with a user-authored override.
-
-**FR Coverage:** FR289, FR290, FR291, FR293, FR294 (`ma-atlassian` migration); FR139/FR140 behaviour delivered as a Sofia store (v7 line); F26 page-tree and staleness rules applied to the initiative store layout.
-
-**Out of scope:** any backend other than Jira and Confluence; a Confluence mirror (FR266 stays retired); `ma-sprint` and sprint capacity; Jira Cloud (`acli` starter is upstream's); porting the Confluence engine to Python.
+**Out of scope:** `bmod-ma-atlassian` (Epic 38); the installer and the bundle (Epic 39); the sprint skills FR296 lists (4.x ships none of them).
 
 ---
 
-## Epic 39: Thin Offline Installer for v7 + Monolith Retirement (Phase 5)
+## Epic 38: Atlassian Overlay on Sofia and the Handoff Slots (Phase 5)
 
-**Goal:** Reduce the `ma-agents` npm package to an offline installer for the v7 line — bundle builder, install flow, uninstall/upgrade from 3.x — and delete the monolith's extension, orchestration and custom-marketplace code. Ship on the v7 **GA tag** only.
+**Goal:** `bmod-ma-atlassian` makes on-prem Jira a Sofia (`bmad-agent-po`) ticket store and publishes to and reads from Confluence through the `customize.toml` slots of the bound upstream skills, with an idempotent `ma-atlassian-bind` (`bind`, `unbind`, `status`) and a migration from a 3.x binding.
 
-**Value:** The air-gap promise is kept by one small package whose job is to carry a pinned BMAD snapshot, the Skills CLI, our extension repository and a working Python runtime, and to drive the upstream install path; everything users run comes from the same sources online users install directly.
+**Scope:**
+- Skills `ma-atlassian-bind`, `ma-atlassian-confluence-plan` and `ma-atlassian-confluence-record-root-page`; JavaScript scripts run with `node` and declared in `[skill] scripts`: publish engine, page tree, override generator, collision check; store starter `config/jira-onprem-ticketing.toml`.
+- Nine config questions (`jira_site`, `jira_project_key`, `jira_mcp_server`, `confluence_site`, `confluence_mcp_server`, `planning_space`, `planning_root_page`, `tickets_space`, `tickets_root_page`) and two Confluence destinations: planning documents, and tickets and plans.
+- The bind target table (FR290, P5-11.4): one slot per bound upstream skill, written as `# ma-atlassian:start` / `# ma-atlassian:end` blocks in `_bmad/custom/<skill>.toml`; Jira selected through `_bmad/custom/ticketing-store-config.toml`.
 
-**Source:** SCP 2026-11-07 §4.1, §4.4. PRD F27 (FR281–FR284), F28 (FR274 am., FR294). Decision P5-11.1, P5-11.6, P5-11.10. Supersedes Epic 35 (cancelled).
+**FR Coverage:** FR289, FR290, FR291, FR293, FR294 (`ma-atlassian` migration), FR300. The FR139 and FR140 behaviour is delivered as a Sofia store.
 
-**Dependencies:** Epics 37 and 38 released. Epic 36's 36.7 GA re-gate PASSED before 39.5. Epic 21 (on-prem profile — done), Epic 26 (instruction-block guardrails — done); Story 31.16's manifest-aware sweep is reused by 39.3.
+**Architecture:** Decision P5-11.4 (overlay and bind table), P5-11.9 (Confluence model).
 
-**Execution order:**
-- Wave 0 — 39.1 bundle builder: BMAD-METHOD `skills/` snapshot at the pin, tea/cis at their tags, `skills` CLI tarball, `ma-bmad-extensions` snapshot, uv, Python 3.11, wheelhouse; manifest with SHAs.
-- Wave 1 — 39.2 install flow: `npx skills add <local>` per selection, `setup.py --module-answers`, `UV_PYTHON` / `UV_FIND_LINKS` / `UV_OFFLINE`, IDE injection, `status` ∥ 39.3 `uninstall` / upgrade from 3.x: `ma-skills` removal, `bmad migrate method` hand-off, our module migrations.
-- Wave 2 — 39.4 deletions: `lib/bmad-extension*`, the `ma-skills` module, `bin/cli.js` orchestration paths, the `--custom-source` wizard (FR239–FR243 retired).
-- Wave 3 — 39.5 release gate on the **GA tag** (FR281): `--network none` end-to-end on a clean VM, multi-tool smoke, 3.18.1 → v7 upgrade on a real project copy, semver MAJOR (4.0.0) for the installer, CHANGELOG, retro.
+**Stories:**
+- **38.1** Spike — on-prem Jira through an MCP server versus REST with ambient credentials; the Confluence MCP write path; which setup answers pre-fill the store configuration.
+- **38.2** Jira store starter — `jira-onprem-ticketing.toml` with the identity clause and the ticket type and status maps.
+- **38.3** `ma-atlassian-bind` — `bind`, `unbind` and `status` over the bind target table; writes only inside its markers; refuses with a report when a key holds a user value; writes the whole Jira starter into `ticketing-store-config.toml` between its markers; its output passes the 36.4 validator.
+- **38.4** Confluence engine — publish engine, page tree and collision check as `node` scripts; `ma-atlassian-confluence-plan` previews the page tree; `ma-atlassian-confluence-record-root-page` records a root page; planning and tickets destinations.
+- **38.5** `migration-1.toml` — reads a 3.x binding (its `project-layout.yaml` and override markers), writes the module answers and the new overrides, deletes the old markers, and reports.
+- **38.6** Release gate — Jira story round-trip (create, transition, status read-back) on an on-prem Jira; a PRD run publishes to the planning destination and a story to the tickets destination; bind then unbind leaves no trace; a user-authored override survives; the module installs alone.
 
-**FR Coverage:** FR274 (am.), FR281, FR282, FR283, FR284, FR294 (3.x → v7 upgrade path); retires FR239–FR243. Re-asserts NFR2/NFR50/NFR57 and NFR77 for the v7 bundle.
+**Gates and dependencies:**
+- Needs 37.1 (repository and CI) and 36.1's GO-38 line.
+- Wave 0: 38.1. Wave 1: 38.2 ∥ 38.3. Wave 2: 38.4 ∥ 38.5. Wave 3: 38.6.
+- Builds on Epic 31 (Confluence publish engine, page tree and collision predicate, relocated into module scripts).
 
-**Out of scope:** retiring the on-prem profile or IDE injection (both stay); new platform targets; any module content change (belongs in `ma-bmad-extensions`); releasing on a preview SHA.
+**Out of scope:** backends other than Jira and Confluence; a local Confluence mirror (FR266); Jira Cloud (upstream's `jira` store starter covers it); a Python port of the engine; sprint capacity.
+
+---
+
+## Epic 39: Thin Offline Installer (Phase 5)
+
+**Goal:** The `ma-agents` 4.x npm package is a thin offline installer. It carries the bundle (BMAD-METHOD snapshot, tea, cis, `ma-bmad-extensions`, the Skills CLI, uv, Python 3.11 and a wheelhouse), installs the selected modules through the Skills CLI and `bmad setup`, injects its own instruction block, reports status, uninstalls, and upgrades a 3.x project. It ships on the BMAD v7 GA tag only.
+
+**Scope:**
+- Commands `install`, `update`, `status`, `uninstall` and `bundle build`; the wizard, its flags and the install sequence (FR298, P5-11.10).
+- Bundle contents and manifest (FR299); additional module sources from a local folder or a Git URL (FR297).
+- Uninstall per `skills-lock.json`; upgrade from 3.x with a backup, `bmad migrate method` and the module migrations.
+- Ownership: the installer owns the `ma-agents` block and never touches the `ma-standards` block (FR301). `status` prints the installer, extension, core and Skills CLI versions (FR302).
+
+**FR Coverage:** FR281, FR282, FR283, FR284, FR294 (3.x → 4.x upgrade), FR297, FR298, FR299, FR301 (`ma-agents` block owner), FR302; NFR87. Re-asserts NFR2, NFR50, NFR57 and NFR77 for the 4.x bundle.
+
+**Architecture:** Decision P5-11.2 (repository and versioning), P5-11.6 (offline Python runtime), P5-11.10 (installer sequence and ownership).
+
+**Stories:**
+- **39.1** Bundle completion — `bundle build` adds `ma-bmad-extensions` at `bmadRef.extensions`, uv and python-build-standalone 3.11 for linux-x64 and win-x64, and the wheelhouse enumerated from every bundled script; `install` verifies the manifest before it writes anything.
+- **39.2** Install flow — wizard and flags, runtime placed in the scope's `.ma-agents/runtime/` with the offline environment (`UV_PYTHON`, `UV_FIND_LINKS`, `UV_OFFLINE=1`, `UV_NO_CACHE=1`) exported and written to the scope's `uv.toml`, Skills CLI add per selected module and additional source, `setup.py --module-answers`, `ma-agents` block injection, `status`, and a post-install uv/Python check that warns without changing the exit code.
+- **39.3** Uninstall and upgrade from 3.x — uninstall removes what `skills-lock.json` lists and the injected block; on a 3.x project it removes the parts `.ma-agents.json` lists, after a backup, then hands off to `bmad migrate method` and the module migrations; the NFR87 upgrade fixture runs in CI.
+- **39.4** Package contents — the npm package ships only the installer and the bundle; a `files` allowlist test enforces it.
+- **39.5** Release gate on the GA tag — `--network none` end-to-end on clean linux-x64 and win-x64 machines, multi-tool smoke, upgrade of a real 3.18.x project copy, `4.0.0` on dist-tag `latest`, CHANGELOG, retrospective.
+
+**Gates and dependencies:**
+- Needs Epics 37 and 38 released. 39.5 needs 36.7's GO-39.5.
+- Wave 0: 39.1. Wave 1: 39.2 ∥ 39.3. Wave 2: 39.4. Wave 3: 39.5.
+- Builds on Epic 26 (content of the instruction block) and Story 31.16 (manifest-aware sweep, used by 39.3).
+
+**Out of scope:** new platform targets; module content (it lives in `ma-bmad-extensions`); a release on a preview commit; the `ma-standards` block (owned by `ma-standards-apply`).
 
 ### Epics 36–39 — Cross-Epic Notes
 
-- **Approval and sequencing record:** Sprint Change Proposal 2026-11-07 (`sprint-change-proposal-2026-11-07.md`), Decision P5-11 (supersedes P5-10). 36 gates 37; 37 gates 38; 37 + 38 gate 39; 39.5 waits for GA. 37.1/37.2 may start once 36.1 records GO on the Skills-CLI and validator questions, even if 36.2 is still open (P5-11.10).
-- **Supersession:** Epics 32–35 are cancelled and annotated above, not edited; Stories 32.1–32.9 are `cancelled` in `sprint-status.yaml` and their files are untouched. The Epic 36 stories cite their reusable Dev Notes.
-- **On-prem line:** until 36.7 passes on the GA tag, ma-agents 3.18.x is the supported on-prem release and v7-line packages are pre-release (FR281). Note: 3.18.1 pins bmad-method 6.10.0 (`package.json`, `lib/bmad.js:2830`); the 6.12.4 bump of the cancelled Epic 32 never happened.
-- **Stories:** Epic 36's story files are authored with this change; 37–39 stories are authored after 36.1's verdict. v7 retires `bmad-create-epics-and-stories` and `bmad-sprint-planning`; this file and `sprint-status.yaml` remain the 3.x-era planning record until `bmad migrate method` moves the project to the ticket tree.
-- **Open PO decisions (SCP §4.6, do not block Epic 36):** `ma-sprint` after GA (drop vs sprint-capacity layer over `tickets.toml`); skill prefixes beyond `bmad-`; Confluence engine language (JavaScript recommended); on-prem update source (`file:` vs `https://`, decided by 36.1).
+- **Sequencing:** 36 gates 37; 37 gates 38; 37 and 38 gate 39; 39.5 waits for 36.7's GO-39.5. 37.1 and 37.2 start on 36.1's GO lines even while 36.2 is open.
+- **Product line:** until 36.7 records GO-39.5, the 3.x line is the supported on-prem release and 4.x packages are pre-releases on dist-tag `next` (FR281).
+- **Stories:** Epic 36 stories are written; Epics 37–39 stories are written after 36.1's verdict, each absorbing the change set the findings file hands it.
+- **Fixed design points:** the sprint functions are served by `bmad-agent-po` with the Jira store, and 4.x ships none of the sprint skills (FR296); owned skill names stay as they are except `bmad-dev-epic` → `ma-ops-dev-epic` and `bmad-knowledge` → `ma-knowledge-atlas` (FR287); the Confluence engine is JavaScript run with `node` (P5-11.9); the bundle installs from `file:` sources, and an install from a Git host uses `https://` (FR297).

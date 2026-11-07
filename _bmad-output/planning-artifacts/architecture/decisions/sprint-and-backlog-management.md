@@ -182,15 +182,4 @@ If a project has existing `backlog.yaml`, `sprints/sprint-N.yaml`, or the old `s
 
 **Affects:** All 13 skills listed in the integration map above, `sprint-status.yaml` (new unified file), `{story_location}/done/` (archive directory)
 
-#### P2-11 amendment (2026-10-31, P5-10): the tracker hook contract **[SUPERSEDED 2026-11-07 by P5-11.4 / FR289]**
-
-> *Superseded 2026-11-07 by Decision P5-11 (Sprint Change Proposal 2026-11-07). BMAD v7 has no `sprint-status.yaml` and retires `bmad-sprint-planning`; `ma-sprint` is not carved (P5-11.8). In the v7 line Jira is a Sofia (`bmad-agent-po`) ticket-store definition selected through `_bmad/custom/ticketing-store-config.toml`, with transitions on Sofia's `board_*` hooks (P5-11.4, FR289) — there is no per-skill tracker hook, adapter reference or `tracker = "file-system"` key. P2-11 itself is unchanged and remains the contract for the 3.x line. The amendment text below is kept as history.*
-
-The backend-routing block (`mcp-detection-pattern-spec.md`) no longer lives inside each sprint skill. From P5-10:
-
-- **`ma-sprint` skills expose a hook, not a branch.** Each skill's `customize.toml` declares `[workflow] tracker = "file-system"` and an `activation_steps_prepend` slot. The skill body implements file-system behaviour only and reads `{workflow.tracker}` at activation.
-- **The Jira branch is one adapter reference** (`ma-atlassian/references/jira-tracker.md`): the routing block, the identity clause (`assignee = currentUser()`, shared-account STOP), the entity mapping to the canonical schema (§6.3) and the retry / switch-to-file-system failure contract — moved verbatim from the 13 skills, maintained once.
-- **Binding is by override.** `ma-atlassian`'s setup skill writes a marker-delimited `_bmad/custom/<skill>.toml` for each installed target: `tracker = "jira"` plus a prepend step that loads the adapter reference. Removing the override (or the module) returns the skill to file-system behaviour with no edit.
-- **Upstream skills are bound the same way.** `bmad-sprint-planning` (v6.12, `sprint_plan.py` core — preserves `project_key`, `tracking_system`, `story_location`), `bmad-build`, `bmad-build-auto`, `bmad-code-review`, `bmad-correct-course`, `bmad-retrospective`, `bmad-walkthrough`. ma-agents' shadow `bmad-sprint-planning` / `bmad-sprint-status` / `bmad-dev-story` are deleted; `v6-shims/` are never bound.
-- **Unknown tracker value** keeps §2.5's fall-back-to-file-system semantics (unchanged — this is sprint state, not a knowledge store; contrast FR262).
-- **`project_key`, `tracking_system`** continue to be written to `sprint-status.yaml` by whichever skill initialises it; the Atlassian module's config questions (Jira URL, project key) feed them via the binding generated from `project-layout.yaml` (P5-9), not via the ma-agents wizard.
+#### P2-11 tracker hook contract — archived; see [archive-superseded-2026-11-07.md](archive-superseded-2026-11-07.md)

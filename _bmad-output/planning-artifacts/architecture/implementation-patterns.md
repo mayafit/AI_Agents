@@ -221,42 +221,38 @@ critical_actions:
 - Letting bmad-method auto-fetch external modules without pre-populating the cache first (breaks air-gap)
 - Including `.git/` directories in `lib/bmad-cache/` — wastes package size, not needed for installation
 
-### Phase 5 v7 Module Patterns (2026-11-07, P5-11)
+### ma-agents 4.x module patterns
 
-**All AI Agents Working on Epics 36–39 MUST:**
-- **One config read path.** A carved skill reads configuration with one `uv run {project-root}/_bmad/scripts/resolve_config.py --key …` call per skill activation (`core.output_folder`, `modules.<code>.<key>`) and customization only through `resolve_customization.py` (FR288). Never open `_bmad/custom/config.toml` or a module file directly.
-- **Every member skill carries a `bmod.toml` stub.** A `[skill]` table with `bmod = "<code>"`, `source = …`, `scripts = …`, matching its module record's `skills` list; `validate_manifests.py` must pass before a commit lands (FR285).
-- **One version line.** All `bmod.toml` records in `ma-bmad-extensions` carry the same version; a change in any module bumps the shared version (NFR86).
-- **Overrides are marker-delimited and keyed per target.** `ma-atlassian-bind` writes only inside its own markers in `_bmad/custom/<skill>.toml` and `ticketing-store-config.toml`; each entry is keyed by (skill, section, key, insertion slot); bind and unbind are idempotent; an existing user value produces a fail-loud collision report, never an overwrite; an absent target is reported, not failed (FR291).
-- **`retired.toml` discipline.** Every rename or removal of an owned skill is recorded in the owning module's `retired.toml` in the same change; a retired name is never reused, ours or upstream's (FR287).
-- **A `migration-<n>.toml` for every on-disk change.** Any user-visible change to files a release leaves on disk ships with a numbered migration that `bmad migrate` runs (FR294). No silent layout changes between releases.
-- **PEP 723 headers on every Python script.** Each script declares its dependencies inline so the offline wheelhouse can be enumerated at build and `uv run --no-cache` resolves from the bundle (FR282). JavaScript scripts (the Confluence engine, Atlas) run with `node` and require nothing outside their skill.
-- **Target the pinned SHA only.** Test against the upstream commit in `bmadRef` / `BMAD_TARGET_REF`; when upstream renames or retires a skill, repoint in the same change and never carry both names (FR271, FR280).
-- **Dependencies point upstream only.** `required_skills` names only `bmad` core at the pin; `recommended_skills` may name upstream skills; a reference to a sibling module's skill is a fail-soft message in the skill body, never a manifest entry (P5-11.3).
+These rules apply to every skill in the `ma-bmad-extensions` repository and to the `ma-agents` 4.x installer (Decision P5-11).
 
-**Phase 5 v7 Anti-Patterns:**
-- Reading `_bmad/bmm/config.yaml`, `project-layout.yaml` or the removed v6 keys (`user_name`, `communication_language`, `document_output_language`, `planning_artifacts`, `implementation_artifacts`).
-- Generated shared text rendered into several modules from one source — each module carries its own copy of any reference it needs.
-- An owned skill named with the `bmad-` prefix.
-- A sibling module in `required_skills` or `recommended_skills`.
-- Any carved skill reading or writing `sprint-status.yaml`, or orchestrating `bmad-dev-story` / `bmad-create-story` / `bmad-sprint-planning` (none exist in v7).
-- Relying on a pre-seeded uv cache offline (`--no-cache` ignores it) instead of the wheelhouse.
+**Module rules (`ma-bmad-extensions`):**
+- **Configuration through `resolve_config.py`.** A skill reads every setup answer it needs with one `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key … --key …` call at activation (`core.output_folder`, `modules.<code>.<key>`), and customization only through `resolve_customization.py`. It opens no configuration file directly.
+- **A `bmod.toml` in every member.** Each member skill carries `[skill]` with `bmod = "bmod-<code>"` and `source` equal to its record's `update_source`, and appears in the record's `skills` list. `validate_manifests.py` passes before a change lands.
+- **One version line.** All four records carry the same `version`; a change to any module bumps it.
+- **Overrides are marker blocks.** Anything a module writes into a file it does not own sits between its own start/end markers (`# ma-atlassian:start` / `# ma-atlassian:end` in TOML; `<!-- ma-standards:start -->` / `<!-- ma-standards:end -->` in Markdown). Writing is idempotent; a key the user already set is reported as a collision and left alone; removal deletes only the module's own blocks.
+- **`retired.toml` in the same change.** Renaming or removing an owned skill adds the `renamed` or `removed` entry to its module's `retired.toml` in the same change. A retired name, ours or upstream's, is never reused.
+- **`migration-<n>.toml` for every on-disk change.** A release that changes the files a previous release left in a project ships a numbered migration with `module`, `from`, `to`, `title`, `summary`, `detect`, `guide` and `checklist`. A migration backs up before it writes, is safe to re-run, and writes a report.
+- **PEP 723 headers.** Every Python script declares its dependencies inline; `bundle build` enumerates the wheelhouse from these headers and `uv run --no-cache` resolves only from it offline.
+- **Node scripts in `[skill] scripts`.** A JavaScript script is listed in its skill's `[skill] scripts`, installed by setup to `_bmad/<code>/scripts/`, run with `node`, and requires nothing outside its own folder and Node's standard library.
+- **Self-contained modules.** Any reference text a module needs is authored in that module. `required_skills` names only `bmad` core; a `recommended_skills` entry for another of our modules carries its `source`, and the skill checks for it at run time and continues without it.
+- **Names.** Owned skills use their family prefix (`ma-agent-`, `sre-`, `cyber-`, `devops-`, `sqa-`, `mil498-`, `ma-ops-`, `ma-standards-`, `ma-knowledge-`, `ma-atlassian-`, or the standards skill's own name) and are unique across the repository and the bundled upstream snapshot.
+- **Status through the plan file.** A skill that changes a story's status does it through `bmad-build`'s `story-<slug>-plan.md`; it reads epics and stories through `tickets.py`.
+- **One core commit.** Skills are tested against `bmadRef.core` only; an upstream rename or retirement is repointed in the same change.
+- **Inputs from 3.x projects are read only by migrations.** 3.x project files (`sprint-status.yaml`, `project-layout.yaml`, `_bmad/bmm/config.yaml`, the 3.x override markers) are named only inside `migration-<n>.toml` files; a CI check enforces it.
 
-### Phase 5 Extension Decomposition Patterns (2026-10-31, P5-10) **[SUPERSEDED 2026-11-07 by P5-11]**
+**Installer rules (`ma-agents` 4.x):**
+- Install only from verified bundle items or from sources the user named (`--source`); verify every item against `manifest.json` before using it.
+- Set `UV_PYTHON`, `UV_FIND_LINKS`, `UV_OFFLINE=1` and `UV_NO_CACHE=1` for every `uv` call, and write the same settings to the scope's `uv.toml`. Spawn uv only through one runner module, always as `uv run --no-cache` with an argv array; a test fails on any other uv execution site.
+- Drive setup through `setup.py --module-answers`; when that fails, print `bmad setup <code>` per module and exit non-zero.
+- Write only the `ma-agents` marker block, `.ma-agents.json`, the runtime folder and the answers file.
 
-> *Superseded by "Phase 5 v7 Module Patterns" above (Sprint Change Proposal 2026-11-07). The rules below assume v6 mechanics (`shared/` generation, per-module `module_version`, version-keyed overlay, `v6-shims/`). Kept as history; do not apply them to Epics 36–39.*
-
-**All AI Agents Working on Epics 32–35 MUST:**
-- **Shared text is generated, never depended on.** A block two modules both need (tracker routing, knowledge-store preflight) has one source under `shared/` in the extension repo and is rendered into each consuming skill at build. Never load it across modules at run time; never hand-edit a rendered copy.
-- **Extension scripts are in-skill.** Anything an extension needs at run time (binding stamp, Confluence page tree, publish-hook generator, Atlas engine) lives under that skill's `scripts/` and is invoked as `uv run {skill-root}/scripts/x.py` or `node {skill-root}/scripts/x.cjs`. Never `require('ma-agents/…')`, never `require.resolve` a package.
-- **Skill directory names are unique across all six packages.** Prefix by family (`sre-`, `cyber-`, `mil498-`, `ma-agent-`, …). IDE skill folders are flat and bmad-method ≥ 6.10 aborts on duplicate leaf names.
-- **Overlays bind through `_bmad/custom/<skill>.toml` only**, marker-delimited, idempotent, version-keyed by the installed bmad-method, excluding `v6-shims/`, and reporting every unbound target by name. No overlay edits a skill document.
-- **One upstream version.** Target the pinned bmad-method only; when upstream retires a skill, repoint to its successor in the same change — never carry both names.
-- **`persistent_facts` are explicit.** Upstream ships them empty; every owned `customize.toml` states its own (e.g. `file:{project-root}/**/project-context.md`).
-- **Version per module.** Bump `module_version` in the module you changed; never bump a sibling.
-
-**Phase 5 Anti-Patterns:**
-- A `ma-core` / shared-runtime module that other extensions import — it recreates the monolith's coupling.
-- Passing `--shims` to bmad-method, or binding a `v6-shims/` name as an overlay target.
-- Putting config questions in the ma-agents wizard that belong to a module's `module.yaml`.
-- Adding skill content to the `ma-agents` npm package after Epic 35.
+**Anti-patterns:**
+- A skill opening `_bmad/config.toml`, `_bmad/custom/*.toml` or another module's files instead of calling the resolver scripts.
+- An owned skill named `bmad-*`.
+- One of our modules in `required_skills`; a skill that fails because a recommended skill is absent.
+- A script that loads code from another skill or from an npm package by path.
+- A module writing outside its markers, or overwriting a user-set key.
+- The installer writing `_bmad/custom/`, editing skill content, or touching the `ma-standards` block.
+- Using a uv cache as the offline package source (`uv run --no-cache` ignores it).
+- Network access during an install from the bundle or during a skill activation.
+- A skill keeping its own ordering or status model beside `tickets.toml` and the plan files.
