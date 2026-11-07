@@ -12,7 +12,7 @@ completedAt: '2026-03-07'
 project_name: 'agents'
 user_name: 'Alon'
 date: '2026-03-05'
-lastEdited: '2026-10-31'
+lastEdited: '2026-11-07'
 ---
 
 # Architecture Decision Document
@@ -33,8 +33,8 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 > inside an H2 titled *"P5-1 Addendum: .agents/skills Cross-Tool Standard Assessment (Story
 > 24.11)"*. An agent looking for architectural decisions found the Phase 2 set and stopped.
 
-**Totals:** 24 numbered decisions (P2-1 … P5-10) plus 4 unnumbered Phase 1 decisions.
-**Next free decision ID: P5-11.**
+**Totals:** 25 numbered decisions (P2-1 … P5-11) plus 4 unnumbered Phase 1 decisions.
+**Next free decision ID: P5-12.**
 
 ---
 
@@ -42,7 +42,8 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 | ID | Decision | Requirements | Notes | File |
 |---|---|---|---|---|
-| P5-10 | Extension decomposition, overlay mechanism & thin offline installer — latest-only bmad-method | FR268–FR278, NFR84–NFR85; FR236 superseded; FR213/NFR74 inverted; FR239–FR243 retired | 2026-10-31 · **F27 + F28** · supersedes P2-3/P2-9 (single module), P4-1 (single plugin), P5-6(c) (uv boundary); amends P2-6, P2-11, P5-9 · Epics 32–35 | [bmad-integration-and-bundling](architecture/decisions/bmad-integration-and-bundling.md) |
+| P5-11 | BMAD v7 target — bmod modules, Sofia-native Jira, Confluence via handoff slots, Skills-CLI offline installer | FR271 (am.), FR280–FR294, NFR84 (am.), NFR86; FR268–FR270/FR274 amended; FR272/FR273/FR275/FR276 superseded; NFR85 superseded; NFR74 amended | 2026-11-07 · **F27 + F28 (current)** · supersedes P5-10 and the P2-11 amendment; target BMAD v7 @ pinned SHA, GA re-gate · Epics 36–39 | [bmad-integration-and-bundling](architecture/decisions/bmad-integration-and-bundling.md) |
+| P5-10 | Extension decomposition, overlay mechanism & thin offline installer — latest-only bmad-method | FR268–FR278, NFR84–NFR85; FR236 superseded; FR213/NFR74 inverted; FR239–FR243 retired | **SUPERSEDED 2026-11-07 by P5-11** (never implemented; Epics 32–35 cancelled) · 2026-10-31 · **F27 + F28** · supersedes P2-3/P2-9 (single module), P4-1 (single plugin), P5-6(c) (uv boundary); amends P2-6, P2-11, P5-9 · Epics 32–35 | [bmad-integration-and-bundling](architecture/decisions/bmad-integration-and-bundling.md) |
 | P5-9 | Federated knowledge stores, binding authority & global install scope | FR248–FR265, FR267, NFR76–NFR83 | 2026-08-02 · supersedes FR111/FR117 · retires FR266 · **F26** | [project-knowledge-and-repository-layout](architecture/decisions/project-knowledge-and-repository-layout.md) |
 | P5-8 | BMAD v6.10.0 — bundle filter, custom marketplace source, Demerzel deprecation | FR235–FR247, NFR70–NFR75 | 2026-07-09 · **current version** · retains the P5-5 reader | [bmad-platform-currency](architecture/decisions/bmad-platform-currency.md) |
 | P5-7 | BMAD Knowledge Atlas — static knowledge-site visualization tier | FR215–FR234, NFR60–NFR69 | 2026-06-28 · extends P3-1 | [knowledge-graph-and-atlas](architecture/decisions/knowledge-graph-and-atlas.md) |

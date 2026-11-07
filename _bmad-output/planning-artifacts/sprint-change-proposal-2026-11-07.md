@@ -18,7 +18,7 @@ On 2026-11-07 a survey of upstream `bmad-code-org/BMAD-METHOD` showed that **`ma
 ### Decision (product owner, 2026-11-07)
 
 - **Target BMAD v7 directly**, at a **pinned upstream commit**, bumped deliberately. Develop against the preview now.
-- **Do not deploy the preview to on-prem users.** ma-agents 3.18.1 on bmad-method 6.12.4 stays the supported on-prem line until v7 GA has passed a qualification gate. The v7-based packages ship as a pre-release line until then.
+- **Do not deploy the preview to on-prem users.** ma-agents 3.18.1 on bmad-method **6.10.0** (its actual pin: `package.json:35`, `lib/bmad.js:2830`; the Epic 32 bump to 6.12.4 never ran) stays the supported on-prem line until v7 GA has passed a qualification gate. The v7-based packages ship as a pre-release line until then.
 - All earlier constraints stand: no dependency between our packages; three purposes preserved (offline on-prem install; our agents/skills; Jira + Confluence); MIL-STD-498 with Gadi; `bmad-dev-epic` kept; uv + Python 3.11 required; no parallel versions.
 
 ### Evidence (upstream `main` @ `e734d3ac3c0f4ea31cc2c2bbbe79e86e54f2cae6`, 2026-11-06)
@@ -83,7 +83,7 @@ Stories 32.1–32.9 (status `ready-for-dev` / `backlog`, none started) are **can
 
 ## Section 3 — Recommended Approach
 
-**Chosen path: fundamental replan (Option 4 of the 10-31 proposal's missing alternative).** Author the carved modules in v7 shape from the first commit; no v6 compatibility output; `ma-agents` 3.x stays frozen on 6.12.4 as the on-prem line until GA qualification.
+**Chosen path: fundamental replan (Option 4 of the 10-31 proposal's missing alternative).** Author the carved modules in v7 shape from the first commit; no v6 compatibility output; `ma-agents` 3.x stays frozen on 6.10.0 as the on-prem line until GA qualification.
 
 Rejected:
 - *Execute Epics 32–35 then adapt.* Builds and deletes four epics of v6 mechanics; two user migrations; burns skill names into `retired.toml`.
@@ -118,11 +118,11 @@ Dependencies: `required_skills = [{ skill = "bmad", version = "<pinned>", source
 ### 4.2 PRD edits
 
 **F27 `bmad-platform-currency.md`** (next free FR is FR280):
-- FR271 **AMENDED**: "ma-agents targets exactly one bmad-method line: **BMAD v7 at a pinned upstream commit** recorded in `package.json` (`bmadRef`) and `BMAD_TARGET_REF`, bumped deliberately; no shims, no parallel versions. ma-agents 3.x on 6.12.4 is maintained for fixes only until FR281 passes."
+- FR271 **AMENDED**: "ma-agents targets exactly one bmad-method line: **BMAD v7 at a pinned upstream commit** recorded in `package.json` (`bmadRef`) and `BMAD_TARGET_REF`, bumped deliberately; no shims, no parallel versions. ma-agents 3.x on 6.10.0 is maintained for fixes only until FR281 passes."
 - FR275, FR276 **SUPERSEDED** by FR280/FR282 (dated note; text kept).
 - FR277 unchanged (uv + Python 3.11). FR278 unchanged (owned TOML validation). FR279 unchanged.
 - **FR280** Target pin: the pinned upstream commit (initially `e734d3ac3c0f4ea31cc2c2bbbe79e86e54f2cae6`) is the only bmad-method the v7 line is tested against; the Epic 36 gate records its verdict per SHA.
-- **FR281** GA qualification gate: no on-prem (offline bundle) release of the v7 line until the Epic 36 gate has been re-run and passed on the v7 GA tag; until then 3.18.x on 6.12.4 is the supported on-prem release.
+- **FR281** GA qualification gate: no on-prem (offline bundle) release of the v7 line until the Epic 36 gate has been re-run and passed on the v7 GA tag; until then 3.18.x on 6.10.0 is the supported on-prem release.
 - **FR282** Offline runtime bundle: the installer ships uv, a Python 3.11 interpreter and a wheelhouse covering every PEP 723 dependency declared by the vendored skills' scripts (enumerated at build; at least `jinja2`, `pyyaml`); an install under `--network none` must activate `render_skill.py`, `resolve_config.py`, `resolve_customization.py`, `tickets.py` and `setup.py` with `uv run --no-cache`.
 - **FR283** Skills CLI: the installer vendors the `skills` npm package at a pinned version and installs modules with `npx skills add <local path> --skill …` from the bundle; no network access is attempted.
 - **FR284** Headless setup: the installer drives `bmad setup` non-interactively through `setup.py --module-answers <file>` with answers collected by its own wizard; if that contract changes upstream, the installer prints the exact `bmad setup <code>` instruction instead of failing (fail-loud, documented fallback).
@@ -140,7 +140,7 @@ Dependencies: `required_skills = [{ skill = "bmad", version = "<pinned>", source
 - **FR287** Naming: no owned skill carries the `bmad-` prefix; renames are recorded in the module's `retired.toml` and a retired name is never reused.
 - **FR288** Config reads: carved skills read configuration only via `resolve_config.py` (`core.*`, `modules.<code>.*`) and customization via `resolve_customization.py`; a test greps for the removed v6 keys.
 - **FR289** Jira as a Sofia store: `ma-atlassian` ships a `jira-onprem-ticketing.toml` store starter (Jira Server/DC through the configured MCP server or REST; types/status maps from §6.3; identity clause as `persistent_facts` on `bmad-agent-po`), selected by writing `_bmad/custom/ticketing-store-config.toml` from the module's setup answers; Jira transitions ride Sofia's `board_*` hooks; no per-skill Jira routing text.
-- **FR290** Confluence publish/read: generated overrides set `external_handoffs` and `on_complete` on `bmad-prd`, `bmad-architecture`, `bmad-ux`, `bmad-product-brief`, `bmad-prfaq`, `bmad-facilitate`, and `external_sources` on `bmad-facilitate`, `bmad-build`, `bmad-build-auto`, `bmad-code-review`, `bmad-retrospective`; the page-tree mirror and staleness rules of F26 apply to the initiative store layout.
+- **FR290** Confluence publish/read: generated overrides set `on_complete` (and `external_handoffs` where the target's `customize.toml` declares it) on `bmad-prd`, `bmad-architecture`, `bmad-ux`, `bmad-product-brief`, `bmad-prfaq`, `bmad-facilitate`, and `external_sources` where declared (at the pinned commit: `bmad-prd`, `bmad-architecture`, `bmad-facilitate`); for targets without a read slot (`bmad-build`, `bmad-build-auto`, `bmad-code-review`, `bmad-retrospective` at the pinned commit) the Confluence-read role uses `activation_steps_prepend`. The bind target table records, per target, which slot exists at the pinned commit (Story 36.1 enumerates them). The page-tree mirror and staleness rules of F26 apply to the initiative store layout.
 - **FR291** Bind/unbind: `ma-atlassian-bind` is idempotent, keyed per target (skill, section, key, insertion slot), honours an existing user-authored value (fail-loud report, never overwrite outside its markers), supports `unbind` (removes only its marker blocks), and is re-run by the user after any module install or `bmad setup`; a target absent on disk is reported, not failed.
 - **FR292** Sprint model: no carved skill reads or writes `sprint-status.yaml`; `ma-ops-dev-epic` enumerates epics and stories through `tickets.py` and writes story status only through `bmad-build`'s plan file; a `bmod-ma-ops/migration-1.toml` moves 3.x `backlog:` entries into the store's `backlog/` folder and archives `sprints:` with a report.
 - **FR293** Knowledge binding retired: the v7 line has no `project-layout.yaml`, generated `_bmad/bmm/config.yaml`, staleness stamp or preflight block; store locations come from `core.output_folder` and `modules.ma-atlassian.*`; `bmod-ma-atlassian/migration-1.toml` converts a 3.x binding (`project-layout.yaml`, Epic 31 override markers) into setup answers and new overrides.
@@ -203,6 +203,13 @@ Sequencing: 36 gates 37; 37 gates 38; 38 + 37 gate 39; 39.5 waits for GA. 37.1/3
 **Scope:** Major. **Route to:** PM (John) for PRD edits and Epics 36–39; Architect (Winston) for P5-11; Scrum Master for `sprint-status.yaml` and the Epic 36 stories; SQA (Gadi) to audit the config-read, prefix and cross-reference sweeps in 37.5.
 
 **Success criteria:** PRD/architecture/epics/sprint-status reflect Sections 4.1–4.5 with no remaining reference to `--custom-source`, `marketplace.json`, `module.yaml`, `sprint-status.yaml` or `_bmad/bmm/config.yaml` as a Phase 5 deliverable; Epics 32–35 and Stories 32.x annotated, not edited; Epic 36 stories authored and readiness-checked; the two adversarial reviews linked from the PR.
+
+### Errata (2026-11-07, found while applying the handoff)
+
+- The 3.x on-prem line pins bmad-method **6.10.0**, not 6.12.4 (`package.json:35`, `lib/bmad.js:2830`). Corrected above and in FR271/P5-11.5.
+- FR290's slot list was written from the v7 docs, not the pinned commit; `external_sources` is absent on `bmad-build`, `bmad-build-auto`, `bmad-code-review`, `bmad-retrospective`, and `external_handoffs` on `bmad-prfaq`. FR290 now binds per declared slot with `activation_steps_prepend` as the read fallback.
+- FR271 and NFR19 live in `bmad-integration-and-bundling.md`, not where Section 2 says; amended there.
+- Gate questions added by the Scrum Master to Story 36.1 beyond Section 4.4: tea/cis tags carrying v7 records; Skills CLI `.agents/skills` + `skills-lock.json` collision with 3.x `.ma-agents.json`; Skills CLI network calls on a local install; `source` fixed at publish time (`file:` vs `github:` baked into the published files); `--module-answers` rejecting re-sent answers; `migrate_v6` story-ID collision for two-digit epics (`32-1` vs `3-21`).
 
 ### Checklist status
 

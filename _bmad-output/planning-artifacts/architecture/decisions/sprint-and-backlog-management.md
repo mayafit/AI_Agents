@@ -182,7 +182,9 @@ If a project has existing `backlog.yaml`, `sprints/sprint-N.yaml`, or the old `s
 
 **Affects:** All 13 skills listed in the integration map above, `sprint-status.yaml` (new unified file), `{story_location}/done/` (archive directory)
 
-#### P2-11 amendment (2026-10-31, P5-10): the tracker hook contract
+#### P2-11 amendment (2026-10-31, P5-10): the tracker hook contract **[SUPERSEDED 2026-11-07 by P5-11.4 / FR289]**
+
+> *Superseded 2026-11-07 by Decision P5-11 (Sprint Change Proposal 2026-11-07). BMAD v7 has no `sprint-status.yaml` and retires `bmad-sprint-planning`; `ma-sprint` is not carved (P5-11.8). In the v7 line Jira is a Sofia (`bmad-agent-po`) ticket-store definition selected through `_bmad/custom/ticketing-store-config.toml`, with transitions on Sofia's `board_*` hooks (P5-11.4, FR289) — there is no per-skill tracker hook, adapter reference or `tracker = "file-system"` key. P2-11 itself is unchanged and remains the contract for the 3.x line. The amendment text below is kept as history.*
 
 The backend-routing block (`mcp-detection-pattern-spec.md`) no longer lives inside each sprint skill. From P5-10:
 

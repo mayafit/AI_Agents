@@ -97,6 +97,8 @@ sprints:
 
 > **Delivery note (2026-10-31, P5-10).** FR139's Jira prompt moves from the ma-agents wizard to the `ma-atlassian` module's own `module.yaml` config questions, and FR140's behaviour is delivered **once** as that module's tracker adapter and bound into each sprint skill by override (FR272, FR273). The sprint skills themselves ship in `ma-sprint` with a tracker hook point and file-system behaviour only. Upstream `bmad-sprint-planning` (v6.12, `sprint_plan.py` core) preserves `project_key`, `tracking_system` and `story_location`, so the unified schema below is unchanged. FR139/FR140 text is retained as the behavioural contract.
 
+> **Delivery note (2026-11-07, P5-11 — SCP 2026-11-07).** The 2026-10-31 note above is **superseded for the v7 line**. BMAD v7 has no `sprint-status.yaml`; tracking moves to the initiative ticket store (`tickets.toml`, Sofia `bmad-agent-po`). `ma-sprint` is **not carved** (open PO decision after GA), so FR65–FR71 and FR128–FR140 stay delivered only by the 3.x monolith and are unchanged there. In the v7 line the sprint model is FR292 (no carved skill reads or writes `sprint-status.yaml`; `bmod-ma-ops/migration-1.toml` moves 3.x `backlog:` into the store and archives `sprints:`), and FR139/FR140's Jira behaviour is a Sofia store definition (FR289). **NFR19** — which lives in `bmad-integration-and-bundling.md`, not in this file — is SUPERSEDED for the v7 line by FR292; 3.x unchanged.
+
 ## Quality Attributes (Non-Functional Requirements)
 
 ### Sprint Management

@@ -110,7 +110,56 @@ ma-agents/
     └── cli.test.js                 — CLI command tests
 ```
 
-### Target Structure after P5-10 (2026-10-31 — Epics 33–35)
+### Target Structure after P5-11 (2026-11-07 — Epics 36–39)
+
+The **Complete Project Directory Structure** above is the current single-package layout (ma-agents 3.x) and stays accurate for the 3.x line. The v7 target is two deliverables: the `ma-bmad-extensions` repository in the BMAD v7 module layout (P5-11.2, FR285) and the thin offline installer's bundle (P5-11.6, FR282–FR284). It replaces the P5-10 tree below.
+
+```
+ma-bmad-extensions/                       — NEW repository; ONE version line (NFR86); validate_manifests.py in CI
+├── skills/                               — flat tree; install with `npx skills add <org>/ma-bmad-extensions[#tag] --skill …`
+│   ├── bmod-ma-ops/                      — module record (code ma-ops)
+│   │   ├── bmod.toml                     — [bmod] code/version/update_source/skills/required_skills (bmad core only) + [[bmod.config_questions]] (none)
+│   │   ├── help/help.md                  — read by the `bmad` skill
+│   │   ├── roster.toml                   — Alex, Yael, Amit, Gadi; group "ops"
+│   │   ├── retired.toml                  — records bmad-dev-epic → ma-ops-dev-epic
+│   │   └── migration-1.toml              — 3.x sprint-status.yaml backlog: → store backlog/; sprints: archived with a report
+│   ├── bmod-ma-standards/                — bmod.toml, help/help.md, retired.toml
+│   ├── bmod-ma-knowledge/                — bmod.toml (config question atlas_output), help/help.md, retired.toml (bmad-knowledge → ma-knowledge-atlas)
+│   ├── bmod-ma-atlassian/                — bmod.toml (jira_site, jira_project_key, jira_mcp_server, confluence_site, confluence_space,
+│   │                                       confluence_root_page, confluence_mcp_server), help/help.md, retired.toml,
+│   │                                       migration-1.toml (3.x project-layout.yaml + Epic 31 markers → setup answers + overrides)
+│   ├── ma-agent-{sre,cyber,devops,sqa}/  — each member skill: SKILL.md + bmod.toml [skill] bmod="ma-ops", source=…, scripts=…
+│   ├── sre-*/ cyber-*/ devops-*/ sqa-*/ mil498-*/
+│   ├── ma-ops-dev-epic/                  — tickets.py discovery; bmad-build / build-auto / code-review / review / walkthrough
+│   ├── cpp-*/ csharp-*/ python-*/ js-ts-*/ … code-review/ test-generator/ git-workflow-skill/ commit-message/ auto-bug-detection/
+│   ├── ma-standards-apply/               — AGENTS.md / .clinerules / .roomodes injection (marker-delimited)
+│   ├── project-context-expansion/ open-presentation/ skill-creator/
+│   ├── ma-knowledge-atlas/scripts/atlas.cjs
+│   ├── ma-atlassian-bind/                — per-target override table; bind / unbind / status; writes _bmad/custom/<skill>.toml
+│   │   ├── references/override-targets.toml    — (skill, section, key, insertion slot) per target
+│   │   ├── assets/jira-onprem-ticketing.toml   — Sofia store starter (Jira Server/DC via MCP or REST)
+│   │   └── scripts/                      — Confluence publish engine + page tree (from lib/confluence-*.js; JavaScript, PEP 723 for any .py)
+│   └── confluence-plan/ confluence-record-root-page/
+└── test/                                 — per module: validate_manifests.py, npx skills add <local> --skill bmod-<code> + bmad setup <code>
+                                            --module-answers, activation of every skill (offline, with the Epic 36 runtime)
+
+ma-agents/                                — THIS repository after Epic 39: the thin offline installer (Node CLI, semver MAJOR 4.0.0)
+├── bin/cli.js                            — wizard, bundle install flow, IDE injection, status / uninstall only
+├── lib/{installer,agents,profile,uninstall}.js
+├── package.json                          — bmadRef = pinned upstream SHA; BMAD_TARGET_REF mirrors it
+└── bundle/ (built, shipped in the tarball; manifest records every SHA/tag/version)
+    ├── bmad-method-skills/               — BMAD-METHOD skills/ snapshot at the pinned SHA (+ tea / cis module repos at their tags)
+    ├── skills-cli/                       — vendored npm `skills` tarball (1.7.6 at the pin)
+    ├── ma-bmad-extensions/               — snapshot of one tag of the extension repository
+    ├── uv/  python-3.11/                 — uv binary + Python 3.11 standalone interpreter (UV_PYTHON)
+    └── wheelhouse/                       — every PEP 723 dependency of the vendored scripts (≥ jinja2, pyyaml); UV_FIND_LINKS + UV_OFFLINE
+```
+
+Removed from `ma-agents` by Epic 39: `lib/bmad-extension/`, `lib/bmad-extension-plugin/`, the `ma-skills` module, `lib/bmad-cache/` and the `bmad-method` npm dependency, `lib/custom-marketplace.js` and the `--custom-source` wizard (FR239–FR243 retired), `bin/cli.js` orchestration paths, `skills/`, `lib/knowledge-atlas/`, `lib/confluence-*.js`, `project-layout.yaml` handling and the 41 preflight copies. Not carved: the `ma-sprint` skills stay in the 3.x monolith only (P5-11.8). Directory names inside `bundle/` and `references/` are indicative; the stories fix them.
+
+### Target Structure after P5-10 (2026-10-31 — Epics 33–35) **[SUPERSEDED 2026-11-07 by P5-11]**
+
+> *Superseded by "Target Structure after P5-11" above (Sprint Change Proposal 2026-11-07): the marketplace / `module.yaml` / `shared/` layout below is v6-shaped and was never built. Kept as history.*
 
 The tree above is the **current** single-package layout and remains accurate until Epic 33 lands. The target is two repositories:
 

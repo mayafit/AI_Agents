@@ -1,5 +1,11 @@
 # Implementation Readiness Review — F27 / Epic 32 (P5-10 hard gate)
 
+> **SUPERSEDED 2026-11-07.** Epic 32 is **cancelled** (no story started) and Decision P5-10 is
+> superseded by P5-11 (Sprint Change Proposal 2026-11-07, `sprint-change-proposal-2026-11-07.md`):
+> the extension split is re-planned against BMAD v7 at a pinned upstream commit, and Epic 32's
+> surviving intent moves to **Epic 36**. The verdict below and conditions **C-1…C-10 are void**;
+> Epic 36 receives its own readiness check. This report is kept unchanged as history.
+
 **Scope:** Epic 32 only (stories 32.1–32.9), the gate that opens the P5-10 decomposition. Requirements
 reviewed: F27 FR275–FR278 (`prd/capabilities/bmad-platform-currency.md`), FR271 (latest-only; it sits
 under the **F28** heading in `prd/capabilities/bmad-integration-and-bundling.md:58` but is the policy

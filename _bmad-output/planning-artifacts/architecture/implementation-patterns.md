@@ -221,7 +221,30 @@ critical_actions:
 - Letting bmad-method auto-fetch external modules without pre-populating the cache first (breaks air-gap)
 - Including `.git/` directories in `lib/bmad-cache/` — wastes package size, not needed for installation
 
-### Phase 5 Extension Decomposition Patterns (2026-10-31, P5-10)
+### Phase 5 v7 Module Patterns (2026-11-07, P5-11)
+
+**All AI Agents Working on Epics 36–39 MUST:**
+- **One config read path.** A carved skill reads configuration with one `uv run {project-root}/_bmad/scripts/resolve_config.py --key …` call per skill activation (`core.output_folder`, `modules.<code>.<key>`) and customization only through `resolve_customization.py` (FR288). Never open `_bmad/custom/config.toml` or a module file directly.
+- **Every member skill carries a `bmod.toml` stub.** A `[skill]` table with `bmod = "<code>"`, `source = …`, `scripts = …`, matching its module record's `skills` list; `validate_manifests.py` must pass before a commit lands (FR285).
+- **One version line.** All `bmod.toml` records in `ma-bmad-extensions` carry the same version; a change in any module bumps the shared version (NFR86).
+- **Overrides are marker-delimited and keyed per target.** `ma-atlassian-bind` writes only inside its own markers in `_bmad/custom/<skill>.toml` and `ticketing-store-config.toml`; each entry is keyed by (skill, section, key, insertion slot); bind and unbind are idempotent; an existing user value produces a fail-loud collision report, never an overwrite; an absent target is reported, not failed (FR291).
+- **`retired.toml` discipline.** Every rename or removal of an owned skill is recorded in the owning module's `retired.toml` in the same change; a retired name is never reused, ours or upstream's (FR287).
+- **A `migration-<n>.toml` for every on-disk change.** Any user-visible change to files a release leaves on disk ships with a numbered migration that `bmad migrate` runs (FR294). No silent layout changes between releases.
+- **PEP 723 headers on every Python script.** Each script declares its dependencies inline so the offline wheelhouse can be enumerated at build and `uv run --no-cache` resolves from the bundle (FR282). JavaScript scripts (the Confluence engine, Atlas) run with `node` and require nothing outside their skill.
+- **Target the pinned SHA only.** Test against the upstream commit in `bmadRef` / `BMAD_TARGET_REF`; when upstream renames or retires a skill, repoint in the same change and never carry both names (FR271, FR280).
+- **Dependencies point upstream only.** `required_skills` names only `bmad` core at the pin; `recommended_skills` may name upstream skills; a reference to a sibling module's skill is a fail-soft message in the skill body, never a manifest entry (P5-11.3).
+
+**Phase 5 v7 Anti-Patterns:**
+- Reading `_bmad/bmm/config.yaml`, `project-layout.yaml` or the removed v6 keys (`user_name`, `communication_language`, `document_output_language`, `planning_artifacts`, `implementation_artifacts`).
+- Generated shared text rendered into several modules from one source — each module carries its own copy of any reference it needs.
+- An owned skill named with the `bmad-` prefix.
+- A sibling module in `required_skills` or `recommended_skills`.
+- Any carved skill reading or writing `sprint-status.yaml`, or orchestrating `bmad-dev-story` / `bmad-create-story` / `bmad-sprint-planning` (none exist in v7).
+- Relying on a pre-seeded uv cache offline (`--no-cache` ignores it) instead of the wheelhouse.
+
+### Phase 5 Extension Decomposition Patterns (2026-10-31, P5-10) **[SUPERSEDED 2026-11-07 by P5-11]**
+
+> *Superseded by "Phase 5 v7 Module Patterns" above (Sprint Change Proposal 2026-11-07). The rules below assume v6 mechanics (`shared/` generation, per-module `module_version`, version-keyed overlay, `v6-shims/`). Kept as history; do not apply them to Epics 36–39.*
 
 **All AI Agents Working on Epics 32–35 MUST:**
 - **Shared text is generated, never depended on.** A block two modules both need (tracker routing, knowledge-store preflight) has one source under `shared/` in the extension repo and is rendered into each consuming skill at build. Never load it across modules at run time; never hand-edit a rendered copy.
