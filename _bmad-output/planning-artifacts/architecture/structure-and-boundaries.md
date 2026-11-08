@@ -156,6 +156,7 @@ ma-bmad-extensions/                         — one version line; tag per releas
 │   ├── create-hardened-docker-skill/  docker-hardening-verification/  docker-image-signing/
 │   ├── verify-hardened-docker-skill/  self-signed-cert/
 │   ├── ma-ops-dev-epic/                    — tickets.py discovery; bmad-build / -auto / code-review / review / walkthrough
+│   │   └── scripts/migrate_v6_backlog.py   — [skill] scripts; the ma-ops migration-1 script
 │   │
 │   │   ── ma-standards members ──
 │   ├── cpp-best-practices/  cpp-concurrency-safety/  cpp-const-correctness/  cpp-memory-handling/
@@ -179,11 +180,11 @@ ma-bmad-extensions/                         — one version line; tag per releas
 │   │   ├── bmod.toml                       — [skill] scripts = the four scripts below
 │   │   ├── config/jira-onprem-ticketing.toml   — Sofia store starter (Jira Server/Data Center)
 │   │   ├── references/bind-targets.toml    — the P5-11.4 target table
-│   │   └── scripts/                        — publish engine, page tree, override generator, collision check (JavaScript)
+│   │   └── scripts/                        — publish engine, page tree, override generator, collision check, migrate_binding.js (JavaScript)
 │   ├── ma-atlassian-confluence-plan/
 │   └── ma-atlassian-confluence-record-root-page/
-└── test/                                   — module assignment; validate_manifests.py; per module: npx skills add <local> and
-                                              <repo>#<tag> into a vanilla v7 project, bmad setup, bmad status, offline activation
+└── test/                                   — module assignment; validate_manifests.py; contract validator (FR303); per module: npx skills add <local> and
+                                              <repo>#<tag> into a v7 project with method, setup.py --module-answers, setup.py --status, offline activation
 ```
 
 **Installer package**
@@ -192,16 +193,17 @@ ma-bmad-extensions/                         — one version line; tag per releas
 ma-agents/                                  — npm package, semver 4.x, engines.node ≥ 20.12
 ├── package.json                            — bmadRef { core, skillsCli, tea, cis, extensions }
 ├── bin/cli.js                              — install, update, status, uninstall, bundle build; wizard and flags
-├── lib/installer.js                        — install sequence (P5-11.10)
+├── lib/installer.js                        — install sequence (P5-11.10); writes .ma-agents/install.json
+├── lib/runtime/uv.js                       — the only uv execution site (uv run --no-cache)
 ├── lib/agents.js                           — coding tool → Skills CLI --agent; ma-agents marker block
-├── lib/uninstall.js                        — skills-lock.json removal; 3.x parts on an upgrade
+├── lib/uninstall.js                        — removal per .ma-agents/install.json; 3.x parts on an upgrade
 ├── lib/bundle.js                           — bundle build: snapshot, wheelhouse enumeration, manifest
 ├── bundle/                                 — built by `bundle build`, shipped in the tarball
 │   ├── manifest.json                       — every item with SHA-256; bmadRef; extension tag; omissions
 │   ├── bmad-method/                        — BMAD-METHOD skills/ at bmadRef.core (core-tools, method, toolsmith, founder)
 │   ├── tea/  cis/                          — at bmadRef.tea / bmadRef.cis (absent when no tag carries a bmod record)
-│   ├── ma-bmad-extensions/                 — skills/ at the extension tag, file: update source
-│   ├── skills-cli/                         — npm `skills` tarball at bmadRef.skillsCli
+│   ├── ma-bmad-extensions/                 — skills/ at bmadRef.extensions, files unchanged (github: sources)
+│   ├── skills-cli/                         — npm `skills` tarball at bmadRef.skillsCli, unpacked by the installer
 │   ├── runtime/linux-x64/  runtime/win-x64/ — uv binary + python-build-standalone 3.11
 │   └── wheelhouse/linux-x64/  wheelhouse/win-x64/ — every PEP 723 dependency of the bundled scripts
 └── test/                                   — install sequence, bundle determinism, injection ownership, upgrade fixture (3.18.x)
@@ -211,21 +213,21 @@ ma-agents/                                  — npm package, semver 4.x, engines
 
 | Component | Owns | Never touches |
 |---|---|---|
-| `ma-agents` installer | bundle verification; runtime placement and `uv.toml`; Skills CLI and `setup.py` invocation; the answers file; the `ma-agents` marker block; `.ma-agents.json`; backup before an upgrade | skill content; `_bmad/custom/`; the `ma-standards` block; the initiative store |
-| `bmod-ma-ops` | its agents and workflows; `migration-1.toml` | sprint or tracking files outside its migration; story status (only `bmad-build`'s plan file sets it) |
+| `ma-agents` installer | bundle verification; `.ma-agents/runtime/`, `.ma-agents/uv.toml`, `.ma-agents/skills-cli/`, `.ma-agents/install.json`; Skills CLI and `setup.py` invocation; the temporary answers file; the `ma-agents` marker block; the backup folder before an upgrade | skill content; `_bmad/custom/`; the `ma-standards` and `bmad:context` blocks; the initiative store; migrations |
+| `bmod-ma-ops` | its agents and workflows; `migration-1.toml` and `migrate_v6_backlog.py` | sprint or tracking files outside its migration; story status (set through `bmad-agent-po` board requests and `bmad-build`'s plan file) |
 | `bmod-ma-standards` | its skills; the `ma-standards` marker block (`ma-standards-apply`) | the `ma-agents` block; other modules' files |
 | `bmod-ma-knowledge` | `ma-knowledge-atlas` and its output folder (`atlas_output`) | the initiative store (read only) |
-| `bmod-ma-atlassian` | its marker blocks in `_bmad/custom/<skill>.toml` and `ticketing-store-config.toml`; Confluence pages under the two root pages; `migration-1.toml` | upstream skill files; user-authored keys; anything outside its markers |
-| Upstream BMAD (`bmad`, Sofia, `bmad-build`) | `_bmad/config.toml`, setup, `bmad migrate`, the initiative store, plan files | — |
+| `bmod-ma-atlassian` | its bracketed keys in `_bmad/custom/<skill>.toml` and `ticketing-store-config.toml`; Confluence pages under the two root pages; `migration-1.toml` and `migrate_binding.js` | upstream skill files; user-authored keys; any line outside its markers |
+| Upstream BMAD (`bmad`, Sofia, `bmad-build`) | `_bmad/config.toml`, setup, migrations (`bmad migrate`), the initiative store, plan files | — |
 
 **Data flow**
 
 | Flow | Path |
 |---|---|
-| Install | `ma-agents install` → verify `manifest.json` → place runtime, write `uv.toml` → `npx skills add <bundle>/bmad-method` → `npx skills add` per module source → answers file → `setup.py --module-answers` → `_bmad/config.toml`, `_bmad/custom/config*.toml` → `ma-agents` block → `ma-agents status` |
-| Bind | `ma-atlassian-bind bind` → `resolve_config.py` (`modules.ma-atlassian.*`) → bind-target table × installed skills → marker blocks in `_bmad/custom/<skill>.toml` + `ticketing-store-config.toml` → report (bound, collision, not installed, missing slot) |
+| Install | `ma-agents install` → verify `manifest.json` → copy runtime, write `.ma-agents/uv.toml` → unpack Skills CLI → `node <skills-cli> add <bundle>/bmad-method` → the same per module source → `setup.py --list-config-questions` → pending answers as `[modules."<code>"]` → `setup.py --module-answers` → `_bmad/config.toml`, `_bmad/custom/config.user.toml` → `install.json` → `ma-agents` block → `ma-agents status` |
+| Bind | `ma-atlassian-bind bind` → `resolve_config.py` (`modules.ma-atlassian.*`) → bind-target table × installed skills → bracketed keys in `_bmad/custom/<skill>.toml` + `ticketing-store-config.toml` → report (bound, collision, not installed, missing slot, missing answer) |
 | Publish | upstream skill finishes (`external_handoffs` / `on_complete`) or Sofia changes the board or store (`board_after` / `store_after`) → `node _bmad/ma-atlassian/scripts/<engine>` → Confluence page under the planning or tickets root page |
-| Migrate | `ma-agents install` on a 3.x project → backup → uninstall 3.x parts → install 4.x → `bmad migrate method` → `bmod-ma-ops/migration-1.toml` → `bmod-ma-atlassian/migration-1.toml` → reports under `{output_folder}/migration-v6-v7/` |
+| Migrate | `ma-agents install` on a 3.x project → `.ma-agents-backup-<datetime>/` → uninstall 3.x parts → install 4.x → prints "ask `bmad` to run `bmad migrate`" → `method` migration → `bmod-ma-ops/migration-1.toml` (`migrate_v6_backlog.py`) → `bmod-ma-atlassian/migration-1.toml` (`migrate_binding.js`) → reports under `{output_folder}/migration-v6-v7/` |
 
 **Requirements to structure**
 
@@ -239,10 +241,13 @@ ma-agents/                                  — npm package, semver 4.x, engines
 | FR287 | every module | `retired.toml` |
 | FR288 | every skill | `resolve_config.py` / `resolve_customization.py` calls |
 | FR289 | `bmod-ma-atlassian` | `ma-atlassian-bind/config/jira-onprem-ticketing.toml`, `ticketing-store-config.toml` |
+| FR303 | extension repository | `test/` contract validator over every owned `customize.toml` and bind output |
+| FR304 | installer | `lib/runtime/uv.js`, `test/` execution guard |
+| FR305 | `bmod-ma-knowledge` | `ma-knowledge-atlas/`, CI fixture initiative |
 | FR290, FR291 | `bmod-ma-atlassian` | `ma-atlassian-bind/references/bind-targets.toml`, `scripts/` |
 | FR292 | `bmod-ma-ops` | `ma-ops-dev-epic/` |
 | FR293, FR300 | `bmod-ma-atlassian` | `bmod.toml` config questions, `ma-atlassian-confluence-*` |
-| FR294 | `bmod-ma-ops`, `bmod-ma-atlassian` | `migration-1.toml` |
+| FR294 | `bmod-ma-ops`, `bmod-ma-atlassian` | `migration-1.toml`, `migrate_v6_backlog.py`, `migrate_binding.js` |
 | FR296 | `bmod-ma-ops` | `migration-1.toml`; no sprint-file skill in the repository |
 | FR297, FR298 | installer | `bin/cli.js` (`--source`, wizard, flags) |
 | FR299 | installer | `lib/bundle.js`, `bundle/manifest.json` |

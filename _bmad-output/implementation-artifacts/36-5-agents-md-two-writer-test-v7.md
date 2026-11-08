@@ -4,7 +4,7 @@ Status: backlog
 Blocked on: 36-1
 Wave: 1 (parallel with 36.3, 36.4)
 
-**FR:** FR301 (IDE injection ownership: two marker blocks, two owners, integration test), FR278 (the `AGENTS.md` coexistence case is covered by an integration test). **NFR:** NFR46 (byte-identical in-marker content on re-stamp), NFR49 (user content preserved). **Decisions:** P5-11.10 (installer sequence and ownership).
+**FR:** FR301 (IDE injection ownership: the `ma-agents` and `ma-standards` blocks, one owner each, beside the upstream `bmad-project-context` block; an integration test runs the three writers in all six orders, re-runs each, and asserts that every block and the user prose stay byte-identical). **NFR:** NFR46 (byte-identical in-marker content on re-stamp), NFR49 (user content preserved). **Decisions:** P5-11.10 (installer sequence and ownership).
 
 ## Story
 
@@ -16,7 +16,7 @@ so that running any writer, in any order, never deletes another writer's block o
 
 Three writers share the instruction files. The installer owns `<!-- ma-agents:start -->` / `<!-- ma-agents:end -->` (lists installed modules and the `bmad` entry point); `ma-standards-apply` owns `<!-- ma-standards:start -->` / `<!-- ma-standards:end -->` in `AGENTS.md`, `CLAUDE.md`, `.clinerules`, `.roomodes` and `.github/copilot-instructions.md`; neither touches the other's markers (P5-11.10, FR301). This story delivers the block writer the installer uses (39.2) and the case table both owners must pass (37.2 copies it into `ma-bmad-extensions`).
 
-v7's writer is LLM-driven, not a script. At `e734d3a`, `bmad-project-context` marks its block `<!-- bmad:context -->` / `<!-- /bmad:context -->` (`skills/bmad-project-context/references/template.md:17`, `:52`); it detects intent — `setup`, **`adopt`** (an instruction file with content but no managed block: every instruction in it enters a ledger, `SKILL.md:29`), `refresh`, `record`, `audit`; on approval it splices between its markers and touches nothing outside them (`:72`); and adoption may propose "a `CLAUDE.md` reduced to `@AGENTS.md`" (`:97`). The deterministic splice can be tested by simulation; the adopt ledger — which may propose relocating or deleting our blocks as "existing instructions" — can only be observed by running the skill.
+v7's writer is LLM-driven, not a script. At `e734d3a`, `bmad-project-context` marks its block `<!-- bmad:context -->` / `<!-- /bmad:context -->` (`skills/bmad-project-context/references/template.md:17`, `:52` at `bmadRef.core`, confirmed by 36.1 AC14); it detects intent — `setup`, **`adopt`** (an instruction file with content but no managed block: every instruction in it enters a ledger, `SKILL.md:29`), `refresh`, `record`, `audit`; on approval it splices between its markers and touches nothing outside them (`:72`); and adoption may propose "a `CLAUDE.md` reduced to `@AGENTS.md`" (`:97`). The deterministic splice can be tested by simulation; the adopt ledger — which may propose relocating or deleting our blocks as "existing instructions" — can only be observed by running the skill.
 
 A 3.x project's `AGENTS.md` holds a `<!-- MA-AGENTS-START -->` block written by the 3.x merger (`lib/installer.js:1332`); it is a migration input that the 3.x → 4.x upgrade (39.3) removes, and the 4.x writer must not match it.
 
@@ -38,7 +38,7 @@ A 3.x project's `AGENTS.md` holds a `<!-- MA-AGENTS-START -->` block written by 
 
 ## Tasks / Subtasks
 
-- [ ] T1 Read 36.1 AC14 for the tree path; read upstream markers from `template.md` at test time (all ACs)
+- [ ] T1 Read 36.1 AC1 for the tree path and AC14 for the upstream markers and their file; read upstream markers from `template.md` at test time (all ACs)
 - [ ] T2 Block writer module (AC1)
 - [ ] T3 `test/instruction-file-coexistence.test.js`; temp-dir fixtures; case table exported for 37.2; add to the chain (AC2–AC5)
 - [ ] T4 Removal and matcher cross-check (AC6, AC7); CRLF (AC8)
