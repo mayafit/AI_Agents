@@ -516,7 +516,7 @@ development_status:
   epic-35: cancelled   # archived; see epics-archive-2026-11-07.md
   # ─── EPICS 36–39: ma-agents 4.x on BMAD v7 ───
   epic-36: backlog   # hard gate for epics 37–39 through 36.1 GO lines and 36.6 PASS; FR280, FR282–FR284, FR301–FR304, NFR84, NFR87
-  36-1-gate-spike-v7-pinned-sha: ready-for-dev   # Wave 0 gate, blocked-on none; FR280, FR282–FR285, FR287, FR289, FR290, FR292, FR294, FR297, FR301
+  36-1-gate-spike-v7-pinned-sha: review   # Wave 0 gate, blocked-on none; FR280, FR282–FR285, FR287, FR289, FR290, FR292, FR294, FR297, FR301
   36-2-offline-runtime-proof: ready-for-dev   # Wave 0, blocked-on none; FR282
   36-3-target-pin-plumbing: backlog   # Wave 1, blocked-on 36-1; FR280, FR282, FR283, FR298, FR299, FR302, FR304
   36-4-owned-toml-validation-v7: backlog   # Wave 1, blocked-on 36-1; contract validator; FR282, FR290, FR291, FR303

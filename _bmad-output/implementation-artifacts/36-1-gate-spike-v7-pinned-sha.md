@@ -1,6 +1,6 @@
 # Story 36.1 — Gate Spike: BMAD v7 at the pinned upstream commit
 
-Status: ready-for-dev
+Status: review
 Blocked on: none
 Wave: 0 (HARD GATE — 36.3, 36.4, 36.5 do not start before this story's verdict is recorded; 36.2 runs in parallel)
 
@@ -43,17 +43,17 @@ Each AC is answered with **[RUN]** (executed in the scratch setup) or **[READ]**
 
 ## Tasks / Subtasks
 
-- [ ] T1 Scratch clone at the commit; tool versions; Skills CLI engines floor (AC1)
-- [ ] T2 AC11 first (offline render) — a STOP here re-scopes 36.2 before anything else runs
-- [ ] T3 Skills CLI: local add online/offline, `#tag` against a scratch GitHub repo, multi-module selection (AC2, AC3, AC4)
-- [ ] T4 `setup.py --module-answers` round-trip and error cases (AC5)
-- [ ] T5 Validator fixture with positive and negative controls (AC6)
-- [ ] T6 `github:` update source online and offline; offline update path (AC7)
-- [ ] T7 Sofia custom store (AC8)
-- [ ] T8 `migrate_v6.py` read-only + `bmad migrate method` on a copy; collision list (AC9)
-- [ ] T9 Bind-target key matrix + unknown-key behaviour (AC10)
-- [ ] T10 tea/cis tags (AC12); `.agents/skills` collision (AC13); upstream instruction-block markers (AC14)
-- [ ] T11 Findings file, verdict, GO lines, change set (AC15); verify AC16; delete scratch dirs
+- [x] T1 Scratch clone at the commit; tool versions; Skills CLI engines floor (AC1)
+- [x] T2 AC11 first (offline render) — a STOP here re-scopes 36.2 before anything else runs
+- [x] T3 Skills CLI: local add online/offline, `#tag` against a scratch GitHub repo, multi-module selection (AC2, AC3, AC4)
+- [x] T4 `setup.py --module-answers` round-trip and error cases (AC5)
+- [x] T5 Validator fixture with positive and negative controls (AC6)
+- [x] T6 `github:` update source online and offline; offline update path (AC7)
+- [x] T7 Sofia custom store (AC8)
+- [x] T8 `migrate_v6.py` read-only + `bmad migrate method` on a copy; collision list (AC9)
+- [x] T9 Bind-target key matrix + unknown-key behaviour (AC10)
+- [x] T10 tea/cis tags (AC12); `.agents/skills` collision (AC13); upstream instruction-block markers (AC14)
+- [x] T11 Findings file, verdict, GO lines, change set (AC15); verify AC16; delete scratch dirs
 
 ## Dev Notes
 
@@ -77,4 +77,4 @@ No test file is added. Every [RUN] records command, exit code and the decisive o
 
 ## Verification record
 
-Verdict: … ; GO lines: 37.1 … / 37.2 … / 36.3–36.5 … / 38 … / 39 … ; Findings file: … ; Scratch dirs removed: … ; unverified (with reason): …
+Verdict: PASS (no STOP; AC12 FALLBACK for cis, tea PASS at v4.0.1) ; GO lines: 37.1 GO / 37.2 GO / 36.3–36.5 GO / 38 GO / 39 GO ; Findings file: `_bmad-output/implementation-artifacts/epic-runs/epic-36/36-1-gate-findings.md` ; Scratch dirs removed: yes (2026-11-14; scratch GitHub repository https://github.com/mayafit/ma-bmad-spike-36-1 left for review) ; unverified (with reason): none
