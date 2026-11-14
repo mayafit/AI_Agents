@@ -181,3 +181,5 @@ If a project has existing `backlog.yaml`, `sprints/sprint-N.yaml`, or the old `s
 5. Legacy files are renamed with `.legacy` suffix (not deleted — user can verify and remove)
 
 **Affects:** All 13 skills listed in the integration map above, `sprint-status.yaml` (new unified file), `{story_location}/done/` (archive directory)
+
+#### P2-11 tracker hook contract — archived; see [archive-superseded-2026-11-07.md](archive-superseded-2026-11-07.md)

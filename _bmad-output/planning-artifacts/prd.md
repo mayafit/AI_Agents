@@ -2,7 +2,7 @@
 stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-24', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-03-25', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-07', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-04-08', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-05-01', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit-2026-05-01b']
 workflowStatus: 'complete'
 completedDate: '2026-03-05'
-lastEdited: '2026-08-03'
+lastEdited: '2026-11-07'
 editHistoryLocation: 'prd/changelog.md'
 inputDocuments: ['docs/index.md', 'docs/project-overview.md', 'docs/architecture.md', 'docs/source-tree-analysis.md', 'docs/development-guide.md', 'README.md', 'CONTRIBUTING.md', 'DEVELOPMENT.md', 'QUICK_START.md', 'SKILLS_STRUCTURE.md', '_bmad-output/planning-artifacts/product-brief-agents-2026-03-08.md']
 workflowType: 'prd'
@@ -21,7 +21,7 @@ classification:
 # Product Requirements Document - agents
 
 **Author:** Alon
-**Date:** 2026-03-05 | **Last Edited:** 2026-08-03
+**Date:** 2026-03-05 | **Last Edited:** 2026-11-07
 
 > **This is the PRD index.** The PRD was decomposed on 2026-07-31 (it was a single 184 KB /
 > 1,011-line file). Content is verbatim; this file carries the front matter and the registers.
@@ -35,17 +35,38 @@ classification:
 > `prd/capabilities/X.md` and `architecture/decisions/X.md` — same filename, both sides of the
 > contract.
 
-**Totals** (recomputed from the shard contents 2026-08-03, fence-aware): **266 FR definition
-lines** covering **265 distinct FR IDs** — FR35 is defined twice (Known Issues #1), so definitions
-exceed distinct IDs by one. Of those 265 distinct IDs, **264 are live and 1 is retired** (FR266,
-retired at P5-9 before implementation, ID never reused). High-water mark **FR267**; FR77 and FR78
+**Totals** (recomputed from the shard contents 2026-11-08, fence-aware): **304 FR definition
+lines** covering **303 distinct FR IDs** — FR35 is defined twice (Known Issues #1), so definitions
+exceed distinct IDs by one. Of those 303 distinct IDs, **291 are live, 11 are withdrawn** (FR268–FR270,
+FR272–FR279, in [withdrawn-requirements](prd/withdrawn-requirements.md)) **and 1 is retired** (FR266,
+retired at P5-9 before implementation, ID never reused); "live" counts superseded IDs kept as
+history, as before. High-water mark **FR305**; FR77 and FR78
 were never defined (Known Issues #2), so the high-water mark overstates the ID count by two.
-**83 NFR definitions covering 83 distinct NFR IDs**, no duplicates and no gaps, high-water mark
-**NFR83**. 11 capability domains covering the PRD's 26 declared capability areas. Every ID except
-FR35 appears in exactly one file.
+**87 NFR definitions covering 87 distinct NFR IDs** (86 live, NFR85 withdrawn), no duplicates and no
+gaps, high-water mark **NFR87**. 12 capability files and one withdrawn-requirements file covering the
+PRD's 27 live capability areas (F27 and F28 are withdrawn). Every ID except FR35 appears in exactly
+one file.
 
-**F26 — Global Installation & Federated Knowledge Stores** is the newest capability area and
-spans two capability files: the install-scope thread lives in
+**F27 — BMAD v6.12.4 Integration** and **F28 — Extension Decomposition & Thin Installer** are
+withdrawn; their requirements are kept in
+[withdrawn-requirements](prd/withdrawn-requirements.md). The 3.x line installs bmad-method 6.10.0
+(FR271, in [bmad-integration-and-bundling](prd/capabilities/bmad-integration-and-bundling.md)).
+
+**F29 — ma-agents 4.x on BMAD v7** lives in
+[ma-agents-v7-line](prd/capabilities/ma-agents-v7-line.md) (FR280–FR305, NFR84, NFR86, NFR87). It
+states the two product lines, and specifies ma-agents 4.x as four BMAD v7 modules in one repository,
+`ma-bmad-extensions` — `ma-ops` (agents, ops workflows, MIL-STD-498, `ma-ops-dev-epic`),
+`ma-standards` (coding standards, review, git workflow, `ma-standards-apply`), `ma-knowledge`
+(Knowledge Atlas) and `ma-atlassian` (Jira ticket store and Confluence overlay) — plus a thin
+offline installer, the npm package `ma-agents` 4.x, that installs a pinned BMAD v7 commit and the
+selected modules from a self-contained bundle.
+
+F29 holds the package map skill by skill, the installer's commands, wizard, flags, install
+sequence, bundle, uninstall and upgrade from 3.x, the Atlassian bind target table, override format
+and Jira store keys and maps, the two migrations, the qualification gate that governs the on-prem
+release, and the CI gates (NFR84), version line (NFR86) and 3.x upgrade test (NFR87).
+
+**F26 — Global Installation & Federated Knowledge Stores** spans two capability files: the install-scope thread lives in
 [bmad-integration-and-bundling](prd/capabilities/bmad-integration-and-bundling.md)
 (FR248–FR253, NFR76–NFR78) and the knowledge-store / Confluence thread in
 [project-knowledge-and-repository-layout](prd/capabilities/project-knowledge-and-repository-layout.md)
@@ -120,8 +141,10 @@ software, so they are pinned here.
 | Capability file | PRD capability areas | FRs | NFRs | Architecture |
 |---|---|---|---|---|
 | [skills-platform.md](prd/capabilities/skills-platform.md) | F1 Skill Management & Portability · F2 Skill Enforcement · F15 Developer Infrastructure | 25 | — | [skills-platform.md](architecture/decisions/skills-platform.md) |
-| [bmad-integration-and-bundling.md](prd/capabilities/bmad-integration-and-bundling.md) | F3 BMAD-METHOD Integration (+ Bundled Install) · F4 BMAD Extension Architecture · **F26** (install scope) | 22 | NFR16–21, 76–78 | [bmad-integration-and-bundling.md](architecture/decisions/bmad-integration-and-bundling.md) |
-| [bmad-platform-currency.md](prd/capabilities/bmad-platform-currency.md) | F25 v6.10.0 *(current)* · F24 v6.9.0 · F23 v6.8.0 · F21 v6.6.0 · F20 6.3.0 · F5 6.2.0 | 52 | NFR29–33, 50–59, 70–75 | [bmad-platform-currency.md](architecture/decisions/bmad-platform-currency.md) |
+| [bmad-integration-and-bundling.md](prd/capabilities/bmad-integration-and-bundling.md) | F3 BMAD-METHOD Integration (+ Bundled Install) · F4 BMAD Extension Architecture · **F26** (install scope) · 3.x platform target (FR271) | 23 | NFR16–21, 76–78 | [bmad-integration-and-bundling.md](architecture/decisions/bmad-integration-and-bundling.md) |
+| [bmad-platform-currency.md](prd/capabilities/bmad-platform-currency.md) | F25 v6.10.0 · F24 v6.9.0 · F23 v6.8.0 · F21 v6.6.0 · F20 6.3.0 · F5 6.2.0 | 52 | NFR29–33, 50–59, 70–75 | [bmad-platform-currency.md](architecture/decisions/bmad-platform-currency.md) |
+| [ma-agents-v7-line.md](prd/capabilities/ma-agents-v7-line.md) | **F29** ma-agents 4.x on BMAD v7 | 26 | NFR84, 86–87 | [bmad-integration-and-bundling.md](architecture/decisions/bmad-integration-and-bundling.md) |
+| [withdrawn-requirements.md](prd/withdrawn-requirements.md) | withdrawn: F27 BMAD v6.12.4 · F28 Extension Decomposition & Thin Installer | 11 | NFR85 | — |
 | [agent-personas-and-ide-targets.md](prd/capabilities/agent-personas-and-ide-targets.md) | F6 Specialized Agent Personas · F14 OpenCode Support · F22 Cline Workflow Generation | 9 | — | [agent-personas-and-ide-targets.md](architecture/decisions/agent-personas-and-ide-targets.md) |
 | [methodology-and-sdlc-workflows.md](prd/capabilities/methodology-and-sdlc-workflows.md) | F7 MIL-STD-498 · F8 SDLC Workflows · F9 Bug Management · F16 Methodology Onboarding | 27 | — | — |
 | [sprint-and-backlog-management.md](prd/capabilities/sprint-and-backlog-management.md) | F10 Sprint & Backlog Management | 20 | **none** | [sprint-and-backlog-management.md](architecture/decisions/sprint-and-backlog-management.md) |
@@ -142,10 +165,10 @@ software, so they are pinned here.
 
 | File | Contents |
 |---|---|
-| [vision-and-system-context.md](prd/vision-and-system-context.md) | Executive Summary, System Overview (all 25 capability areas with status, Future Directions), Success Criteria |
+| [vision-and-system-context.md](prd/vision-and-system-context.md) | Executive Summary, System Overview (capability areas with status, Future Directions), Success Criteria. Its System Overview lists the 27 live areas (F1–F26, F29). |
 | [user-journeys.md](prd/user-journeys.md) | 7 persona journeys + journey requirements summary |
 | [domain-constraints-and-innovation.md](prd/domain-constraints-and-innovation.md) | Compliance & standards, technical constraints, integration requirements, risk mitigations, innovation patterns, developer-tool requirements |
-| [changelog.md](prd/changelog.md) | 28-entry revision history, evicted from the front matter |
+| [changelog.md](prd/changelog.md) | 31-entry revision history, evicted from the front matter |
 
 ## Finding a requirement by ID
 
@@ -156,8 +179,10 @@ exact and machine-derived from the shard contents (no approximation, no "partial
 | FR IDs | Capability file | Count |
 |---|---|---|
 | FR1–FR7, FR34–FR38, FR44–FR47, FR51–FR55, FR73, FR204–FR206 | [skills-platform](prd/capabilities/skills-platform.md) | 25 |
-| FR8–FR12, FR74–FR76, FR104–FR106, FR123–FR127, FR248–FR253 | [bmad-integration-and-bundling](prd/capabilities/bmad-integration-and-bundling.md) | 22 |
+| FR8–FR12, FR74–FR76, FR104–FR106, FR123–FR127, FR248–FR253, FR271 | [bmad-integration-and-bundling](prd/capabilities/bmad-integration-and-bundling.md) | 23 |
 | FR94–FR103, FR107–FR110, FR182–FR198, FR207–FR214, FR235–FR247 | [bmad-platform-currency](prd/capabilities/bmad-platform-currency.md) | 52 |
+| FR280–FR305 | [ma-agents-v7-line](prd/capabilities/ma-agents-v7-line.md) | 26 |
+| FR268–FR270, FR272–FR279 (withdrawn) | [withdrawn-requirements](prd/withdrawn-requirements.md) | 11 |
 | FR13–FR33, FR60–FR64, FR72 | [methodology-and-sdlc-workflows](prd/capabilities/methodology-and-sdlc-workflows.md) | 27 |
 | FR35, FR42, FR56–FR57, FR199–FR203 | [agent-personas-and-ide-targets](prd/capabilities/agent-personas-and-ide-targets.md) | 9 |
 | FR65–FR71, FR128–FR140 | [sprint-and-backlog-management](prd/capabilities/sprint-and-backlog-management.md) | 20 |
@@ -172,6 +197,8 @@ exact and machine-derived from the shard contents (no approximation, no "partial
 |---|---|
 | NFR1–NFR15 | general-quality-attributes |
 | NFR16–NFR21, NFR76–NFR78 | bmad-integration-and-bundling |
+| NFR84, NFR86–NFR87 | ma-agents-v7-line |
+| NFR85 (withdrawn) | withdrawn-requirements |
 | NFR22–NFR25, NFR34–NFR37, NFR79–NFR83 | project-knowledge-and-repository-layout |
 | NFR26–NFR28 | agent-activity-dashboard |
 | NFR29–NFR33, NFR50–NFR59, NFR70–NFR75 | bmad-platform-currency |
@@ -181,7 +208,7 @@ exact and machine-derived from the shard contents (no approximation, no "partial
 
 ## Related documents
 
-- [architecture.md](architecture.md) — architecture index + decision register (P2-1 … P5-9; next free ID P5-10)
+- [architecture.md](architecture.md) — architecture index + decision register (P2-1 … P5-11; next free ID P5-12)
 - [epics.md](epics.md) — epics and stories
 - [../implementation-artifacts/sprint-status.yaml](../implementation-artifacts/sprint-status.yaml) — delivery status; the authority on what actually shipped
 
@@ -196,8 +223,8 @@ pre-split counts). Only these organisational changes were made:
 2. **The six BMAD version threads became one capability.** F5, F20, F21, F23, F24 and F25 were
    six co-equal capability areas, but the project supports exactly one bmad-method version at a
    time — each thread superseded the last. They are now one *platform currency* capability
-   ordered **newest first**, so the current state (v6.10.0) is at the top and the history
-   follows.
+   ordered **newest first**. The installed version of the 3.x line is stated by FR271
+   (bmad-method 6.10.0).
 3. **FR204–FR206 moved to skills-platform.** They sat inside the Local-LLM / On-Prem section
    between FR176 and FR177, but their own subsection is titled "Git Workflow Guardrails (all
    profiles)" and Architecture Decision P5-4 governs them. Text and IDs unchanged.
@@ -221,7 +248,7 @@ Recorded, deliberately **not** fixed — no requirement text or ID was altered.
    defines no quality attributes at all — no performance, reliability or scale constraint on
    the sprint model.
 4. **Capability statuses lag delivery.** F23 (v6.8.0), F24 (v6.9.0) and F25 (v6.10.0) are
-   marked *Planned*, yet Epics 27, 28 and 30 shipped them in v3.13.0, v3.13.1 and v3.17.0.
+   marked *Planned*, yet versions v3.13.0, v3.13.1 and v3.17.0 shipped them.
    Treat [sprint-status.yaml](../implementation-artifacts/sprint-status.yaml) as the delivery
    authority.
 5. **Supersession is prose-only.** Retirement is narrated ("supersedes FR208", "Superseded

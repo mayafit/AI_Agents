@@ -110,6 +110,153 @@ ma-agents/
     └── cli.test.js                 — CLI command tests
 ```
 
+### Target Structure — ma-agents 4.x
+
+The tree above is the ma-agents 3.x line. ma-agents 4.x is two deliverables: the `ma-bmad-extensions` repository of BMAD v7 modules and the `ma-agents` npm installer with its offline bundle (Decision P5-11).
+
+**Extension repository**
+
+```
+ma-bmad-extensions/                         — one version line; tag per release; validate_manifests.py in CI
+├── skills/                                 — flat; every folder below sits directly in skills/
+│   ├── bmod-ma-ops/                        — record folder, code ma-ops
+│   │   ├── bmod.toml                       — [bmod] code, version, update_source, skills (40), required_skills = bmad core,
+│   │   │                                     recommended_skills = bmad-build, bmad-agent-po, git-workflow-skill + code-review (with source);
+│   │   │                                     no config questions
+│   │   ├── SKILL.md                        — stub: redirects to `bmad setup ma-ops`
+│   │   ├── help/help.md
+│   │   ├── roster.toml                     — Alex, Yael, Amit, Gadi; group "ops"
+│   │   ├── retired.toml                    — renamed bmad-dev-epic → ma-ops-dev-epic
+│   │   └── migration-1.toml                — 3.x backlog: → {output_folder}/backlog/; sprints: → archive-v6/sprints.yaml; report
+│   ├── bmod-ma-standards/                  — record folder, code ma-standards
+│   │   ├── bmod.toml                       — skills (29), required_skills = bmad core; no config questions
+│   │   ├── SKILL.md  help/help.md
+│   │   └── retired.toml                    — empty
+│   ├── bmod-ma-knowledge/                  — record folder, code ma-knowledge
+│   │   ├── bmod.toml                       — skills (1); config question atlas_output
+│   │   ├── SKILL.md  help/help.md
+│   │   └── retired.toml                    — renamed bmad-knowledge → ma-knowledge-atlas
+│   ├── bmod-ma-atlassian/                  — record folder, code ma-atlassian
+│   │   ├── bmod.toml                       — skills (3); nine config questions (P5-11.9)
+│   │   ├── SKILL.md  help/help.md
+│   │   ├── retired.toml                    — empty
+│   │   └── migration-1.toml                — 3.x project-layout.yaml + 3.x override markers → answers + bind; report
+│   │
+│   │   ── ma-ops members (each: SKILL.md, bmod.toml [skill] bmod = "bmod-ma-ops", source = …) ──
+│   ├── ma-agent-sre/  ma-agent-cyber/  ma-agent-devops/  ma-agent-sqa/
+│   ├── sre-check-deployment-status/  sre-check-secrets/  sre-check-system-status/  sre-day-2-ops/
+│   ├── sre-deployment-strategies/  sre-fix-deployments/  sre-gitops-status/
+│   ├── cyber-generate-certs/  cyber-immunity-estimation/  cyber-security-audit/  cyber-vault-secrets/
+│   ├── cyber-verify-docker-users/  cyber-verify-image-signature/  cyber-vulnerability-scan/
+│   ├── devops-configure-infrastructure/  devops-disconnected-deployment/  devops-docker-compose-setup/
+│   ├── devops-manage-helm/  devops-sign-docker-image/
+│   ├── sqa-audit/  sqa-ieee12207/  sqa-requirements-quality/
+│   ├── mil498-ocd/  mil498-requirement-quality/  mil498-sdd/  mil498-sdp/  mil498-srs/  mil498-ssdd/
+│   ├── mil498-sss/  mil498-std/                      — DID templates under each skill's assets/
+│   ├── create-hardened-docker-skill/  docker-hardening-verification/  docker-image-signing/
+│   ├── verify-hardened-docker-skill/  self-signed-cert/
+│   ├── ma-ops-dev-epic/                    — tickets.py discovery; bmad-build / -auto / code-review / review / walkthrough
+│   │   └── scripts/migrate_v6_backlog.py   — [skill] scripts; the ma-ops migration-1 script
+│   │
+│   │   ── ma-standards members ──
+│   ├── cpp-best-practices/  cpp-concurrency-safety/  cpp-const-correctness/  cpp-memory-handling/
+│   ├── cpp-modern-composition/  cpp-robust-interfaces/  csharp-best-practices/
+│   ├── python-best-practices/  python-dependency-mgmt/  python-security-skill/
+│   ├── js-ts-dependency-mgmt/  js-ts-security-skill/  vercel-react-best-practices/  cmake-best-practices/
+│   ├── logging-best-practices/  opentelemetry-best-practices/  code-documentation/  code-review/
+│   ├── test-generator/  test-accompanied-development/  git-workflow-skill/  commit-message/
+│   ├── auto-bug-detection/  ai-audit-trail/  document-revision-history/  skill-creator/
+│   ├── project-context-expansion/
+│   ├── open-presentation/                  — assets/: the training deck
+│   ├── ma-standards-apply/                 — ma-standards marker block in AGENTS.md, CLAUDE.md, .clinerules,
+│   │                                         .roomodes, .github/copilot-instructions.md; `remove` sub-command
+│   │
+│   │   ── ma-knowledge member ──
+│   ├── ma-knowledge-atlas/
+│   │   └── assets/atlas.cjs                — Knowledge Atlas engine, run with node
+│   │
+│   │   ── ma-atlassian members ──
+│   ├── ma-atlassian-bind/                  — bind / unbind / status
+│   │   ├── bmod.toml                       — [skill] scripts = the four scripts below
+│   │   ├── config/jira-onprem-ticketing.toml   — Sofia store starter (Jira Server/Data Center)
+│   │   ├── references/bind-targets.toml    — the P5-11.4 target table
+│   │   └── scripts/                        — publish engine, page tree, override generator, collision check, migrate_binding.js (JavaScript)
+│   ├── ma-atlassian-confluence-plan/
+│   └── ma-atlassian-confluence-record-root-page/
+└── test/                                   — module assignment; validate_manifests.py; contract validator (FR303); per module: npx skills add <local> and
+                                              <repo>#<tag> into a v7 project with method, setup.py --module-answers, setup.py --status, offline activation
+```
+
+**Installer package**
+
+```
+ma-agents/                                  — npm package, semver 4.x, engines.node ≥ 20.12
+├── package.json                            — bmadRef { core, skillsCli, tea, cis, extensions }
+├── bin/cli.js                              — install, update, status, uninstall, bundle build; wizard and flags
+├── lib/installer.js                        — install sequence (P5-11.10); writes .ma-agents/install.json
+├── lib/runtime/uv.js                       — the only uv execution site (uv run --no-cache)
+├── lib/agents.js                           — coding tool → Skills CLI --agent; ma-agents marker block
+├── lib/uninstall.js                        — removal per .ma-agents/install.json; 3.x parts on an upgrade
+├── lib/bundle.js                           — bundle build: snapshot, wheelhouse enumeration, manifest
+├── bundle/                                 — built by `bundle build`, shipped in the tarball
+│   ├── manifest.json                       — every item with SHA-256; bmadRef; extension tag; omissions
+│   ├── bmad-method/                        — BMAD-METHOD skills/ at bmadRef.core (core-tools, method, toolsmith, founder)
+│   ├── tea/  cis/                          — at bmadRef.tea / bmadRef.cis (absent when no tag carries a bmod record)
+│   ├── ma-bmad-extensions/                 — skills/ at bmadRef.extensions, files unchanged (github: sources)
+│   ├── skills-cli/                         — npm `skills` tarball at bmadRef.skillsCli, unpacked by the installer
+│   ├── runtime/linux-x64/  runtime/win-x64/ — uv binary + python-build-standalone 3.11
+│   └── wheelhouse/linux-x64/  wheelhouse/win-x64/ — every PEP 723 dependency of the bundled scripts
+└── test/                                   — install sequence, bundle determinism, injection ownership, upgrade fixture (3.18.x)
+```
+
+**Boundaries**
+
+| Component | Owns | Never touches |
+|---|---|---|
+| `ma-agents` installer | bundle verification; `.ma-agents/runtime/`, `.ma-agents/uv.toml`, `.ma-agents/skills-cli/`, `.ma-agents/install.json`; Skills CLI and `setup.py` invocation; the temporary answers file; the `ma-agents` marker block; the backup folder before an upgrade | skill content; `_bmad/custom/`; the `ma-standards` and `bmad:context` blocks; the initiative store; migrations |
+| `bmod-ma-ops` | its agents and workflows; `migration-1.toml` and `migrate_v6_backlog.py` | sprint or tracking files outside its migration; story status (set through `bmad-agent-po` board requests and `bmad-build`'s plan file) |
+| `bmod-ma-standards` | its skills; the `ma-standards` marker block (`ma-standards-apply`) | the `ma-agents` block; other modules' files |
+| `bmod-ma-knowledge` | `ma-knowledge-atlas` and its output folder (`atlas_output`) | the initiative store (read only) |
+| `bmod-ma-atlassian` | its bracketed keys in `_bmad/custom/<skill>.toml` and `ticketing-store-config.toml`; Confluence pages under the two root pages; `migration-1.toml` and `migrate_binding.js` | upstream skill files; user-authored keys; any line outside its markers |
+| Upstream BMAD (`bmad`, Sofia, `bmad-build`) | `_bmad/config.toml`, setup, migrations (`bmad migrate`), the initiative store, plan files | — |
+
+**Data flow**
+
+| Flow | Path |
+|---|---|
+| Install | `ma-agents install` → verify `manifest.json` → copy runtime, write `.ma-agents/uv.toml` → unpack Skills CLI → `node <skills-cli> add <bundle>/bmad-method` → the same per module source → `setup.py --list-config-questions` → pending answers as `[modules."<code>"]` → `setup.py --module-answers` → `_bmad/config.toml`, `_bmad/custom/config.user.toml` → `install.json` → `ma-agents` block → `ma-agents status` |
+| Bind | `ma-atlassian-bind bind` → `resolve_config.py` (`modules.ma-atlassian.*`) → bind-target table × installed skills → bracketed keys in `_bmad/custom/<skill>.toml` + `ticketing-store-config.toml` → report (bound, collision, not installed, missing slot, missing answer) |
+| Publish | upstream skill finishes (`external_handoffs` / `on_complete`) or Sofia changes the board or store (`board_after` / `store_after`) → `node _bmad/ma-atlassian/scripts/<engine>` → Confluence page under the planning or tickets root page |
+| Migrate | `ma-agents install` on a 3.x project → `.ma-agents-backup-<datetime>/` → uninstall 3.x parts → install 4.x → prints "ask `bmad` to run `bmad migrate`" → `method` migration → `bmod-ma-ops/migration-1.toml` (`migrate_v6_backlog.py`) → `bmod-ma-atlassian/migration-1.toml` (`migrate_binding.js`) → reports under `{output_folder}/migration-v6-v7/` |
+
+**Requirements to structure**
+
+| Requirement | Component | Location |
+|---|---|---|
+| FR280, FR281 | installer | `package.json` `bmadRef`; CI qualification gate |
+| FR282 | installer | `bundle/runtime/`, `bundle/wheelhouse/`, `lib/installer.js` |
+| FR283, FR284 | installer | `lib/installer.js` |
+| FR285, FR295 | extension repository | `skills/bmod-*/bmod.toml`, member `bmod.toml`, `test/` |
+| FR286 | `bmod-ma-ops` | `roster.toml`, `help/help.md` (every record) |
+| FR287 | every module | `retired.toml` |
+| FR288 | every skill | `resolve_config.py` / `resolve_customization.py` calls |
+| FR289 | `bmod-ma-atlassian` | `ma-atlassian-bind/config/jira-onprem-ticketing.toml`, `ticketing-store-config.toml` |
+| FR303 | extension repository | `test/` contract validator over every owned `customize.toml` and bind output |
+| FR304 | installer | `lib/runtime/uv.js`, `test/` execution guard |
+| FR305 | `bmod-ma-knowledge` | `ma-knowledge-atlas/`, CI fixture initiative |
+| FR290, FR291 | `bmod-ma-atlassian` | `ma-atlassian-bind/references/bind-targets.toml`, `scripts/` |
+| FR292 | `bmod-ma-ops` | `ma-ops-dev-epic/` |
+| FR293, FR300 | `bmod-ma-atlassian` | `bmod.toml` config questions, `ma-atlassian-confluence-*` |
+| FR294 | `bmod-ma-ops`, `bmod-ma-atlassian` | `migration-1.toml`, `migrate_v6_backlog.py`, `migrate_binding.js` |
+| FR296 | `bmod-ma-ops` | `migration-1.toml`; no sprint-file skill in the repository |
+| FR297, FR298 | installer | `bin/cli.js` (`--source`, wizard, flags) |
+| FR299 | installer | `lib/bundle.js`, `bundle/manifest.json` |
+| FR301 | installer, `bmod-ma-standards` | `lib/agents.js`, `ma-standards-apply/` |
+| FR302 | installer, every module | `bmadRef`, `required_skills`, `ma-agents status` |
+| NFR84 | extension repository | `test/`, CI |
+| NFR86 | extension repository | one `version` across `bmod-*/bmod.toml` |
+| NFR87 | installer | `test/` upgrade fixture |
+
 ### Architectural Boundaries
 
 **Module Boundaries (4 modules, strict separation):**

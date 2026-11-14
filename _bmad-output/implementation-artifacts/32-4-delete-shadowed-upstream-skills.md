@@ -1,0 +1,62 @@
+# Story 32.4 — Delete the Three Skills That Shadow Upstream Names
+
+Status: backlog
+Blocked on: 32-3; and 32.1's findings file recording **32.4 GO** (AC8 schema verdict `superset`, or a PO acceptance of the dropped keys — readiness C-1)
+Wave: 2 (parallel with 32.5; 32.6 follows in Wave 3)
+
+**FR:** FR276, FR271. **NFR:** NFR49 (preserve user content on update), NFR52 (multi-tool parity — re-proven in 32.9). **Decision inputs:** P5-10.5 ("our shadow copies of `bmad-dev-story`, `bmad-sprint-planning`, `bmad-sprint-status` are deleted (upstream's `sprint_plan.py` core preserves our schema keys)"), P5-10.3 (unique leaf names).
+
+## Story
+
+As an **ma-agents user on bmad-method 6.12.4**,
+I want ma-agents to stop shipping its own `bmad-dev-story`, `bmad-sprint-planning` and `bmad-sprint-status`,
+so that `bmad-sprint-planning` is upstream's scripted, tested skill, the two retired names are simply gone (no shims), and no install carries two skills with one leaf name.
+
+## Context
+
+ma-agents ships these three under module `ma-skills` in two pipelines: `lib/bmad-extension/skills/{bmad-dev-story,bmad-sprint-planning,bmad-sprint-status}/` (staged as the custom-source plugin) and `skills/{bmad-sprint-planning,bmad-sprint-status}/` (`SKILL.md` + `skill.json`, installed by `lib/installer.js`), plus the generated mirror `lib/bmad-extension-plugin/skills/` and the tracked self-install copies `.agents/skills/{bmad-dev-story,bmad-sprint-planning,bmad-sprint-status}/` (registered at `.agents/skills/MANIFEST.yaml:25-31`). At 6.12.4 upstream `bmad-sprint-planning` is a real skill rebuilt around `scripts/sprint_plan.py` (keeps `project_key`, `tracking_system`, `story_location`; absorbs `bmad-check-implementation-readiness` and `bmad-sprint-status`), and `bmad-dev-story` / `bmad-sprint-status` exist only under `v6-shims/`, which ma-agents does not install (FR271). Enumerations: `lib/bmad-extension/skills/module-help.csv:36`, `:38`, `:45`; `lib/bmad-extension/.claude-plugin/marketplace.json.template:90-92`. These three documents also carry Epic 31 text: 8 of the 41 `## Knowledge Store Binding Preflight` copies and 3 of the 9 `## Knowledge Store Backend Routing` (Story 31.9 gate) copies live in them, and 5 of the 30 source files carrying a Jira routing block (`is \`jira\``). That routing text is **not lost** — it survives in the ten other sprint/backlog skills (`add-sprint`, `add-to-sprint`, `cleanup-done`, `close-sprint`, `generate-backlog`, `modify-sprint`, `my-next-issue`, `prioritize-backlog`, `remove-from-sprint`, `sprint-status-view`) until Epic 34 moves it into the Atlassian adapter. What *is* lost, between this story and Epic 34, is Jira routing, the knowledge-store preflight and the 31.9 gate **for sprint planning itself**: upstream `bmad-sprint-planning` carries none of them.
+
+## Acceptance Criteria
+
+1. **Gone from every source tree.** No directory named `bmad-dev-story`, `bmad-sprint-planning` or `bmad-sprint-status` exists under `skills/`, `lib/bmad-extension/skills/`, `lib/bmad-extension-plugin/skills/`, or `.agents/skills/` (fs walk in a test; outside authority: the file system).
+2. **Gone from every enumeration.** No row in `lib/bmad-extension/skills/module-help.csv` and its plugin mirror names them; no `skills[]` entry in `marketplace.json.template` or the generated `marketplace.json`; no entry in `.agents/skills/MANIFEST.yaml`. `test/extension-module-restructure.test.js` derives the expected skill-dir count from an fs listing of `lib/bmad-extension/skills/*/` and the CSV row count from parsing the CSV, and asserts they are equal to each other and to the template's `skills[]` length — it no longer hard-codes `51` (`:219`, `:320`) or lists the three names (`:188-191`).
+3. **Upstream skill resolves.** A real 6.12.4 install (`--modules bmm --tools claude-code --yes`, with the ma-agents plugin staged) produces exactly one `.claude/skills/bmad-sprint-planning/`, and its `SKILL.md` is byte-identical to `node_modules/bmad-method/src/bmm-skills/**/bmad-sprint-planning/SKILL.md` (outside authority: the vendored upstream tree). `.claude/skills/bmad-dev-story/` and `.claude/skills/bmad-sprint-status/` do not exist.
+4. **Upgrade path does not delete upstream's copy.** On a project previously installed by ma-agents 3.18.x (fixture: `.ma-agents.json` listing `bmad-sprint-planning` / `bmad-sprint-status` from root `skills/`, with those dirs present), running the new install leaves (a) no ma-agents-owned copy and no `.ma-agents.json` entry for the three IDs, and (b) upstream's `bmad-sprint-planning` intact (byte-compare as in AC3). The test drives the real `bin/cli.js` install path, not `migrateRetiredSkills` in isolation, because ordering is the defect class here. Ownership follows the 31-16 rule (`sprint-status.yaml` `31-16-…` entry): a manifest-listed skill is ma-agents', but an unlisted one is **not** therefore upstream's or the user's to delete — manifests under-record, so when ownership cannot be proven the copy is preserved and named, never removed.
+5. **Cline wrappers reconcile.** After AC4's upgrade, `.cline/` carries no wrapper for `bmad-dev-story` / `bmad-sprint-status`, and the `bmad-sprint-planning` wrapper (if any) points at the upstream skill. Asserted through `deployClineWorkflows` (`lib/bmad.js:1876`) on a real tree; `test/cline-workflow-reconciliation.test.js` passes.
+6. **Pinned counts re-derived, not re-typed.** Every count these deletions move is re-derived from the file system before being re-pinned, and each new number is recorded in the Verification record with the command that produced it. Sites (all verified in this worktree): `test/project-layout-artifact-routing.test.js:1929` (41); `test/project-layout-confluence-page-tree.test.js:2235-2245` (`GATE_COPIES`), `:2291` (9), `:2428` (41); `test/project-layout-confluence-publish-hook.test.js:4027` (9), `:4040` (41); `test/release-gate-epic-31.test.js:1153` (41), `:1178` (9), `:1917` (9), `:2360` (`{ preflight: 46, gate: 9 }`), `:2363` (46); explicit file lists at `test/project-layout-staleness-guard.test.js:1145-1161` and `test/project-layout-confluence-routing.test.js:103-106`. Expected arithmetic (to be *confirmed* by the walk, not trusted): preflight 41 → 33, gate 9 → 6, release-gate preflight 46 → 38, Jira-routed source files 30 → 25 (`test/jira-identity-clause.test.js:72`'s `>= 20` floor still holds). If the walk disagrees with this arithmetic, the walk wins and the discrepancy is explained. Where a test can, it asserts `old − removed_by_this_story = new`, with `removed` counted from the dirs this story deletes (`git diff --name-status --diff-filter=D` against the epic base), not re-typed.
+7. **Byte-identity invariants survive.** The remaining preflight copies are still one sha256; the remaining gate copies are still one sha256 (the existing `digests.size === 1` assertions pass unchanged).
+8. **Known limitation recorded, not hidden.** `CHANGELOG.md` `[Unreleased]` gains a "Known limitations" entry: *between this release and Epic 34, `bmad-sprint-planning` (now upstream) does not route to Jira, does not run the knowledge-store binding preflight, and does not apply the Story 31.9 backend-routing gate; on a Jira-bound project run sprint planning against the file-system `sprint-status.yaml` and use the ma-agents sprint skills (which still route) to sync; tracked as Epic 34 Stories 34.2 (hook points), 34.3 (Jira and Confluence adapters) and 34.4 (`ma-atlassian-setup` binds `bmad-sprint-planning`, `bmad-build` and `bmad-build-auto` per FR273 as amended 2026-10-31).* **Closure condition (readiness C-4):** the entry is carried forward unchanged in every ma-agents release's CHANGELOG until the first ma-agents release that vendors an `ma-atlassian` version whose target table binds those three skills (Epic 35.1 — `lib/extensions/ma-atlassian/…/targets.yaml` is the first Epic 34 artefact visible in this repo); that release removes the entry. The test suite gains one test that fails if the entry is absent from `CHANGELOG.md` while no `lib/extensions/ma-atlassian/**/targets.yaml` exists in the repo that lists `bmad-sprint-planning` as a target — both halves are file reads in this repo, so the guard's lifetime is defined.
+11. **`sprint_plan.py` round-trip keeps our sections (readiness C-1).** After AC3's install, a copy of this repo's `_bmad-output/implementation-artifacts/sprint-status.yaml` is run through the installed upstream `bmad-sprint-planning/scripts/sprint_plan.py generate` via `uv run` (the command 32.1 AC8 recorded). The test parses both files with an independent YAML reader and asserts that `backlog` and `sprints` are deep-equal before and after, and that every top-level key present before (`project_key`, `tracking_system`, `story_location`, `epics`, …) is still present. Outside authority: upstream's own script on our real file. Skips with a recorded reason only if `uv` is absent (32.9 runs it with `uv`); a failure blocks the story.
+9. **Module version.** `lib/bmad-extension/skills/module.yaml` `module_version` is bumped per its own policy comment (currently `3.8.0`, policy at `module.yaml:8`) — skills removed ⇒ the bump that policy prescribes.
+10. **Bundle.** `npm run build:plugin` regenerates the mirror; drift guard clean.
+
+## Tasks / Subtasks
+
+- [ ] T1 Delete the five source dirs + plugin mirror dirs + `.agents/skills` copies (AC1)
+- [ ] T2 CSV rows, template `skills[]`, `.agents/skills/MANIFEST.yaml` (AC2)
+- [ ] T3 Ownership-aware upgrade removal; real-path upgrade test (AC4) — see Dev Notes
+- [ ] T4 Real install byte-compare against vendored upstream (AC3); Cline reconciliation (AC5)
+- [ ] T5 Walk-derive and re-pin every count in AC6; record commands + numbers
+- [ ] T6 CHANGELOG known limitation + guard test (AC8)
+- [ ] T7 `module_version` bump (AC9); `npm run build:plugin` (AC10)
+- [ ] T8 `sprint_plan.py generate` round-trip test on a copy of our `sprint-status.yaml` (AC11); confirm 32.1's 32.4 GO line before T1
+
+## Dev Notes
+
+- **Do NOT add these IDs to `RETIRED_SKILL_IDS`** (`lib/installer.js:2244`). `migrateRetiredSkills` deletes the installed dir by ID and runs at `bin/cli.js:4742`, *after* the BMAD install at `bin/cli.js:4481-4508` — it would delete upstream's freshly installed `bmad-sprint-planning`. Removal must be ownership-aware: drop the ID from `.ma-agents.json`, and delete a tool-dir copy only if it is ma-agents' (e.g. it contains `skill.json`, which root `skills/` ships and upstream does not), or run before the BMAD install. Use 32.1 AC6's finding on what upstream's update already removes.
+- The `lib/bmad-extension/` copies are plugin-staged under module `ma-skills`; bmad-method 6.10+ fails loud on duplicate leaf names within a resolution (FR238b). 32.1 AC7 records the cross-module behaviour — if 32.3's offline smoke was recorded as blocked-on-32.4, re-run it here and close it.
+- Jira-routing count: the 30 → 25 figure comes from `grep -rlF 'is \`jira\`' skills lib/bmad-extension/skills lib/bmad-extension/workflows --include=*.md` at the worktree base; the test's own `jiraRoutedFiles()` is the authority.
+- Tests that will move: the AC6 list plus `test/extension-module-restructure.test.js`, `test/jira-identity-clause.test.js` (count only), `test/story-15-5-workflow-skills.test.js` (lists the nine sprint skills, not these three — expect no change; confirm). `test/routing-parity.test.js` and `test/plugin-manifests.test.js` do not name these skills (verified by grep) but count-check them after the rebuild.
+- The repo's tracked `.agents/skills/` is a self-install artifact that `npm test` mutates (see memory); delete the three copies in the same commit and re-run the chain to confirm nothing regenerates them.
+- `my-next-issue` "next steps" still point at `bmad-dev-story` / `bmad-create-story` — that is 32.6's sweep, not this story; do not half-fix it here.
+
+## Out of scope
+
+- Moving Jira routing or the preflight anywhere (Epic 34 — no overlay, no adapter, no hook point here).
+- Editing the ten surviving sprint skills' routing text.
+- Rewriting `bmad-dev-epic` (32.5) or sweeping other retired names (32.6).
+- Any file move into the extension repository (Epic 33).
+
+## Verification record
+
+Suite: … ; re-derived counts (command → number): preflight …, gate …, release-gate …, jira-routed … ; mutants: (re-add one deleted dir → AC1 red; drop the CHANGELOG entry → AC8 red; delete-by-ID on upgrade → AC4 red; drop `sprints` from the round-tripped copy → AC11 red) … ; unverified: …

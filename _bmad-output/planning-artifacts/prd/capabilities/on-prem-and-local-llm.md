@@ -29,7 +29,7 @@
 #### On-Prem Profile Layered Guardrails
 
 - FR177: When the active profile is `on-prem`, the installer layers additional local-LLM guardrails into the same per-tool instruction blocks: explicit "never create files in `~/.claude/` or any user home directory" rule; explicit "do NOT reference or use `str_replace_editor` or other Claude Code tools that may not exist" rule; a `/no_think` reasoning-OFF directive prefix for planning-phase prompts; and reasoning-mode / temperature guidance per BMAD phase
-- FR178: When profile is `on-prem`, BMAD agent persona customizations under `lib/bmad-customize/` gain a phase-aware system-prompt prefix — planning-phase agents (PM John, Architect Winston, SM Bob, Analyst Mary, Tech Writer Paige, UX Sally, SQA Gadi) receive a reasoning-OFF / text-response directive; the implementation agent (Dev Amelia) receives a reasoning-ON / careful-implementation directive. These prefixes are not applied when profile is `standard`. (Note: the former quick-flow Dev persona `bmm-quick-flow-solo-dev` (Barry) was consolidated into Amelia in BMAD v6.3.0 per Story 22.3.)
+- FR178: When profile is `on-prem`, BMAD agent persona customizations under `lib/bmad-customize/` gain a phase-aware system-prompt prefix — planning-phase agents (PM John, Architect Winston, SM Bob, Analyst Mary, Tech Writer Paige, UX Sally, SQA Gadi) receive a reasoning-OFF / text-response directive; the implementation agent (Dev Amelia) receives a reasoning-ON / careful-implementation directive. These prefixes are not applied when profile is `standard`. (Note: the former quick-flow Dev persona `bmm-quick-flow-solo-dev` (Barry) was consolidated into Amelia in BMAD v6.3.0.)
 
 #### Reference Deployment Documentation
 
@@ -41,7 +41,7 @@
 
 ### Local-LLM / On-Prem Agent Tuning
 
-- NFR44: On-prem profile guardrails must not regress standard profile behavior — when the persisted or supplied profile is `standard`, no `/no_think` directives, `str_replace_editor` warnings, or other local-LLM-specific instructions are present in any generated instruction file. Verified by diffing standard-profile install output against the pre-Epic-20 baseline
+- NFR44: On-prem profile guardrails must not regress standard profile behavior — when the persisted or supplied profile is `standard`, no `/no_think` directives, `str_replace_editor` warnings, or other local-LLM-specific instructions are present in any generated instruction file. Verified by diffing standard-profile install output against the baseline recorded before the on-prem profile existed
 - NFR45: The profile prompt must be non-blocking in CI/CD — `--yes` defaults the profile to `standard` without prompting; in interactive mode the prompt appears once and the answer is persisted in `.ma-agents.json`; subsequent runs honor the persisted value without re-prompting. On-prem CI/CD is served by committing `.ma-agents.json` with `"profile": "on-prem"` to the repo — no per-invocation flag is provided
 - NFR46: Per-tool template stamping must be idempotent — re-running `npx ma-agents install` with the same profile against the same project produces byte-identical instruction-file content within the marker blocks (only the marker block is rewritten; user content outside is untouched)
 - NFR47: BMAD planning-mode file restrictions in the generated `.roomodes` must enforce phase boundaries at the application layer, not solely via prompt — verified by attempting a `.ts`/`.py` edit while in `bmad-architect` mode and confirming Roo Code rejects with `FileRestrictionError`
