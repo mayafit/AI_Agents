@@ -363,6 +363,8 @@ The file is version-controlled as part of `_bmad-output/` project knowledge. Com
 
 ## On-Prem / Air-Gapped Deployment
 
+**4.x line (BMAD v7):** every v7 skill activates with `uv run --no-cache`, so an air-gapped machine needs the offline runtime the 4.x bundle ships: uv, a Python 3.11 interpreter and a wheelhouse of the skill scripts' dependencies, plus Node.js ≥ 22.20. [docs/on-prem-runtime.md](docs/on-prem-runtime.md) lists the prerequisites, the runtime folder, the `uv.toml` keys and environment variables that point uv at it, the commands that check an installation, a troubleshooting table, and how to regenerate the wheelhouse. It applies to the 4.x line only; the rest of this section describes the 3.x line.
+
 When running AI coding agents against a locally-hosted LLM (e.g., Nemotron Super 49B on vLLM), `ma-agents install` asks a one-time profile question at setup:
 
 ```
