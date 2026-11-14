@@ -1,0 +1,13 @@
+# Story 36.4 fixture: the bind skill (ma-atlassian-bind shape).
+
+[workflow]
+activation_steps_prepend = []
+activation_steps_append = []
+
+persistent_facts = [
+  "file:{project-root}/**/project-context.md",
+  "Bind writes only bracketed keys a target's customize.toml declares; a key the user set is a collision.",
+]
+
+# Instruction run after bind, unbind or status completes.
+on_complete = ""

@@ -1,6 +1,6 @@
 # Story 36.4 — `customize.toml` Contract Validator: module files and bind overrides
 
-Status: backlog
+Status: review
 Blocked on: 36-1
 Wave: 1 (parallel with 36.3, 36.5)
 
@@ -46,13 +46,13 @@ Each AC states **Re-run at GA**: `yes` means 36.7 AC6 runs it against the GA sna
 
 ## Tasks / Subtasks
 
-- [ ] T1 Tree locator + `uv run --no-cache` invoker with prerequisite failure (AC1)
-- [ ] T2 Member fixtures; shape, resolution, `persistent_facts` (AC2, AC3)
-- [ ] T3 Slot classifier + fixtures (AC4)
-- [ ] T4 Bind-table rows at the pin (AC5); `--custom-dir` mode (AC6)
-- [ ] T5 Placeholder inventory from the pinned tree; `{diff_file}` guard (AC7, AC8)
-- [ ] T6 Undeclared-key failure; parse-failure recording (AC9)
-- [ ] T7 Mutants m1–m6 (AC10); add the test to the chain
+- [x] T1 Tree locator + `uv run --no-cache` invoker with prerequisite failure (AC1)
+- [x] T2 Member fixtures; shape, resolution, `persistent_facts` (AC2, AC3)
+- [x] T3 Slot classifier + fixtures (AC4)
+- [x] T4 Bind-table rows at the pin (AC5); `--custom-dir` mode (AC6)
+- [x] T5 Placeholder inventory from the pinned tree; `{diff_file}` guard (AC7, AC8)
+- [x] T6 Undeclared-key failure; parse-failure recording (AC9)
+- [x] T7 Mutants m1–m6 (AC10); add the test to the chain
 
 ## Dev Notes
 
@@ -72,4 +72,40 @@ Each AC states **Re-run at GA**: `yes` means 36.7 AC6 runs it against the GA sna
 
 ## Verification record
 
-Tree commit: … ; resolver / `render_skill.py` parse-failure exit: … ; undeclared-key resolver exit / HALT line: … ; bind-table rows: … ; mutants m1–m6: … ; unverified: …
+Run 2026-11-15, Windows 11, Git Bash, Node v24.15.0, uv 0.13.8 (Python 3.12.10 picked by `requires-python >=3.11`). Every row below is [RUN] unless marked [READ].
+
+**Tree commit:** `e734d3ac3c0f4ea31cc2c2bbbe79e86e54f2cae6` — scratch clone (`git init; git fetch --depth 1 origin e734d3a…; git checkout FETCH_HEAD`, `git rev-parse HEAD` = pin), passed as `BMAD_V7_TREE`; removed after the run. No upstream file is committed; fixtures are authored, not copied.
+
+**Deliverables:** `scripts/validate_customize.py` (PEP 723, `requires-python = ">=3.11"`, stdlib only — `--self-check` → `third_party_imports: []`); `test/customize-contract-v7.test.js` (appended to `npm test` after `wheelhouse-coverage.test.js`); fixtures `test/fixtures/customize-v7/` (`skills/` 4 members; `projects/` 13 override projects; `negative/` 2 skills roots). Modes: `--skills-root`, `--custom-dir`, `--classify SKILL TABLE KEY`, `--render`, `--print-placeholders`, `--json`; exit 0 / 1 findings / 2 prerequisite.
+
+**Test run:** `BMAD_V7_TREE=<clone> node test/customize-contract-v7.test.js` → `61 passed, 0 failed` (79 s). `node test/uv-transition-resilience.test.js` → `7 passed, 0 failed` (no `uv run` in any `lib/`, `scripts/`, `bin/` JavaScript; the test file spawns `uv` with `['run', '--no-cache', …]`).
+
+| AC | Result | Evidence |
+|---|---|---|
+| 1 | PASS | Validator spawns `[find_uv(), "run", "--no-cache", str(script), *args]` via `subprocess.run(argv)`; test spawns `spawnSync('uv', ['run','--no-cache', …])`. No uv / no tree → test fails at "Prerequisites" (never skips). Validator with `PATH=<node dir>` → exit 2 `prerequisite: uv not found on PATH`; `--tree <missing>` → exit 2 `prerequisite: BMAD v7 tree not found at …`. |
+| 2 | PASS | `--skills-root test/fixtures/customize-v7/skills` → exit 0, 4 members: `ma-agent-sre` agent, `ma-atlassian-bind` / `ma-knowledge-atlas` / `ma-ops-dev-epic` workflow; 4 resolver calls; each top-level key returned equal to `tomllib` (`ma-agent-sre` → `agent`, `workflow`). |
+| 3 | PASS | Each member's `persistent_facts` explicit and non-empty; resolver returns the same list. Control: `persistent_facts = []` → `facts-empty`. |
+| 4 | PASS | `classify`: `bmad-agent-po agent.persistent_facts` defined; `workflow.board_after` defined; `workflow.activation_steps_prepend` undefined; `workflow.board_afterr` undefined; `bmad-sprint-planning` any key retired (from `skills/bmod-method/retired.toml` `removed`). The test asserts no slot name appears in the validator source. |
+| 5 | PASS | All 16 rows classify `defined`; `projects/bind-rows/` (11 files, each key bracketed) → exit 0; owned rows == table; resolver (real upstream skill dir, fixture project) returns ours for every row. |
+| 6 | PASS | `valid-multi` (3 owned keys in `bmad-agent-po.toml` beside user keys + 4 owned keys in `ticketing-store-config.toml`) exit 0; `user-workflow` (user `on_complete` + owned `activation_steps_prepend` in one `[workflow]`, one header) exit 0, resolver returns both. Negatives: `neg-unbalanced` `marker-unbalanced` `bmad-build.toml:3`; `neg-nested` `marker-nested` `bmad-agent-po.toml:5`; `neg-two-keys` `marker-pair-keys` `:3`; `neg-key-two-pairs` `marker-duplicate-key` `:6`; `neg-board-afterr` `slot-undefined` `:4`; also `neg-retired` `slot-retired` `bmad-sprint-planning.toml:4`. |
+| 7 | PASS | Placeholder set extracted with `ast` at run time: Jinja names = keys of `_RenderContext.variables` in `render_skill.py` (`agent, config, halt, initiative_folder, rendered, workflow`); single-brace = string constants in `render_skill.py` / `resolve_config.py` (`project-root, skill-root`). Owner-defined runtime names: a member's own "`` `{x}` is ``" / "bind/set `` `{x}` `` to" line; an override may use any placeholder the target's own files use. `render_skill.py` hard-exits on an undefined variable: `negative/undefined-placeholder` → `HALT: workflow.md:9: 'ticket_url' is undefined` (exit 1), plus `placeholder-undefined` at `workflow.md:9` and `customize.toml:6`. So the test renders every member with `--render`: 4 × exit 0. Shell scripts under `scripts/` excluded by path (`ma-ops-dev-epic/scripts/container-status.sh` carries `{{.Names}}`, member passes). `{project-root}` in `persistent_facts` is **not** expanded by v7 render: output line `- file:{project-root}/**/project-context.md` under the workflow's "read `file:` globs under `{project-root}`" — the agent binds it. |
+| 8 | PASS | Planted `negative/diff-output` → `diff-output` at `customize.toml:10`; `projects/neg-diff-output` → `bmad-code-review.toml:4`. |
+| 9 | PASS | See the two records below. |
+| 10 | PASS | Mutants below. |
+
+**Undeclared key (`projects/neg-undeclared/_bmad/custom/bmad-build.toml`, `[workflow] ma_unknown_key = "MA-UNKNOWN-KEY-SENTINEL"`):** validator exit 1, only finding `undeclared-key` `bmad-build.toml:3` table `workflow` key `ma_unknown_key`. `uv run --no-cache <tree>/skills/bmad/scripts/resolve_customization.py --skill <tree>/skills/bmad-build --project-root <copy> --key workflow.ma_unknown_key` → exit 0, `{"workflow.ma_unknown_key": "MA-UNKNOWN-KEY-SENTINEL"}`. `uv run --no-cache …/render_skill.py --project-root <copy> --skill <tree>/skills/bmad-build` → exit 1, `HALT: <copy>\_bmad\custom\bmad-build.toml sets keys bmad-build does not declare: workflow.ma_unknown_key` (`render_skill.py:121-128`, `_check_persistent_layers`).
+
+**Parse failure (`projects/neg-malformed-prd/_bmad/custom/bmad-prd.toml`, unterminated string at line 3):** validator exit 1, `parse` `bmad-prd.toml:3`. Resolver → exit 1, stdout empty, stderr `error: failed to parse <copy>\_bmad\custom\bmad-prd.toml: Illegal character '\n' (at line 3, column 41)` (`config_utils.py` `load_toml` → `ConfigError`). `render_skill.py --skill <tree>/skills/bmad-prd` → exit 1, `HALT: render entry is missing: <tree>\skills\bmad-prd\workflow.md` — it never reaches the override. Finding for 38.3: at the pin `bmad-prd`, `bmad-architecture`, `bmad-facilitate`, `bmad-ux`, `bmad-product-brief`, `bmad-prfaq` have no `workflow.md` (they are SKILL.md + resolver skills, so `render_skill.py`'s HALT does not guard them), and an undeclared key on them is returned by the resolver without any halt. `bmad-prd/SKILL.md:22`, `bmad-ux/SKILL.md:35` and `bmad-product-brief/SKILL.md:20` [READ] say on any resolver failure "read `{skill-root}/customize.toml` directly and use defaults", so on those three a malformed override is dropped silently (the other three were not read for this). Bind must never write an unparsable file or an undeclared key; when the user's file does not parse, bind must report and leave it unchanged. `bmad-build`, `bmad-build-auto`, `bmad-code-review`, `bmad-retrospective`, `bmad-agent-po` render (`workflow.md` present) and halt.
+
+**Bind-table rows ([READ] `<tree>/skills/<target>/customize.toml`, first definition; matches 36.1 AC10):** `bmad-prd` `[workflow] external_sources :108`, `external_handoffs :127`; `bmad-architecture :75`, `:81`; `bmad-facilitate :24`, `:36`; `bmad-ux on_complete :20`; `bmad-product-brief :38`; `bmad-prfaq :39`; `bmad-build activation_steps_prepend :17`; `bmad-build-auto :17`; `bmad-code-review :15`; `bmad-retrospective :15`; `bmad-agent-po` `[agent] persistent_facts :21`, `[workflow] board_after :91`, `store_after :103`. All 16 [RUN] `defined`.
+
+**Mutants (each applied to the real file, full test run, file restored):**
+- m1 duplicate `on_epic_complete` in `skills/ma-ops-dev-epic/customize.toml` → exit 1, 3 failed: `customize.toml:22 [parse] … Cannot overwrite a value (at line 22, column 27)`.
+- m2 `persistent_facts` moved to `[workflow]` in `skills/ma-agent-sre/customize.toml` → exit 1, 4 failed: `customize.toml:34 [wrong-table] persistent_facts is under [workflow]` (+ `facts-missing`).
+- m3 `{diff_output}` appended to `skills/ma-knowledge-atlas/workflow.md` → exit 1, 2 failed: `workflow.md:15 [diff-output]`.
+- m4 `BMAD_V7_TREE=<scratchpad>/no-such-tree` → exit 1, `✗ the pinned BMAD v7 tree is present: prerequisite: no BMAD v7 tree at …no-such-tree`.
+- m5 bracketed `[workflow] activation_steps_prepend` appended to `projects/bind-rows/…/bmad-agent-po.toml` → exit 1, 2 failed: `bmad-agent-po.toml:18 [slot-undefined] [workflow] activation_steps_prepend is undefined for bmad-agent-po`; the permanent fixture `projects/neg-po-prepend` holds the same case.
+- m6 undeclared-key check disabled in the validator (`if False and not declares(…)`) → exit 1, 2 failed: the AC9 `ma_unknown_key` assertions.
+The test also keeps m1, m2, m3, m4, m5 as in-run controls on temp copies or permanent fixtures.
+
+**Unverified:** the Linux CI half (36.6 AC3). The `--render` path downloads `jinja2` through uv when online; offline it needs the 36.2 wheelhouse (`UV_FIND_LINKS`, `UV_OFFLINE=1`) — not run offline here. `npm test` will fail at this test until `bundle/bmad-method/` exists (36.3) or `BMAD_V7_TREE` is set: by AC1 the prerequisite fails, it does not skip.

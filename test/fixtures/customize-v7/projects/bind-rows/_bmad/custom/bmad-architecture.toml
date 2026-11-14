@@ -1,0 +1,10 @@
+# Story 36.4 fixture: ma-atlassian-bind output for bmad-architecture (bind target table, FR290).
+[workflow]
+# ma-atlassian:start workflow.external_sources
+external_sources = [
+  "Confluence planning space: search the pages under the planning root page that match this topic before drafting.",
+]
+# ma-atlassian:end
+# ma-atlassian:start workflow.external_handoffs
+external_handoffs = ["Publish the finished document to the Confluence planning destination."]
+# ma-atlassian:end

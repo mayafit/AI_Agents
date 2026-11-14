@@ -1,0 +1,5 @@
+# Story 36.4 negative fixture (AC6): a pair setting a slot bmad-agent-po does not have.
+[workflow]
+# ma-atlassian:start workflow.board_afterr
+board_afterr = "Publish the changed ticket pages."
+# ma-atlassian:end

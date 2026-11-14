@@ -1,0 +1,5 @@
+# Story 36.4 fixture: ma-atlassian-bind output for bmad-ux (bind target table, FR290).
+[workflow]
+# ma-atlassian:start workflow.on_complete
+on_complete = "Publish the output to the Confluence planning destination."
+# ma-atlassian:end

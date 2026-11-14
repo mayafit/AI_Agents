@@ -1,0 +1,5 @@
+# Story 36.4 negative fixture (AC4): an override for a skill v7 retired.
+[workflow]
+# ma-atlassian:start workflow.on_complete
+on_complete = "Publish the sprint page."
+# ma-atlassian:end

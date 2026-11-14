@@ -1,0 +1,5 @@
+# Story 36.4 fixture: ma-atlassian-bind output for bmad-build (bind target table, FR290).
+[workflow]
+# ma-atlassian:start workflow.activation_steps_prepend
+activation_steps_prepend = ["Read the ticket's Confluence page before planning."]
+# ma-atlassian:end

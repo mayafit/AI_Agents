@@ -1,0 +1,3 @@
+# Story 36.4 negative fixture (AC9): a file that does not parse.
+[workflow]
+external_sources = ["unterminated string

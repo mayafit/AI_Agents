@@ -1,0 +1,10 @@
+# Story 36.4 negative fixture (AC8 positive control): a review lens that names the pre-v7 diff placeholder.
+[workflow]
+activation_steps_prepend = []
+activation_steps_append = []
+persistent_facts = ["file:{project-root}/**/project-context.md"]
+
+[[workflow.lenses]]
+id = "quick"
+name = "Quick"
+instruction = "Read the unified diff at {diff_output} and report findings."

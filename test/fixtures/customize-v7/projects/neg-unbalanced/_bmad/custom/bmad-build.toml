@@ -1,0 +1,4 @@
+# Story 36.4 negative fixture (AC6): a start marker with no end marker.
+[workflow]
+# ma-atlassian:start workflow.activation_steps_prepend
+activation_steps_prepend = ["Read the ticket's Confluence page before planning."]

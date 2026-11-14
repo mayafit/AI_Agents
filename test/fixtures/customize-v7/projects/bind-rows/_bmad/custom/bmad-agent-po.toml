@@ -1,0 +1,16 @@
+# Story 36.4 fixture: ma-atlassian-bind output for bmad-agent-po (bind target table, FR290).
+[agent]
+# ma-atlassian:start agent.persistent_facts
+persistent_facts = [
+  "'My work' means assignee = currentUser(); when the authenticated account is a shared or service account, stop and ask for a personal identity.",
+  "BMAD type to Jira issue type: epic = Epic, story = Story, spike = Task with label spike, bug = Bug; the initiative stays local.",
+]
+# ma-atlassian:end
+
+[workflow]
+# ma-atlassian:start workflow.board_after
+board_after = "Publish the changed ticket pages to the Confluence tickets destination."
+# ma-atlassian:end
+# ma-atlassian:start workflow.store_after
+store_after = "Publish the ticket pages to the Confluence tickets destination."
+# ma-atlassian:end
