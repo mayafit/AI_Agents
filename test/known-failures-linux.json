@@ -1,0 +1,13 @@
+{
+  "description": "Story 36.6 AC3: npm test chain files known to fail on Linux (ubuntu-latest, Node 22, uv 0.13.8, Python 3.11), each failing identically at 38ea256 (run https://github.com/mayafit/AI_Agents/actions/runs/43655069772). File -> bug key; the key must name an existing _bmad-output/implementation-artifacts/<key>.md. .github/scripts/run-test-chain.js fails the job on a failure not listed here and on a listed file that passes. The cause per file is in the 2026-11-15 note of bug-npm-test-windows-suite-health-chain.",
+  "failures": {
+    "test/migration-validation.test.js": "bug-npm-test-windows-suite-health-chain",
+    "test/config-storage.test.js": "bug-npm-test-windows-suite-health-chain",
+    "test/cross-repo-validation.test.js": "bug-npm-test-windows-suite-health-chain",
+    "test/project-layout-binding-spine.test.js": "bug-npm-test-windows-suite-health-chain",
+    "test/project-layout-config-generation.test.js": "bug-npm-test-windows-suite-health-chain",
+    "test/project-layout-staleness-guard.test.js": "bug-npm-test-windows-suite-health-chain",
+    "test/project-layout-artifact-routing.test.js": "bug-blocking-4-citation-guard-is-blind-in-ci",
+    "test/project-layout-confluence-publish-hook.test.js": "bug-ac9c-tripwire-encodes-a-story-scope-constraint-as-a-permanent-branch-relative-assertion"
+  }
+}

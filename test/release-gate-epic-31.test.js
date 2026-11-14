@@ -1995,15 +1995,27 @@ test('AC7.5c [harness] the scan reaches shipped instruction text OUTSIDE the thr
   // no file was added or removed by that insertion. Verifiable in one command:
   //
   //     git diff --name-status --diff-filter=A <merge-base>..origin/main
+  //
+  // ─── EPIC 36 (STORIES 36.2-36.5): 964 -> 965 AND 1,283 -> 1,284, WITH THE REASON
+  //
+  // Story 36.2 added ONE shipped markdown file, `docs/on-prem-runtime.md` (the
+  // 4.x offline-runtime recipe), under the `docs/` `files` root and OUTSIDE the
+  // skills/ roots. So the widening and the total both move by exactly 1 and the
+  // OLD scope (319) does not move. The new file is scanned like every other
+  // shipped .md (AC7.5 passes on it). Found by Story 36.6's Linux chain run,
+  // where this suite failed at HEAD and passed at 38ea256. Verifiable:
+  //
+  //     git diff --name-status --diff-filter=A 38ea256..HEAD -- docs/ lib/ scripts/ skills/ bin/
   assert.strictEqual(inSkillRoots.size, 319,
     `the OLD scope must be what it was: found ${inSkillRoots.size} skill-root .md`);
-  assert.strictEqual(outside.length, 964,
+  assert.strictEqual(outside.length, 965,
     `the widening must actually widen: ${outside.length} tracked shipped .md now scanned that ` +
-    `the skills/-roots scope missed (expected 964, of which 730 reach the npm tarball — ` +
+    `the skills/-roots scope missed (expected 965, of which 730 reach the npm tarball — ` +
     `663 lib/bmad-cache, 26 lib/bmad-workflows, 8 lib/mil498-templates, ` +
-    `7 lib/bmad-extension/workflows, 6 lib/templates, and the root/docs/mil498 documentation)`
+    `7 lib/bmad-extension/workflows, 6 lib/templates, and the root/docs/mil498 documentation; ` +
+    `the tarball split was last measured before Epic 36 added docs/on-prem-runtime.md)`
   );
-  assert.strictEqual(shipped.length, 1283,
+  assert.strictEqual(shipped.length, 1284,
     `and the total scanned markdown population is pinned: found ${shipped.length}`);
 });
 
@@ -2156,11 +2168,25 @@ test('AC7.5h [harness] the scan population includes shipped NON-MARKDOWN agent-r
   // shim preloaded into the bmad-method child. It is `.js`, so neither scanned
   // population moves and the whole +1 lands in the UNSCANNED remainder. Its
   // text is an fs wrapper with no instruction text and no FR266 vocabulary.
+  //
+  // ─── EPIC 36 (STORIES 36.2-36.5): 2,036 -> 2,042 AND 428 -> 433, WITH THE REASON
+  //
+  // Epic 36 added six tracked files under the `files` roots: one markdown
+  // (`docs/on-prem-runtime.md`, 36.2, counted in AC7.5c above) and five in the
+  // UNSCANNED remainder — `scripts/build-wheelhouse.py` (36.2), `lib/bundle.js`
+  // and `lib/runtime/uv.js` (36.3), `scripts/validate_customize.py` (36.4) and
+  // `lib/inject/marker-block.js` (36.5). No structured file was added, so the
+  // structured population (325) does not move. `all` moves by +6, the markdown
+  // population by +1 and the remainder by +5. Their text is installer and
+  // validator code with no FR266 vocabulary. Found by Story 36.6's Linux chain
+  // run (this suite failed at HEAD and passed at 38ea256). Verifiable:
+  //
+  //     git diff --name-status --diff-filter=A 38ea256..HEAD -- docs/ lib/ scripts/ skills/ bin/
   const all = shippedFilesWithExtensions(['']); // '' matches every filename
-  assert.strictEqual(all.length, 2036,
+  assert.strictEqual(all.length, 2042,
     `the shipped tracked population must be what the record says: found ${all.length}`);
-  assert.strictEqual(all.length - md.size - structured.length, 428,
-    'and the UNSCANNED remainder must be the 428 files item 16 enumerates');
+  assert.strictEqual(all.length - md.size - structured.length, 433,
+    'and the UNSCANNED remainder must be the 433 files item 16 enumerates');
 });
 
 test('AC7.5i [end-to-end] a TOML external_handoffs mirror directive is REPORTED, and was NOT before', () => {

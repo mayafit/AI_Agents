@@ -5,6 +5,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased (4.x)
+
+ma-agents 4.x is not released, and nothing in this section is in a published
+package. It records what the 4.x line targets and what is known not to work yet.
+
+- **Target.** BMAD v7 at BMAD-METHOD commit
+  `e734d3ac3c0f4ea31cc2c2bbbe79e86e54f2cae6` (`package.json` `bmadRef.core`), a
+  preview-alpha upstream commit, not a GA release; Skills CLI `skills@1.7.6`,
+  tea `v4.0.1`, no cis.
+- **Support line.** Until Story 39.5 qualifies 4.x on an upstream GA tag, the
+  3.x line is the supported on-prem release (FR281), maintained from branch
+  `maint/3.x` (cut at `v3.18.1`). 4.x packages, from Story 39.4 on, are
+  pre-releases (`4.0.0-next.N`) on npm dist-tag `next`.
+- **Requirements.** Node.js ≥ 22.20.0, the floor the bundled Skills CLI declares
+  (`engines.node`). The v7 skills run with `uv run --no-cache`, so a machine
+  needs uv, a Python 3.11 interpreter and the wheelhouse of the skill scripts'
+  dependencies; offline they come from the 4.x bundle
+  (`docs/on-prem-runtime.md`).
+
+### Known limitations
+
+- **cis is not bundled.** No tag of `bmad-module-creative-intelligence-suite`
+  carries a v7 module record, so `bmadRef.cis` is empty and the bundle records
+  cis as omitted; tea is bundled at `v4.0.1` (Story 36.1, FALLBACK).
+- **v7 project-context adoption removes the ma-agents blocks from `CLAUDE.md`.**
+  When `bmad-project-context` adopts a project, its default proposal deletes the
+  `ma-agents` and `ma-standards` blocks from `CLAUDE.md` as duplicates of the
+  `AGENTS.md` copies and reduces `CLAUDE.md` to `@AGENTS.md`; the next ma-agents
+  install or update writes them back, and the next refresh flags them again. The
+  `AGENTS.md` blocks survive byte-identical (Story 36.5 AC9; fix planned in 37.2
+  and 39.2).
+- **Update checks for `core-tools` and `method` report `could-not-check`.**
+  Upstream `main` moved its module records after the pinned commit, so
+  `setup.py --status` cannot read them online until `bmadRef.core` moves; offline
+  every module reports `could-not-check`, which does not fail the command (Story
+  36.1 AC7).
+- **Offline token counting falls back.** `bmad-toolsmith` `count_tokens.py`
+  reports `"method": "fallback"` offline, because `tiktoken` downloads its
+  encoding at first use (Story 36.2).
+- **A malformed customization is dropped silently on six upstream skills.**
+  `bmad-prd`, `bmad-architecture`, `bmad-facilitate`, `bmad-ux`,
+  `bmad-product-brief` and `bmad-prfaq` have no `workflow.md`, so a
+  `_bmad/custom/<skill>.toml` that does not parse, or names an undeclared key,
+  is not halted on; the skill falls back to its defaults (Story 36.4).
+- **Not verified: Windows with the network adapter disabled.** The Windows
+  offline runs used `UV_OFFLINE=1` and a black-hole proxy instead (Story 36.2).
+- **Not verified: global install scope.** Only the project-scope `uv.toml`
+  selected by `UV_CONFIG_FILE` was proven; the uv user configuration file was
+  not exercised (Story 36.2).
+- **Not verified by a syscall trace: no download when the interpreter is
+  missing.** Shown by uv's verbose log inside `--network none` (Story 36.2).
+- **Not implemented: a full-clone fallback for `bundle build`.** When a proxy
+  refuses a fetch by commit, the build fails with git's error (Story 36.3).
+- **The Skills CLI's dependency versions follow the registry on the build
+  day.** Its ranges (`tar ^7.5.20`, `yaml ^2.8.3`) are resolved at build time,
+  so a later build can pick newer patches and change `bundle/manifest.json`; the
+  manifest records the exact set (Story 36.3).
+- **Not verified offline: the contract validator's `--render` path.** It
+  downloads `jinja2` through uv when online (Story 36.4).
+- **Not verified in a human-driven session: the adoption run.** Story 36.5's two
+  runs were fresh agent sessions executing the pinned skill with scripted user
+  turns; Story 36.7 repeats it at GA in a real session.
+- **Marker lines inside a fenced code block count as markers.** A
+  `<!-- ma-agents:start -->` line quoted in a code fence in your own prose is
+  matched by exact line equality (Story 36.5).
+- **`npm test` does not pass on Windows.** The chain stops at pre-existing
+  failures tracked as `bug-npm-test-windows-suite-health-chain`; the Linux CI job
+  runs every file and gates on a known-failure allowlist (Story 36.6).
+
 ## [3.18.1] - 2026-10-17
 
 ### Fixed
