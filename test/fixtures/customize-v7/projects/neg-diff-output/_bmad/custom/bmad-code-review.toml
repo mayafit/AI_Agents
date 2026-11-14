@@ -1,0 +1,5 @@
+# Story 36.4 negative fixture (AC8): an override naming the pre-v7 diff placeholder.
+[workflow]
+# ma-atlassian:start workflow.activation_steps_prepend
+activation_steps_prepend = ["Read the unified diff at {diff_output} with the ticket's Confluence page."]
+# ma-atlassian:end

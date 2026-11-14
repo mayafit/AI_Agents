@@ -1,0 +1,7 @@
+# Story 36.4 fixture (AC6): the user already has [workflow] with a key of their own;
+# bind inserted its owned key into that same table, with no second table header.
+[workflow]
+on_complete = "Post the plan link in the team channel."
+# ma-atlassian:start workflow.activation_steps_prepend
+activation_steps_prepend = ["Read the ticket's Confluence page before planning."]
+# ma-atlassian:end

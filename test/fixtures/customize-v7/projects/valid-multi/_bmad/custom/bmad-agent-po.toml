@@ -1,0 +1,21 @@
+# Story 36.4 fixture (AC6): a user file with several owned keys inserted into its existing tables.
+[agent]
+# The user's own fact, not owned by ma-atlassian.
+activation_steps_append = ["Say which initiative is active before anything else."]
+# ma-atlassian:start agent.persistent_facts
+persistent_facts = [
+  "'My work' means assignee = currentUser(); when the authenticated account is a shared or service account, stop and ask for a personal identity.",
+]
+# ma-atlassian:end
+
+[workflow]
+publication = "on_start"
+# ma-atlassian:start workflow.board_after
+board_after = """
+Publish the changed ticket pages to the Confluence tickets destination.
+Report the page links.
+"""
+# ma-atlassian:end
+# ma-atlassian:start workflow.store_after
+store_after = "Publish the ticket pages to the Confluence tickets destination."
+# ma-atlassian:end

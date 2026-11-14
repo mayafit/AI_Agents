@@ -1,0 +1,6 @@
+# Story 36.4 negative fixture (AC6): one pair bracketing two keys.
+[workflow]
+# ma-atlassian:start workflow.board_after
+board_after = "Publish the changed ticket pages."
+store_after = "Publish the ticket pages."
+# ma-atlassian:end

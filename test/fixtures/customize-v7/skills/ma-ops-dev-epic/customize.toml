@@ -1,0 +1,21 @@
+# Story 36.4 fixture: an orchestration workflow member (ma-ops-dev-epic shape).
+
+[workflow]
+
+# Extra instructions to run before config is loaded and before the user is greeted.
+activation_steps_prepend = []
+
+# Extra instructions to run after the greeting and before the first wave.
+activation_steps_append = []
+
+# Facts kept in context for the whole run.
+persistent_facts = [
+  "file:{project-root}/**/project-context.md",
+  "Stories run in dependency waves from tickets.toml `after`; a wave starts only when the previous one is done.",
+]
+
+# Model tier per pipeline stage.
+model_tiers = ["build=standard", "review=strong"]
+
+# Instruction run after the epic-level gate passes. Empty means none (a user instruction).
+on_epic_complete = ""

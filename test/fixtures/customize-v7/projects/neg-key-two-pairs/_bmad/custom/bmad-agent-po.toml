@@ -1,0 +1,7 @@
+# Story 36.4 negative fixture (AC6): one key named by two pairs.
+[workflow]
+# ma-atlassian:start workflow.board_after
+board_after = "Publish the changed ticket pages."
+# ma-atlassian:end
+# ma-atlassian:start workflow.board_after
+# ma-atlassian:end

@@ -1,0 +1,21 @@
+# Story 36.4 fixture (AC6): Sofia store file; bind writes only keys the file does not yet define.
+description = "Our on-prem Jira."
+
+[tickets]
+# ma-atlassian:start tickets.store
+store = "jira-onprem"
+# ma-atlassian:end
+key = "OPS"
+# ma-atlassian:start tickets.site
+site = "https://jira.example.invalid"
+# ma-atlassian:end
+# ma-atlassian:start tickets.mcp_server
+mcp_server = ""
+# ma-atlassian:end
+
+[verbs]
+# ma-atlassian:start verbs.query
+query = """
+REST: GET <site>/rest/api/2/search?jql=project=<key>. MCP: the server's search tool when mcp_server is set.
+"""
+# ma-atlassian:end

@@ -1,0 +1,3 @@
+# Story 36.4 negative fixture (AC9): a key bmad-build does not declare.
+[workflow]
+ma_unknown_key = "MA-UNKNOWN-KEY-SENTINEL"

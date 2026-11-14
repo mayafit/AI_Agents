@@ -1,0 +1,8 @@
+# Story 36.4 negative fixture (AC6): a pair nested inside another pair.
+[workflow]
+# ma-atlassian:start workflow.board_after
+board_after = "Publish the changed ticket pages."
+# ma-atlassian:start workflow.store_after
+store_after = "Publish the ticket pages."
+# ma-atlassian:end
+# ma-atlassian:end

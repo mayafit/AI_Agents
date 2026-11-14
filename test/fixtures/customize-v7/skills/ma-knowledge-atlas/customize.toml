@@ -1,0 +1,15 @@
+# Story 36.4 fixture: the Atlas skill (ma-knowledge-atlas shape).
+
+[workflow]
+activation_steps_prepend = []
+activation_steps_append = []
+
+persistent_facts = [
+  "file:{project-root}/**/project-context.md",
+  "The atlas is generated from planning and implementation artifacts; it never edits them.",
+]
+
+# Output file for the generated site.
+atlas_output = "{project-root}/_bmad-output/knowledge-atlas.html"
+
+on_complete = ""
