@@ -1,0 +1,170 @@
+{
+  "schema": 1,
+  "builder": "lib/bundle.js",
+  "bmadRef": {
+    "core": "1111111111111111111111111111111111111111",
+    "skillsCli": "1.2.3",
+    "tea": "v4.0.1",
+    "cis": "",
+    "extensions": ""
+  },
+  "repositories": {
+    "core": "https://github.com/bmad-code-org/BMAD-METHOD",
+    "tea": "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise",
+    "cis": "https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite"
+  },
+  "modules": [
+    "bmad-method",
+    "tea"
+  ],
+  "omitted": [
+    {
+      "name": "cis",
+      "repository": "https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite",
+      "requestedRef": "",
+      "reason": "bmadRef.cis is empty: no cis tag carries a bmod record (Story 36.1 AC12)"
+    }
+  ],
+  "pending": [
+    {
+      "name": "ma-bmad-extensions",
+      "requestedRef": "",
+      "story": "39.1"
+    },
+    {
+      "name": "runtime",
+      "story": "39.1"
+    }
+  ],
+  "bmodMethod": {
+    "path": "skills/bmod-method/bmod.toml",
+    "version": "6.13.0-next"
+  },
+  "bmadRequiredSkillsSource": "github:bmad-code-org/BMAD-METHOD/skills",
+  "bmadSkill": "bmad-method/skills/bmad/SKILL.md",
+  "skillsCli": {
+    "package": "skills",
+    "version": "1.2.3",
+    "bin": "bin/cli.mjs",
+    "enginesNode": ">=22.20.0",
+    "treeSha256": "f42a9189b44166b309835fc116e02f3291272a0ae0c4fc6559936fb1c9ab462e",
+    "dependencyCount": 1,
+    "dependencies": [
+      "fixture-dep@1.0.0"
+    ]
+  },
+  "size": 1108,
+  "items": [
+    {
+      "name": "bmad-method",
+      "path": "bmad-method",
+      "repository": "https://github.com/bmad-code-org/BMAD-METHOD",
+      "requestedRef": "1111111111111111111111111111111111111111",
+      "resolvedCommit": "1111111111111111111111111111111111111111",
+      "fileCount": 9,
+      "size": 515,
+      "treeSha256": "1a63296556b8485f332cf25df9008b917afa0258d8e04b268d124e76d5f94533",
+      "files": [
+        {
+          "path": "skills/bmad-agent-po/scripts/tickets.py",
+          "sha256": "6033b71beb49c38afa673672f9bfbcaa97d6b293e0a442de9cb72cc912433788",
+          "size": 59
+        },
+        {
+          "path": "skills/bmad/SKILL.md",
+          "sha256": "e6bef3b3d5740358225c4d31a8e6775473640da835a066f5bf9e439121e7b824",
+          "size": 19
+        },
+        {
+          "path": "skills/bmad/scripts/migrate_v6.py",
+          "sha256": "12cb6be080996517720e6ef74cb4ec66a2662a00becdb3fa463e8da3cfa2dc30",
+          "size": 53
+        },
+        {
+          "path": "skills/bmad/scripts/render_skill.py",
+          "sha256": "7163de3f0ab7be1e2071aa53b5b72e9dfb769f0fa4919deb50e74c1788c506f2",
+          "size": 55
+        },
+        {
+          "path": "skills/bmad/scripts/resolve_config.py",
+          "sha256": "2ed1b4deca6cfebdef2b37085a0791ad7aad7f0a2f665d250dc12424debab6d5",
+          "size": 57
+        },
+        {
+          "path": "skills/bmad/scripts/resolve_customization.py",
+          "sha256": "267135ddfb379e946d92c684a6cc9dbdc74228478e12baeef28b0559aeb909ea",
+          "size": 64
+        },
+        {
+          "path": "skills/bmad/scripts/setup.py",
+          "sha256": "cbbf1da20e15e24f6b763951cccec1f9f2e6d1b41ef874113a4b70a731cb27af",
+          "size": 48
+        },
+        {
+          "path": "skills/bmad/scripts/validate_manifests.py",
+          "sha256": "e2ad580c0eedafe8c4f1e0207553120730bb703db358549bda5d7923ec756e17",
+          "size": 61
+        },
+        {
+          "path": "skills/bmod-method/bmod.toml",
+          "sha256": "6454e9812bc12339f6d694b566d6ce54b5d0f08d8701b48f4dd21b26a5056c78",
+          "size": 99
+        }
+      ]
+    },
+    {
+      "name": "tea",
+      "path": "tea",
+      "repository": "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise",
+      "requestedRef": "v4.0.1",
+      "resolvedCommit": "2222222222222222222222222222222222222222",
+      "fileCount": 2,
+      "size": 61,
+      "treeSha256": "4e18eae5a831d8342f575992a53c2d113edf2d260734b8ace0ef01daa3627233",
+      "files": [
+        {
+          "path": "skills/bmad-tea/SKILL.md",
+          "sha256": "43735260579f262243d04945099fc59552373ca1932b13608c5b1a9e07f33101",
+          "size": 23
+        },
+        {
+          "path": "skills/bmod-tea/bmod.toml",
+          "sha256": "ff272a8d9f2c0befa7573597c4eb0c3bee7c6c136185060a0027c65fabbc8a8c",
+          "size": 38
+        }
+      ]
+    },
+    {
+      "name": "skills-cli",
+      "path": "skills-cli",
+      "repository": "npm:skills",
+      "requestedRef": "1.2.3",
+      "resolvedIntegrity": "sha512-fixture",
+      "fileCount": 4,
+      "size": 532,
+      "treeSha256": "f42a9189b44166b309835fc116e02f3291272a0ae0c4fc6559936fb1c9ab462e",
+      "files": [
+        {
+          "path": "bin/cli.mjs",
+          "sha256": "2281845c05174f97ac907358046ca8ffd738cd19e3b5116f0e78ddef956bdddc",
+          "size": 218
+        },
+        {
+          "path": "node_modules/fixture-dep/index.js",
+          "sha256": "7cd70c156932ff56a1dcbfd0e4c871eb9c4962a82faf471d3b066b88f818ac12",
+          "size": 23
+        },
+        {
+          "path": "node_modules/fixture-dep/package.json",
+          "sha256": "e6cbc286bcbfeec8a5f6632fca5fdac582045c6df7ca07d6e04d42dcff50870e",
+          "size": 84
+        },
+        {
+          "path": "package.json",
+          "sha256": "de892cef162eb80e08be58d2e97301f2861f276e70e336144dc68adc3fe53886",
+          "size": 207
+        }
+      ]
+    }
+  ]
+}

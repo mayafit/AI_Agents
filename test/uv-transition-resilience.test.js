@@ -21,19 +21,21 @@
  *     exported classifiers ignore a uv/python3 banner, and no ma-agents `lib`
  *     JS source contains the probe-banner needle strings.
  *
- *   AC3/NFR59c — ma-agents CONTROL-PLANE Python (its own `lib`/`scripts`/`bin`
- *     code and the activation steps that invoke
- *     `python3 {project-root}/_bmad/scripts/resolve_customization.py`) stays on
- *     the `python`/`python3` interpreter and is never migrated to `uv run`.
+ *   FR304 (Story 36.3, Decision P5-11.6) — uv EXECUTION RULE, replacing the
+ *     former NFR59c "no `uv run` anywhere in lib/scripts/bin" rule: the 4.x
+ *     installer runs `setup.py` through uv, so the rule is about WHERE uv is
+ *     executed. Installer JavaScript spawns uv only through one runner module,
+ *     `lib/runtime/uv.js`, always as `uv run --no-cache` with an argv array. The
+ *     guard fails on any spawn / exec / execFile / execSync call (and their
+ *     Sync variants) whose command or argv names uv outside that module, and on
+ *     a spawn inside the module whose argv does not start with
+ *     `'run', '--no-cache'`. Message strings that merely mention `uv run` pass.
  *
  * PYTHON-vs-UV SCOPING BOUNDARY (AC4 — read this before touching anything Python):
  *   BMAD's `uv` standardization governs BMAD-INSTALLED skill scripts, which
  *   ma-agents neither owns nor modifies (they live under vendored
- *   `lib/bmad-cache/**` and `node_modules/bmad-method/**` — and yes, upstream
- *   bmb content already uses `uv run resolve_customization.py`; that is BMAD's
- *   call, not ours). ma-agents control-plane Python stays on `python`/`python3`
- *   so the air-gapped install surface (NFR58) never gains a `uv` runtime
- *   dependency.
+ *   `lib/bmad-cache/**` and `node_modules/bmad-method/**`). Offline, uv and its
+ *   Python come from the bundle (P5-11.6), never from the network (NFR58).
  *
  *   Story 30.4 / FR247 — the former `uv run` exception scoped to the
  *   `ml-experiment` / `ml-infra` / `ml-eda` skills (which ran the USER's
@@ -189,20 +191,125 @@ test('no ma-agents lib JS source greps installer stdout for the probe/uv banner 
 // ───────────────────────────────────────────────────────────────────────────
 // AC3 / NFR59c — control-plane Python stays on python/python3, never `uv run`
 // ───────────────────────────────────────────────────────────────────────────
-console.log('\nAC3/NFR59c: control-plane Python stays on python/python3 (ml-* exemption dropped, FR247)');
+console.log('\nFR304: uv is executed only through lib/runtime/uv.js, always `run --no-cache` (P5-11.6)');
 
-test('ma-agents control-plane code (lib JS, scripts/, bin/) contains no `uv run`', () => {
+const UV_RUNNER = 'lib/runtime/uv.js';
+const EXEC_CALL_RE = /(?<![\w$])(spawn|spawnSync|exec|execSync|execFile|execFileSync)\s*\(/g;
+
+// Source with comments blanked (strings and template literals kept), so a
+// comment that quotes a call is not a call. Regex literals are not parsed; a
+// false positive here is loud and fixable, a false negative is not.
+function blankComments(src) {
+  let out = '';
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    const n = src[i + 1];
+    if (c === '/' && n === '/') {
+      while (i < src.length && src[i] !== '\n') { out += ' '; i++; }
+    } else if (c === '/' && n === '*') {
+      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) { out += src[i] === '\n' ? '\n' : ' '; i++; }
+      out += '  '; i += 2;
+    } else if (c === '"' || c === "'" || c === '`') {
+      let j = i + 1;
+      while (j < src.length && src[j] !== c) j += src[j] === '\\' ? 2 : 1;
+      out += src.slice(i, j + 1); i = j + 1;
+    } else { out += c; i++; }
+  }
+  return out;
+}
+
+// The text between the call's `(` and its matching `)`, skipping strings.
+function callArgsText(src, openParen) {
+  let depth = 0;
+  for (let i = openParen; i < src.length; i++) {
+    const c = src[i];
+    if (c === '"' || c === "'" || c === '`') {
+      let j = i + 1;
+      while (j < src.length && src[j] !== c) j += src[j] === '\\' ? 2 : 1;
+      i = j;
+    } else if (c === '(') depth++;
+    else if (c === ')' && --depth === 0) return src.slice(openParen + 1, i);
+  }
+  return src.slice(openParen + 1);
+}
+
+// Does a call's argument text name uv as a command or argv element? A string
+// literal whose words include `uv` / `uv.exe` / a path ending in it, or an
+// identifier `uv` / `uvSomething` (e.g. `uvPath`).
+function namesUv(argText) {
+  const strings = [];
+  const code = argText.replace(/(["'`])((?:\\.|(?!\1)[^\\])*)\1/g, (_, q, body) => { strings.push(body); return ' "" '; });
+  if (strings.some((s) => /(^|[\s/\\])uv(\.exe)?(?=$|\s)/.test(s))) return true;
+  return /(?<![\w$.])uv(?:[A-Z_]\w*)?(?![\w$])/.test(code);
+}
+
+// FR304 problems in one source file (relative `/` path); empty when it complies.
+function uvExecutionProblems(src, rel) {
+  const text = blankComments(src);
+  const problems = [];
+  const isRunner = rel === UV_RUNNER;
+  let calls = 0;
+  for (const m of text.matchAll(EXEC_CALL_RE)) {
+    const args = callArgsText(text, m.index + m[0].length - 1);
+    const line = text.slice(0, m.index).split('\n').length;
+    if (isRunner) {
+      calls++;
+      if (!/^[^,]*,\s*\[\s*(['"])run\1\s*,\s*(['"])--no-cache\2/.test(args)) {
+        problems.push(`${rel}:${line} ${m[1]}(…) does not pass an argv array starting 'run', '--no-cache'`);
+      }
+      if (/shell\s*:\s*true/.test(args)) problems.push(`${rel}:${line} ${m[1]}(…) uses a shell`);
+    } else if (namesUv(args)) {
+      problems.push(`${rel}:${line} ${m[1]}(…) executes uv outside ${UV_RUNNER}`);
+    }
+  }
+  if (isRunner && calls === 0) problems.push(`${rel} spawns nothing; it must be the uv execution site`);
+  return problems;
+}
+
+test('FR304 guard (fixtures): execSync(\'uv run x.py\') outside the runner fails; a message mentioning uv run passes', () => {
+  assert.strictEqual(uvExecutionProblems("const cp = require('child_process');\ncp.execSync('uv run x.py');\n", 'lib/other.js').length, 1);
+  assert.strictEqual(uvExecutionProblems("spawnSync(uvPath, ['run', 'x.py']);\n", 'lib/other.js').length, 1);
+  assert.strictEqual(uvExecutionProblems("execFile('C:\\\\rt\\\\uv.exe', ['run', 'x.py'], cb);\n", 'scripts/x.js').length, 1);
+  assert.deepStrictEqual(uvExecutionProblems("console.log('run it with uv run x.py');\n", 'lib/other.js'), []);
+  assert.deepStrictEqual(uvExecutionProblems("// execSync('uv run x.py')\nexecSync('git status');\n", 'lib/other.js'), []);
+  assert.deepStrictEqual(uvExecutionProblems("/regex/.exec(line); spawnSync('node', ['--version']);\n", 'bin/x.js'), []);
+});
+
+test('FR304 guard (fixtures): a runner spawn without --no-cache, or with a shell, fails', () => {
+  assert.strictEqual(uvExecutionProblems("spawn(uv, ['run', ...argv], {});\n", UV_RUNNER).length, 1);
+  assert.strictEqual(uvExecutionProblems("spawn(uv, ['run', '--no-cache', ...argv], { shell: true });\n", UV_RUNNER).length, 1);
+  assert.strictEqual(uvExecutionProblems("spawn(uv, `run --no-cache ${a}`);\n", UV_RUNNER).length, 1);
+  assert.deepStrictEqual(uvExecutionProblems("spawn(uv, ['run', '--no-cache', ...argv], { shell: false });\n", UV_RUNNER), []);
+});
+
+test('FR304: no uv execution site in lib/, scripts/, bin/ outside lib/runtime/uv.js, and the runner always passes run --no-cache', () => {
   const skip = new Set(['bmad-cache', 'bmad-extension-plugin', 'node_modules']);
+  const isJs = (n) => /\.(c|m)?js$/.test(n);
   const files = [
-    ...walk(path.join(projectRoot, 'lib'), (n) => n.endsWith('.js'), skip),
-    ...walk(path.join(projectRoot, 'scripts'), (n) => n.endsWith('.js'), skip),
-    ...walk(path.join(projectRoot, 'bin'), (n) => n.endsWith('.js'), skip),
+    ...walk(path.join(projectRoot, 'lib'), isJs, skip),
+    ...walk(path.join(projectRoot, 'scripts'), isJs, skip),
+    ...walk(path.join(projectRoot, 'bin'), isJs, skip),
   ];
-  const offenders = files
-    .filter((f) => fs.readFileSync(f, 'utf8').includes('uv run'))
-    .map((f) => path.relative(projectRoot, f));
-  assert.deepStrictEqual(offenders, [],
-    `control-plane code must invoke python/python3 directly, never \`uv run\`. Offenders: ${offenders.join(', ')}`);
+  const rels = files.map((f) => path.relative(projectRoot, f).split(path.sep).join('/'));
+  assert.ok(rels.includes(UV_RUNNER), `the uv runner ${UV_RUNNER} must exist`);
+  const problems = files.flatMap((f, i) => uvExecutionProblems(fs.readFileSync(f, 'utf8'), rels[i]));
+  assert.deepStrictEqual(problems, [],
+    `uv may be executed only through ${UV_RUNNER} as \`run --no-cache\` with an argv array (FR304). Problems:\n  ${problems.join('\n  ')}`);
+});
+
+test('FR304: runUv spawns uv with [run, --no-cache, ...argv], no shell, and rejects a non-array argv', () => {
+  const { runUv } = require('../lib/runtime/uv');
+  const calls = [];
+  const fake = (cmd, args, opts) => { calls.push({ cmd, args, opts }); return { status: 0, stdout: 'ok', stderr: '' }; };
+  const r = runUv(['setup.py', '--project-root', 'a b'], { uv: '/rt/uv', spawnSync: fake, env: { UV_OFFLINE: '1' } });
+  assert.strictEqual(r.status, 0);
+  assert.strictEqual(calls[0].cmd, '/rt/uv');
+  assert.deepStrictEqual(calls[0].args, ['run', '--no-cache', 'setup.py', '--project-root', 'a b']);
+  assert.strictEqual(calls[0].opts.shell, false);
+  assert.strictEqual(calls[0].opts.env.UV_OFFLINE, '1');
+  assert.throws(() => runUv('setup.py', { spawnSync: fake }), TypeError);
+  assert.throws(() => runUv([], { spawnSync: fake }), TypeError);
 });
 
 test('no ma-agents-owned skill uses `uv run` (FR247 — the ml-* exception is gone along with ml-*)', () => {
