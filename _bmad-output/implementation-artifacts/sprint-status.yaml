@@ -520,7 +520,7 @@ development_status:
   36-2-offline-runtime-proof: done   # Wave 0, blocked-on none; FR282
   36-3-target-pin-plumbing: review   # Wave 1, blocked-on 36-1; FR280, FR282, FR283, FR298, FR299, FR302, FR304
   36-4-owned-toml-validation-v7: review   # Wave 1, blocked-on 36-1; contract validator; FR282, FR290, FR291, FR303
-  36-5-agents-md-two-writer-test-v7: backlog   # Wave 1, blocked-on 36-1; three-writer instruction-file test; FR301
+  36-5-agents-md-two-writer-test-v7: review   # Wave 1, blocked-on 36-1; three-writer instruction-file test; FR301
   36-6-release-gate-v7-line: backlog   # Wave 2, blocked-on 36-1..36-5; gate record and tag v4-gate-<short-sha>, no npm publish; FR280, FR282, FR298, FR301–FR304
   36-7-ga-re-gate: backlog   # Wave 3, blocked-on v7 GA and 36-6; GO-39.5 opens 39.5; FR280–FR282, FR290, FR302, NFR87
   epic-37: backlog   # 37.1/37.2 blocked-on 36.1 GO lines, 37.3–37.6 on 36.6 PASS; FR285–FR288, FR292, FR294–FR296, FR301, FR305, NFR84, NFR86
