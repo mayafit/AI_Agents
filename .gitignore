@@ -75,3 +75,7 @@ _bmad-output/knowledge-site/
 # Root-level files that should not be committed (VS Code workspace, scratch output)
 agents.code-workspace
 out.txt
+
+# Story 36.3 — the offline bundle written by `ma-agents bundle build` (FR299).
+# Rebuilt from package.json `bmadRef`; never committed (Story 39.4 adds it to the npm `files`).
+/bundle/

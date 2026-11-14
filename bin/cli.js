@@ -148,6 +148,8 @@ ${chalk.bold('Usage:')}
   ${chalk.cyan(`npx ${NAME} reconfigure`)}                 Re-run the profile prompt and re-stamp artifacts
   ${chalk.cyan(`npx ${NAME} config layout`)}                Reconfigure repository layout
   ${chalk.cyan(`npx ${NAME} config layout --show`)}         Show current layout (read-only)
+  ${chalk.cyan(`npx ${NAME} bundle build`)} [--out <dir>]    Maintainer: snapshot package.json bmadRef
+                                             into bundle/ with a SHA-256 manifest
   ${chalk.cyan(`npx ${NAME} help`)}                         Show this help
 
 ${chalk.bold('Install options:')}
@@ -6149,6 +6151,17 @@ async function main() {
       break;
     case 'reconfigure':
       await handleReconfigure(args.slice(1));
+      break;
+    // Story 36.3 (FR298, FR299) — maintainer command: snapshot `package.json`
+    // `bmadRef` into `bundle/` with a SHA-256 manifest. Implementation: lib/bundle.js.
+    case 'bundle':
+      if (args[1] === 'build') {
+        process.exitCode = require('../lib/bundle').runBundleBuild(args.slice(2));
+      } else {
+        console.error(chalk.red(`Unknown bundle subcommand: ${args[1] || '(none)'}`));
+        console.error(chalk.gray('  Usage: npx ma-agents bundle build [--out <dir>]'));
+        process.exit(1);
+      }
       break;
     case 'help':
     case '--help':
