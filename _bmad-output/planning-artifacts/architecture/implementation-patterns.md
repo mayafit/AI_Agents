@@ -237,19 +237,20 @@ These rules apply to every skill in the `ma-bmad-extensions` repository and to t
 - **Self-contained modules.** Any reference text a module needs is authored in that module. `required_skills` names only `bmad` core; a `recommended_skills` entry for another of our modules carries its `source`, and the skill checks for it at run time and continues without it.
 - **Names.** Owned skills use their family prefix (`ma-agent-`, `sre-`, `cyber-`, `devops-`, `sqa-`, `mil498-`, `ma-ops-`, `ma-standards-`, `ma-knowledge-`, `ma-atlassian-`, or the standards skill's own name) and are unique across the repository and the bundled upstream snapshot.
 - **Status through Sofia.** A skill that starts or completes a story asks `bmad-agent-po` ("start story <id>", "mark story <id> done") so the configured store moves its card; it never edits a plan's status line; it reads epics and stories through `tickets.py`.
-- **One core commit.** Skills are tested against `bmadRef.core` only; an upstream rename or retirement is repointed in the same change.
+- **One core commit.** Skills are tested against `bmadRef.core` only; an upstream rename or retirement is repointed in the same change. The `source` of every `required_skills` entry for an upstream skill is the BMAD-METHOD folder that holds that skill at `bmadRef.core`, read from the snapshot.
 - **Inputs from 3.x projects are read only by migrations.** 3.x project files (`sprint-status.yaml`, `project-layout.yaml`, `_bmad/bmm/config.yaml`, the 3.x override markers) are named only inside `migration-<n>.toml` files; a CI check enforces it.
 
 **Installer rules (`ma-agents` 4.x):**
 - Install only from verified bundle items or from sources the user named (`--source`); verify every item against `manifest.json` before using it.
-- Set `UV_PYTHON_INSTALL_DIR`, `UV_PYTHON_PREFERENCE=only-managed`, `UV_PYTHON_DOWNLOADS=never`, `UV_FIND_LINKS`, `UV_OFFLINE=1` and `UV_NO_CACHE=1` for every `uv` call, and write the same settings (`python-install-dir`, `python-preference`, `python-downloads`, `find-links`, `offline`, `no-cache`) to `<project-root>/.ma-agents/uv.toml` or the uv user configuration file. Spawn uv only through one runner module (`lib/runtime/uv.js`), always as `uv run --no-cache` with an argv array; a test fails on any other uv execution site (FR304).
-- Run the Skills CLI from the unpacked bundled tarball with `node`; never `npx`.
+- Set `UV_PYTHON_INSTALL_DIR`, `UV_PYTHON_PREFERENCE=only-managed`, `UV_PYTHON_DOWNLOADS=never`, `UV_FIND_LINKS`, `UV_OFFLINE=1` and `UV_NO_CACHE=1` for every `uv` call, and write `python-preference = "only-managed"`, `python-downloads = "never"`, `find-links`, `offline = true` and `no-cache = true` to `<project-root>/.ma-agents/uv.toml` or the uv user configuration file. The Python install directory has no `uv.toml` key: name `UV_PYTHON_INSTALL_DIR` beside `UV_CONFIG_FILE` in the `ma-agents` block so activations set both. Spawn uv only through one runner module (`lib/runtime/uv.js`), always as `uv run --no-cache` with an argv array; a test fails on any other uv execution site (FR304).
+- Run the Skills CLI from the bundled `skills-cli/` tree (with its runtime dependencies) with `node`; never `npx`, and never the Skills CLI `update` command. Set `DISABLE_TELEMETRY=1` and `DO_NOT_TRACK=1`, close stdin, pass `--agent <tool>`, and name the module record and every member with its own `--skill`.
 - Drive setup through `setup.py --list-config-questions` and `setup.py --module-answers` with only the pending questions, as `[modules."<code>"]` tables in a temporary file; when that fails, print the instruction to ask `bmad` to run `bmad setup <code>` per module, with its scripted form, and exit non-zero. Never run a migration; print the instruction to ask `bmad` to run `bmad migrate`.
 - Write only the `ma-agents` marker block, `.ma-agents/` (runtime, `uv.toml`, `skills-cli/`, `install.json`), the temporary answers file and the upgrade backup folder.
 
 **Anti-patterns:**
 - A skill opening `_bmad/config.toml`, `_bmad/custom/*.toml` or another module's files instead of calling the resolver scripts.
-- An owned skill named `bmad-*`.
+- An owned skill named `bmad-*` (upstream's validator accepts it; our CI test rejects it).
+- A key in `_bmad/custom/<skill>.toml` that the skill's `customize.toml` does not declare (`render_skill.py` halts the skill).
 - One of our modules in `required_skills`; a skill that fails because a recommended skill is absent.
 - A script that loads code from another skill or from an npm package by path.
 - A module writing outside its markers, or overwriting a user-set key.
