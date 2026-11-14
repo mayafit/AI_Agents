@@ -1,0 +1,184 @@
+{
+  "schema": 1,
+  "generator": "scripts/build-wheelhouse.py",
+  "python_version": "3.11",
+  "snapshot": {
+    "commit": "0000000000000000000000000000000000000000"
+  },
+  "extra_skills": [],
+  "scan": {
+    "glob": "skills/**/scripts/**/*.py",
+    "excluded_rule": "any path segment named 'tests'",
+    "excluded_reason": "fixture",
+    "excluded": [
+      "snapshot:skills/bmad/scripts/tests/test_render_skill.py"
+    ]
+  },
+  "scripts": [
+    {
+      "source": "snapshot",
+      "path": "skills/bmad-agent-po/scripts/tickets.py",
+      "has_header": true,
+      "requires_python": ">=3.11",
+      "dependencies": [
+        "pyyaml>=6.0.2,<7"
+      ]
+    },
+    {
+      "source": "snapshot",
+      "path": "skills/bmad/scripts/config_utils.py",
+      "has_header": false,
+      "requires_python": null,
+      "dependencies": []
+    },
+    {
+      "source": "snapshot",
+      "path": "skills/bmad/scripts/render_skill.py",
+      "has_header": true,
+      "requires_python": ">=3.11",
+      "dependencies": [
+        "jinja2>=3.1"
+      ]
+    },
+    {
+      "source": "snapshot",
+      "path": "skills/bmad/scripts/resolve_config.py",
+      "has_header": true,
+      "requires_python": ">=3.11",
+      "dependencies": []
+    },
+    {
+      "source": "snapshot",
+      "path": "skills/ma-ops-dev-epic/scripts/migrate_v6_backlog.py",
+      "has_header": true,
+      "requires_python": ">=3.11",
+      "dependencies": [
+        "Jinja2>=3.1",
+        "PyYAML[libyaml] >= 6.0.2 ; python_version >= '3.11'"
+      ]
+    }
+  ],
+  "requirements": [
+    "Jinja2>=3.1",
+    "jinja2>=3.1",
+    "PyYAML[libyaml] >= 6.0.2 ; python_version >= '3.11'",
+    "pyyaml>=6.0.2,<7"
+  ],
+  "dependencies": [
+    "jinja2",
+    "pyyaml"
+  ],
+  "platforms": {
+    "linux-x64": {
+      "pip_platforms": [
+        "manylinux2014_x86_64",
+        "manylinux_2_17_x86_64"
+      ],
+      "uv_python_platform": "x86_64-manylinux_2_17",
+      "commands": {
+        "resolve": [
+          "uv",
+          "pip",
+          "compile",
+          "<requirements.in>"
+        ],
+        "download": [
+          "python",
+          "-m",
+          "pip",
+          "download",
+          "<pin>"
+        ]
+      },
+      "pins": [
+        "jinja2==3.1.6",
+        "markupsafe==3.0.4",
+        "pyyaml==6.0.3"
+      ],
+      "wheels": [
+        {
+          "file": "jinja2-3.1.6-py3-none-any.whl",
+          "name": "jinja2",
+          "version": "3.1.6",
+          "python_tag": "py3",
+          "abi_tag": "none",
+          "platform_tag": "any",
+          "sha256": "f83cf36c99e6cbc5cb168679fdff90f5dcca43d56074bdddb825ae4365912887"
+        },
+        {
+          "file": "markupsafe-3.0.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "name": "markupsafe",
+          "version": "3.0.4",
+          "python_tag": "cp311",
+          "abi_tag": "cp311",
+          "platform_tag": "manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64",
+          "sha256": "1f3402ba1d5647d6b446fc68d4bab8efa3fb14322fac7c4ad8345e22cf4255d8"
+        },
+        {
+          "file": "pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "name": "pyyaml",
+          "version": "6.0.3",
+          "python_tag": "cp311",
+          "abi_tag": "cp311",
+          "platform_tag": "manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64",
+          "sha256": "aee06f34bbcef5799ee53dcbcdcb2df8ebd86f8dbefe488218aca6447d7a5b08"
+        }
+      ]
+    },
+    "win-x64": {
+      "pip_platforms": [
+        "win_amd64"
+      ],
+      "uv_python_platform": "x86_64-pc-windows-msvc",
+      "commands": {
+        "resolve": [
+          "uv",
+          "pip",
+          "compile",
+          "<requirements.in>"
+        ],
+        "download": [
+          "python",
+          "-m",
+          "pip",
+          "download",
+          "<pin>"
+        ]
+      },
+      "pins": [
+        "jinja2==3.1.6",
+        "markupsafe==3.0.4",
+        "pyyaml==6.0.3"
+      ],
+      "wheels": [
+        {
+          "file": "jinja2-3.1.6-py3-none-any.whl",
+          "name": "jinja2",
+          "version": "3.1.6",
+          "python_tag": "py3",
+          "abi_tag": "none",
+          "platform_tag": "any",
+          "sha256": "f83cf36c99e6cbc5cb168679fdff90f5dcca43d56074bdddb825ae4365912887"
+        },
+        {
+          "file": "markupsafe-3.0.4-cp311-cp311-win_amd64.whl",
+          "name": "markupsafe",
+          "version": "3.0.4",
+          "python_tag": "cp311",
+          "abi_tag": "cp311",
+          "platform_tag": "win_amd64",
+          "sha256": "c7df2ecbbf9131189482681310a75c4e845ea466ee14ecc89b45ab6f13b9384b"
+        },
+        {
+          "file": "pyyaml-6.0.3-cp311-cp311-win_amd64.whl",
+          "name": "pyyaml",
+          "version": "6.0.3",
+          "python_tag": "cp311",
+          "abi_tag": "cp311",
+          "platform_tag": "win_amd64",
+          "sha256": "625674caeef575710ca183a9d69c9ceb93f86182f3b415417a44c7015af420fe"
+        }
+      ]
+    }
+  }
+}
