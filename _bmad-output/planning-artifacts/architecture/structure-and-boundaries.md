@@ -117,7 +117,8 @@ The tree above is the ma-agents 3.x line. ma-agents 4.x is two deliverables: the
 **Extension repository**
 
 ```
-ma-bmad-extensions/                         — one version line; tag per release; validate_manifests.py in CI
+ma-bmad-extensions/                         — public GitHub repository github:mayafit/ma-bmad-extensions; one version line;
+│                                             tag per release; validate_manifests.py in CI
 ├── skills/                                 — flat; every folder below sits directly in skills/
 │   ├── bmod-ma-ops/                        — record folder, code ma-ops
 │   │   ├── bmod.toml                       — [bmod] code, version, update_source, skills (40), required_skills = bmad core,
@@ -183,14 +184,14 @@ ma-bmad-extensions/                         — one version line; tag per releas
 │   │   └── scripts/                        — publish engine, page tree, override generator, collision check, migrate_binding.js (JavaScript)
 │   ├── ma-atlassian-confluence-plan/
 │   └── ma-atlassian-confluence-record-root-page/
-└── test/                                   — module assignment; validate_manifests.py; contract validator (FR303); per module: npx skills add <local> and
+└── test/                                   — module assignment; no owned bmad-* name (FR287); validate_manifests.py; contract validator (FR303); per module: npx skills add <local> and
                                               <repo>#<tag> into a v7 project with method, setup.py --module-answers, setup.py --status, offline activation
 ```
 
 **Installer package**
 
 ```
-ma-agents/                                  — npm package, semver 4.x, engines.node ≥ 20.12
+ma-agents/                                  — npm package, semver 4.x, engines.node >=22.20.0 (the Skills CLI floor)
 ├── package.json                            — bmadRef { core, skillsCli, tea, cis, extensions }
 ├── bin/cli.js                              — install, update, status, uninstall, bundle build; wizard and flags
 ├── lib/installer.js                        — install sequence (P5-11.10); writes .ma-agents/install.json
@@ -203,9 +204,11 @@ ma-agents/                                  — npm package, semver 4.x, engines
 │   ├── bmad-method/                        — BMAD-METHOD skills/ at bmadRef.core (core-tools, method, toolsmith, founder)
 │   ├── tea/  cis/                          — at bmadRef.tea / bmadRef.cis (absent when no tag carries a bmod record)
 │   ├── ma-bmad-extensions/                 — skills/ at bmadRef.extensions, files unchanged (github: sources)
-│   ├── skills-cli/                         — npm `skills` tarball at bmadRef.skillsCli, unpacked by the installer
+│   ├── skills-cli/                         — npm `skills` at bmadRef.skillsCli with its runtime dependencies
+│   │                                         (npm install --omit=dev --ignore-scripts tree), copied by the installer
 │   ├── runtime/linux-x64/  runtime/win-x64/ — uv binary + python-build-standalone 3.11
 │   └── wheelhouse/linux-x64/  wheelhouse/win-x64/ — every PEP 723 dependency of the bundled scripts
+│                                             (initial bmadRef.core: jinja2, markupsafe, pyyaml)
 └── test/                                   — install sequence, bundle determinism, injection ownership, upgrade fixture (3.18.x)
 ```
 
@@ -224,10 +227,10 @@ ma-agents/                                  — npm package, semver 4.x, engines
 
 | Flow | Path |
 |---|---|
-| Install | `ma-agents install` → verify `manifest.json` → copy runtime, write `.ma-agents/uv.toml` → unpack Skills CLI → `node <skills-cli> add <bundle>/bmad-method` → the same per module source → `setup.py --list-config-questions` → pending answers as `[modules."<code>"]` → `setup.py --module-answers` → `_bmad/config.toml`, `_bmad/custom/config.user.toml` → `install.json` → `ma-agents` block → `ma-agents status` |
+| Install | `ma-agents install` → verify `manifest.json` → copy runtime, write `.ma-agents/uv.toml` → copy Skills CLI → `node <skills-cli> add <bundle>/bmad-method --skill <each record and member>` → the same per module source → `setup.py --list-config-questions` → pending answers as `[modules."<code>"]` → `setup.py --module-answers` → `_bmad/config.toml`, `_bmad/custom/config.user.toml` → `install.json` → `ma-agents` block → `ma-agents status` |
 | Bind | `ma-atlassian-bind bind` → `resolve_config.py` (`modules.ma-atlassian.*`) → bind-target table × installed skills → bracketed keys in `_bmad/custom/<skill>.toml` + `ticketing-store-config.toml` → report (bound, collision, not installed, missing slot, missing answer) |
 | Publish | upstream skill finishes (`external_handoffs` / `on_complete`) or Sofia changes the board or store (`board_after` / `store_after`) → `node _bmad/ma-atlassian/scripts/<engine>` → Confluence page under the planning or tickets root page |
-| Migrate | `ma-agents install` on a 3.x project → `.ma-agents-backup-<datetime>/` → uninstall 3.x parts → install 4.x → prints "ask `bmad` to run `bmad migrate`" → `method` migration → `bmod-ma-ops/migration-1.toml` (`migrate_v6_backlog.py`) → `bmod-ma-atlassian/migration-1.toml` (`migrate_binding.js`) → reports under `{output_folder}/migration-v6-v7/` |
+| Migrate | `ma-agents install` on a 3.x project → `.ma-agents-backup-<datetime>/` → uninstall 3.x parts (3.x `bmad-*` skill folders and `_bmad/ma-skills/` included) → install 4.x → prints "ask `bmad` to run `bmad migrate`" → `method` migration → `bmod-ma-ops/migration-1.toml` (`migrate_v6_backlog.py`) → `bmod-ma-atlassian/migration-1.toml` (`migrate_binding.js`) → reports under `{output_folder}/migration-v6-v7/` |
 
 **Requirements to structure**
 

@@ -4,7 +4,7 @@ Status: backlog
 Blocked on: 36-1
 Wave: 1 (parallel with 36.3, 36.5)
 
-**FR:** FR303 (contract validator: every owned `customize.toml` and every bind output resolves through the pinned `resolve_customization.py`, and every bound slot is defined at `bmadRef.core`; also parse, no undefined variables, explicit `persistent_facts`, `{diff_file}`), FR282 (`uv run --no-cache` with the offline runtime), FR290 / FR291 (the slot check the bind generator runs on its output). **Decisions:** P5-11.4 (overlay and bind table), P5-11.6 (offline Python runtime).
+**FR:** FR303 (contract validator: every owned `customize.toml` and every bind output resolves through the pinned `resolve_customization.py`, and every bound slot is defined at `bmadRef.core`; any key a target's `customize.toml` does not declare fails; also parse, no undefined variables, explicit `persistent_facts`, `{diff_file}`), FR282 (`uv run --no-cache` with the offline runtime), FR290 / FR291 (the slot check the bind generator runs on its output). **Decisions:** P5-11.4 (overlay and bind table), P5-11.6 (offline Python runtime).
 
 ## Story
 
@@ -16,7 +16,7 @@ so that an override in the wrong table, a slot the target does not have, or an u
 
 v7 merges `customize.toml` with `_bmad/custom/<skill>.toml` and `.user.toml`. Workflow skills expose `[workflow] activation_steps_prepend/append`, `persistent_facts` (shipped empty), `on_complete` and, on some skills, `external_sources` / `external_handoffs` (`skills/bmad-build/customize.toml` at `e734d3a`: `[workflow]` `:13`, `persistent_facts = []` `:27`, `on_complete` `:49`); review lenses use `{diff_file}` (`:102-103`). Sofia (`bmad-agent-po`) takes `activation_steps_*` and `persistent_facts` under **`[agent]`** (`skills/bmad-agent-po/customize.toml:7`, `:15-21`) and has named `[workflow]` slots `spec_/tickets_/refine_/board_/validate_/replan_/store_{before,after}` (`:72-103`). `migrate_v6.py` treats keys on retired skills as cleanup (`RETIRED_CUSTOM_KEYS` / `MOVED_CUSTOM_KEYS`, `skills/bmad/scripts/migrate_v6.py:89`, `:106`).
 
-Bind target table baseline at `e734d3a` (FR290, P5-11.4), every slot present:
+Bind target table baseline at `e734d3a` (FR290, P5-11.4), every slot present; the classifier re-reads it per `bmadRef.core` (upstream `main` reworks `bmad-facilitate`'s customization in `a867e16`):
 
 | Target | Slot | Line |
 |---|---|---|
@@ -41,8 +41,8 @@ Each AC states **Re-run at GA**: `yes` means 36.7 AC6 runs it against the GA sna
 6. **Override output mode (`--custom-dir`).** (Re-run at GA: yes.) Run over a project's `_bmad/custom/`, the validator checks every file: it parses; each marker pair brackets exactly one owned key; pairs are balanced and not nested; a key appears in at most one pair; the bracketed key sits in the table its start marker names and classifies `defined` for that file's skill. Fixtures: a valid file with several owned keys passes; a user file that already has `[workflow]` with a user key, and an owned key inserted into that same table, passes and the resolver returns both keys; an unbalanced marker, a nested pair, a pair bracketing two keys, a key inside two pairs, and a pair setting `[workflow] board_afterr` each fail with the file and line. 38.3 runs this mode on the generator's output; 38.6 gates on it.
 7. **No undefined variables.** (Re-run at GA: yes.) Every `{name}` and `{{…}}` placeholder in checked TOML values and in member skill markdown that v7 renders is either in the set the pinned `render_skill.py` / `resolve_config.py` define (extracted at test time from the tree, not typed) or defined by the owning skill. Shell scripts under `skills/**/scripts/` are excluded by path (Docker `--format` strings; BMAD never renders them). If 36.1 shows `render_skill.py` hard-exits on an undefined variable, the test renders each fixture skill and asserts exit 0.
 8. **`{diff_file}` only.** (Re-run at GA: yes.) No checked TOML, skill markdown or override contains `{diff_output}`; a planted fixture makes the test fail (positive control).
-9. **Parse-failure and unknown-key behaviour recorded.** (Re-run at GA: yes.) A malformed `_bmad/custom/bmad-prd.toml` and an override setting an undefined key are fed to the v7 resolver; exit codes and output are recorded in the Verification record and asserted by the test (so a GA change turns it red). The observed behaviour is handed to 38.3 (what bind reports when a user file does not parse).
-10. **Mutation-checked.** (Re-run at GA: no.) (m1) duplicate key in a fixture `customize.toml` → AC2 red naming the file; (m2) `persistent_facts` moved from `[agent]` to `[workflow]` in the agent fixture → AC2/AC3 red; (m3) `{diff_output}` planted → AC8 red; (m4) the tree path pointed at a nonexistent dir → fails loudly; (m5) a fixture override `[workflow] activation_steps_prepend` for `bmad-agent-po` → AC4 reports `undefined` and AC6 fails.
+9. **Undeclared keys fail; parse failure recorded.** (Re-run at GA: yes.) The validator fails on any key, in a module `customize.toml` override or a bind output file, that the target's `customize.toml` does not declare, naming file, table and key. At `e734d3a` `resolve_customization.py` returns such a key while `render_skill.py` halts the target skill on it (`skills/bmad/scripts/render_skill.py:121-128`: "sets keys <skill> does not declare"); the test asserts both behaviours on a fixture `_bmad/custom/bmad-build.toml` holding `[workflow] ma_unknown_key` (resolver exit 0 with the key returned; `render_skill.py` exit 1 with the HALT line), so a GA change turns it red. A malformed `_bmad/custom/bmad-prd.toml` is fed to the v7 resolver and `render_skill.py`; exit codes and output are recorded in the Verification record and asserted by the test. Both behaviours are handed to 38.3 (bind never writes an undeclared key; what bind reports when a user file does not parse).
+10. **Mutation-checked.** (Re-run at GA: no.) (m1) duplicate key in a fixture `customize.toml` → AC2 red naming the file; (m2) `persistent_facts` moved from `[agent]` to `[workflow]` in the agent fixture → AC2/AC3 red; (m3) `{diff_output}` planted → AC8 red; (m4) the tree path pointed at a nonexistent dir → fails loudly; (m5) a fixture override `[workflow] activation_steps_prepend` for `bmad-agent-po` → AC4 reports `undefined` and AC6 fails; (m6) the undeclared-key check removed from the validator → AC9 red on `ma_unknown_key`.
 
 ## Tasks / Subtasks
 
@@ -51,8 +51,8 @@ Each AC states **Re-run at GA**: `yes` means 36.7 AC6 runs it against the GA sna
 - [ ] T3 Slot classifier + fixtures (AC4)
 - [ ] T4 Bind-table rows at the pin (AC5); `--custom-dir` mode (AC6)
 - [ ] T5 Placeholder inventory from the pinned tree; `{diff_file}` guard (AC7, AC8)
-- [ ] T6 Parse-failure / unknown-key recording (AC9)
-- [ ] T7 Mutants m1–m5 (AC10); add the test to the chain
+- [ ] T6 Undeclared-key failure; parse-failure recording (AC9)
+- [ ] T7 Mutants m1–m6 (AC10); add the test to the chain
 
 ## Dev Notes
 
@@ -72,4 +72,4 @@ Each AC states **Re-run at GA**: `yes` means 36.7 AC6 runs it against the GA sna
 
 ## Verification record
 
-Tree commit: … ; resolver parse-failure exit / unknown-key behaviour: … ; bind-table rows: … ; mutants m1–m5: … ; unverified: …
+Tree commit: … ; resolver / `render_skill.py` parse-failure exit: … ; undeclared-key resolver exit / HALT line: … ; bind-table rows: … ; mutants m1–m6: … ; unverified: …
