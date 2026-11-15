@@ -16,6 +16,8 @@ on:
   pull_request:
   push:
     tags: ['v*']
+  # Story 36.6: manual runs (gh workflow run offline-install.yml --ref <branch>).
+  workflow_dispatch:
 
 # Cancel in-flight runs on the same ref when a newer commit arrives.
 concurrency:
@@ -42,30 +44,36 @@ jobs:
 
     env:
       # F3 Section 7 — pin by manifest-list digest (sha256) so a re-tag
-      # of node:20.18.1-bookworm upstream cannot silently change the
-      # base image we test against. The tag is kept as a human-readable
-      # comment for log clarity; the @sha256:... portion is what Docker
-      # actually resolves.
+      # upstream cannot silently change the base image we test against. The
+      # tag is kept as a human-readable comment for log clarity; the
+      # @sha256:... portion is what Docker actually resolves.
       #
-      # Digest captured: 2026-04-23 (UTC) via:
-      #   docker pull node:20.18.1-bookworm
-      #   docker inspect --format='{{index .RepoDigests 0}}' node:20.18.1-bookworm
-      # Returned: node@sha256:968ca0550acc7589a8b1324401ec6e39ace53b2c82d2aed3a278e9ff491c2b1c
+      # Story 36.6 (36.1 change set; FR298): moved from
+      # node:20.18.1-bookworm@sha256:968ca0550acc7589a8b1324401ec6e39ace53b2c82d2aed3a278e9ff491c2b1c
+      # to a Node >= 22.20 image: package.json engines.node is >=22.20.0, the
+      # floor the bundled Skills CLI declares, and that CLI does not load on
+      # Node 20 (Story 36.1 AC2). The offline-runtime job below uses the
+      # same digest; test/release-gate-epic-36.test.js asserts both.
+      #
+      # Digest captured: 2026-11-14 (UTC), Node v22.23.5, git 2.39.5, via:
+      #   docker pull node:22-bookworm
+      #   docker inspect --format='{{index .RepoDigests 0}}' node:22-bookworm
+      # Returned: node@sha256:e13726ca604184d7a91fcacab1fc09eefd642dc28e79ac34e85540dd93b78cfb
       #
       # Recovery procedure when this digest becomes unfetchable (e.g. the
       # tag is retired or Docker Hub garbage-collects an old layer):
-      #   1. Find the next-best supported Node 20.x base — preferably the
-      #      smallest patch bump (20.18.2-bookworm, 20.19.0-bookworm, ...).
+      #   1. Pull the current node:22-bookworm (any 22.x >= 22.20).
       #   2. Re-run the two commands above against the new tag.
-      #   3. Update both the tag in the comment and the digest below.
-      #   4. Run the workflow on a PR to confirm the install still passes.
+      #   3. Update both the tag in the comment and the digest below, here
+      #      and in the offline-runtime job.
+      #   4. Run the workflow on a PR to confirm both jobs still pass.
       #
       # IMPORTANT: use the full `bookworm` variant (not `-slim`). bmad.js
       # shells out to `git` during its offline-install path (e.g. to set
       # the local file:// origin at lib/bmad.js:1633). The slim variant
       # omits git, and since we are inside `--network none`, we cannot
       # `apt-get install` it at runtime.
-      OFFLINE_NODE_IMAGE: node:20.18.1-bookworm@sha256:968ca0550acc7589a8b1324401ec6e39ace53b2c82d2aed3a278e9ff491c2b1c
+      OFFLINE_NODE_IMAGE: node:22-bookworm@sha256:e13726ca604184d7a91fcacab1fc09eefd642dc28e79ac34e85540dd93b78cfb
 
     steps:
       - name: Checkout
@@ -158,4 +166,85 @@ jobs:
             echo "  the FR250 degradation notice reports all three required facts."
             echo "- The egress block is re-verified AFTER both installs, so \"succeeded\" means"
             echo "  \"succeeded with zero network calls\", not merely \"exited 0\"."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Story 36.6 AC4 (FR282, NFR58; Decision P5-11.6) — the BMAD v7 offline
+  # runtime. Reproduces Story 36.2 AC4 (render_skill.py, resolve_config.py,
+  # resolve_customization.py, tickets.py and setup.py activate with
+  # `uv run --no-cache` from the runtime) and AC5(a) (no wheelhouse -> the
+  # activation fails) inside a `--network none` container. uv, the Python 3.11
+  # interpreter and the wheelhouse are fetched in the pre-pull steps below,
+  # while the runner still has network; the container downloads nothing.
+  offline-runtime:
+    name: Air-gapped v7 runtime (uv + Python 3.11 + wheelhouse)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # Same image as the offline-install job (see the comment there).
+      OFFLINE_NODE_IMAGE: node:22-bookworm@sha256:e13726ca604184d7a91fcacab1fc09eefd642dc28e79ac34e85540dd93b78cfb
+      UV_VERSION: '0.13.8'
+      # SHA-256 of uv-x86_64-unknown-linux-gnu.tar.gz 0.13.8 (Story 36.1 / 36.2 record).
+      UV_SHA256: '5acfd9177cfecf0bf87578f059728215ccc884388988f55f7a65041b57387d91'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js (>= 22.20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install deps (online, host)
+        run: npm ci --no-audit --no-fund --ignore-scripts
+
+      - name: Pre-pull offline container image
+        run: docker pull "$OFFLINE_NODE_IMAGE"
+
+      - name: Build the bundle (ma-agents bundle build, online)
+        run: node bin/cli.js bundle build
+
+      - name: Pre-fetch the runtime (uv, Python 3.11, wheelhouse; online)
+        run: |
+          set -euo pipefail
+          mkdir -p rt/bin
+          curl -sSfL -o uv.tar.gz \
+            "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${UV_SHA256}  uv.tar.gz" | sha256sum -c -
+          tar -xzf uv.tar.gz -C rt/bin --strip-components=1
+          rm uv.tar.gz
+          rt/bin/uv --version
+          UV_PYTHON_INSTALL_DIR="$PWD/rt/python" rt/bin/uv python install 3.11 --no-bin
+          ls rt/python
+          core=$(node -p 'require("./package.json").bmadRef.core')
+          UV="$PWD/rt/bin/uv" rt/bin/uv run scripts/build-wheelhouse.py --snapshot bundle/bmad-method \
+            --snapshot-commit "$core" --platform linux-x64 --out rt --require jinja2 --require pyyaml
+          ls rt/wheelhouse/linux-x64
+
+      - name: Run the v7 runtime with no network
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --network none \
+            -v "$PWD:/workspace:ro" \
+            -v "$PWD/rt:/rt:ro" \
+            "$OFFLINE_NODE_IMAGE" \
+            bash /workspace/.github/scripts/offline-runtime-verify.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Offline v7 runtime (Story 36.6 AC4)"
+            echo ""
+            echo "| Item | Value |"
+            echo "|---|---|"
+            echo "| Container image | \`${OFFLINE_NODE_IMAGE}\` |"
+            echo "| uv | ${UV_VERSION} (sha256 \`${UV_SHA256}\`) |"
+            echo "| Python | $(ls rt/python 2>/dev/null | tr '\n' ' ') |"
+            echo "| Wheels (linux-x64) | $(ls rt/wheelhouse/linux-x64 2>/dev/null | wc -l) |"
+            echo ""
+            echo "Egress-block strategy: Docker \`--network none\`; every activation runs under \`env -i\` with the P5-11.6 environment."
           } >> "$GITHUB_STEP_SUMMARY"
