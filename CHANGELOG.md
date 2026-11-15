@@ -18,6 +18,10 @@ package. It records what the 4.x line targets and what is known not to work yet.
   3.x line is the supported on-prem release (FR281), maintained from branch
   `maint/3.x` (cut at `v3.18.1`). 4.x packages, from Story 39.4 on, are
   pre-releases (`4.0.0-next.N`) on npm dist-tag `next`.
+- **Version.** `package.json` carries `4.0.0-beta.1` from 2026-11-15, when the
+  repository went public and the Epic 36 gate passed (tag `v4-gate-e734d3a`);
+  the extension repository `ma-bmad-extensions` carries the same version on
+  every module record. Nothing is published to npm at this version.
 - **Requirements.** Node.js ≥ 22.20.0, the floor the bundled Skills CLI declares
   (`engines.node`). The v7 skills run with `uv run --no-cache`, so a machine
   needs uv, a Python 3.11 interpreter and the wheelhouse of the skill scripts'
