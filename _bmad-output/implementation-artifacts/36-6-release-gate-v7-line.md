@@ -1,6 +1,6 @@
 # Story 36.6 — 4.x Gate Record: release record, CI runtime proof, gate tag
 
-Status: backlog
+Status: review
 Blocked on: 36-1, 36-2, 36-3, 36-4, 36-5
 Wave: 2 (closes Epic 36 for the pinned commit; its PASS opens 37.3–37.6)
 
@@ -32,13 +32,13 @@ Each AC states **Re-run at GA**: `yes` means 36.7 re-asserts it on the GA snapsh
 
 ## Tasks / Subtasks
 
-- [ ] T1 `test-linux.yml` with uv + Python 3.11 + `bundle build`; per-file runner; allowlist; positive and negative runs (AC3) — before T2
-- [ ] T2 Chain health on Windows + Linux; per-file disposition vs `main@38ea256`; bug-file note (AC2)
-- [ ] T3 Offline runtime CI job (AC4)
-- [ ] T4 `test/release-gate-epic-36.test.js` (AC5); manifest reproducibility (AC6)
-- [ ] T5 `maint/3.x` confirmed or created with PO approval; gate tag `v4-gate-<short-sha>` (AC7)
-- [ ] T6 CHANGELOG + README Known limitations + parity test (AC8)
-- [ ] T7 Retro; release record (AC1, AC9)
+- [x] T1 `test-linux.yml` with uv + Python 3.11 + `bundle build`; per-file runner; allowlist; positive and negative runs (AC3) — before T2 (required status check: not set, cannot be set on the current plan — PO)
+- [x] T2 Chain health on Windows + Linux; per-file disposition vs `main@38ea256`; bug-file note (AC2)
+- [x] T3 Offline runtime CI job (AC4)
+- [x] T4 `test/release-gate-epic-36.test.js` (AC5); manifest reproducibility (AC6)
+- [ ] T5 `maint/3.x` confirmed or created with PO approval; gate tag `v4-gate-<short-sha>` (AC7) — `maint/3.x` confirmed at `38ea256`; tag `v4-gate-e734d3a` not created (verdict FAIL; release owner creates it on PASS)
+- [x] T6 CHANGELOG + README Known limitations + parity test (AC8)
+- [x] T7 Retro; release record (AC1, AC9)
 
 ## Dev Notes
 
@@ -60,4 +60,26 @@ Each AC states **Re-run at GA**: `yes` means 36.7 re-asserts it on the GA snapsh
 
 ## Verification record
 
-Commit: … ; Linux CI runs (pos/neg): … ; required-check status: … ; offline CI run: … ; chain (Windows) halt + per-file: … ; chain (Linux) allowlist: … ; manifest SHA-256 (CI / local): … ; gate tag: … ; `maint/3.x`: … ; retro file: … ; verdict: … ; unverified: …
+Commit: `bmadRef.core` `e734d3ac3c0f4ea31cc2c2bbbe79e86e54f2cae6` (ma-agents `main` `5468e4e` + this story's working tree) ; Linux CI runs (pos/neg): positive https://github.com/mayafit/AI_Agents/actions/runs/43655910096 (success, 116 files, 108 pass, 8 allowlisted, gate holds), negative https://github.com/mayafit/AI_Agents/actions/runs/43656256468 (uv steps removed: `uv: not on PATH`, `customize-contract-v7` fails `prerequisite: uv not found on PATH (ENOENT); install uv 0.13+`, job fails) ; required-check status: **not required, cannot be set** — branch protection and rulesets APIs return HTTP 403 (private repository, free plan); PO action ; offline CI run: https://github.com/mayafit/AI_Agents/actions/runs/43655929762 job `offline-runtime` success (five scripts exit 0, both controls fail as expected, `--network none`), `OFFLINE_NODE_IMAGE` `node:22-bookworm@sha256:e13726ca604184d7a91fcacab1fc09eefd642dc28e79ac34e85540dd93b78cfb` ; chain (Windows) halt + per-file: `npm test` halts at position 22 `test/migration-validation.test.js`; 22–116 run one by one: 4 pre-existing (`migration-validation`, `project-layout-staleness-guard`, `project-layout-artifact-routing`, `project-layout-confluence-publish-hook` — identical at `38ea256`), 1 new (`customize-contract-v7` m2, fixed) ; chain (Linux) allowlist: 8 files, identical at `38ea256` (https://github.com/mayafit/AI_Agents/actions/runs/43655069772): `migration-validation`, `config-storage`, `cross-repo-validation`, `project-layout-binding-spine`, `project-layout-config-generation`, `project-layout-staleness-guard` → `bug-npm-test-windows-suite-health-chain`; `project-layout-artifact-routing` → `bug-blocking-4-citation-guard-is-blind-in-ci`; `project-layout-confluence-publish-hook` → `bug-ac9c-tripwire-…`; 1 new in the first run (`release-gate-epic-31`, counts re-pinned) ; manifest SHA-256 (CI / local): `8515f1d4d0e5b189e48ff8249e1a4353412ddecfed8d6be2daa7e8a61c748cd7` / `8515f1d4d0e5b189e48ff8249e1a4353412ddecfed8d6be2daa7e8a61c748cd7` ; gate tag: `v4-gate-e734d3a` — not created (verdict FAIL) ; `maint/3.x`: exists at `38ea25603f2e0810ea95348dc00263abd75e374d` = `v3.18.1^{}` (recorded, not created) ; retro file: `epic-runs/epic-36/epic-36-retro-2026-11-15.md` ; verdict: **FAIL** — blocking item AC3 merge-blocking (record: `epic-runs/epic-36/36-6-release-gate.md`) ; unverified: listed in the release record (36.2–36.6), mirrored as Known limitations in `CHANGELOG.md` / `README.md`
+
+### Dev Agent Record
+
+Run 2026-11-15, Windows 11 (Git Bash, Node v24.15.0, npm 11.12.1, uv 0.13.8), Docker Desktop 29.9.2, GitHub Actions `ubuntu-latest`. CI was observed on snapshot commits of the working tree pushed to throwaway branches `ci/36-6-release-gate-probe`, `ci/36-6-negative-no-uv`, `ci/36-6-disposition-38ea256` (left on the remote for review); each probe's `test-linux.yml` adds `'ci/36-6-**'` to the `push` branches, the committed file does not. Local: `node bin/cli.js bundle build` → manifest `8515f1d4…`; `uv run scripts/build-wheelhouse.py --snapshot bundle/bmad-method --snapshot-commit e734d3a… --out bundle/runtime` → wheelhouse manifest `1ca62852…`; `node test/release-gate-epic-36.test.js` → 17 passed; eight mutants red (release record). The offline verify script was first run locally in `node:22-bookworm` (`--network none`, PASS) before CI. `npm test` was run in full (AC2); `.agents/`, `AGENTS.md`, `_bmad-output/project-context.md`, `skills/git-workflow-skill/skill.json`, `lib/knowledge-atlas/dist/atlas.cjs` and the ignored droppings the suites create were restored/removed afterwards.
+
+### File List
+
+- `.github/workflows/test-linux.yml` (new)
+- `.github/scripts/run-test-chain.js` (new)
+- `.github/scripts/offline-runtime-verify.sh` (new)
+- `.github/workflows/offline-install.yml` (`workflow_dispatch`; `OFFLINE_NODE_IMAGE` → Node 22 digest; new `offline-runtime` job)
+- `test/release-gate-epic-36.test.js` (new; appended to the `npm test` chain)
+- `test/known-failures-linux.json` (new)
+- `test/release-gate-epic-31.test.js` (AC7.5c / AC7.5h counts re-pinned for Epic 36's shipped files)
+- `test/customize-contract-v7.test.js` (m2 regex accepts CRLF)
+- `package.json` (chain)
+- `CHANGELOG.md` ("Unreleased (4.x)"), `README.md` ("4.x line" + Known limitations)
+- `_bmad-output/implementation-artifacts/epic-runs/epic-36/36-6-release-gate.md` (new), `epic-runs/epic-36/epic-36-retro-2026-11-15.md` (new)
+- `_bmad-output/implementation-artifacts/bug-npm-test-windows-suite-health-chain.md` (dated note)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`, this story
+
+Note: `.gitignore` ignores `.github/` and its negations cannot re-include files under it, so the three new `.github/` files need `git add -f`.

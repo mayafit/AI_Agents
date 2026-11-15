@@ -1,0 +1,134 @@
+name: Test Chain (Linux, uv)
+
+# Story 36.6 AC3 (FR281, FR303, FR304; NFR84) — the `npm test` chain on Linux
+# with the v7 runtime prerequisites present.
+#
+# Node >= 22.20 is the floor the bundled Skills CLI declares (FR298). uv is
+# pinned (action tag + uv version + the release's SHA-256), and Python 3.11 is
+# installed through it, because the 36.4 contract validator and the v7 skill
+# scripts run with `uv run --no-cache`. `ma-agents bundle build` puts the pinned
+# upstream snapshot in `bundle/` (git-ignored), and the 36.2 builder writes the
+# wheelhouse manifest into `bundle/runtime/`, so the tests that need the real
+# snapshot run against it instead of skipping.
+#
+# The chain is NOT run with `&&`: `.github/scripts/run-test-chain.js` reads the
+# chain from package.json and runs every file on its own, then gates on
+# `test/known-failures-linux.json` (file -> bug key): any failure not listed
+# fails the job, and so does any listed file that passes (stale entry).
+#
+# Merge-blocking: the job is a required status check on `main` only when the
+# repository admin adds "Test chain (Linux, uv)" to the branch protection rule.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: test-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test-linux:
+    name: Test chain (Linux, uv)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # The interpreter every `uv run` resolves (installed by the step below).
+      UV_PYTHON: '3.11'
+      DISABLE_TELEMETRY: '1'
+      DO_NOT_TRACK: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js (>= 22.20, the bundled Skills CLI floor)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Set up uv (pinned)
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: '0.13.8'
+          # SHA-256 of uv-x86_64-unknown-linux-gnu.tar.gz 0.13.8 (Story 36.1 / 36.2 record).
+          checksum: '5acfd9177cfecf0bf87578f059728215ccc884388988f55f7a65041b57387d91'
+          enable-cache: false
+
+      - name: Install Python 3.11 (uv-managed)
+        run: uv python install 3.11
+
+      - name: Toolchain versions
+        run: |
+          set -euo pipefail
+          node --version
+          npm --version
+          git --version
+          command -v uv || echo "uv: not on PATH"
+          uv --version || true
+          uv python find 3.11 || true
+          uv run --no-cache --no-project python --version || true
+          node -e '
+            const floor = require("./package.json").engines.node.replace(/^>=/, "").split(".").map(Number);
+            const have = process.versions.node.split(".").map(Number);
+            const ok = have[0] > floor[0] || (have[0] === floor[0] && (have[1] > floor[1] || (have[1] === floor[1] && have[2] >= floor[2])));
+            console.log(`node ${process.versions.node} vs engines.node >=${floor.join(".")}: ${ok ? "ok" : "BELOW FLOOR"}`);
+            process.exit(ok ? 0 : 1);'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund --ignore-scripts
+
+      - name: Build the bundle (ma-agents bundle build)
+        id: bundle
+        run: |
+          set -euo pipefail
+          node bin/cli.js bundle build
+          sum=$(sha256sum bundle/manifest.json | cut -d' ' -f1)
+          echo "manifest_sha256=$sum" >> "$GITHUB_OUTPUT"
+          echo "bundle/manifest.json sha256 $sum"
+
+      - name: Build the wheelhouse manifest for the snapshot
+        run: |
+          set -euo pipefail
+          core=$(node -p 'require("./package.json").bmadRef.core')
+          uv run scripts/build-wheelhouse.py --snapshot bundle/bmad-method --snapshot-commit "$core" \
+            --out bundle/runtime --require jinja2 --require pyyaml
+          sha256sum bundle/runtime/wheelhouse/wheelhouse-manifest.json
+
+      - name: Run the chain file by file (allowlist gate)
+        run: |
+          node .github/scripts/run-test-chain.js \
+            --allowlist test/known-failures-linux.json \
+            --require-pass test/customize-contract-v7.test.js \
+            --require-pass test/instruction-file-coexistence.test.js \
+            --require-pass test/release-gate-epic-36.test.js \
+            --json chain-results.json
+
+      - name: Record the manifest SHA-256
+        if: always()
+        run: |
+          {
+            echo "## Bundle"
+            echo ""
+            echo "| Item | Value |"
+            echo "|---|---|"
+            echo "| \`bundle/manifest.json\` sha256 | \`${{ steps.bundle.outputs.manifest_sha256 || 'n/a' }}\` |"
+            echo "| bmadRef.core | \`$(node -p 'require("./package.json").bmadRef.core')\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload chain results and bundle manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-linux-results
+          path: |
+            chain-results.json
+            bundle/manifest.json
+            bundle/runtime/wheelhouse/wheelhouse-manifest.json
+          if-no-files-found: warn

@@ -198,7 +198,8 @@ test('m1: a duplicate key in a member customize.toml fails AC2, naming the file'
 
 test('m2: persistent_facts moved from [agent] to [workflow] in the agent fails AC2/AC3', () => {
   const r = mutateMember('m2', 'ma-agent-sre', (t) => {
-    const facts = t.match(/persistent_facts = \[[\s\S]*?\n\]\n/)[0];
+    // `\r?`: a Windows checkout (core.autocrlf=true) holds the fixture with CRLF (Story 36.6 chain run).
+    const facts = t.match(/persistent_facts = \[[\s\S]*?\r?\n\]\r?\n/)[0];
     return t.replace(facts, '') + facts;
   });
   assert.strictEqual(r.status, 1, r.stdout + r.stderr);
