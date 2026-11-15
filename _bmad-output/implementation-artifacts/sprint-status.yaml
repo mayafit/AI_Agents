@@ -524,7 +524,7 @@ development_status:
   36-6-release-gate-v7-line: done   # Wave 2, blocked-on 36-1..36-5; gate record and tag v4-gate-<short-sha>, no npm publish; FR280, FR282, FR298, FR301–FR304
   36-7-ga-re-gate: backlog   # Wave 3, blocked-on v7 GA and 36-6; GO-39.5 opens 39.5; FR280–FR282, FR290, FR302, NFR87
   epic-37: backlog   # 37.1/37.2 blocked-on 36.1 GO lines, 37.3–37.6 on 36.6 PASS; FR285–FR288, FR292, FR294–FR296, FR301, FR305, NFR84, NFR86
-  37-1-repository-scaffold: review   # Wave 0, blocked-on none (36.1 GO-37.1); public repo, four records, one version line, CI gates; FR285–FR288, FR295, FR297, FR302, FR303, NFR84, NFR86
+  37-1-repository-scaffold: done   # Wave 0, blocked-on none (36.1 GO-37.1); public repo, four records, one version line, CI gates; FR285–FR288, FR295, FR297, FR302, FR303, NFR84, NFR86
   37-2-ma-standards-module: in-progress   # Wave 1 (parallel with 37.4), blocked-on none (36.1 GO-37.2; 37.1 merged); bmod-ma-standards: 28 standards skills + ma-standards-apply (owner of the ma-standards block, 36.5 cases); FR285–FR288, FR295, FR301, FR303, FR304, NFR84, NFR86
   epic-38: backlog   # blocked-on 37.1 and 36.1 GO-38; FR289–FR291, FR293, FR294, FR300
   epic-39: backlog   # blocked-on epics 37–38, 39.5 on 36.7 GO-39.5; 4.0.0-next.N on dist-tag next from 39.4, 4.0.0 on latest at 39.5; FR281–FR284, FR294, FR297–FR299, FR301, FR302, NFR87
