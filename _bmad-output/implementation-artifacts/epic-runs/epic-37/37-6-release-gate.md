@@ -52,12 +52,12 @@ The orchestrator pastes the GitHub Actions runs here after the push (workflow `c
 
 | Run | Branch / commit | Result |
 |---|---|---|
-| `<orchestrator pastes>` | `feat/37-6-release-gate` at `<sha>` (push) | `gates` + `offline`: `<result>` |
-| `<orchestrator pastes>` | pull request #6 → `main` | `<result>` |
+| https://github.com/mayafit/ma-bmad-extensions/actions/runs/43734676798 | `feat/37-6-release-gate` at `c698e7e` (push) | `gates` + `offline`: success |
+| https://github.com/mayafit/ma-bmad-extensions/actions/runs/43734681899 | pull request #6 → `main` | `gates` + `offline`: success |
 | `<orchestrator pastes>` | `main` at `<merge-commit>` (after the merge; `EXPECT_UPDATE=current`) | `<result>` |
 | `<orchestrator pastes>` | tag `v4.0.0-beta.1` (push of the tag starts `ci`; its tag step must show four `PASS`) | `<result>` |
 
-The `main` run at `7cde826` (37.5's merge) is the last green run before this story: `<orchestrator pastes>`.
+The `main` run at `7cde826` (37.5's merge) is the last green run before this story: https://github.com/mayafit/ma-bmad-extensions/actions/runs/43732205527 (success).
 
 ## Tag — for the release owner, after the PO merges this story
 
