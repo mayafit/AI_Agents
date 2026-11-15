@@ -1,6 +1,6 @@
 # Story 37.1 — Repository scaffold: `ma-bmad-extensions` with four module records, one version line and per-module CI gates
 
-Status: in-progress
+Status: review
 Blocked on: none (36.1 GO-37.1: AC2, AC4, AC6 PASS)
 Wave: 0 (Epic 37; 37.2 and 37.4 follow in Wave 1)
 
@@ -52,7 +52,7 @@ Each AC states **Re-run at GA**: `yes` means 36.7 re-asserts it after `bmadRef.c
 - [x] T7 `tools/pack-skills-cli.mjs` + `tools/install_test.py`, local and tag modes (AC10, AC11)
 - [x] T8 `.github/workflows/ci.yml`, `.gitattributes`, README layout and local commands (AC1, AC4)
 - [x] T9 Mutants m1–m16; Linux run at Node 22.20.0 (AC4, AC12)
-- [ ] T10 Push `feat/37-1-scaffold` and record the Actions run (AC4) — see the Verification record
+- [x] T10 Push `feat/37-1-scaffold` and record the Actions run (AC4) — see the Verification record
 
 ## Dev Notes
 
@@ -93,7 +93,7 @@ Run 2026-11-15. Windows 11 host (Git Bash, Node v24.15.0, npm 11.12.1, git 2.54.
 - **AC1** — [RUN] `gh repo view mayafit/ma-bmad-extensions --json visibility` → `PUBLIC`. The four records carry `version = "1.0.0"`. The GitHub repository holds no ref yet (`git ls-remote` empty; `defaultBranchRef` empty). **PASS**
 - **AC2** — [READ] values as specified; [RUN] AC5 and AC10 green (setup lists `atlas_output` for `ma-knowledge`, the nine keys for `ma-atlassian`, none for `ma-ops` / `ma-standards`). **PASS**
 - **AC3** — [RUN] validator `--render` exit 0; in the installed `ma-ops` project, `uv run --no-cache <p>/_bmad/scripts/render_skill.py --project-root <p> --skill <p>/.claude/skills/ma-ops-dev-epic` → exit 0, prints the workflow with `persistent_facts` rendered and both activation lists `_None._`. **PASS**
-- **AC4** — [RUN] `ci.yml` parses (12 steps); the Linux container run of the same commands → `ALL STEPS PASSED`. Actions run: not observed (see T10 below). **PASS** for the workflow and its commands; the Actions run itself is unverified.
+- **AC4** — [RUN] `ci.yml` parses (12 steps); the Linux container run of the same commands → `ALL STEPS PASSED`. Actions runs green (see T10 below). **PASS**
 - **AC5** — [RUN] Windows and Linux: exit 0, `bmod files valid: 4 skills, 4 module records, 4 knowledge documents.` **PASS**
 - **AC6** — [RUN] `tools/validate_customize.py` SHA-256 `084c68bd7d374b295ae282b0b1f02af73e09af84b785271b98026e8d8b35d4a0` = ma-agents `scripts/validate_customize.py` (`cmp` identical); with and without `--render`: `OK: 4 member file(s), 0 override file(s), 0 finding(s)`, exit 0. **PASS**
 - **AC7** — [RUN] `OK: 33 guidance file(s); every script runs through uv run --no-cache`, exit 0. **PASS**
@@ -102,5 +102,5 @@ Run 2026-11-15. Windows 11 host (Git Bash, Node v24.15.0, npm 11.12.1, git 2.54.
 - **AC10** — [RUN] Windows (11 s) and Linux: per module `add: 31 core skills + [bmod-<code>, <member>] -> 33 folders in .claude/skills`; pending answered with defaults (`ma-atlassian` 9, `ma-knowledge` 1, `ma-ops` 0, `ma-standards` 0), `status 'created'`; `--status` → each module `1.0.0`, scope `project`, update `could-not-check`; four `PASS`, exit 0. Skills CLI tree: `skills@1.7.6`, bin `bin/cli.mjs`, dependencies `@isaacs/fs-minipass`, `chownr`, `minipass`, `minizlib`, `tar`, `yallist`, `yaml`. First run found a defect, fixed in this change: `ma-standards-apply/SKILL.md` had `project's` inside a single-quoted `description`; the Skills CLI printed `Skipped … YAML parse error` and exited 0, and the test failed `missing ['ma-standards-apply']` (now m15). **PASS**
 - **AC11** — [RUN] `--from-tag mayafit/ma-bmad-extensions` → `SKIP: tag v1.0.0 does not exist on github.com/mayafit/ma-bmad-extensions; the install from a tag runs once it does`, exit 0, on both hosts. The tag branch of the code is unverified until 37.6 pushes `v1.0.0`. **PASS** (guard); tag install unverified.
 - **AC12** — [RUN] m1 exit 1 (`every module record carries one version … bmod-ma-standards has '1.0.1'`); m2 `validate_manifests.py` exit 0 (`5 skills`), `check_names.py` exit 1 (`skills/bmad-foo: owned skill folder carries the reserved prefix 'bmad-'`); m3 exit 1 (`skills/stray-skill: listed by no module record`); m4 exit 1 (`listed by 2 module records: bmod-ma-ops, bmod-ma-standards`); m5 exit 1 (`lists 'sre-check-secrets', which is not a folder under skills/`); m6 exit 1 (`the package map gives this skill no 4.x module`); m7 exit 1 (`the package map puts it in 'ma-standards'`); m8 exit 1 (`module 'ma-extra' is not a module of the package map`); m9 exit 1 (69 map skills not shipped); m10a/b/c exit 1 (file:line and rule); m11a exit 1 (`[facts-empty]`); m11b exit 1 (`[diff-output]`, `[placeholder-undefined]`); m12 exit 1 (`help/help.md … the module record does not ship`); m13 exit 1 (`[skill] source 'file:../skills' differs from … update_source`); m14 exit 1 (`group 'ops' lists 'ma-agent-qa', which no member defines`); m15 exit 1 (`missing ['ma-standards-apply']`); m16 exit 1 (`--status unmet_requirements: … 'requires': 'bmad-loop' … 'state': 'missing'`). Each on a scratch copy; the repository itself unchanged and green. **PASS**
-- **T10 / Actions run** — not pushed. The GitHub repository has no branch, so the first push of `feat/37-1-scaffold` would become its default branch, and the update check reads `main`; `main` is pushed first by the maintainer, then this branch, and the run URL is recorded then.
-- **Unverified**: the GitHub Actions run (above); the tag install (AC11, until `v1.0.0`).
+- **T10 / Actions run** — `main` (`7da8cfd`, README + LICENSE) pushed first so it is the default branch, then `feat/37-1-scaffold` at `3ebbe04`; PR https://github.com/mayafit/ma-bmad-extensions/pull/1. Actions: push run https://github.com/mayafit/ma-bmad-extensions/actions/runs/43677018955 and pull-request run https://github.com/mayafit/ma-bmad-extensions/actions/runs/43677044248, both `success`, every step green (the tag step printed `SKIP`). AC4 **PASS** in full.
+- **Unverified**: the tag install (AC11, until `v1.0.0`).
