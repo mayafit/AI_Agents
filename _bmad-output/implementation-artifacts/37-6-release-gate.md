@@ -1,6 +1,6 @@
 # Story 37.6 — Release gate: every module installs alone from the folder and from the tag, `setup.py --status` reports `current` online, every skill activates offline with the 36.2 runtime, names unique against the snapshot; tag `v4.0.0-beta.1`
 
-Status: in-progress
+Status: done
 Blocked on: none (37.1–37.5 merged 2026-11-15: extensions PRs #1–#5, ma-agents #166, #167, #169, #170, #171)
 Wave: 4 (Epic 37; closes the epic for the pinned commit; the tag is cut after this story merges)
 

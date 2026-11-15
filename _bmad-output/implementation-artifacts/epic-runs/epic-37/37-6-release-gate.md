@@ -4,7 +4,7 @@ Run date: 2026-11-15. Story: `_bmad-output/implementation-artifacts/37-6-release
 
 ## Verdict
 
-**PASS — conditional on two items the release owner closes after the merge** (2026-11-15): every gate of NFR84 holds on `main` `7cde826` with this story's checks (table below); the two items that cannot be verified before the tag exists are the GitHub Actions runs of this branch and of `main` after the merge (the orchestrator pastes them), and the install from the real tag `v4.0.0-beta.1` (the release owner cuts the tag on the merge commit and pastes the run; the tag path itself is proved on a local clone, AC2). No STOP, no blocking finding, no new failure. Epic 38 and Epic 39 may start on the tagged commit; `bmadRef.extensions` (39.1) names `v4.0.0-beta.1`.
+**PASS** (closed 2026-11-15 evening: the merge of extensions PR #6 is `15021a1`, its `main` run and the tag run are green, the tag `v4.0.0-beta.1` exists on `15021a1`, and the install from the real tag printed four `PASS … update current`; see "Tag" below). Earlier wording, kept as the record: **PASS — conditional on two items the release owner closes after the merge** (2026-11-15): every gate of NFR84 holds on `main` `7cde826` with this story's checks (table below); the two items that cannot be verified before the tag exists are the GitHub Actions runs of this branch and of `main` after the merge (the orchestrator pastes them), and the install from the real tag `v4.0.0-beta.1` (the release owner cuts the tag on the merge commit and pastes the run; the tag path itself is proved on a local clone, AC2). No STOP, no blocking finding, no new failure. Epic 38 and Epic 39 may start on the tagged commit; `bmadRef.extensions` (39.1) names `v4.0.0-beta.1`.
 
 ## Commit qualified
 
@@ -54,8 +54,8 @@ The orchestrator pastes the GitHub Actions runs here after the push (workflow `c
 |---|---|---|
 | https://github.com/mayafit/ma-bmad-extensions/actions/runs/43734676798 | `feat/37-6-release-gate` at `c698e7e` (push) | `gates` + `offline`: success |
 | https://github.com/mayafit/ma-bmad-extensions/actions/runs/43734681899 | pull request #6 → `main` | `gates` + `offline`: success |
-| `<orchestrator pastes>` | `main` at `<merge-commit>` (after the merge; `EXPECT_UPDATE=current`) | `<result>` |
-| `<orchestrator pastes>` | tag `v4.0.0-beta.1` (push of the tag starts `ci`; its tag step must show four `PASS`) | `<result>` |
+| https://github.com/mayafit/ma-bmad-extensions/actions/runs/43739817998 | `main` at `15021a1` (after the merge; `EXPECT_UPDATE=current`) | `gates` + `offline`: success |
+| https://github.com/mayafit/ma-bmad-extensions/actions/runs/43742289650 | tag `v4.0.0-beta.1` on `15021a1` (the tag step ran the real install: four `PASS`) | `gates` + `offline`: success |
 
 The `main` run at `7cde826` (37.5's merge) is the last green run before this story: https://github.com/mayafit/ma-bmad-extensions/actions/runs/43732205527 (success).
 
@@ -78,9 +78,31 @@ uv run --no-cache tools/install_test.py --tree $BMAD_TREE --skills-cli $CLI --wo
 
   must print `module <code> from mayafit/ma-bmad-extensions#v4.0.0-beta.1` and `PASS` for `ma-atlassian`, `ma-knowledge`, `ma-ops`, `ma-standards`, each `status: <code> 4.0.0-beta.1 scope project update current`, and `OK: 4 module(s) installed alone from mayafit/ma-bmad-extensions#v4.0.0-beta.1 and reported by setup.py --status, update state in ['current']`, exit 0 — the same four lines the local tag produced (AC2). The pushed tag also starts `ci`, whose step 20 must show the same instead of `SKIP`. Paste both here:
 
-- `git show --no-patch v4.0.0-beta.1`: `<release owner pastes>`
-- `install_test.py --from-tag` output: `<release owner pastes>`
-- Actions run of the tag: `<release owner pastes>`
+- `git show --no-patch v4.0.0-beta.1`:
+
+```
+tag v4.0.0-beta.1
+Tagger: Alon Mayaffit <alon.mayafit@gmail.com>
+Date:   Sun Nov 15 19:35:56 2026 +0200
+
+ma-bmad-extensions 4.0.0-beta.1: first tag of the 4.x line (Story 37.6)
+
+commit 15021a1d31f846e259fa4ee77946aa3dd38938fc (merge of extensions PR #6)
+```
+- `install_test.py --from-tag mayafit/ma-bmad-extensions --expect-update current` (Windows host, 2026-11-15):
+
+```
+  status: ma-atlassian 4.0.0-beta.1 scope project update current
+  PASS ma-atlassian
+  status: ma-knowledge 4.0.0-beta.1 scope project update current
+  PASS ma-knowledge
+  status: ma-ops 4.0.0-beta.1 scope project update current
+  PASS ma-ops
+  status: ma-standards 4.0.0-beta.1 scope project update current
+  PASS ma-standards
+OK: 4 module(s) installed alone from mayafit/ma-bmad-extensions#v4.0.0-beta.1 and reported by setup.py --status, update state in ['current']
+```
+- Actions run of the tag: https://github.com/mayafit/ma-bmad-extensions/actions/runs/43742289650 (success).
 - Then 39.1 sets ma-agents `bmadRef.extensions` to `v4.0.0-beta.1`. No npm publish in this story (39.4).
 
 ## Unverified items (every item 37.1–37.6 marked unverified)
@@ -89,7 +111,7 @@ uv run --no-cache tools/install_test.py --tree $BMAD_TREE --skills-cli $CLI --wo
 - 37.2, 37.4: the GitHub Actions runs of their branches were pasted in their records; nothing else.
 - 37.3: an agent-performed `bmad migrate` following `migration-1.toml` and an agent-performed `ma-ops-dev-epic` run against a live `bmad-agent-po` (rendered text read, not executed) — open, not a gate item; `setup.py --status` `current` for a module whose `main` record differs — **closed** (AC3: `ahead` / `newer-available` shown).
 - 37.5: an agent-performed `cyber-vulnerability-scan` run with one scanner absent — open, not a gate item; the tag install — as 37.1.
-- 37.6: the GitHub Actions runs (orchestrator); the real tag install and the tag's own run (release owner); a Windows offline run (the runtime builder supports `win-x64`; the no-network proof is Linux's `--network none`, as in 36.2/36.6); the activations are renders and script starts, not agent-performed skill runs.
+- 37.6: the GitHub Actions runs, the real tag install and the tag's own run — **closed** (above); a Windows offline run (the runtime builder supports `win-x64`; the no-network proof is Linux's `--network none`, as in 36.2/36.6); the activations are renders and script starts, not agent-performed skill runs.
 
 ## Other changes this story made outside its new files
 
