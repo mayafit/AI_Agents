@@ -122,8 +122,8 @@ ma-bmad-extensions/                         — public GitHub repository github:
 ├── skills/                                 — flat; every folder below sits directly in skills/
 │   ├── bmod-ma-ops/                        — record folder, code ma-ops
 │   │   ├── bmod.toml                       — [bmod] code, version, update_source, skills (40), required_skills = bmad core,
-│   │   │                                     recommended_skills = bmad-build, bmad-agent-po, git-workflow-skill + code-review (with source);
-│   │   │                                     no config questions
+│   │   │                                     bmad-agent-po, bmad-build (upstream); recommended_skills = git-workflow-skill, code-review,
+│   │   │                                     js-ts-security-skill, python-security-skill (ma-standards, each with source); no config questions
 │   │   ├── SKILL.md                        — stub: redirects to `bmad setup ma-ops`
 │   │   ├── help/help.md
 │   │   ├── roster.toml                     — Alex, Yael, Amit, Gadi; group "ops"
@@ -168,13 +168,16 @@ ma-bmad-extensions/                         — public GitHub repository github:
 │   ├── test-generator/  test-accompanied-development/  git-workflow-skill/  commit-message/
 │   ├── auto-bug-detection/  ai-audit-trail/  document-revision-history/  skill-creator/
 │   ├── project-context-expansion/
-│   ├── open-presentation/                  — assets/: the training deck
-│   ├── ma-standards-apply/                 — ma-standards marker block in AGENTS.md, CLAUDE.md, .clinerules,
-│   │                                         .roomodes, .github/copilot-instructions.md; `remove` sub-command
+│   ├── open-presentation/                  — assets/: the training deck (the 3.x deck, unchanged in 4.0.0-beta)
+│   ├── ma-standards-apply/                 — ma-standards marker block: AGENTS.md always (created); CLAUDE.md, .clinerules,
+│   │                                         .github/copilot-instructions.md when present or named; .roomodes as a JSON
+│   │                                         customModes entry when present (YAML skipped, never created); an import-only
+│   │                                         CLAUDE.md skipped; `remove` sub-command
 │   │
 │   │   ── ma-knowledge member ──
 │   ├── ma-knowledge-atlas/
-│   │   └── assets/atlas.cjs                — Knowledge Atlas engine, run with node
+│   │   ├── scripts/build_atlas.py          — [skill] scripts; PEP 723 store reader and stager; runs the engine with node
+│   │   └── assets/atlas.cjs                — Knowledge Atlas engine (Epic 29 bundle, unchanged); an asset, not a script entry
 │   │
 │   │   ── ma-atlassian members ──
 │   ├── ma-atlassian-bind/                  — bind / unbind / status
@@ -184,7 +187,7 @@ ma-bmad-extensions/                         — public GitHub repository github:
 │   │   └── scripts/                        — publish engine, page tree, override generator, collision check, migrate_binding.js (JavaScript)
 │   ├── ma-atlassian-confluence-plan/
 │   └── ma-atlassian-confluence-record-root-page/
-└── test/                                   — module assignment; no owned bmad-* name (FR287); validate_manifests.py; contract validator (FR303); per module: npx skills add <local> and
+└── test/                                   — module assignment (--complete with the package map's pending marker); no owned bmad-* name (FR287); validate_manifests.py; contract validator (FR303); the sweep; per module: npx skills add <local> and
                                               <repo>#<tag> into a v7 project with method, setup.py --module-answers, setup.py --status, offline activation
 ```
 
@@ -207,8 +210,9 @@ ma-agents/                                  — npm package, semver 4.x, engines
 │   ├── skills-cli/                         — npm `skills` at bmadRef.skillsCli with its runtime dependencies
 │   │                                         (npm install --omit=dev --ignore-scripts tree), copied by the installer
 │   ├── runtime/linux-x64/  runtime/win-x64/ — uv binary + python-build-standalone 3.11
-│   └── wheelhouse/linux-x64/  wheelhouse/win-x64/ — every PEP 723 dependency of the bundled scripts
-│                                             (initial bmadRef.core: jinja2, markupsafe, pyyaml)
+│   └── wheelhouse/linux-x64/  wheelhouse/win-x64/ — every PEP 723 dependency of the bundled scripts, snapshot and extensions,
+│                                             derived from the headers (initial bmadRef.core: jinja2, markupsafe, pyyaml,
+│                                             tiktoken, requests and what they require); Windows interpreter installed --no-bin --no-registry
 └── test/                                   — install sequence, bundle determinism, injection ownership, upgrade fixture (3.18.x)
 ```
 
