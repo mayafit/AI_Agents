@@ -470,8 +470,23 @@ git config user.email "offline-ci@example.invalid"
 git config user.name  "Offline CI"
 
 GLOBAL_LOG="/tmp/global-install.log"
+# NO `--agent` here, deliberately — unlike the project-scope installs above.
+#
+# The FR250 assertions further down require the BMAD scope notice, and
+# bin/cli.js only emits it when the selection contained at least one
+# `category: 'bmad'` agent for the global filter to drop
+# (`if (bmadAgentIds.length > 0)`). `--agent` takes exactly ONE id
+# (`preselectedAgents = agentFlag ? [agentFlag] : null`), so `--agent claude-code`
+# — an `ide` agent — made the selection all-IDE, the filter dropped nothing, the
+# notice never printed, and the three FR250 greps below could not pass. Passing a
+# bmad agent instead is not the fix either: it would be filtered out, leaving zero
+# agents and failing the PRESENCE check above.
+#
+# Omitting `--agent` takes the default `--yes` selection, which carries both IDE
+# and bmad agents — the same invocation test/global-install-scope.test.js makes,
+# so the gate and that unit test now exercise one code path instead of two.
 if HOME="$GLOBAL_HOME" USERPROFILE="$GLOBAL_HOME" \
-     node "$PKG_DIR/bin/cli.js" install --yes --force --global --agent claude-code \
+     node "$PKG_DIR/bin/cli.js" install --yes --force --global \
      > "$GLOBAL_LOG" 2>&1; then
   echo "    OK:   global install exited 0 with no network"
 else
